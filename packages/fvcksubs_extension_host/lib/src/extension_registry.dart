@@ -311,6 +311,25 @@ class ExtensionRegistry {
     return extension.sources(item, enabledProviders: enabledStreamProviders);
   }
 
+  /// Lists playable sources for a strict protocol-v2 item.
+  Future<List<StreamSource>> sourcesV2(MediaItemV2 item) {
+    final extension = extensionById(item.ref.extensionId);
+    if (!isExtensionEnabled(extension.manifest.id)) {
+      return Future.value(const []);
+    }
+    final declaresStream = extension.manifest.providers.any(
+      (provider) => provider.roles.contains(ProviderRole.stream),
+    );
+    if (!declaresStream) return Future.value(const []);
+    final enabledStreamProviders = <String>{
+      for (final provider in extension.manifest.providers)
+        if (provider.roles.contains(ProviderRole.stream) &&
+            isProviderEnabled(provider.id))
+          provider.id,
+    };
+    return extension.sourcesV2(item, enabledProviders: enabledStreamProviders);
+  }
+
   /// Resolves [sourceId] (produced by [sources] for [ref]) into a stream.
   Future<PlayableStream> resolveSource(MediaRef ref, String sourceId) =>
       extensionById(ref.extensionId).resolve(sourceId);
@@ -339,6 +358,21 @@ class ExtensionRegistry {
     }
   }
 
+  /// Looks up subtitles for a strict protocol-v2 item.
+  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) async {
+    final extension = extensionById(item.ref.extensionId);
+    if (!isExtensionEnabled(extension.manifest.id)) return const [];
+    final declaresSubtitles = extension.manifest.providers.any(
+      (provider) => provider.roles.contains(ProviderRole.subtitles),
+    );
+    if (!declaresSubtitles) return const [];
+    try {
+      return await extension.externalSubtitlesV2(item);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Fetches fresh detail for [ref], from the extension that owns it.
   ///
   /// Not gated on [isExtensionEnabled] (unlike [sources]) — a disabled
@@ -348,6 +382,10 @@ class ExtensionRegistry {
   /// [extensionById] throwing.
   Future<MediaDetail> meta(MediaRef ref) =>
       extensionById(ref.extensionId).meta(ref);
+
+  /// Fetches a strict protocol-v2 detail response.
+  Future<MediaDetailV2> metaV2(MediaRef ref) =>
+      extensionById(ref.extensionId).metaV2(ref);
 
   /// The installed extension with [id]. Throws [StateError] if none.
   ContentExtension extensionById(String id) => _extensions.firstWhere(

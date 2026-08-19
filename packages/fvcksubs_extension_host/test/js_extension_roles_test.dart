@@ -13,25 +13,31 @@ import 'package:test/test.dart';
 /// role's shape intact, including the ones with real consequences
 /// (`enabledProviders` reaching the bundle, DRM surviving the crossing).
 void main() {
-  Manifest manifestWith(List<String> roles) => Manifest.parse({
-    'apiVersion': 1,
-    'id': 'roles',
-    'name': 'roles',
-    'version': '1.0.0',
-    'runtime': 'js',
-    'categories': ['live'],
-    'providers': [
-      {
-        'id': 'roles.p',
-        'roles': roles,
-        if (roles.contains('catalog'))
-          'catalogs': [
-            {'id': 'c', 'name': 'C', 'category': 'live', 'kind': 'liveEvent'},
-          ],
-      },
-    ],
-    'permissions': {'hosts': <String>[]},
-  });
+  Manifest manifestWith(List<String> roles, {int apiVersion = 1}) =>
+      Manifest.parse({
+        'apiVersion': apiVersion,
+        'id': 'roles',
+        'name': 'roles',
+        'version': '1.0.0',
+        'runtime': 'js',
+        'categories': ['live'],
+        'providers': [
+          {
+            'id': 'roles.p',
+            'roles': roles,
+            if (roles.contains('catalog'))
+              'catalogs': [
+                {
+                  'id': 'c',
+                  'name': 'C',
+                  'category': 'live',
+                  'kind': 'liveEvent',
+                },
+              ],
+          },
+        ],
+        'permissions': {'hosts': <String>[]},
+      });
 
   MediaItem item() => const MediaItem(
     ref: MediaRef(extensionId: 'roles', providerId: 'roles.p', id: '7'),
@@ -43,8 +49,20 @@ void main() {
     ],
   );
 
-  JsExtension load(String bundle, {List<String> roles = const ['stream']}) =>
-      JsExtension.load(manifest: manifestWith(roles), source: bundle);
+  JsExtension load(
+    String bundle, {
+    List<String> roles = const ['stream'],
+    int apiVersion = 1,
+  }) => JsExtension.load(
+    manifest: manifestWith(roles, apiVersion: apiVersion),
+    source: bundle,
+  );
+
+  final itemV2 = EventItemV2(
+    ref: const MediaRef(extensionId: 'roles', providerId: 'roles.p', id: 'v2'),
+    title: 'V2 event',
+    schedule: Schedule(startsAt: DateTime.utc(2026, 8, 19)),
+  );
 
   test('catalogVersioned decodes with the manifest apiVersion', () async {
     final extension = load(
@@ -219,6 +237,39 @@ globalThis.__extension = {
           .having((t) => t.url, 'url', 'https://x/7.srt')
           .having((t) => t.label, 'label', 'Indonesian'),
     ]);
+  });
+
+  test('protocol v2 detail, sources, and subtitles cross intact', () async {
+    final extension = load(
+      '''
+globalThis.__extension = {
+  async meta(args) {
+    return {
+      item: { ref: args.ref, kind: "video", title: "V2 detail" },
+      facts: [{ label: "Year", value: "2026" }]
+    };
+  },
+  async sources(args) {
+    return { sources: [{ id: "v2-source", label: args.item.kind }] };
+  },
+  async subtitles(args) {
+    return { subtitles: [{ language: "en", url: "https://x/" + args.item.kind + ".vtt" }] };
+  }
+};
+''',
+      roles: ['meta', 'stream', 'subtitles'],
+      apiVersion: 2,
+    );
+    addTearDown(extension.dispose);
+
+    final detail = await extension.metaV2(itemV2.ref);
+    expect(detail.item, isA<VideoItemV2>());
+    expect(detail.facts.single.value, '2026');
+    expect((await extension.sourcesV2(itemV2)).single.label, 'event');
+    expect(
+      (await extension.externalSubtitlesV2(itemV2)).single.url,
+      'https://x/event.vtt',
+    );
   });
 
   test('a role returning the wrong shape fails loudly', () {

@@ -1,4 +1,6 @@
 import '../content/media_item.dart';
+import '../content/media_detail_v2.dart';
+import '../content/media_item_v2.dart';
 import '../content/media_ref.dart';
 import '../content/stream.dart';
 import 'catalog.dart';
@@ -32,6 +34,10 @@ abstract class ContentExtension {
   Future<MediaDetail> meta(MediaRef ref) =>
       throw UnsupportedError('${manifest.id} does not provide meta');
 
+  /// Returns one item's strict protocol-v2 detail.
+  Future<MediaDetailV2> metaV2(MediaRef ref) =>
+      throw UnsupportedError('${manifest.id} does not provide v2 meta');
+
   /// Lists playable sources for an item. Half of [ProviderRole.stream].
   ///
   /// Takes the full [item], not just its [MediaRef]: a stream extension that
@@ -52,6 +58,12 @@ abstract class ContentExtension {
     MediaItem item, {
     Set<String>? enabledProviders,
   }) => throw UnsupportedError('${manifest.id} does not provide sources');
+
+  /// Lists playable sources for a protocol-v2 item.
+  Future<List<StreamSource>> sourcesV2(
+    MediaItemV2 item, {
+    Set<String>? enabledProviders,
+  }) => throw UnsupportedError('${manifest.id} does not provide v2 sources');
 
   /// Resolves a source id into a ready stream. Half of [ProviderRole.stream].
   Future<PlayableStream> resolve(String sourceId) =>
@@ -76,4 +88,8 @@ abstract class ContentExtension {
   /// guaranteed to be possible.
   Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) =>
       throw UnsupportedError('${manifest.id} does not provide subtitles');
+
+  /// Looks up subtitles for a protocol-v2 item.
+  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) =>
+      throw UnsupportedError('${manifest.id} does not provide v2 subtitles');
 }

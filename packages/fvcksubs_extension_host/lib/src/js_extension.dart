@@ -123,6 +123,12 @@ class JsExtension extends ContentExtension {
     return MediaDetail.fromJson(decoded);
   }
 
+  @override
+  Future<MediaDetailV2> metaV2(MediaRef ref) async {
+    final decoded = await _call('meta', {'ref': ref.toJson()});
+    return MediaDetailV2.fromJson(decoded);
+  }
+
   /// Lists sources for [item].
   ///
   /// The whole item goes across, not just its ref — a stream extension
@@ -135,9 +141,20 @@ class JsExtension extends ContentExtension {
   Future<List<StreamSource>> sources(
     MediaItem item, {
     Set<String>? enabledProviders,
-  }) async {
+  }) => _sourcesFromJson(item.toJson(), enabledProviders);
+
+  @override
+  Future<List<StreamSource>> sourcesV2(
+    MediaItemV2 item, {
+    Set<String>? enabledProviders,
+  }) => _sourcesFromJson(item.toJson(), enabledProviders);
+
+  Future<List<StreamSource>> _sourcesFromJson(
+    Map<String, Object?> item,
+    Set<String>? enabledProviders,
+  ) async {
     final decoded = await _call('sources', {
-      'item': item.toJson(),
+      'item': item,
       if (enabledProviders != null)
         'enabledProviders': enabledProviders.toList(),
     });
@@ -160,8 +177,17 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) async {
-    final decoded = await _call('subtitles', {'item': item.toJson()});
+  Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) =>
+      _subtitlesFromJson(item.toJson());
+
+  @override
+  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) =>
+      _subtitlesFromJson(item.toJson());
+
+  Future<List<SubtitleTrack>> _subtitlesFromJson(
+    Map<String, Object?> item,
+  ) async {
+    final decoded = await _call('subtitles', {'item': item});
     final list = decoded['subtitles'];
     if (list is! List) {
       throw JsExtensionException(
