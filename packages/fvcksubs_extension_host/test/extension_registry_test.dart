@@ -80,7 +80,8 @@ class FakeExtension extends ContentExtension {
   @override
   Future<CatalogPage> catalog(CatalogQuery query) async {
     if (failCatalog) throw StateError('catalog is down');
-    if (pages.isNotEmpty) return pages[query.page] ?? const CatalogPage(items: []);
+    if (pages.isNotEmpty)
+      return pages[query.page] ?? const CatalogPage(items: []);
     return CatalogPage(items: _catalogItems[query.catalogId] ?? const []);
   }
 
@@ -113,7 +114,8 @@ class FakeExtension extends ContentExtension {
 
   @override
   Future<MediaDetail> meta(MediaRef ref) async =>
-      metaDetail ?? (throw UnsupportedError('${manifest.id} does not provide meta'));
+      metaDetail ??
+      (throw UnsupportedError('${manifest.id} does not provide meta'));
 
   /// What [externalSubtitles] returns when it doesn't throw.
   final List<SubtitleTrack> externalSubtitlesResult;
@@ -241,6 +243,32 @@ void main() {
       expect(page.items.map((i) => i.ref.id), ['a1', 'a2']);
     });
 
+    test('an old binding routes to the replacement extension', () async {
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          id: 'a',
+          categories: ['sport'],
+          catalogItems: {
+            'catalog': [_item('a', 'old')],
+          },
+        ),
+      ]);
+      final binding = registry.catalogsFor('sport').single;
+
+      registry.install(
+        FakeExtension(
+          id: 'a',
+          categories: ['sport'],
+          catalogItems: {
+            'catalog': [_item('a', 'updated')],
+          },
+        ),
+      );
+
+      final page = await registry.loadCatalog(binding);
+      expect(page.items.single.ref.id, 'updated');
+    });
+
     test('propagates a failure instead of swallowing it', () {
       // Each shelf owns its own error state, so the registry must not hide
       // this — one dead catalog shows an error in its shelf, and the other
@@ -279,25 +307,28 @@ void main() {
   });
 
   group('search', () {
-    test('fans out to every search-role extension and merges the results', () async {
-      final registry = ExtensionRegistry([
-        FakeExtension(
-          id: 'a',
-          categories: ['sport'],
-          searchable: true,
-          searchResults: [_item('a', 'a1')],
-        ),
-        FakeExtension(
-          id: 'b',
-          categories: ['movie'],
-          searchable: true,
-          searchResults: [_item('b', 'b1')],
-        ),
-      ]);
+    test(
+      'fans out to every search-role extension and merges the results',
+      () async {
+        final registry = ExtensionRegistry([
+          FakeExtension(
+            id: 'a',
+            categories: ['sport'],
+            searchable: true,
+            searchResults: [_item('a', 'a1')],
+          ),
+          FakeExtension(
+            id: 'b',
+            categories: ['movie'],
+            searchable: true,
+            searchResults: [_item('b', 'b1')],
+          ),
+        ]);
 
-      final results = await registry.search('anything');
-      expect(results.map((i) => i.ref.id), ['a1', 'b1']);
-    });
+        final results = await registry.search('anything');
+        expect(results.map((i) => i.ref.id), ['a1', 'b1']);
+      },
+    );
 
     test('skips an extension that doesn\'t declare the search role', () async {
       final registry = ExtensionRegistry([
@@ -314,7 +345,12 @@ void main() {
 
     test('one provider failing does not blank the others\' results', () async {
       final registry = ExtensionRegistry([
-        FakeExtension(id: 'a', categories: ['sport'], searchable: true, failSearch: true),
+        FakeExtension(
+          id: 'a',
+          categories: ['sport'],
+          searchable: true,
+          failSearch: true,
+        ),
         FakeExtension(
           id: 'b',
           categories: ['movie'],
@@ -346,41 +382,53 @@ void main() {
       expect(await registry.search('anything'), isEmpty);
     });
 
-    test('skips a disabled extension even if its provider is enabled', () async {
-      final registry = ExtensionRegistry([
-        FakeExtension(
-          id: 'a',
-          categories: ['sport'],
-          searchable: true,
-          searchResults: [_item('a', 'a1')],
-        ),
-      ], disabledExtensionIds: {'a'});
+    test(
+      'skips a disabled extension even if its provider is enabled',
+      () async {
+        final registry = ExtensionRegistry(
+          [
+            FakeExtension(
+              id: 'a',
+              categories: ['sport'],
+              searchable: true,
+              searchResults: [_item('a', 'a1')],
+            ),
+          ],
+          disabledExtensionIds: {'a'},
+        );
 
-      expect(await registry.search('anything'), isEmpty);
-    });
+        expect(await registry.search('anything'), isEmpty);
+      },
+    );
   });
 
   group('enable/disable', () {
-    test('starts enabled; setExtensionEnabled toggles categories/catalogs live', () {
-      final registry = ExtensionRegistry([
-        FakeExtension(id: 'a', categories: ['sport']),
-      ]);
-      expect(registry.isExtensionEnabled('a'), isTrue);
-      expect(registry.categories, ['sport']);
+    test(
+      'starts enabled; setExtensionEnabled toggles categories/catalogs live',
+      () {
+        final registry = ExtensionRegistry([
+          FakeExtension(id: 'a', categories: ['sport']),
+        ]);
+        expect(registry.isExtensionEnabled('a'), isTrue);
+        expect(registry.categories, ['sport']);
 
-      registry.setExtensionEnabled('a', false);
-      expect(registry.isExtensionEnabled('a'), isFalse);
-      expect(registry.categories, isEmpty);
-      expect(registry.catalogsFor('sport'), isEmpty);
+        registry.setExtensionEnabled('a', false);
+        expect(registry.isExtensionEnabled('a'), isFalse);
+        expect(registry.categories, isEmpty);
+        expect(registry.catalogsFor('sport'), isEmpty);
 
-      registry.setExtensionEnabled('a', true);
-      expect(registry.categories, ['sport']);
-    });
+        registry.setExtensionEnabled('a', true);
+        expect(registry.categories, ['sport']);
+      },
+    );
 
     test('seeding disabled ids at construction takes effect immediately', () {
-      final registry = ExtensionRegistry([
-        FakeExtension(id: 'a', categories: ['sport']),
-      ], disabledExtensionIds: {'a'});
+      final registry = ExtensionRegistry(
+        [
+          FakeExtension(id: 'a', categories: ['sport']),
+        ],
+        disabledExtensionIds: {'a'},
+      );
       expect(registry.categories, isEmpty);
       expect(registry.disabledExtensionIds, {'a'});
     });
@@ -398,25 +446,31 @@ void main() {
       expect(bindings.single.extensionId, 'b');
     });
 
-    test('sources() short-circuits to empty for a disabled extension, without calling it', () async {
-      final fake = FakeExtension(id: 'a', categories: ['sport']);
-      final registry = ExtensionRegistry([fake], disabledExtensionIds: {'a'});
+    test(
+      'sources() short-circuits to empty for a disabled extension, without calling it',
+      () async {
+        final fake = FakeExtension(id: 'a', categories: ['sport']);
+        final registry = ExtensionRegistry([fake], disabledExtensionIds: {'a'});
 
-      expect(await registry.sources(_item('a', 'x')), isEmpty);
-      expect(fake.lastEnabledProviders, isNull);
-    });
+        expect(await registry.sources(_item('a', 'x')), isEmpty);
+        expect(fake.lastEnabledProviders, isNull);
+      },
+    );
 
-    test('sources() passes only this extension\'s enabled stream providers', () async {
-      final fake = FakeExtension(id: 'a', categories: ['sport']);
-      final registry = ExtensionRegistry([fake]);
+    test(
+      'sources() passes only this extension\'s enabled stream providers',
+      () async {
+        final fake = FakeExtension(id: 'a', categories: ['sport']);
+        final registry = ExtensionRegistry([fake]);
 
-      await registry.sources(_item('a', 'x'));
-      expect(fake.lastEnabledProviders, {'a.p'});
+        await registry.sources(_item('a', 'x'));
+        expect(fake.lastEnabledProviders, {'a.p'});
 
-      registry.setProviderEnabled('a.p', false);
-      await registry.sources(_item('a', 'x'));
-      expect(fake.lastEnabledProviders, isEmpty);
-    });
+        registry.setProviderEnabled('a.p', false);
+        await registry.sources(_item('a', 'x'));
+        expect(fake.lastEnabledProviders, isEmpty);
+      },
+    );
   });
 
   group('routing', () {
@@ -490,20 +544,23 @@ void main() {
         expect(fake.externalSubtitlesCalls, 0);
       });
 
-      test('short-circuits to empty for a disabled extension, without calling it', () async {
-        final fake = FakeExtension(
-          id: 'subs',
-          categories: ['movie'],
-          subtitlesRole: true,
-        );
-        final registry = ExtensionRegistry(
-          [fake],
-          disabledExtensionIds: {'subs'},
-        );
+      test(
+        'short-circuits to empty for a disabled extension, without calling it',
+        () async {
+          final fake = FakeExtension(
+            id: 'subs',
+            categories: ['movie'],
+            subtitlesRole: true,
+          );
+          final registry = ExtensionRegistry(
+            [fake],
+            disabledExtensionIds: {'subs'},
+          );
 
-        expect(await registry.externalSubtitles(_item('subs', 'x')), isEmpty);
-        expect(fake.externalSubtitlesCalls, 0);
-      });
+          expect(await registry.externalSubtitles(_item('subs', 'x')), isEmpty);
+          expect(fake.externalSubtitlesCalls, 0);
+        },
+      );
 
       test('a lookup failure comes back empty rather than throwing', () async {
         final fake = FakeExtension(
@@ -553,9 +610,16 @@ void main() {
       final replacement = FakeExtension(id: 'a', categories: ['movie']);
       final replaced = registry.install(replacement);
 
-      expect(replaced, same(original), reason: 'caller must be able to dispose it');
-      expect(registry.installed.map((m) => m.id), ['a', 'b'],
-          reason: 'replaced in place, so order is unchanged');
+      expect(
+        replaced,
+        same(original),
+        reason: 'caller must be able to dispose it',
+      );
+      expect(
+        registry.installed.map((m) => m.id),
+        ['a', 'b'],
+        reason: 'replaced in place, so order is unchanged',
+      );
       expect(registry.extensionById('a'), same(replacement));
       expect(registry.categories, contains('movie'));
     });
@@ -568,8 +632,12 @@ void main() {
 
       registry.install(FakeExtension(id: 'a', categories: ['live']));
 
-      expect(registry.isExtensionEnabled('a'), isFalse,
-          reason: 'updating an extension the user switched off must not switch it back on');
+      expect(
+        registry.isExtensionEnabled('a'),
+        isFalse,
+        reason:
+            'updating an extension the user switched off must not switch it back on',
+      );
     });
 
     test('uninstall removes the extension and returns it', () {

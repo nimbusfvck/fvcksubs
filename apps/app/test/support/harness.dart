@@ -41,11 +41,12 @@ class FakeExtension extends ContentExtension {
     String? catalogName,
     String? description,
     String? author,
+    String version = '1.0.0',
   }) : _manifest = Manifest.parse({
          'apiVersion': 1,
          'id': id,
          'name': name ?? id,
-         'version': '1.0.0',
+         'version': version,
          'runtime': 'builtin',
          'description': ?description,
          'author': ?author,

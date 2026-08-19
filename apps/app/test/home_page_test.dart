@@ -5,6 +5,7 @@ import 'package:fvcksubs_app/catalog/catalog_screen.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/catalog/media_grid.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
+import 'package:fvcksubs_app/addons/installer_controller.dart';
 import 'package:fvcksubs_app/catalog/plugin_selector.dart';
 import 'package:fvcksubs_app/home/catalog_shelf.dart';
 import 'package:fvcksubs_app/home/home_page.dart';
@@ -703,6 +704,50 @@ void main() {
 
       expect(extension.catalogCalls, 2);
       expect(find.text('Live Item'), findsOneWidget);
+    });
+
+    testWidgets('an installed update replaces the visible cached catalog', (
+      tester,
+    ) async {
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          id: 'nimora',
+          version: '1.0.0',
+          categories: ['sport'],
+          items: [fakeItem(title: 'Old catalog')],
+        ),
+      ]);
+      final controller = InstallerController(
+        registry: registry,
+        installer: ExtensionInstaller(),
+        installedStore: FakeInstalledExtensionStore(),
+        repoStore: FakeRepoStore(),
+      );
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: const HomePage(),
+          registry: registry,
+          installerController: controller,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Old catalog'), findsOneWidget);
+
+      registry.install(
+        FakeExtension(
+          id: 'nimora',
+          version: '1.1.0',
+          categories: ['sport'],
+          items: [fakeItem(title: 'Updated catalog')],
+        ),
+      );
+      await controller.setRepoUrl('https://example.invalid/repo.json');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Old catalog'), findsNothing);
+      expect(find.text('Updated catalog'), findsOneWidget);
     });
   });
 }

@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
+import '../addons/installer_controller.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
 import '../theme/tokens.dart';
@@ -58,7 +60,7 @@ class _HomePageState extends State<HomePage> {
     await Future.wait([
       for (final binding in bindings)
         scope.catalogCache
-            .reload(scope.registry, binding, category: category)
+            .reloadVersioned(scope.registry, binding, category: category)
             .then<void>((_) {}, onError: (_, _) {}),
     ]);
     if (!mounted) return;
@@ -68,9 +70,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    return ListenableBuilder(
-      listenable: scope.pluginController,
-      builder: (context, _) => _body(context, scope),
+    return BlocBuilder<InstallerController, InstallerState>(
+      bloc: scope.installerController,
+      builder: (context, _) => ListenableBuilder(
+        listenable: scope.pluginController,
+        builder: (context, _) => _body(context, scope),
+      ),
     );
   }
 
@@ -159,6 +164,7 @@ class _HomePageState extends State<HomePage> {
                 delegate: SliverChildBuilderDelegate((context, i) {
                   final key = ValueKey(
                     '$_generation/$selected/${bindings[i].extensionId}/'
+                    '${bindings[i].extension.manifest.version}/'
                     '${bindings[i].catalog.id}',
                   );
                   if (bindings[i].catalog.expanded) {

@@ -8,7 +8,8 @@ class CatalogCache {
   final Map<String, VersionedCatalogPage> _versionedCompleted = {};
 
   static String _keyOf(CatalogBinding binding, String category) =>
-      '${binding.extensionId}/${binding.catalog.id}/$category';
+      '${binding.extensionId}@${binding.extension.manifest.version}/'
+      '${binding.catalog.id}/$category';
 
   CatalogPage? peek(CatalogBinding binding, String category) =>
       _completed[_keyOf(binding, category)];

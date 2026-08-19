@@ -187,7 +187,7 @@ class ExtensionRegistry {
     String? page,
     Map<String, String> filters = const {},
     String? subCategory,
-  }) => binding.extension.catalog(
+  }) => _currentExtension(binding).catalog(
     CatalogQuery(
       providerId: binding.providerId,
       catalogId: binding.catalog.id,
@@ -205,7 +205,7 @@ class ExtensionRegistry {
     String? page,
     Map<String, String> filters = const {},
     String? subCategory,
-  }) => binding.extension.catalogVersioned(
+  }) => _currentExtension(binding).catalogVersioned(
     CatalogQuery(
       providerId: binding.providerId,
       catalogId: binding.catalog.id,
@@ -215,6 +215,16 @@ class ExtensionRegistry {
       subCategory: subCategory,
     ),
   );
+
+  ContentExtension _currentExtension(CatalogBinding binding) {
+    final index = _extensions.indexWhere(
+      (extension) => extension.manifest.id == binding.extensionId,
+    );
+    if (index < 0) {
+      throw StateError('Extension "${binding.extensionId}" is not installed.');
+    }
+    return _extensions[index];
+  }
 
   /// Free-text search, fanned out to every installed extension that declares
   /// [ProviderRole.search], merged into one list.
