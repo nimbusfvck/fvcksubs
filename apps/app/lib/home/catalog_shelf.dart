@@ -4,9 +4,9 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
 import '../catalog/catalog_screen.dart';
-import '../catalog/media_card.dart';
-import '../catalog/media_grid.dart';
-import '../detail/open_item.dart';
+import '../catalog/media_card_v2.dart';
+import '../catalog/media_grid_v2.dart';
+import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 
 class CatalogShelf extends StatefulWidget {
@@ -37,22 +37,22 @@ class CatalogShelf extends StatefulWidget {
 }
 
 class _CatalogShelfState extends State<CatalogShelf> {
-  Future<CatalogPage>? _future;
+  Future<VersionedCatalogPage>? _future;
 
-  CatalogPage? _cached;
+  VersionedCatalogPage? _cached;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_future != null) return;
     final scope = AppScope.of(context);
-    _cached = scope.catalogCache.peek(widget.binding, widget.category);
+    _cached = scope.catalogCache.peekVersioned(widget.binding, widget.category);
     _future = _load();
   }
 
-  Future<CatalogPage> _load() {
+  Future<VersionedCatalogPage> _load() {
     final scope = AppScope.of(context);
-    return scope.catalogCache.load(
+    return scope.catalogCache.loadVersioned(
       scope.registry,
       widget.binding,
       category: widget.category,
@@ -63,7 +63,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
     final scope = AppScope.of(context);
     setState(() {
       _cached = null;
-      _future = scope.catalogCache.reload(
+      _future = scope.catalogCache.reloadVersioned(
         scope.registry,
         widget.binding,
         category: widget.category,
@@ -71,7 +71,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
     });
   }
 
-  void _open(MediaItem item) => openItem(context, item);
+  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
   void _openCatalog({String? subCategory, String? title}) =>
       Navigator.of(context).push(
@@ -86,7 +86,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
       );
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<CatalogPage>(
+  Widget build(BuildContext context) => FutureBuilder<VersionedCatalogPage>(
     future: _future,
     initialData: _cached,
     builder: (context, snapshot) {
@@ -110,7 +110,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
       }
 
       final page = snapshot.data;
-      final items = page?.items ?? const <MediaItem>[];
+      final items = page?.items ?? const <VersionedMediaItem>[];
       if (items.isEmpty) {
         return _ShelfMessage(
           child: Text(
@@ -128,17 +128,17 @@ class _CatalogShelfState extends State<CatalogShelf> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final group in MediaGrid.groupsOf(items))
+          for (final section in page.sections)
             _Section(
-              group: group,
+              section: section,
               display: widget.binding.catalog.display,
               fallbackTitle: widget.binding.catalog.name,
-              subCategoryId: group.label == null
+              subCategoryId: section.title == null
                   ? null
-                  : idsByName[group.label],
+                  : idsByName[section.title],
               onTap: _open,
               onSeeMore: (subCategory) =>
-                  _openCatalog(subCategory: subCategory, title: group.label),
+                  _openCatalog(subCategory: subCategory, title: section.title),
             ),
         ],
       );
@@ -148,7 +148,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
 class _Section extends StatelessWidget {
   const _Section({
-    required this.group,
+    required this.section,
     required this.display,
     required this.fallbackTitle,
     required this.subCategoryId,
@@ -156,37 +156,39 @@ class _Section extends StatelessWidget {
     required this.onSeeMore,
   });
 
-  final MediaGroup group;
+  final CatalogSectionV2 section;
   final CatalogDisplay display;
 
   final String fallbackTitle;
 
   final String? subCategoryId;
-  final ValueChanged<MediaItem> onTap;
+  final ValueChanged<VersionedMediaItem> onTap;
   final ValueChanged<String?> onSeeMore;
 
   @override
   Widget build(BuildContext context) {
     final limit = CatalogShelf.previewLimitFor(display);
-    final hasMore = group.items.length > limit;
-    final preview = hasMore ? group.items.take(limit).toList() : group.items;
+    final hasMore = section.items.length > limit;
+    final preview = hasMore
+        ? section.items.take(limit).toList()
+        : section.items;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Header(
-          title: group.label ?? fallbackTitle,
+          title: section.title ?? fallbackTitle,
           onSeeMore: hasMore ? () => onSeeMore(subCategoryId) : null,
         ),
         switch (display) {
           CatalogDisplay.row => _Carousel(items: preview, onTap: onTap),
-          CatalogDisplay.grid => MediaGrid(
-            items: preview,
+          CatalogDisplay.grid => MediaGridV2(
+            sections: [CatalogSectionV2(id: section.id, items: preview)],
             onTap: onTap,
             scrollable: false,
           ),
-          CatalogDisplay.list => MediaGrid(
-            items: preview,
+          CatalogDisplay.list => MediaGridV2(
+            sections: [CatalogSectionV2(id: section.id, items: preview)],
             onTap: onTap,
             scrollable: false,
             columns: 1,
@@ -238,12 +240,14 @@ class _Header extends StatelessWidget {
 class _Carousel extends StatelessWidget {
   const _Carousel({required this.items, required this.onTap});
 
-  final List<MediaItem> items;
-  final ValueChanged<MediaItem> onTap;
+  final List<VersionedMediaItem> items;
+  final ValueChanged<VersionedMediaItem> onTap;
 
   @override
   Widget build(BuildContext context) {
-    final posterMode = items.any((item) => item.poster != null);
+    final posterMode = items.any(
+      (entry) => entry.item.artwork?.portrait != null,
+    );
     final itemWidth = posterMode ? 140.0 : 300.0;
     final height = posterMode ? 260.0 : 172.0;
 
@@ -256,7 +260,7 @@ class _Carousel extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
         itemBuilder: (context, i) => SizedBox(
           width: itemWidth,
-          child: MediaCard(item: items[i], onTap: () => onTap(items[i])),
+          child: MediaCardV2(item: items[i].item, onTap: () => onTap(items[i])),
         ),
       ),
     );

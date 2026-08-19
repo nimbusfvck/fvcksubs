@@ -3,8 +3,9 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
-import '../catalog/media_grid.dart';
-import '../detail/open_item.dart';
+import '../catalog/catalog_cache.dart';
+import '../catalog/media_grid_v2.dart';
+import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 
 class CatalogGridSection extends StatefulWidget {
@@ -26,7 +27,7 @@ class CatalogGridSection extends StatefulWidget {
 }
 
 class _CatalogGridSectionState extends State<CatalogGridSection> {
-  List<MediaItem> _items = const [];
+  VersionedCatalogPage? _page;
   String? _nextPage;
   bool _loading = true;
   bool _loadingMore = false;
@@ -46,9 +47,9 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     _started = true;
     final cached = AppScope.of(
       context,
-    ).catalogCache.peek(widget.binding, widget.category);
+    ).catalogCache.peekVersioned(widget.binding, widget.category);
     if (cached != null) {
-      _items = cached.items;
+      _page = cached;
       _nextPage = cached.nextPage;
       _loading = false;
     }
@@ -64,14 +65,14 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   Future<void> _load() async {
     final scope = AppScope.of(context);
     try {
-      final page = await scope.catalogCache.load(
+      final page = await scope.catalogCache.loadVersioned(
         scope.registry,
         widget.binding,
         category: widget.category,
       );
       if (!mounted) return;
       setState(() {
-        _items = page.items;
+        _page = page;
         _nextPage = page.nextPage;
         _loading = false;
         _error = null;
@@ -100,14 +101,14 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   Future<void> _loadMore() async {
     setState(() => _loadingMore = true);
     try {
-      final page = await AppScope.of(context).registry.loadCatalog(
+      final page = await AppScope.of(context).registry.loadCatalogVersioned(
         widget.binding,
         category: widget.category,
         page: _nextPage,
       );
       if (!mounted) return;
       setState(() {
-        _items = [..._items, ...page.items];
+        _page = _page == null ? page : mergeVersionedCatalogPages(_page!, page);
         _nextPage = page.nextPage;
         _loadingMore = false;
       });
@@ -117,7 +118,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
   }
 
-  void _open(MediaItem item) => openItem(context, item);
+  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +145,8 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
         ),
       );
     }
-    if (_items.isEmpty) {
+    final page = _page;
+    if (page == null || page.items.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
         child: Center(
@@ -157,7 +159,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
     return Column(
       children: [
-        MediaGrid(items: _items, onTap: _open, scrollable: false),
+        MediaGridV2(sections: page.sections, onTap: _open, scrollable: false),
         if (_loadingMore)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),

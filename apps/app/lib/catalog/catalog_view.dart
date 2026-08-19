@@ -3,7 +3,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
-import '../detail/open_item.dart';
+import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import 'catalog_filter_bar.dart';
 import 'catalog_cache.dart';
@@ -153,16 +153,7 @@ class _CatalogViewState extends State<CatalogView> {
     _load();
   }
 
-  void _open(VersionedMediaItem item) {
-    final legacy = item.legacyItem;
-    if (legacy != null) {
-      openItem(context, legacy);
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('This item requires protocol v2 playback.')),
-    );
-  }
+  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
   @override
   Widget build(BuildContext context) => Column(
