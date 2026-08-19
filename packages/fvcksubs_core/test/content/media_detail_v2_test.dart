@@ -35,6 +35,7 @@ void main() {
               EpisodeSummary(
                 ref: episodeRef,
                 title: 'Episode 1',
+                position: 1,
                 durationSeconds: 1200,
               ),
             ],
@@ -57,7 +58,11 @@ void main() {
               'id': 'volume-1',
               'title': 'Volume 1',
               'episodes': [
-                {'ref': episodeRef.toJson(), 'title': 'Episode 1'},
+                {
+                  'ref': episodeRef.toJson(),
+                  'title': 'Episode 1',
+                  'position': 1,
+                },
               ],
             },
           ],
@@ -84,6 +89,7 @@ void main() {
       () => EpisodeSummary.fromJson({
         'ref': episodeRef.toJson(),
         'title': 'Episode 1',
+        'position': 1,
         'availableAt': '2026-08-19T18:00:00+07:00',
       }),
       throwsFormatException,
@@ -102,7 +108,19 @@ void main() {
       () => EpisodeSummary.fromJson({
         'ref': episodeRef.toJson(),
         'title': 'Episode 1',
+        'position': 1,
         'durationSeconds': 0,
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('episode position must be a positive integer', () {
+    expect(
+      () => EpisodeSummary.fromJson({
+        'ref': episodeRef.toJson(),
+        'title': 'Episode 1',
+        'position': 0,
       }),
       throwsFormatException,
     );

@@ -165,6 +165,8 @@ interface EpisodeSummary {
   ref: MediaRef;
   /** Primary episode row text. */
   title: string;
+  /** One-based episode position displayed inside its group. */
+  position: number;
   /** Optional synopsis shown in the episode list. */
   description?: string;
   /** Optional episode-specific artwork. */

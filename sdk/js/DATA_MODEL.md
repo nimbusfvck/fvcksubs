@@ -76,8 +76,9 @@ secondary selector.
 | `credits` | no | Credited people or entities with `name`, optional `role`, and optional `image`. |
 | `episodeGuide` | no | Typed episode navigation grouped by extension-defined IDs and titles. |
 
-Each episode summary has its own stable `ref`, a `title`, and optional
-`description`, `artwork`, positive `durationSeconds`, and UTC `availableAt`.
+Each episode summary has its own stable `ref`, a `title`, and a positive
+one-based `position` displayed within its group. `description`, `artwork`,
+positive `durationSeconds`, and UTC `availableAt` are optional.
 `defaultEpisodeRef`, when supplied, must point to an episode listed in the
 guide. Groups are generic and may represent any extension-defined grouping.
 

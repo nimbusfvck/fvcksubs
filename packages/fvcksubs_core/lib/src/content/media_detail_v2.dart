@@ -72,6 +72,7 @@ class EpisodeSummary extends Equatable {
   const EpisodeSummary({
     required this.ref,
     required this.title,
+    required this.position,
     this.description,
     this.artwork,
     this.durationSeconds,
@@ -83,12 +84,19 @@ class EpisodeSummary extends Equatable {
     _rejectUnknown(json, const {
       'ref',
       'title',
+      'position',
       'description',
       'artwork',
       'durationSeconds',
       'availableAt',
     }, 'episode summary');
     final duration = json['durationSeconds'];
+    final position = json['position'];
+    if (position is! num || position.toInt() != position || position < 1) {
+      throw const FormatException(
+        'episode.position must be a positive integer',
+      );
+    }
     if (duration != null &&
         (duration is! num || duration.toInt() != duration || duration <= 0)) {
       throw const FormatException(
@@ -98,6 +106,7 @@ class EpisodeSummary extends Equatable {
     return EpisodeSummary(
       ref: _requiredRef(json['ref'], 'episode.ref'),
       title: _requiredString(json['title'], 'episode.title'),
+      position: position.toInt(),
       description: _optionalString(json['description'], 'episode.description'),
       artwork: _optionalArtwork(json['artwork'], 'episode.artwork'),
       durationSeconds: (duration as num?)?.toInt(),
@@ -110,6 +119,9 @@ class EpisodeSummary extends Equatable {
 
   /// Primary episode title.
   final String title;
+
+  /// One-based display position inside the containing group.
+  final int position;
 
   /// Optional synopsis.
   final String? description;
@@ -127,6 +139,7 @@ class EpisodeSummary extends Equatable {
   Map<String, Object?> toJson() => {
     'ref': ref.toJson(),
     'title': title,
+    'position': position,
     if (description != null) 'description': description,
     if (artwork != null) 'artwork': artwork!.toJson(),
     if (durationSeconds != null) 'durationSeconds': durationSeconds,
@@ -138,6 +151,7 @@ class EpisodeSummary extends Equatable {
   List<Object?> get props => [
     ref,
     title,
+    position,
     description,
     artwork,
     durationSeconds,

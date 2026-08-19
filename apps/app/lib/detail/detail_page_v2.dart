@@ -42,7 +42,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
       episode: EpisodeIdentity(
         parentRef: parent.ref,
         groupId: group.id,
-        position: index + 1,
+        position: episode.position,
       ),
     );
   }
@@ -332,7 +332,7 @@ class _Credits extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 80,
+    height: 88,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
       itemCount: values.length,
@@ -346,31 +346,77 @@ class _Credits extends StatelessWidget {
             color: AppColors.surfaceDarkElevated,
             borderRadius: AppRadius.md,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
-              Text(
-                credit.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
-              ),
-              if (credit.role case final role?)
-                Text(
-                  role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
+              _CreditAvatar(credit: credit),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      credit.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDark,
+                      ),
+                    ),
+                    if (credit.role case final role?)
+                      Text(
+                        role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         );
       },
     ),
   );
+}
+
+class _CreditAvatar extends StatelessWidget {
+  const _CreditAvatar({required this.credit});
+
+  final MediaCredit credit;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = ColoredBox(
+      color: AppColors.surfaceDark,
+      child: Center(
+        child: Text(
+          credit.name.characters.first.toUpperCase(),
+          style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+        ),
+      ),
+    );
+    return Semantics(
+      image: credit.image != null,
+      label: '${credit.name} profile image',
+      child: ClipOval(
+        child: SizedBox.square(
+          dimension: 48,
+          child: credit.image == null
+              ? fallback
+              : CachedNetworkImage(
+                  imageUrl: credit.image!.url,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => fallback,
+                  errorWidget: (_, _, _) => fallback,
+                ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EpisodeTile extends StatelessWidget {
@@ -380,18 +426,56 @@ class _EpisodeTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(episode.title),
-    subtitle: episode.description == null
-        ? null
-        : Text(
-            episode.description!,
-            maxLines: 2,
+  Widget build(BuildContext context) {
+    final image = episode.artwork?.landscape ?? episode.artwork?.portrait;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      minVerticalPadding: AppSpacing.sm,
+      leading: ClipRRect(
+        borderRadius: AppRadius.sm,
+        child: SizedBox(
+          width: 104,
+          height: 60,
+          child: image == null
+              ? const _EpisodeImageFallback()
+              : CachedNetworkImage(
+                  imageUrl: image.url,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => const _EpisodeImageFallback(),
+                  errorWidget: (_, _, _) => const _EpisodeImageFallback(),
+                ),
+        ),
+      ),
+      title: Text(
+        'Episode ${episode.position}',
+        style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            episode.title,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
           ),
-    trailing: const Icon(Icons.play_circle_outline),
-    onTap: onTap,
+          if (episode.description case final description?)
+            Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+      trailing: const Icon(Icons.play_circle_outline),
+      onTap: onTap,
+    );
+  }
+}
+
+class _EpisodeImageFallback extends StatelessWidget {
+  const _EpisodeImageFallback();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+    color: AppColors.surfaceDarkElevated,
+    child: Icon(Icons.movie_outlined, color: AppColors.onDarkSoft),
   );
 }
 
