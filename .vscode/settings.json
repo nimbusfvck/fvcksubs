@@ -1,0 +1,19 @@
+{
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.rulers": [80],
+        "editor.selectionHighlight": false,
+        "editor.suggest.snippetsPreventQuickSuggestions": false,
+        "editor.suggestSelection": "first",
+        "editor.tabCompletion": "onlySnippets",
+        "editor.wordBasedSuggestions": "off"
+    },
+    "dart.previewFlutterUiGuides": true,
+    "dart.closingLabels": true,
+    // The root pubspec.yaml is a Dart pub workspace manifest (`workspace:`),
+    // not a Flutter project — without this, Dart-Code stops at that pubspec
+    // and never reaches apps/app's, so it treats the whole folder as
+    // "Dart-only" and refuses to launch on a device.
+    "dart.projectSearchDepth": 4
+}

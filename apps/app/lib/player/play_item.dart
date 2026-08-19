@@ -1,0 +1,308 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
+
+import '../app_scope.dart';
+import '../platform/playback_capability.dart';
+import '../theme/tokens.dart';
+import 'player_page.dart';
+import 'subtitle_preference_controller.dart';
+
+Future<void> playItem(
+  BuildContext context,
+  MediaItem item, {
+  List<SeriesSeason> seasons = const [],
+  bool replaceCurrent = false,
+}) async {
+  final scope = AppScope.of(context);
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+
+  final cached = scope.sourceCache.peek(item.ref);
+  if (cached != null) {
+    _openPlayer(navigator, scope, item, cached, seasons, replaceCurrent);
+    if (scope.sourceCache.isStale(item.ref)) {
+      unawaited(_revalidate(scope, item));
+    }
+    return;
+  }
+
+  final cachedList = scope.sourceCache.peekSourceList(item.ref);
+  if (cachedList != null && cachedList.isNotEmpty) {
+    final fast = await _resolveWithOverlay(
+      context,
+      navigator,
+      (progress) =>
+          _resolveKnownSources(scope, item, [cachedList.first], progress),
+    );
+    if (fast == null) return; // abandoned mid-resolve
+    if (fast.isNotEmpty) {
+      scope.sourceCache.store(item.ref, fast);
+      final pendingSources = _revalidate(scope, item);
+      _openPlayer(
+        navigator,
+        scope,
+        item,
+        fast,
+        seasons,
+        replaceCurrent,
+        pendingSources: pendingSources,
+      );
+      return;
+    }
+  }
+
+  final sources = await _resolveWithOverlay(
+    context,
+    navigator,
+    (progress) => _playableSources(scope, item, progress),
+  );
+  if (sources == null) return;
+
+  if (sources.isEmpty) {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('No playable sources found.')),
+    );
+    return;
+  }
+
+  scope.sourceCache.store(item.ref, sources);
+  _openPlayer(navigator, scope, item, sources, seasons, replaceCurrent);
+}
+
+Future<List<ResolvedSource>?> _resolveWithOverlay(
+  BuildContext context,
+  NavigatorState navigator,
+  Future<List<ResolvedSource>> Function(_ResolveProgress progress) resolve,
+) async {
+  final progress = _ResolveProgress();
+  final overlay = DialogRoute<void>(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: Colors.black87,
+    builder: (_) => _PlayLoadingOverlay(progress: progress),
+  );
+
+  var abandoned = false;
+  unawaited(overlay.popped.whenComplete(() => abandoned = true));
+  unawaited(navigator.push(overlay));
+
+  final result = await resolve(progress);
+  progress.dispose();
+
+  if (abandoned) return null;
+  navigator.removeRoute(overlay);
+  return result;
+}
+
+Future<List<ResolvedSource>?> _revalidate(
+  AppScope scope,
+  MediaItem item,
+) async {
+  final progress = _ResolveProgress();
+  final sources = await _playableSources(scope, item, progress);
+  progress.dispose();
+  if (sources.isEmpty) return null;
+  scope.sourceCache.store(item.ref, sources);
+  return sources;
+}
+
+void _openPlayer(
+  NavigatorState navigator,
+  AppScope scope,
+  MediaItem item,
+  List<ResolvedSource> sources,
+  List<SeriesSeason> seasons,
+  bool replaceCurrent, {
+  Future<List<ResolvedSource>?>? pendingSources,
+}) {
+  final resolved = _preferredFirst(sources, scope.subtitlePreferenceController);
+  scope.libraryController.recordWatched(item);
+  final route = MaterialPageRoute<void>(
+    builder: (_) => PlayerPage(
+      item: item,
+      resolvedSources: resolved,
+      seasons: seasons,
+      pendingSources: pendingSources,
+    ),
+  );
+  unawaited(
+    replaceCurrent ? navigator.pushReplacement(route) : navigator.push(route),
+  );
+}
+
+List<ResolvedSource> _preferredFirst(
+  List<ResolvedSource> sources,
+  SubtitlePreferenceController preference,
+) {
+  if (preference.languageCode == null) return sources;
+  final matching = <ResolvedSource>[];
+  final rest = <ResolvedSource>[];
+  for (final source in sources) {
+    if (preference.isSatisfiedBy(source.stream.subtitles)) {
+      matching.add(source);
+    } else {
+      rest.add(source);
+    }
+  }
+  return [...matching, ...rest];
+}
+
+Future<List<ResolvedSource>> _playableSources(
+  AppScope scope,
+  MediaItem item,
+  _ResolveProgress progress,
+) async {
+  List<StreamSource> sources;
+  try {
+    sources = await scope.registry.sources(item);
+  } catch (_) {
+    return const [];
+  }
+  if (sources.isEmpty) return const [];
+
+  scope.sourceCache.recordSourceList(item.ref, sources);
+  return _resolveKnownSources(scope, item, sources, progress);
+}
+
+Future<List<ResolvedSource>> _resolveKnownSources(
+  AppScope scope,
+  MediaItem item,
+  List<StreamSource> sources,
+  _ResolveProgress progress,
+) async {
+  progress.begin([for (final source in sources) source.label]);
+
+  final target = PlaybackTarget.detect();
+  final resolved = await Future.wait(
+    sources.map((source) async {
+      try {
+        final stream = await scope.registry.resolveSource(item.ref, source.id);
+        if (!target.canPlay(stream)) return null;
+        return ResolvedSource(source: source, stream: stream);
+      } catch (_) {
+        return null;
+      } finally {
+        progress.markSettled(source.label);
+      }
+    }),
+  );
+  return resolved.whereType<ResolvedSource>().toList();
+}
+
+class _ResolveProgress extends ChangeNotifier {
+  final List<String> _outstanding = [];
+  int _total = 0;
+  int _settled = 0;
+
+  List<String> get outstanding => List.unmodifiable(_outstanding);
+
+  int get settledCount => _settled;
+  int get total => _total;
+
+  void begin(List<String> names) {
+    _outstanding
+      ..clear()
+      ..addAll(names);
+    _total = names.length;
+    _settled = 0;
+    notifyListeners();
+  }
+
+  void markSettled(String name) {
+    _outstanding.remove(name);
+    _settled++;
+    notifyListeners();
+  }
+}
+
+class _PlayLoadingOverlay extends StatefulWidget {
+  const _PlayLoadingOverlay({required this.progress});
+
+  final _ResolveProgress progress;
+
+  @override
+  State<_PlayLoadingOverlay> createState() => _PlayLoadingOverlayState();
+}
+
+class _PlayLoadingOverlayState extends State<_PlayLoadingOverlay> {
+  Timer? _ticker;
+  int _cursor = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(milliseconds: 900), (_) {
+      if (mounted) setState(() => _cursor++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: ListenableBuilder(
+          listenable: widget.progress,
+          builder: (context, _) {
+            final outstanding = widget.progress.outstanding;
+            final total = widget.progress.total;
+            final line = outstanding.isEmpty
+                ? 'Finding sources…'
+                : 'Checking ${outstanding[_cursor % outstanding.length]}…';
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                      Icon(
+                        Icons.travel_explore,
+                        color: AppColors.onDark,
+                        size: 22,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  line,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleSm.copyWith(
+                    color: AppColors.onDark,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                if (total > 0) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${widget.progress.settledCount} of $total ready',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}

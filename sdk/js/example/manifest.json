@@ -1,0 +1,26 @@
+{
+  "apiVersion": 1,
+  "id": "hello",
+  "name": "Hello SDK",
+  "version": "1.0.0",
+  "runtime": "js",
+  "entry": "bundle.js",
+  "categories": ["movie"],
+  "providers": [
+    {
+      "id": "hello.catalog",
+      "roles": ["catalog"],
+      "catalogs": [
+        {
+          "id": "main",
+          "name": "Hello",
+          "categories": ["movie"],
+          "kind": "movie",
+          "display": "grid"
+        }
+      ]
+    },
+    { "id": "hello.stream", "roles": ["stream"] }
+  ],
+  "permissions": { "hosts": ["cdn.example.com"] }
+}

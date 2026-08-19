@@ -1,0 +1,11 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins-dependencies
+pubspec_overrides.yaml
+*.iml
+.idea/
+.DS_Store
+
+# Planning doc — kept in the folder, not tracked.
+PLAN.md

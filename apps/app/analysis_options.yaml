@@ -1,0 +1,10 @@
+include: package:lints/recommended.yaml
+
+# App code, not a published library — widgets don't need public-API docs, and
+# Flutter's own APIs use dynamic in places. Keep the load-bearing style rules.
+linter:
+  rules:
+    - prefer_single_quotes
+    - prefer_const_constructors
+    - prefer_final_locals
+    - unawaited_futures

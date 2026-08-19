@@ -1,0 +1,20 @@
+name: fvcksubs_core
+description: >-
+  Content model, extension protocol, and cross-extension matcher for fvcksubs.
+  Pure Dart, no Flutter — so the protocol and the matcher can be tested without
+  a device.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+resolution: workspace
+
+dependencies:
+  equatable: ^2.0.7
+  meta: ^1.16.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0

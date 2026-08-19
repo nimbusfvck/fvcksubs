@@ -1,0 +1,43 @@
+name: fvcksubs_app
+description: fvcksubs — a multi-vertical streaming shell driven by extensions.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  fvcksubs_core:
+    path: ../../packages/fvcksubs_core
+  fvcksubs_extension_host:
+    path: ../../packages/fvcksubs_extension_host
+  fvcksubs_storage:
+    path: ../../packages/fvcksubs_storage
+  better_player_plus: ^1.3.5
+  cached_network_image: ^3.4.1
+  device_info_plus: ^13.2.0
+
+dev_dependencies:
+  # Test-only: installer_controller_test builds a repo.json whose declared
+  # bundle hash has to match what ExtensionInstaller computes.
+  crypto: ^3.0.7
+  flutter_test:
+    sdk: flutter
+  lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Inter is bundled rather than fetched at runtime by google_fonts. With the
+  # runtime fetch, the first frame laid out against a narrower fallback font
+  # and text that sizes tightly to its content — the category chips — stayed
+  # clipped once the real font arrived. Bundling also means text renders
+  # correctly with no network at all.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf

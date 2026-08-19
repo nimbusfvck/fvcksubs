@@ -1,0 +1,16 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: FvcksubsJsRuntimeBindings
+description: |
+  Bindings for `src/fvcksubs_js_runtime.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/fvcksubs_js_runtime_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/fvcksubs_js_runtime.h'
+  include-directives:
+    - 'src/fvcksubs_js_runtime.h'
+ffi-native:
+comments:
+  style: any
+  length: full

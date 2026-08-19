@@ -1,0 +1,103 @@
+import 'package:flutter/material.dart';
+
+import '../theme/tokens.dart';
+import 'installer_controller.dart';
+
+Future<bool> showPermissionDialog(
+  BuildContext context,
+  PermissionRequest request,
+) async {
+  final accepted = await showDialog<bool>(
+    context: context,
+    builder: (context) => _PermissionDialog(request: request),
+  );
+  return accepted ?? false;
+}
+
+class _PermissionDialog extends StatelessWidget {
+  const _PermissionDialog({required this.request});
+
+  final PermissionRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = request.entry;
+    return AlertDialog(
+      backgroundColor: AppColors.surfaceDarkElevated,
+      title: Text(
+        request.isUpdate ? 'Update ${entry.name}?' : 'Install ${entry.name}?',
+        style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            [
+              'Version ${entry.version}',
+              if (entry.author != null) 'by ${entry.author}',
+            ].join(' · '),
+            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+          ),
+          if (entry.description != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              entry.description!,
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (request.newHosts.isEmpty)
+            Text(
+              'This extension requests no network access.',
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+            )
+          else ...[
+            Text(
+              request.isUpdate
+                  ? 'This update wants access to new sites:'
+                  : 'This extension will be able to reach:',
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final host in request.newHosts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  '• $host',
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.liveAccent,
+                  ),
+                ),
+              ),
+          ],
+          if (request.alreadyGrantedHosts.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Already allowed:',
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            ),
+            const SizedBox(height: 2),
+            for (final host in request.alreadyGrantedHosts)
+              Text(
+                '• $host',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.onDarkSoft,
+                ),
+              ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(request.isUpdate ? 'Update' : 'Install'),
+        ),
+      ],
+    );
+  }
+}

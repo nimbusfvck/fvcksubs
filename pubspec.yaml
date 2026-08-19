@@ -1,0 +1,17 @@
+name: fvcksubs_workspace
+publish_to: none
+
+# Dart's native pub workspace (SDK >= 3.6). One `dart pub get` at the root
+# resolves every package below, with a single shared lockfile.
+#
+# Melos is deliberately not here yet: nothing needs multi-package scripting
+# until the Flutter app and the extension host exist.
+environment:
+  sdk: ^3.9.0
+
+workspace:
+  - packages/fvcksubs_core
+  - packages/fvcksubs_extension_host
+  - packages/fvcksubs_storage
+  - packages/fvcksubs_js_runtime
+  - apps/app

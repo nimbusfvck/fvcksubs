@@ -1,0 +1,25 @@
+name: fvcksubs_extension_host
+description: >-
+  Installs extensions and routes protocol calls to them. Pure Dart — the
+  registry and aggregation logic stay testable without Flutter. The Fase-2
+  QuickJS runtime will live here too.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+
+resolution: workspace
+
+dependencies:
+  crypto: ^3.0.7
+  dio: ^5.9.1
+  fvcksubs_core:
+    path: ../fvcksubs_core
+  fvcksubs_js_runtime:
+    path: ../fvcksubs_js_runtime
+  pointycastle: ^4.0.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0

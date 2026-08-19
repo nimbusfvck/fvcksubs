@@ -1,0 +1,25 @@
+name: fvcksubs_storage
+description: >-
+  Local persistence for app-owned state: Addons on/off settings and the
+  Library (favourites, history, continue-watching). See PLAN.md §15 — this
+  package exists because Library needs it, not before.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.9.0
+
+resolution: workspace
+
+dependencies:
+  equatable: ^2.0.7
+  flutter:
+    sdk: flutter
+  fvcksubs_core:
+    path: ../fvcksubs_core
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^6.0.0
