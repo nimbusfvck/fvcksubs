@@ -441,7 +441,7 @@ void main() {
       expect(t.registry.installed.map((m) => m.id), contains('remote_ext'));
     });
 
-    test('an update that widens nothing does not ask again', () async {
+    test('an update without new hosts still shows update details', () async {
       final t = build();
       await t.controller.setRepoUrl('$baseUrl/repo.json');
       await t.controller.refresh();
@@ -454,9 +454,12 @@ void main() {
 
       expect(
         t.asked,
-        hasLength(1),
-        reason: 're-asking about already-granted hosts trains click-through',
+        hasLength(2),
+        reason: 'the second prompt confirms the release, not old permissions',
       );
+      expect(t.asked.last.isUpdate, isTrue);
+      expect(t.asked.last.installedVersion, '1.0.0');
+      expect(t.asked.last.newHosts, isEmpty);
       expect(t.store.saved['remote_ext']!.version, '2.0.0');
     });
 

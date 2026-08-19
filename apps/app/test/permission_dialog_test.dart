@@ -9,6 +9,7 @@ void main() {
     List<String> hosts = const [],
     String? description,
     String? author,
+    List<String> releaseNotes = const [],
   }) => ExtensionRepoEntry(
     id: 'remote_ext',
     name: 'Remote Extension',
@@ -19,6 +20,7 @@ void main() {
     hosts: hosts,
     description: description,
     author: author,
+    releaseNotes: releaseNotes,
   );
 
   /// Pumps the dialog and returns whatever it resolved to.
@@ -92,6 +94,32 @@ void main() {
     // under "Already allowed" rather than mixed in with it.
     expect(find.text('• tracker.example'), findsOneWidget);
     expect(find.text('Already allowed:'), findsOneWidget);
+  });
+
+  testWidgets('an update shows its version change and release notes', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      PermissionRequest(
+        entry: entry(
+          releaseNotes: const [
+            'Added Motorsport event artwork.',
+            'Fixed live catalog refresh.',
+          ],
+        ),
+        newHosts: const [],
+        alreadyGrantedHosts: const ['cdn.example'],
+        isUpdate: true,
+        installedVersion: '1.4.0',
+      ),
+    );
+
+    expect(find.text('Version 1.4.0 → 2.0.0'), findsOneWidget);
+    expect(find.text("What's new"), findsOneWidget);
+    expect(find.text('• Added Motorsport event artwork.'), findsOneWidget);
+    expect(find.text('• Fixed live catalog refresh.'), findsOneWidget);
+    expect(find.textContaining('no new network access'), findsOneWidget);
   });
 
   testWidgets('Install resolves true, Cancel resolves false', (tester) async {

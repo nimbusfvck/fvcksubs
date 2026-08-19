@@ -35,7 +35,10 @@ class _PermissionDialog extends StatelessWidget {
         children: [
           Text(
             [
-              'Version ${entry.version}',
+              if (request.isUpdate && request.installedVersion != null)
+                'Version ${request.installedVersion} → ${entry.version}'
+              else
+                'Version ${entry.version}',
               if (entry.author != null) 'by ${entry.author}',
             ].join(' · '),
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
@@ -47,10 +50,30 @@ class _PermissionDialog extends StatelessWidget {
               style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
             ),
           ],
+          if (entry.releaseNotes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              request.isUpdate ? "What's new" : 'Release notes',
+              style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            for (final note in entry.releaseNotes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text(
+                  '• $note',
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+              ),
+          ],
           const SizedBox(height: AppSpacing.md),
           if (request.newHosts.isEmpty)
             Text(
-              'This extension requests no network access.',
+              request.isUpdate
+                  ? 'This update requests no new network access.'
+                  : 'This extension requests no network access.',
               style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
             )
           else ...[

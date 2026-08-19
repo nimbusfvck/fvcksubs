@@ -11,6 +11,7 @@ class PermissionRequest {
     required this.newHosts,
     required this.alreadyGrantedHosts,
     required this.isUpdate,
+    this.installedVersion,
   });
 
   final ExtensionRepoEntry entry;
@@ -20,6 +21,8 @@ class PermissionRequest {
   final List<String> alreadyGrantedHosts;
 
   final bool isUpdate;
+
+  final String? installedVersion;
 
   List<String> get allHosts => [...alreadyGrantedHosts, ...newHosts];
 }
@@ -169,10 +172,6 @@ class InstallerController extends Cubit<InstallerState> {
         if (!granted.contains(host)) host,
     ];
 
-    if (installed != null && newHosts.isEmpty) {
-      return granted;
-    }
-
     final accepted = await _requestConsent(
       PermissionRequest(
         entry: entry,
@@ -181,6 +180,7 @@ class InstallerController extends Cubit<InstallerState> {
             ? const []
             : granted.where(wanted.contains).toList(),
         isUpdate: installed != null,
+        installedVersion: installed?.version,
       ),
     );
     if (!accepted) return null;
