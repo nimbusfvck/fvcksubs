@@ -7,12 +7,32 @@ import '../app_scope.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'player_page.dart';
+import 'playback_media.dart';
 import 'source_priority_controller.dart';
 import 'subtitle_preference_controller.dart';
 
 Future<void> playItem(
   BuildContext context,
   MediaItem item, {
+  List<SeriesSeason> seasons = const [],
+  bool replaceCurrent = false,
+}) => _playMedia(
+  context,
+  PlaybackMedia.legacy(item),
+  seasons: seasons,
+  replaceCurrent: replaceCurrent,
+);
+
+Future<void> playItemV2(
+  BuildContext context,
+  MediaItemV2 item, {
+  bool replaceCurrent = false,
+}) =>
+    _playMedia(context, PlaybackMedia.v2(item), replaceCurrent: replaceCurrent);
+
+Future<void> _playMedia(
+  BuildContext context,
+  PlaybackMedia item, {
   List<SeriesSeason> seasons = const [],
   bool replaceCurrent = false,
 }) async {
@@ -99,7 +119,7 @@ Future<List<ResolvedSource>?> _resolveWithOverlay(
 
 Future<List<ResolvedSource>?> _revalidate(
   AppScope scope,
-  MediaItem item,
+  PlaybackMedia item,
 ) async {
   final progress = _ResolveProgress();
   final sources = await _playableSources(scope, item, progress);
@@ -112,7 +132,7 @@ Future<List<ResolvedSource>?> _revalidate(
 void _openPlayer(
   NavigatorState navigator,
   AppScope scope,
-  MediaItem item,
+  PlaybackMedia item,
   List<ResolvedSource> sources,
   List<SeriesSeason> seasons,
   bool replaceCurrent, {
@@ -123,14 +143,25 @@ void _openPlayer(
     scope.sourcePriorityController,
     scope.subtitlePreferenceController,
   );
-  scope.libraryController.recordWatched(item);
+  final legacyItem = item.legacyItem;
+  if (legacyItem == null) {
+    scope.libraryControllerV2.recordWatched(item.v2Item!);
+  } else {
+    scope.libraryController.recordWatched(legacyItem);
+  }
   final route = MaterialPageRoute<void>(
-    builder: (_) => PlayerPage(
-      item: item,
-      resolvedSources: resolved,
-      seasons: seasons,
-      pendingSources: pendingSources,
-    ),
+    builder: (_) => legacyItem == null
+        ? PlayerPage.v2(
+            item: item.v2Item!,
+            resolvedSources: resolved,
+            pendingSources: pendingSources,
+          )
+        : PlayerPage(
+            item: legacyItem,
+            resolvedSources: resolved,
+            seasons: seasons,
+            pendingSources: pendingSources,
+          ),
   );
   unawaited(
     replaceCurrent ? navigator.pushReplacement(route) : navigator.push(route),
@@ -164,12 +195,15 @@ List<ResolvedSource> _preferredFirst(
 
 Future<List<ResolvedSource>> _playableSources(
   AppScope scope,
-  MediaItem item,
+  PlaybackMedia item,
   _ResolveProgress progress,
 ) async {
   List<StreamSource> sources;
   try {
-    sources = await scope.registry.sources(item);
+    final legacyItem = item.legacyItem;
+    sources = legacyItem == null
+        ? await scope.registry.sourcesV2(item.v2Item!)
+        : await scope.registry.sources(legacyItem);
   } catch (_) {
     return const [];
   }
@@ -181,7 +215,7 @@ Future<List<ResolvedSource>> _playableSources(
 
 Future<List<ResolvedSource>> _resolveKnownSources(
   AppScope scope,
-  MediaItem item,
+  PlaybackMedia item,
   List<StreamSource> sources,
   _ResolveProgress progress,
 ) async {

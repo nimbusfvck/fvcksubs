@@ -18,6 +18,40 @@ void main() {
     ),
   );
 
+  Widget playButtonV2(MediaItemV2 item) => Builder(
+    builder: (context) => ElevatedButton(
+      onPressed: () => playItemV2(context, item),
+      child: const Text('play v2'),
+    ),
+  );
+
+  testWidgets('protocol v2 resolves sources and opens the native player', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'video'),
+      title: 'Native v2',
+    );
+    final registry = ExtensionRegistry([
+      _V2FakeExtension(
+        sourceList: const [StreamSource(id: 'primary', label: 'Primary')],
+        resolved: const PlayableStream(
+          url: 'https://edge/video.m3u8',
+          format: StreamFormat.hls,
+        ),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: playButtonV2(item), registry: registry),
+    );
+    await tester.tap(find.text('play v2'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(find.text('Native v2'), findsOneWidget);
+  });
+
   Widget seriesPlayButton(MediaItem item, List<SeriesSeason> seasons) =>
       Builder(
         builder: (context) => ElevatedButton(
@@ -43,7 +77,9 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     // Mid-resolve: the spinner is up, and the screen that launched it is
     // still there underneath — the whole point of not pushing a page.
@@ -77,7 +113,9 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pumpAndSettle();
 
@@ -99,7 +137,9 @@ void main() {
     final item = fakeItem();
     final registry = ExtensionRegistry([FakeExtension()]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pumpAndSettle();
 
@@ -120,12 +160,17 @@ void main() {
         resolved: const PlayableStream(
           url: 'https://edge/x.mpd',
           format: StreamFormat.dash,
-          drm: DrmConfig(scheme: DrmScheme.unsupported, licenseUrl: 'https://l'),
+          drm: DrmConfig(
+            scheme: DrmScheme.unsupported,
+            licenseUrl: 'https://l',
+          ),
         ),
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pumpAndSettle();
 
@@ -148,7 +193,9 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -175,7 +222,9 @@ void main() {
     );
     final registry = ExtensionRegistry([extension]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pumpAndSettle();
 
@@ -302,7 +351,11 @@ void main() {
       final cache = SourceCache(now: () => now);
 
       await tester.pumpWidget(
-        wrapApp(child: playButton(item), registry: registry, sourceCache: cache),
+        wrapApp(
+          child: playButton(item),
+          registry: registry,
+          sourceCache: cache,
+        ),
       );
       await tester.tap(find.text('play'));
       await tester.pumpAndSettle();
@@ -430,41 +483,40 @@ void main() {
       },
     );
 
-    testWidgets(
-      'a stale persisted primary falls back to full discovery',
-      (tester) async {
-        final item = fakeItem();
-        final extension = FakeExtension(
-          sourceList: const [StreamSource(id: 'b', label: 'Cricfy SD')],
-          resolved: const PlayableStream(
-            url: 'https://edge/live.m3u8',
-            format: StreamFormat.hls,
-          ),
-          resolveFailsFor: const {'a'},
-        );
-        final registry = ExtensionRegistry([extension]);
-        // Persisted from an earlier session — source 'a' no longer resolves
-        // (the upstream dropped it); only the fan-out below would find 'b'.
-        final sourceCache = seededCache(item.ref, const [
-          StreamSource(id: 'a', label: 'Kora HD (gone)'),
-        ]);
+    testWidgets('a stale persisted primary falls back to full discovery', (
+      tester,
+    ) async {
+      final item = fakeItem();
+      final extension = FakeExtension(
+        sourceList: const [StreamSource(id: 'b', label: 'Cricfy SD')],
+        resolved: const PlayableStream(
+          url: 'https://edge/live.m3u8',
+          format: StreamFormat.hls,
+        ),
+        resolveFailsFor: const {'a'},
+      );
+      final registry = ExtensionRegistry([extension]);
+      // Persisted from an earlier session — source 'a' no longer resolves
+      // (the upstream dropped it); only the fan-out below would find 'b'.
+      final sourceCache = seededCache(item.ref, const [
+        StreamSource(id: 'a', label: 'Kora HD (gone)'),
+      ]);
 
-        await tester.pumpWidget(
-          wrapApp(
-            child: playButton(item),
-            registry: registry,
-            sourceCache: sourceCache,
-          ),
-        );
-        await tester.tap(find.text('play'));
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrapApp(
+          child: playButton(item),
+          registry: registry,
+          sourceCache: sourceCache,
+        ),
+      );
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
 
-        expect(find.byType(PlayerPage), findsOneWidget);
-        expect(extension.sourcesCalls, 1);
-        final player = tester.widget<PlayerPage>(find.byType(PlayerPage));
-        expect(player.resolvedSources.single.source.id, 'b');
-      },
-    );
+      expect(find.byType(PlayerPage), findsOneWidget);
+      expect(extension.sourcesCalls, 1);
+      final player = tester.widget<PlayerPage>(find.byType(PlayerPage));
+      expect(player.resolvedSources.single.source.id, 'b');
+    });
   });
 
   testWidgets('seasons passed to playItem reach the player', (tester) async {
@@ -482,7 +534,10 @@ void main() {
       SeriesSeason(
         number: 1,
         name: 'Season 1',
-        episodes: [SeriesEpisode(title: 'Ep 1'), SeriesEpisode(title: 'Ep 2')],
+        episodes: [
+          SeriesEpisode(title: 'Ep 1'),
+          SeriesEpisode(title: 'Ep 2'),
+        ],
       ),
     ];
 
@@ -547,7 +602,9 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: playButton(item), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: playButton(item), registry: registry),
+    );
     await tester.tap(find.text('play'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -557,4 +614,14 @@ void main() {
 
     await tester.pumpAndSettle();
   });
+}
+
+class _V2FakeExtension extends FakeExtension {
+  _V2FakeExtension({required super.sourceList, required super.resolved});
+
+  @override
+  Future<List<StreamSource>> sourcesV2(
+    MediaItemV2 item, {
+    Set<String>? enabledProviders,
+  }) => Future.value(sourceList);
 }
