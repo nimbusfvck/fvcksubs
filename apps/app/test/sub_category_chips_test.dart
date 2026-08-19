@@ -8,7 +8,7 @@ import 'support/harness.dart';
 /// Subcategory chips in [CatalogView] — the drill-down screen, where the
 /// filter bar already lives.
 ///
-/// The whole point of M26 is that these are *not* declared: they arrive with
+/// These are not declared: they arrive with
 /// the catalog response, so the tests drive them by what the fake extension
 /// returns rather than by anything in its manifest.
 void main() {
@@ -16,6 +16,7 @@ void main() {
     ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: id),
     kind: MediaKind.liveEvent,
     title: title,
+    startsAt: DateTime.utc(2026, 8, 19),
   );
 
   FakeExtension extensionWith({List<SubCategory> subCategories = const []}) =>

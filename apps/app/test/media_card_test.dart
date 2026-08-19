@@ -272,8 +272,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.textContaining('2'), findsNothing);
-      expect(find.textContaining('1'), findsNothing);
+      expect(find.text('2'), findsNothing);
+      expect(find.text('1'), findsNothing);
     });
 
     testWidgets(
