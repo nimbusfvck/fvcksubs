@@ -386,7 +386,6 @@ class _PlayerPageState extends State<PlayerPage> {
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
         onBack: () => _handleBack(controller),
-        onEnterPip: () => _enterPipAndClose(context, controller),
         isLive: _isLive,
         upNext: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
@@ -398,8 +397,8 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _DragToPipWrapper(
-      getController: () => _betterController,
+    return _DragToCloseWrapper(
+      onDismiss: () => _handleBack(_betterController),
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -573,46 +572,20 @@ class _PlaybackErrorOverlay extends StatelessWidget {
   );
 }
 
-Future<void> _enterPipAndClose(
-  BuildContext context,
-  BetterPlayerController? controller,
-) async {
-  if (controller != null && controller.isFullScreen) {
-    controller.exitFullScreen();
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-  }
-  if (!context.mounted) return;
+class _DragToCloseWrapper extends StatefulWidget {
+  const _DragToCloseWrapper({required this.onDismiss, required this.child});
 
-  var pipStarted = false;
-  if (controller != null) {
-    try {
-      await controller.enablePictureInPicture(
-        controller.betterPlayerGlobalKey!,
-      );
-      pipStarted = true;
-    } catch (_) {}
-  }
-  if (!context.mounted) return;
-  if (pipStarted) {
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-  }
-  if (context.mounted) Navigator.of(context).pop();
-}
-
-class _DragToPipWrapper extends StatefulWidget {
-  const _DragToPipWrapper({required this.getController, required this.child});
-
-  final BetterPlayerController? Function() getController;
+  final VoidCallback onDismiss;
   final Widget child;
 
   @override
-  State<_DragToPipWrapper> createState() => _DragToPipWrapperState();
+  State<_DragToCloseWrapper> createState() => _DragToCloseWrapperState();
 }
 
 const double _kDismissThreshold = 200;
 const double _kDismissVelocity = 800;
 
-class _DragToPipWrapperState extends State<_DragToPipWrapper>
+class _DragToCloseWrapperState extends State<_DragToCloseWrapper>
     with SingleTickerProviderStateMixin {
   double _dy = 0;
   late final AnimationController _snapCtrl;
@@ -638,10 +611,10 @@ class _DragToPipWrapperState extends State<_DragToPipWrapper>
     setState(() => _dy = (_dy + details.delta.dy).clamp(0, double.infinity));
   }
 
-  Future<void> _onDragEnd(DragEndDetails details) async {
+  void _onDragEnd(DragEndDetails details) {
     final velocity = details.primaryVelocity ?? 0;
     if (_dy > _kDismissThreshold || velocity > _kDismissVelocity) {
-      await _enterPipAndClose(context, widget.getController());
+      widget.onDismiss();
     } else {
       _snapBack();
     }
@@ -683,7 +656,6 @@ class _NetflixControlsOverlay extends StatefulWidget {
     required this.currentIndex,
     required this.onChangeSource,
     required this.onBack,
-    required this.onEnterPip,
     required this.isLive,
     this.upNext,
     this.upNextPaused = false,
@@ -701,7 +673,6 @@ class _NetflixControlsOverlay extends StatefulWidget {
   final VoidCallback onChangeSource;
   final VoidCallback onBack;
 
-  final VoidCallback onEnterPip;
   final bool isLive;
 
   final NextEpisode? upNext;
@@ -996,10 +967,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                             onPressed: widget.onBack,
                           ),
                           const SizedBox(width: AppSpacing.xs),
-                          if (widget.isLive) ...[
-                            const _PlayerLiveIndicator(),
-                            const SizedBox(width: AppSpacing.xs),
-                          ],
                           Expanded(
                             child: Text(
                               widget.media.title,
@@ -1017,15 +984,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                             ),
                           ),
                           _PlaybackFavoriteButton(media: widget.media),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.picture_in_picture_alt_rounded,
-                            ),
-                            color: Colors.white,
-                            iconSize: 22,
-                            tooltip: 'Picture-in-picture',
-                            onPressed: widget.onEnterPip,
-                          ),
                         ],
                       ),
                     ),
@@ -1044,13 +1002,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.replay_10_rounded),
-                      color: Colors.white,
-                      iconSize: 38,
-                      onPressed: () => _skip(-10),
-                    ),
-                    const SizedBox(width: AppSpacing.xl),
+                    if (!widget.isLive) ...[
+                      IconButton(
+                        icon: const Icon(Icons.replay_10_rounded),
+                        color: Colors.white,
+                        iconSize: 38,
+                        onPressed: () => _skip(-10),
+                      ),
+                      const SizedBox(width: AppSpacing.xl),
+                    ],
                     if (isBuffering)
                       const SizedBox(
                         width: 64,
@@ -1074,13 +1034,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                         iconSize: 64,
                         onPressed: _togglePlayPause,
                       ),
-                    const SizedBox(width: AppSpacing.xl),
-                    IconButton(
-                      icon: const Icon(Icons.forward_10_rounded),
-                      color: Colors.white,
-                      iconSize: 38,
-                      onPressed: () => _skip(10),
-                    ),
+                    if (!widget.isLive) ...[
+                      const SizedBox(width: AppSpacing.xl),
+                      IconButton(
+                        icon: const Icon(Icons.forward_10_rounded),
+                        color: Colors.white,
+                        iconSize: 38,
+                        onPressed: () => _skip(10),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1118,48 +1080,59 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              if (widget.resolvedSources.length > 1)
-                                InkWell(
-                                  onTap: () {
-                                    _hideTimer?.cancel();
-                                    widget.onChangeSource();
-                                  },
-                                  borderRadius: AppRadius.sm,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.sm,
-                                      vertical: AppSpacing.xxs + 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white12,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (widget.isLive) ...[
+                                    const _PlayerLiveIndicator(),
+                                    if (widget.resolvedSources.length > 1)
+                                      const SizedBox(width: AppSpacing.xs),
+                                  ],
+                                  if (widget.resolvedSources.length > 1)
+                                    InkWell(
+                                      onTap: () {
+                                        _hideTimer?.cancel();
+                                        widget.onChangeSource();
+                                      },
                                       borderRadius: AppRadius.sm,
-                                      border: Border.all(
-                                        color: Colors.white24,
-                                        width: 0.5,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.playlist_play_rounded,
-                                          color: Colors.white,
-                                          size: 20,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.sm,
+                                          vertical: AppSpacing.xxs + 2,
                                         ),
-                                        const SizedBox(width: AppSpacing.xxs),
-                                        Text(
-                                          _current.source.label,
-                                          style: AppTypography.bodySm.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white12,
+                                          borderRadius: AppRadius.sm,
+                                          border: Border.all(
+                                            color: Colors.white24,
+                                            width: 0.5,
                                           ),
                                         ),
-                                      ],
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.playlist_play_rounded,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(
+                                              width: AppSpacing.xxs,
+                                            ),
+                                            Text(
+                                              _current.source.label,
+                                              style: AppTypography.bodySm
+                                                  .copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                )
-                              else
-                                const SizedBox.shrink(),
+                                ],
+                              ),
 
                               Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -1253,7 +1226,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                             ],
                           ),
 
-                          if (!widget.isLive && duration > Duration.zero) ...[
+                          if (widget.isLive || duration > Duration.zero) ...[
                             Row(
                               children: [
                                 Text(
@@ -1284,21 +1257,37 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                                     .toDouble(),
                                               ),
                                       min: 0.0,
-                                      max: duration.inMilliseconds.toDouble(),
-                                      onChangeStart: (val) {
-                                        _hideTimer?.cancel();
-                                        setState(() => _dragValueMs = val);
-                                      },
-                                      onChanged: (val) {
-                                        setState(() => _dragValueMs = val);
-                                      },
-                                      onChangeEnd: (val) {
-                                        _seekTo(
-                                          Duration(milliseconds: val.round()),
-                                        );
-                                        setState(() => _dragValueMs = null);
-                                        _revealControls();
-                                      },
+                                      max: duration > Duration.zero
+                                          ? duration.inMilliseconds.toDouble()
+                                          : 1.0,
+                                      onChangeStart: duration > Duration.zero
+                                          ? (val) {
+                                              _hideTimer?.cancel();
+                                              setState(
+                                                () => _dragValueMs = val,
+                                              );
+                                            }
+                                          : null,
+                                      onChanged: duration > Duration.zero
+                                          ? (val) {
+                                              setState(
+                                                () => _dragValueMs = val,
+                                              );
+                                            }
+                                          : null,
+                                      onChangeEnd: duration > Duration.zero
+                                          ? (val) {
+                                              _seekTo(
+                                                Duration(
+                                                  milliseconds: val.round(),
+                                                ),
+                                              );
+                                              setState(
+                                                () => _dragValueMs = null,
+                                              );
+                                              _revealControls();
+                                            }
+                                          : null,
                                     ),
                                   ),
                                 ),

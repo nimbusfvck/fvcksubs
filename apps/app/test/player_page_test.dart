@@ -8,7 +8,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
 
-/// The drag-down-to-PiP gesture, and specifically what happens when the drag
+/// The drag-down-to-close gesture, and specifically what happens when the drag
 /// doesn't end cleanly.
 ///
 /// [PlayerPage] wraps its content in a widget that translates the player
@@ -21,7 +21,7 @@ import 'support/harness.dart';
 /// player was left translated downward with no code path back to zero —
 /// visually stuck.
 void main() {
-  // Away from every button the controls overlay draws — back/favorite/PiP up
+  // Away from every button the controls overlay draws — back/favorite up
   // top, play/rewind/forward dead centre, source/CC pill at the bottom — so
   // the touch is unambiguously a drag on empty background, not a tap on some
   // control.
@@ -152,6 +152,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Protocol v2 video'), findsOneWidget);
+    expect(find.byIcon(Icons.picture_in_picture_alt_rounded), findsNothing);
     await tester.tap(find.byTooltip('Add to favorites'));
     await tester.pump();
     expect(find.byTooltip('Remove from favorites'), findsOneWidget);
@@ -183,6 +184,10 @@ void main() {
       expect(find.byKey(const Key('player-live-indicator')), findsOneWidget);
       expect(find.text('LIVE'), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('Live broadcast')), findsOneWidget);
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.byIcon(Icons.replay_10_rounded), findsNothing);
+      expect(find.byIcon(Icons.forward_10_rounded), findsNothing);
+      expect(find.byIcon(Icons.picture_in_picture_alt_rounded), findsNothing);
       semantics.dispose();
     });
 
