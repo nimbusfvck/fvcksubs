@@ -12,7 +12,7 @@ import 'app.dart';
 import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
-import 'library/library_controller_v2.dart';
+import 'library/legacy_library_controller.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
 import 'player/subtitle_preference_controller.dart';
@@ -52,15 +52,15 @@ Future<void> main() async {
     },
   );
 
+  final legacyLibraryStore = SharedPreferencesLegacyLibraryStore();
+  final legacyLibraryController = LegacyLibraryController(
+    store: legacyLibraryStore,
+    initial: await legacyLibraryStore.load(),
+  );
   final libraryStore = SharedPreferencesLibraryStore();
   final libraryController = LibraryController(
     store: libraryStore,
     initial: await libraryStore.load(),
-  );
-  final libraryStoreV2 = SharedPreferencesLibraryStoreV2();
-  final libraryControllerV2 = LibraryControllerV2(
-    store: libraryStoreV2,
-    initial: await libraryStoreV2.load(),
   );
 
   const pluginStore = SharedPreferencesPluginSelectionStore();
@@ -94,8 +94,8 @@ Future<void> main() async {
       deviceClass: deviceClass,
       addonsController: addonsController,
       installerController: installerController,
+      legacyLibraryController: legacyLibraryController,
       libraryController: libraryController,
-      libraryControllerV2: libraryControllerV2,
       pluginController: pluginController,
       catalogCache: CatalogCache(),
       subtitlePreferenceController: subtitlePreferenceController,

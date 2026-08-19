@@ -64,7 +64,7 @@ class EpisodeTarget {
 
 EpisodeTarget? episodeTargetFor(
   List<SeriesSeason> seasons,
-  UserMediaState? watched, {
+  LegacyUserMediaState? watched, {
   int? lastAiredSeason,
   int? lastAiredEpisode,
 }) {
@@ -170,7 +170,10 @@ NextEpisode? nextEpisodeOf(MediaItem current, List<SeriesSeason> seasons) {
   );
 }
 
-EpisodeTarget? _resume(List<SeriesSeason> seasons, UserMediaState? watched) {
+EpisodeTarget? _resume(
+  List<SeriesSeason> seasons,
+  LegacyUserMediaState? watched,
+) {
   final extra = watched?.item.extra;
   final season = extra?['season'];
   final episode = extra?['episode'];

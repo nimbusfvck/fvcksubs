@@ -145,9 +145,9 @@ void _openPlayer(
   );
   final legacyItem = item.legacyItem;
   if (legacyItem == null) {
-    scope.libraryControllerV2.recordWatched(item.v2Item!);
+    scope.libraryController.recordWatched(item.v2Item!);
   } else {
-    scope.libraryController.recordWatched(legacyItem);
+    scope.legacyLibraryController.recordWatched(legacyItem);
   }
   final route = MaterialPageRoute<void>(
     builder: (_) => legacyItem == null

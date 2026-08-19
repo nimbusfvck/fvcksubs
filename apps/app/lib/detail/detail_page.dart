@@ -118,7 +118,7 @@ class _DetailPageState extends State<DetailPage> {
 
           final watched = AppScope.of(
             context,
-          ).libraryController.recordFor(item.ref);
+          ).legacyLibraryController.recordFor(item.ref);
 
           final target = episodeTargetFor(
             seasons,
@@ -455,7 +455,7 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context).libraryController;
+    final controller = AppScope.of(context).legacyLibraryController;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,

@@ -9,7 +9,7 @@ import 'package:fvcksubs_app/player/source_cache.dart';
 import 'package:fvcksubs_app/player/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
-import 'package:fvcksubs_app/library/library_controller_v2.dart';
+import 'package:fvcksubs_app/library/legacy_library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
@@ -403,16 +403,16 @@ class FakeRepoStore implements RepoStore {
   Future<void> save(String? url) async => saved = url;
 }
 
-/// In-memory [LibraryStore] — no real `shared_preferences` plugin in a
+/// In-memory [LegacyLibraryStore] — no real `shared_preferences` plugin in a
 /// widget test.
-class FakeLibraryStore implements LibraryStore {
-  Map<String, UserMediaState> saved = {};
+class FakeLibraryStore implements LegacyLibraryStore {
+  Map<String, LegacyUserMediaState> saved = {};
 
   @override
-  Future<Map<String, UserMediaState>> load() async => saved;
+  Future<Map<String, LegacyUserMediaState>> load() async => saved;
 
   @override
-  Future<void> save(Map<String, UserMediaState> records) async =>
+  Future<void> save(Map<String, LegacyUserMediaState> records) async =>
       saved = records;
 }
 
@@ -488,7 +488,7 @@ class FakePluginSelectionStore implements PluginSelectionStore {
 /// the same way they do in the running app. A [child] that brings its own
 /// Scaffold is unaffected by the extra one.
 ///
-/// [addonsController] and [libraryController] each default to a fresh one
+/// [addonsController] and [legacyLibraryController] each default to a fresh one
 /// over an in-memory store — pass an explicit one when a test needs to
 /// observe toggles, favorites, or persistence.
 Widget wrapApp({
@@ -498,8 +498,8 @@ Widget wrapApp({
   RecordingPlayer? player,
   AddonsController? addonsController,
   InstallerController? installerController,
+  LegacyLibraryController? legacyLibraryController,
   LibraryController? libraryController,
-  LibraryControllerV2? libraryControllerV2,
   PluginController? pluginController,
   CatalogCache? catalogCache,
   SubtitlePreferenceController? subtitlePreferenceController,
@@ -521,10 +521,11 @@ Widget wrapApp({
         installedStore: FakeInstalledExtensionStore(),
         repoStore: FakeRepoStore(),
       ),
+  legacyLibraryController:
+      legacyLibraryController ??
+      LegacyLibraryController(store: FakeLibraryStore()),
   libraryController:
-      libraryController ?? LibraryController(store: FakeLibraryStore()),
-  libraryControllerV2:
-      libraryControllerV2 ?? LibraryControllerV2(store: _FakeLibraryStoreV2()),
+      libraryController ?? LibraryController(store: _FakeLibraryStoreV2()),
   pluginController:
       pluginController ?? PluginController(store: FakePluginSelectionStore()),
   catalogCache: catalogCache ?? CatalogCache(),
@@ -542,10 +543,10 @@ Widget wrapApp({
   child: MaterialApp(home: Scaffold(body: child)),
 );
 
-class _FakeLibraryStoreV2 implements LibraryStoreV2 {
+class _FakeLibraryStoreV2 implements LibraryStore {
   @override
-  Future<Map<String, UserMediaStateV2>> load() async => {};
+  Future<Map<String, UserMediaState>> load() async => {};
 
   @override
-  Future<void> save(Map<String, UserMediaStateV2> records) async {}
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

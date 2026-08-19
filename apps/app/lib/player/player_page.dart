@@ -10,7 +10,7 @@ import '../app_scope.dart';
 import '../detail/episode_target.dart';
 import '../detail/favorite_button.dart';
 import '../library/library_controller.dart';
-import '../library/library_controller_v2.dart';
+import '../library/legacy_library_controller.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'play_item.dart';
@@ -100,8 +100,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _upNextPaused = false;
   bool _advancing = false;
 
+  LegacyLibraryController? _legacyLibraryController;
   LibraryController? _libraryController;
-  LibraryControllerV2? _libraryControllerV2;
 
   Timer? _progressTimer;
 
@@ -140,8 +140,8 @@ class _PlayerPageState extends State<PlayerPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final scope = AppScope.of(context);
+    _legacyLibraryController = scope.legacyLibraryController;
     _libraryController = scope.libraryController;
-    _libraryControllerV2 = scope.libraryControllerV2;
     _progressTimer ??= Timer.periodic(
       _kProgressReportInterval,
       (_) => _reportProgress(),
@@ -273,7 +273,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
     final legacyItem = widget.media.legacyItem;
     final progress = legacyItem == null
-        ? _libraryControllerV2?.recordFor(widget.media.ref)?.progress
+        ? _libraryController?.recordFor(widget.media.ref)?.progress
         : _legacyResumeProgress(legacyItem);
 
     if (progress == null || progress < _kMinResumeProgress) return;
@@ -288,9 +288,9 @@ class _PlayerPageState extends State<PlayerPage> {
     if (position == null) return;
     final legacyItem = widget.media.legacyItem;
     if (legacyItem != null) {
-      _libraryController?.recordWatched(legacyItem, progress: position);
+      _legacyLibraryController?.recordWatched(legacyItem, progress: position);
     } else {
-      _libraryControllerV2?.recordWatched(
+      _libraryController?.recordWatched(
         widget.media.v2Item!,
         progress: position,
       );
@@ -298,7 +298,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Duration? _legacyResumeProgress(MediaItem item) {
-    final record = _libraryController?.recordFor(item.ref);
+    final record = _legacyLibraryController?.recordFor(item.ref);
     if (record == null || !_isSameEpisode(record.item, item)) return null;
     return record.progress;
   }
@@ -1663,8 +1663,8 @@ class _PlaybackFavoriteButton extends StatelessWidget {
     final legacyItem = media.legacyItem;
     if (legacyItem != null) return FavoriteButton(item: legacyItem);
 
-    final controller = AppScope.of(context).libraryControllerV2;
-    return BlocBuilder<LibraryControllerV2, LibraryStateV2>(
+    final controller = AppScope.of(context).libraryController;
+    return BlocBuilder<LibraryController, LibraryState>(
       bloc: controller,
       builder: (context, state) {
         final favorited = state.isFavorite(media.ref);

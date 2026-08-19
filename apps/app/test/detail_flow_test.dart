@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/detail/detail_page.dart';
-import 'package:fvcksubs_app/library/library_controller.dart';
+import 'package:fvcksubs_app/library/legacy_library_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -119,13 +119,13 @@ void main() {
 
   testWidgets('the favorite button toggles Library state', (tester) async {
     final item = fakeItem();
-    final controller = LibraryController(store: FakeLibraryStore());
+    final controller = LegacyLibraryController(store: FakeLibraryStore());
 
     await tester.pumpWidget(
       wrapApp(
         child: DetailPage(item: item),
         registry: ExtensionRegistry([FakeExtension()]),
-        libraryController: controller,
+        legacyLibraryController: controller,
       ),
     );
     await tester.pumpAndSettle();
@@ -144,7 +144,7 @@ void main() {
     tester,
   ) async {
     final item = fakeItem();
-    final controller = LibraryController(store: FakeLibraryStore());
+    final controller = LegacyLibraryController(store: FakeLibraryStore());
     final registry = ExtensionRegistry([
       FakeExtension(
         sourceList: const [StreamSource(id: 's', label: 'HD 1080p')],
@@ -159,7 +159,7 @@ void main() {
       wrapApp(
         child: DetailPage(item: item),
         registry: registry,
-        libraryController: controller,
+        legacyLibraryController: controller,
       ),
     );
     await tester.pumpAndSettle();
@@ -224,7 +224,10 @@ void main() {
         ]);
 
         await tester.pumpWidget(
-          wrapApp(child: DetailPage(item: item), registry: registry),
+          wrapApp(
+            child: DetailPage(item: item),
+            registry: registry,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -234,56 +237,53 @@ void main() {
       },
     );
 
-    testWidgets(
-      'pressing Play on a fresh series lands on the latest available '
-      'episode, not S1E1',
-      (tester) async {
-        final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
-        final controller = LibraryController(store: FakeLibraryStore());
-        final registry = ExtensionRegistry([
-          FakeExtension(
-            metaDetail: showWith(item, [season(1, 10)]),
-            // The catalog lists all 10 episodes' titles, but only the first
-            // 3 have actually aired anywhere a provider can reach them.
-            sourceListFor: (probed) {
-              final episode = probed.extra['episode'];
-              return (episode is int && episode <= 3)
-                  ? const [StreamSource(id: 's', label: 'HD')]
-                  : const [];
-            },
-            resolved: const PlayableStream(
-              url: 'https://edge/x.m3u8',
-              format: StreamFormat.hls,
-            ),
+    testWidgets('pressing Play on a fresh series lands on the latest available '
+        'episode, not S1E1', (tester) async {
+      final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
+      final controller = LegacyLibraryController(store: FakeLibraryStore());
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          metaDetail: showWith(item, [season(1, 10)]),
+          // The catalog lists all 10 episodes' titles, but only the first
+          // 3 have actually aired anywhere a provider can reach them.
+          sourceListFor: (probed) {
+            final episode = probed.extra['episode'];
+            return (episode is int && episode <= 3)
+                ? const [StreamSource(id: 's', label: 'HD')]
+                : const [];
+          },
+          resolved: const PlayableStream(
+            url: 'https://edge/x.m3u8',
+            format: StreamFormat.hls,
           ),
-        ]);
+        ),
+      ]);
 
-        await tester.pumpWidget(
-          wrapApp(
-            child: DetailPage(item: item),
-            registry: registry,
-            libraryController: controller,
-          ),
-        );
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrapApp(
+          child: DetailPage(item: item),
+          registry: registry,
+          legacyLibraryController: controller,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        // No last-aired hint here, so the label's own guess is S1E1 — the
-        // probe below is what actually finds episode 3.
-        await tester.tap(find.text('Play S1E1'));
-        await tester.pumpAndSettle();
+      // No last-aired hint here, so the label's own guess is S1E1 — the
+      // probe below is what actually finds episode 3.
+      await tester.tap(find.text('Play S1E1'));
+      await tester.pumpAndSettle();
 
-        expect(controller.history, hasLength(1));
-        expect(controller.history.single.item.extra['season'], 1);
-        expect(controller.history.single.item.extra['episode'], 3);
-      },
-    );
+      expect(controller.history, hasLength(1));
+      expect(controller.history.single.item.extra['season'], 1);
+      expect(controller.history.single.item.extra['episode'], 3);
+    });
 
     testWidgets(
       'a last-aired hint sends the probe straight there — nothing after '
       'it is ever even asked about',
       (tester) async {
         final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
-        final controller = LibraryController(store: FakeLibraryStore());
+        final controller = LegacyLibraryController(store: FakeLibraryStore());
         final probed = <int>[];
         final registry = ExtensionRegistry([
           FakeExtension(
@@ -311,7 +311,7 @@ void main() {
           wrapApp(
             child: DetailPage(item: item),
             registry: registry,
-            libraryController: controller,
+            legacyLibraryController: controller,
           ),
         );
         await tester.pumpAndSettle();
@@ -328,35 +328,37 @@ void main() {
       },
     );
 
-    testWidgets(
-      'falls back to S1E1 when nothing probes as available',
-      (tester) async {
-        final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
-        final registry = ExtensionRegistry([
-          FakeExtension(
-            metaDetail: showWith(item, [season(1, 3)]),
-            sourceListFor: (_) => const [],
-            resolved: const PlayableStream(
-              url: 'https://edge/x.m3u8',
-              format: StreamFormat.hls,
-            ),
+    testWidgets('falls back to S1E1 when nothing probes as available', (
+      tester,
+    ) async {
+      final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          metaDetail: showWith(item, [season(1, 3)]),
+          sourceListFor: (_) => const [],
+          resolved: const PlayableStream(
+            url: 'https://edge/x.m3u8',
+            format: StreamFormat.hls,
           ),
-        ]);
+        ),
+      ]);
 
-        await tester.pumpWidget(
-          wrapApp(child: DetailPage(item: item), registry: registry),
-        );
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrapApp(
+          child: DetailPage(item: item),
+          registry: registry,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Play S1E1'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Play S1E1'));
+      await tester.pumpAndSettle();
 
-        // The probe found nothing, fell back to S1E1, and playItem itself
-        // then found no sources for that either — same honest message as
-        // any other item with nothing playable.
-        expect(find.textContaining('No playable sources found.'), findsOneWidget);
-      },
-    );
+      // The probe found nothing, fell back to S1E1, and playItem itself
+      // then found no sources for that either — same honest message as
+      // any other item with nothing playable.
+      expect(find.textContaining('No playable sources found.'), findsOneWidget);
+    });
 
     testWidgets('continues from the episode last watched', (tester) async {
       final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
@@ -370,7 +372,7 @@ void main() {
           ),
         ),
       ]);
-      final controller = LibraryController(store: FakeLibraryStore());
+      final controller = LegacyLibraryController(store: FakeLibraryStore());
       // What playing S2E3 leaves behind: episodes share the series' ref and
       // carry their coordinates in `extra`.
       controller.recordWatched(
@@ -386,7 +388,7 @@ void main() {
         wrapApp(
           child: DetailPage(item: item),
           registry: registry,
-          libraryController: controller,
+          legacyLibraryController: controller,
         ),
       );
       await tester.pumpAndSettle();
@@ -402,7 +404,10 @@ void main() {
       ]);
 
       await tester.pumpWidget(
-        wrapApp(child: DetailPage(item: item), registry: registry),
+        wrapApp(
+          child: DetailPage(item: item),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -416,14 +421,14 @@ void main() {
       final registry = ExtensionRegistry([
         FakeExtension(metaDetail: MediaDetail(item: item)),
       ]);
-      final controller = LibraryController(store: FakeLibraryStore());
+      final controller = LegacyLibraryController(store: FakeLibraryStore());
       controller.recordWatched(item, progress: const Duration(minutes: 20));
 
       await tester.pumpWidget(
         wrapApp(
           child: DetailPage(item: item),
           registry: registry,
-          libraryController: controller,
+          legacyLibraryController: controller,
         ),
       );
       await tester.pumpAndSettle();
@@ -442,14 +447,14 @@ void main() {
         final registry = ExtensionRegistry([
           FakeExtension(metaDetail: MediaDetail(item: item)),
         ]);
-        final controller = LibraryController(store: FakeLibraryStore());
+        final controller = LegacyLibraryController(store: FakeLibraryStore());
         controller.recordWatched(item);
 
         await tester.pumpWidget(
           wrapApp(
             child: DetailPage(item: item),
             registry: registry,
-            libraryController: controller,
+            legacyLibraryController: controller,
           ),
         );
         await tester.pumpAndSettle();
@@ -465,7 +470,8 @@ void main() {
       number: number,
       name: 'Season $number',
       episodes: [
-        for (var i = 1; i <= episodes; i++) SeriesEpisode(title: 'S${number}E$i'),
+        for (var i = 1; i <= episodes; i++)
+          SeriesEpisode(title: 'S${number}E$i'),
       ],
     );
 
@@ -487,7 +493,10 @@ void main() {
         ]);
 
         await tester.pumpWidget(
-          wrapApp(child: DetailPage(item: item), registry: registry),
+          wrapApp(
+            child: DetailPage(item: item),
+            registry: registry,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -520,7 +529,10 @@ void main() {
         ]);
 
         await tester.pumpWidget(
-          wrapApp(child: DetailPage(item: item), registry: registry),
+          wrapApp(
+            child: DetailPage(item: item),
+            registry: registry,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -546,7 +558,10 @@ void main() {
         ]);
 
         await tester.pumpWidget(
-          wrapApp(child: DetailPage(item: item), registry: registry),
+          wrapApp(
+            child: DetailPage(item: item),
+            registry: registry,
+          ),
         );
         await tester.pumpAndSettle();
 

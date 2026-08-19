@@ -36,7 +36,7 @@ class _HomeShellState extends State<HomeShell> {
     final body = BlocBuilder<AddonsController, AddonsState>(
       bloc: scope.addonsController,
       builder: (context, _) => ListenableBuilder(
-        listenable: scope.libraryController,
+        listenable: scope.legacyLibraryController,
         builder: (context, _) => _body,
       ),
     );

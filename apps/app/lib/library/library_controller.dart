@@ -1,77 +1,93 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
-class LibraryController extends ChangeNotifier {
+class LibraryState {
+  LibraryState({Map<String, UserMediaState> records = const {}})
+    : records = Map.unmodifiable(records);
+
+  final Map<String, UserMediaState> records;
+
+  UserMediaState? recordFor(MediaRef ref) =>
+      records[UserMediaState.keyFor(ref)];
+
+  bool isFavorite(MediaRef ref) => recordFor(ref)?.favorite ?? false;
+
+  List<UserMediaState> get favorites =>
+      records.values.where((record) => record.favorite).toList()
+        ..sort((a, b) => a.item.title.compareTo(b.item.title));
+
+  List<UserMediaState> get continueWatching =>
+      records.values
+          .where((record) => (record.progress ?? Duration.zero) > Duration.zero)
+          .toList()
+        ..sort(_mostRecentFirst);
+
+  List<UserMediaState> get history =>
+      records.values.where((record) => record.lastWatched != null).toList()
+        ..sort(_mostRecentFirst);
+
+  static int _mostRecentFirst(UserMediaState first, UserMediaState second) =>
+      second.lastWatched!.compareTo(first.lastWatched!);
+}
+
+class LibraryController extends Cubit<LibraryState> {
   LibraryController({
     required this.store,
     Map<String, UserMediaState> initial = const {},
-  }) : _records = Map.of(initial);
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       super(LibraryState(records: initial));
 
   final LibraryStore store;
+  final DateTime Function() _now;
 
-  final Map<String, UserMediaState> _records;
+  UserMediaState? recordFor(MediaRef ref) => state.recordFor(ref);
 
-  bool isFavorite(MediaRef ref) =>
-      _records[UserMediaState.keyFor(ref)]?.favorite ?? false;
+  bool isFavorite(MediaRef ref) => state.isFavorite(ref);
 
-  UserMediaState? recordFor(MediaRef ref) =>
-      _records[UserMediaState.keyFor(ref)];
+  List<UserMediaState> get favorites => state.favorites;
 
-  void toggleFavorite(MediaItem item) {
-    final existing = _records[UserMediaState.keyFor(item.ref)];
+  List<UserMediaState> get continueWatching => state.continueWatching;
+
+  List<UserMediaState> get history => state.history;
+
+  void toggleFavorite(MediaItemV2 item) {
+    final existing = recordFor(item.ref);
     _upsert(
-      (existing ?? UserMediaState(ref: item.ref, item: item)).copyWith(
+      (existing ?? UserMediaState(item: item)).copyWith(
         item: item,
         favorite: !(existing?.favorite ?? false),
       ),
     );
   }
 
-  void recordWatched(MediaItem item, {Object? progress = _unspecified}) {
-    final existing = _records[UserMediaState.keyFor(item.ref)];
-    final base = existing ?? UserMediaState(ref: item.ref, item: item);
+  void recordWatched(MediaItemV2 item, {Object? progress = _unspecified}) {
+    final existing = recordFor(item.ref);
+    final base = existing ?? UserMediaState(item: item);
     _upsert(
       identical(progress, _unspecified)
-          ? base.copyWith(item: item, lastWatched: DateTime.now())
+          ? base.copyWith(item: item, lastWatched: _now())
           : base.copyWith(
               item: item,
               progress: progress as Duration?,
-              lastWatched: DateTime.now(),
+              lastWatched: _now(),
             ),
     );
   }
 
   static const Object _unspecified = Object();
 
-  void _upsert(UserMediaState state) {
-    if (!state.favorite && state.lastWatched == null) {
-      _records.remove(state.key);
+  void _upsert(UserMediaState record) {
+    final records = Map<String, UserMediaState>.of(state.records);
+    if (!record.favorite && record.lastWatched == null) {
+      records.remove(record.key);
     } else {
-      _records[state.key] = state;
+      records[record.key] = record;
     }
-    _persist();
-    notifyListeners();
+    emit(LibraryState(records: records));
+    unawaited(store.save(records));
   }
-
-  void _persist() {
-    // Keep UI state responsive even if persistence fails.
-    unawaited(store.save(Map.of(_records)));
-  }
-
-  List<UserMediaState> get favorites =>
-      _records.values.where((s) => s.favorite).toList()
-        ..sort((a, b) => a.item.title.compareTo(b.item.title));
-
-  List<UserMediaState> get continueWatching =>
-      _records.values
-          .where((s) => (s.progress ?? Duration.zero) > Duration.zero)
-          .toList()
-        ..sort((a, b) => b.lastWatched!.compareTo(a.lastWatched!));
-
-  List<UserMediaState> get history =>
-      _records.values.where((s) => s.lastWatched != null).toList()
-        ..sort((a, b) => b.lastWatched!.compareTo(a.lastWatched!));
 }

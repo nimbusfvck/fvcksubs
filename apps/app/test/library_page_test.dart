@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
-import 'package:fvcksubs_app/library/library_controller_v2.dart';
+import 'package:fvcksubs_app/library/legacy_library_controller.dart';
 import 'package:fvcksubs_app/library/library_page.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -11,8 +11,8 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'support/harness.dart';
 
 void main() {
-  LibraryController controllerWith(List<UserMediaState> records) =>
-      LibraryController(
+  LegacyLibraryController controllerWith(List<LegacyUserMediaState> records) =>
+      LegacyLibraryController(
         store: FakeLibraryStore(),
         initial: {for (final r in records) r.key: r},
       );
@@ -38,8 +38,8 @@ void main() {
     final watching = fakeItem(id: 'watching', title: 'In Progress Match');
 
     final controller = controllerWith([
-      UserMediaState(ref: favorited.ref, item: favorited, favorite: true),
-      UserMediaState(
+      LegacyUserMediaState(ref: favorited.ref, item: favorited, favorite: true),
+      LegacyUserMediaState(
         ref: watching.ref,
         item: watching,
         progress: const Duration(minutes: 5),
@@ -51,7 +51,7 @@ void main() {
       wrapApp(
         child: const LibraryPage(),
         registry: ExtensionRegistry([FakeExtension()]),
-        libraryController: controller,
+        legacyLibraryController: controller,
       ),
     );
     await tester.pumpAndSettle();
@@ -73,8 +73,8 @@ void main() {
       ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'v2'),
       title: 'Saved v2 item',
     );
-    const record = UserMediaStateV2(item: item, favorite: true);
-    final controller = LibraryControllerV2(
+    const record = UserMediaState(item: item, favorite: true);
+    final controller = LibraryController(
       store: _MemoryLibraryStoreV2(),
       initial: {record.key: record},
     );
@@ -83,7 +83,7 @@ void main() {
       wrapApp(
         child: const LibraryPage(),
         registry: ExtensionRegistry([FakeExtension()]),
-        libraryControllerV2: controller,
+        libraryController: controller,
       ),
     );
     await tester.pumpAndSettle();
@@ -101,7 +101,11 @@ void main() {
     (tester) async {
       final favorited = fakeItem(id: 'fav', title: 'Favorited Match');
       final controller = controllerWith([
-        UserMediaState(ref: favorited.ref, item: favorited, favorite: true),
+        LegacyUserMediaState(
+          ref: favorited.ref,
+          item: favorited,
+          favorite: true,
+        ),
       ]);
 
       await tester.pumpWidget(
@@ -116,7 +120,7 @@ void main() {
               ),
             ),
           ]),
-          libraryController: controller,
+          legacyLibraryController: controller,
         ),
       );
       await tester.pumpAndSettle();
@@ -137,7 +141,7 @@ void main() {
         title: 'Orphaned Match',
       );
       final controller = controllerWith([
-        UserMediaState(ref: orphan.ref, item: orphan, favorite: true),
+        LegacyUserMediaState(ref: orphan.ref, item: orphan, favorite: true),
       ]);
 
       await tester.pumpWidget(
@@ -145,7 +149,7 @@ void main() {
           // The registry only has "fake" installed, not "uninstalled".
           child: const LibraryPage(),
           registry: ExtensionRegistry([FakeExtension()]),
-          libraryController: controller,
+          legacyLibraryController: controller,
         ),
       );
       await tester.pumpAndSettle();
@@ -167,10 +171,10 @@ void main() {
   );
 }
 
-class _MemoryLibraryStoreV2 implements LibraryStoreV2 {
+class _MemoryLibraryStoreV2 implements LibraryStore {
   @override
-  Future<Map<String, UserMediaStateV2>> load() async => {};
+  Future<Map<String, UserMediaState>> load() async => {};
 
   @override
-  Future<void> save(Map<String, UserMediaStateV2> records) async {}
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

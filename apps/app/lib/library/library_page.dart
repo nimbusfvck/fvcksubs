@@ -9,9 +9,9 @@ import '../catalog/media_card.dart';
 import '../catalog/media_card_v2.dart';
 import '../detail/open_item.dart';
 import '../detail/open_versioned_item.dart';
-import 'library_controller.dart';
-import 'library_controller_v2.dart';
 import '../theme/tokens.dart';
+import 'library_controller.dart';
+import 'legacy_library_controller.dart';
 
 class LibraryPage extends StatelessWidget {
   const LibraryPage({super.key});
@@ -19,12 +19,12 @@ class LibraryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    return BlocBuilder<LibraryControllerV2, LibraryStateV2>(
-      bloc: scope.libraryControllerV2,
+    return BlocBuilder<LibraryController, LibraryState>(
+      bloc: scope.libraryController,
       builder: (context, v2) => ListenableBuilder(
-        listenable: scope.libraryController,
+        listenable: scope.legacyLibraryController,
         builder: (context, _) => _LibraryContent(
-          legacy: scope.libraryController,
+          legacy: scope.legacyLibraryController,
           v2: v2,
           registry: scope.registry,
         ),
@@ -40,8 +40,8 @@ class _LibraryContent extends StatelessWidget {
     required this.registry,
   });
 
-  final LibraryController legacy;
-  final LibraryStateV2 v2;
+  final LegacyLibraryController legacy;
+  final LibraryState v2;
   final ExtensionRegistry registry;
 
   @override
@@ -135,7 +135,7 @@ class _Section extends StatelessWidget {
   });
 
   final String title;
-  final List<UserMediaState> records;
+  final List<LegacyUserMediaState> records;
   final ExtensionRegistry registry;
 
   @override
@@ -180,7 +180,7 @@ class _Section extends StatelessWidget {
 class _RecordCard extends StatelessWidget {
   const _RecordCard({required this.record, required this.registry});
 
-  final UserMediaState record;
+  final LegacyUserMediaState record;
   final ExtensionRegistry registry;
 
   bool get _available =>
@@ -212,7 +212,7 @@ class _SectionV2 extends StatelessWidget {
   });
 
   final String title;
-  final List<UserMediaStateV2> records;
+  final List<UserMediaState> records;
   final ExtensionRegistry registry;
 
   @override
@@ -256,7 +256,7 @@ class _SectionV2 extends StatelessWidget {
 class _RecordCardV2 extends StatelessWidget {
   const _RecordCardV2({required this.record, required this.registry});
 
-  final UserMediaStateV2 record;
+  final UserMediaState record;
   final ExtensionRegistry registry;
 
   bool get _available => registry.installed.any(

@@ -11,7 +11,7 @@ class FavoriteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context).libraryController;
+    final controller = AppScope.of(context).legacyLibraryController;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {

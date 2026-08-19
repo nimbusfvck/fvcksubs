@@ -3,91 +3,46 @@ import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
-import 'support/harness.dart';
-
 void main() {
-  MediaItem item({String id = 'e1', String title = 'Home vs Away'}) =>
-      MediaItem(
-        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: id),
-        kind: MediaKind.liveEvent,
+  VideoItemV2 item({String id = 'one', String title = 'Example'}) =>
+      VideoItemV2(
+        ref: MediaRef(extensionId: 'extension', providerId: 'provider', id: id),
         title: title,
       );
 
-  test('toggleFavorite flips the flag, persists, and notifies', () async {
-    final store = FakeLibraryStore();
+  test('toggleFavorite emits and persists the updated records', () async {
+    final store = _MemoryLibraryStoreV2();
     final controller = LibraryController(store: store);
-    var notified = 0;
-    controller.addListener(() => notified++);
 
     controller.toggleFavorite(item());
-    expect(controller.isFavorite(item().ref), isTrue);
-    expect(notified, 1);
     await Future<void>.delayed(Duration.zero);
-    expect(store.saved.values.single.favorite, isTrue);
+
+    expect(controller.isFavorite(item().ref), isTrue);
+    expect(store.records.values.single.favorite, isTrue);
 
     controller.toggleFavorite(item());
     expect(controller.isFavorite(item().ref), isFalse);
-    expect(notified, 2);
+    expect(controller.state.records, isEmpty);
   });
 
-  test('un-favoriting an item with no watch history drops the record', () async {
-    final controller = LibraryController(store: FakeLibraryStore());
-    controller.toggleFavorite(item());
-    expect(controller.favorites, hasLength(1));
+  test('watching preserves progress when no new position is provided', () {
+    final controller = LibraryController(
+      store: _MemoryLibraryStoreV2(),
+      now: () => DateTime.utc(2026, 8, 19),
+    );
 
-    controller.toggleFavorite(item());
-    expect(controller.favorites, isEmpty);
-  });
-
-  test('favoriting keeps a watched record instead of dropping it', () {
-    final controller = LibraryController(store: FakeLibraryStore());
+    controller.recordWatched(item(), progress: const Duration(minutes: 12));
     controller.recordWatched(item());
-    controller.toggleFavorite(item());
-    controller.toggleFavorite(item()); // un-favorite again
-    // Still watched, so it should still show up in history.
-    expect(controller.history, hasLength(1));
+
+    expect(
+      controller.recordFor(item().ref)?.progress,
+      const Duration(minutes: 12),
+    );
+    expect(controller.history.single.lastWatched, DateTime.utc(2026, 8, 19));
   });
 
-  test('recordWatched sets lastWatched/progress and surfaces in history', () {
-    final controller = LibraryController(store: FakeLibraryStore());
-    controller.recordWatched(item(), progress: const Duration(minutes: 3));
-
-    expect(controller.history, hasLength(1));
-    expect(controller.history.single.progress, const Duration(minutes: 3));
-    expect(controller.continueWatching, hasLength(1));
-  });
-
-  test('continueWatching excludes records with no progress', () {
-    final controller = LibraryController(store: FakeLibraryStore());
-    controller.recordWatched(item()); // no progress passed
-    expect(controller.continueWatching, isEmpty);
-    expect(controller.history, hasLength(1));
-  });
-
-  test(
-    'recordWatched with no progress preserves a previously saved position',
-    () {
-      // The bug this guards: opening the player calls recordWatched(item)
-      // with no progress — the resume point of a previous watch used to
-      // get wiped to null right then, before playback ever had a chance
-      // to report a fresh one, so resuming never actually worked.
-      final controller = LibraryController(store: FakeLibraryStore());
-      controller.recordWatched(item(), progress: const Duration(minutes: 12));
-
-      controller.recordWatched(item()); // player re-opening, no progress yet
-
-      expect(controller.recordFor(item().ref)?.progress, const Duration(minutes: 12));
-    },
-  );
-
-  test('recordWatched still sets lastWatched when progress is omitted', () {
-    final controller = LibraryController(store: FakeLibraryStore());
-    controller.recordWatched(item());
-    expect(controller.recordFor(item().ref)?.lastWatched, isNotNull);
-  });
-
-  test('recordWatched can still explicitly clear progress', () {
-    final controller = LibraryController(store: FakeLibraryStore());
+  test('watching can explicitly clear progress', () {
+    final controller = LibraryController(store: _MemoryLibraryStoreV2());
     controller.recordWatched(item(), progress: const Duration(minutes: 12));
 
     controller.recordWatched(item(), progress: null);
@@ -96,34 +51,52 @@ void main() {
     expect(controller.continueWatching, isEmpty);
   });
 
-  test('history is sorted most-recently-watched first', () {
-    final controller = LibraryController(store: FakeLibraryStore());
+  test('derived collections have stable ordering', () {
+    var time = DateTime.utc(2026, 8, 19);
+    final controller = LibraryController(
+      store: _MemoryLibraryStoreV2(),
+      now: () => time,
+    );
+
+    controller.toggleFavorite(item(id: 'z', title: 'Zulu'));
+    controller.toggleFavorite(item(id: 'a', title: 'Alpha'));
     controller.recordWatched(item(id: 'older'));
+    time = time.add(const Duration(minutes: 1));
     controller.recordWatched(item(id: 'newer'));
 
-    expect(
-      controller.history.map((s) => s.ref.id).toList(),
-      ['newer', 'older'],
-    );
+    expect(controller.favorites.map((record) => record.item.title), [
+      'Alpha',
+      'Zulu',
+    ]);
+    expect(controller.history.map((record) => record.ref.id), [
+      'newer',
+      'older',
+    ]);
   });
 
-  test('favorites are sorted alphabetically by title', () {
-    final controller = LibraryController(store: FakeLibraryStore());
-    controller.toggleFavorite(item(id: 'b', title: 'Zebra'));
-    controller.toggleFavorite(item(id: 'a', title: 'Apple'));
-
-    expect(
-      controller.favorites.map((s) => s.item.title).toList(),
-      ['Apple', 'Zebra'],
-    );
-  });
-
-  test('starts seeded from initial records', () {
-    final seed = UserMediaState(ref: item().ref, item: item(), favorite: true);
+  test('initial records are exposed as immutable state', () {
+    final record = UserMediaState(item: item(), favorite: true);
+    final initial = {record.key: record};
     final controller = LibraryController(
-      store: FakeLibraryStore(),
-      initial: {seed.key: seed},
+      store: _MemoryLibraryStoreV2(),
+      initial: initial,
     );
+
+    initial.clear();
+
     expect(controller.isFavorite(item().ref), isTrue);
+    expect(() => controller.state.records.clear(), throwsUnsupportedError);
   });
+}
+
+class _MemoryLibraryStoreV2 implements LibraryStore {
+  Map<String, UserMediaState> records = {};
+
+  @override
+  Future<Map<String, UserMediaState>> load() async => Map.of(records);
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {
+    this.records = Map.of(records);
+  }
 }

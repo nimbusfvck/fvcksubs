@@ -26,7 +26,7 @@ void main() {
   );
 
   /// A library record standing for "this episode was the last one played".
-  UserMediaState watched(int s, int e) => UserMediaState(
+  LegacyUserMediaState watched(int s, int e) => LegacyUserMediaState(
     ref: seriesRef,
     item: MediaItem(
       ref: seriesRef,
@@ -85,7 +85,7 @@ void main() {
     // What a *movie* record looks like — nothing about episodes in it.
     final target = episodeTargetFor(
       [season(1, 10)],
-      UserMediaState(
+      LegacyUserMediaState(
         ref: seriesRef,
         item: series,
         lastWatched: DateTime(2026, 8, 17),

@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
-import '../library/library_controller_v2.dart';
+import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../theme/tokens.dart';
 
@@ -261,8 +261,8 @@ class _FavoriteAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context).libraryControllerV2;
-    return BlocBuilder<LibraryControllerV2, LibraryStateV2>(
+    final controller = AppScope.of(context).libraryController;
+    return BlocBuilder<LibraryController, LibraryState>(
       bloc: controller,
       builder: (context, state) {
         final active = state.isFavorite(item.ref);
