@@ -12,7 +12,9 @@ BetterPlayerDataSource betterPlayerDataSource(
   liveStream: isLive,
   videoFormat: _format(stream.format),
   drmConfiguration: _drm(stream),
-  subtitles: _subtitles(stream.subtitles, preferredSubtitleLanguage),
+  subtitles: isLive
+      ? null
+      : _subtitles(stream.subtitles, preferredSubtitleLanguage),
   cacheConfiguration: BetterPlayerCacheConfiguration(
     useCache: !isLive,
     maxCacheSize: 100 * 1024 * 1024, // 100 MB

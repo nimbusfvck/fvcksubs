@@ -30,6 +30,22 @@ void main() {
     expect(ds.liveStream, isTrue);
   });
 
+  test('live streams never load subtitle tracks', () {
+    final ds = betterPlayerDataSource(
+      const PlayableStream(
+        url: 'https://edge/live.m3u8',
+        format: StreamFormat.hls,
+        subtitles: [
+          SubtitleTrack(language: 'en', url: 'https://subs/live.vtt'),
+        ],
+      ),
+      isLive: true,
+      preferredSubtitleLanguage: 'en',
+    );
+
+    expect(ds.subtitles, isNull);
+  });
+
   test('isLive: false maps to liveStream: false — a real seek bar for VOD', () {
     // The bug M28's player update fixed: this used to be hardcoded `true`
     // unconditionally (ported as-is from back-pass, which only ever played

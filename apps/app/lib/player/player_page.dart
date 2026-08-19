@@ -731,6 +731,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 
   Timer? _suppressBufferingTimer;
   bool _suppressBufferingIndicator = false;
+  bool _valueUpdateScheduled = false;
 
   bool get _isBuffering =>
       !_suppressBufferingIndicator && (_videoValue?.value.isBuffering ?? true);
@@ -766,7 +767,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   }
 
   void _onValueChanged() {
-    if (!mounted) return;
+    if (!mounted || _valueUpdateScheduled) return;
+    _valueUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _valueUpdateScheduled = false;
+      if (!mounted) return;
+      _applyVideoValue();
+    });
+  }
+
+  void _applyVideoValue() {
     final value = _videoValue?.value;
     final bool isPlaying = value?.isPlaying ?? false;
     final bool isBuffering = value?.isBuffering ?? true;
@@ -865,6 +875,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   }
 
   Future<void> _openSubtitlePicker() async {
+    if (widget.isLive) return;
     _hideTimer?.cancel();
     final currentSub = widget.controller?.betterPlayerSubtitlesSource;
     final tracks = subtitlesForPicker(_current.stream.subtitles);
@@ -1149,42 +1160,46 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  GestureDetector(
-                                    onTap: _openSubtitlePicker,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: AppSpacing.xs,
-                                        vertical: AppSpacing.xxs,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            _activeSubtitleLabel != null
-                                                ? Icons.closed_caption_rounded
-                                                : Icons
-                                                      .closed_caption_off_rounded,
-                                            color: _activeSubtitleLabel != null
-                                                ? AppColors.brandAccent
-                                                : Colors.white,
-                                            size: 26,
-                                          ),
-                                          if (_activeSubtitleLabel != null) ...[
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _activeSubtitleLabel!,
-                                              style: AppTypography.caption
-                                                  .copyWith(
-                                                    color:
-                                                        AppColors.brandAccent,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
+                                  if (!widget.isLive)
+                                    GestureDetector(
+                                      onTap: _openSubtitlePicker,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.xs,
+                                          vertical: AppSpacing.xxs,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _activeSubtitleLabel != null
+                                                  ? Icons.closed_caption_rounded
+                                                  : Icons
+                                                        .closed_caption_off_rounded,
+                                              color:
+                                                  _activeSubtitleLabel != null
+                                                  ? AppColors.brandAccent
+                                                  : Colors.white,
+                                              size: 26,
                                             ),
+                                            if (_activeSubtitleLabel !=
+                                                null) ...[
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                _activeSubtitleLabel!,
+                                                style: AppTypography.caption
+                                                    .copyWith(
+                                                      color:
+                                                          AppColors.brandAccent,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                            ],
                                           ],
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   GestureDetector(
                                     onTap: _openQualityPicker,
                                     child: Padding(

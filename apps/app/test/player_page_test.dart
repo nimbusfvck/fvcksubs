@@ -33,8 +33,12 @@ void main() {
   Future<void> pumpPlayer(
     WidgetTester tester, {
     List<SubtitleTrack> subtitles = const [],
+    bool isLive = false,
   }) async {
-    final item = fakeItem(title: 'Some Movie');
+    final item = fakeItem(
+      title: 'Some Movie',
+      poster: isLive ? null : const ImageRef('https://img/movie.jpg'),
+    );
     final resolved = [
       ResolvedSource(
         source: const StreamSource(id: 's', label: 'HD'),
@@ -158,6 +162,19 @@ void main() {
       await tester.tap(find.byIcon(Icons.closed_caption_off_rounded));
       await tester.pumpAndSettle();
     }
+
+    testWidgets('live controls do not offer subtitles', (tester) async {
+      await pumpPlayer(
+        tester,
+        isLive: true,
+        subtitles: const [
+          SubtitleTrack(language: 'en', url: 'https://subs/live.vtt'),
+        ],
+      );
+
+      expect(find.byIcon(Icons.closed_caption_off_rounded), findsNothing);
+      expect(find.byIcon(Icons.closed_caption_rounded), findsNothing);
+    });
 
     testWidgets('same-language tracks collapse into one row with a count', (
       tester,
