@@ -73,7 +73,8 @@ class ExtensionRegistry {
   }
 
   /// Extension ids currently switched off in Addons.
-  Set<String> get disabledExtensionIds => Set.unmodifiable(_disabledExtensionIds);
+  Set<String> get disabledExtensionIds =>
+      Set.unmodifiable(_disabledExtensionIds);
 
   /// Provider ids (full, `"fvck.kora"`) currently switched off in Addons.
   Set<String> get disabledProviderIds => Set.unmodifiable(_disabledProviderIds);
@@ -197,6 +198,24 @@ class ExtensionRegistry {
     ),
   );
 
+  /// Loads and normalizes one catalog page through its protocol version.
+  Future<VersionedCatalogPage> loadCatalogVersioned(
+    CatalogBinding binding, {
+    String? category,
+    String? page,
+    Map<String, String> filters = const {},
+    String? subCategory,
+  }) => binding.extension.catalogVersioned(
+    CatalogQuery(
+      providerId: binding.providerId,
+      catalogId: binding.catalog.id,
+      category: category,
+      page: page,
+      filters: filters,
+      subCategory: subCategory,
+    ),
+  );
+
   /// Free-text search, fanned out to every installed extension that declares
   /// [ProviderRole.search], merged into one list.
   ///
@@ -219,8 +238,32 @@ class ExtensionRegistry {
             ))
           extension,
     ];
-    final results = await Future.wait(
+    final results = await Future.wait<List<MediaItem>>(
       providers.map((extension) => _searchOne(extension, query)),
+    );
+    return results.expand((items) => items).toList();
+  }
+
+  /// Searches through the versioned boundary and returns normalized items.
+  Future<List<VersionedMediaItem>> searchVersioned(String query) async {
+    final providers = <ContentExtension>[
+      for (final extension in _extensions)
+        if (isExtensionEnabled(extension.manifest.id) &&
+            extension.manifest.providers.any(
+              (provider) =>
+                  isProviderEnabled(provider.id) &&
+                  provider.roles.contains(ProviderRole.search),
+            ))
+          extension,
+    ];
+    final results = await Future.wait<List<VersionedMediaItem>>(
+      providers.map((extension) async {
+        try {
+          return (await extension.searchVersioned(query)).items.toList();
+        } catch (_) {
+          return <VersionedMediaItem>[];
+        }
+      }),
     );
     return results.expand((items) => items).toList();
   }

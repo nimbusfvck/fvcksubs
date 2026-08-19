@@ -2,6 +2,7 @@ import '../content/media_item.dart';
 import '../content/media_ref.dart';
 import '../content/stream.dart';
 import 'catalog.dart';
+import 'catalog_v2.dart';
 import 'manifest.dart';
 
 /// The contract every extension fulfills, whatever runtime backs it.
@@ -19,6 +20,13 @@ abstract class ContentExtension {
   /// Lists items for a catalog. Fills [ProviderRole.catalog].
   Future<CatalogPage> catalog(CatalogQuery query) =>
       throw UnsupportedError('${manifest.id} does not provide a catalog');
+
+  /// Lists a catalog through the versioned compatibility boundary.
+  ///
+  /// Version-1 implementations inherit this adapter. Runtime-backed
+  /// extensions override it so decoding follows [Manifest.apiVersion].
+  Future<VersionedCatalogPage> catalogVersioned(CatalogQuery query) async =>
+      VersionedCatalogPage.fromV1(await catalog(query));
 
   /// Returns one item's detail. Fills [ProviderRole.meta].
   Future<MediaDetail> meta(MediaRef ref) =>
@@ -52,6 +60,12 @@ abstract class ContentExtension {
   /// Free-text search. Fills [ProviderRole.search].
   Future<CatalogPage> search(String query, {String? page}) =>
       throw UnsupportedError('${manifest.id} does not provide search');
+
+  /// Searches through the versioned compatibility boundary.
+  Future<VersionedCatalogPage> searchVersioned(
+    String query, {
+    String? page,
+  }) async => VersionedCatalogPage.fromV1(await search(query, page: page));
 
   /// Looks up subtitles for [item] independently of any resolved source.
   /// Fills [ProviderRole.subtitles].

@@ -26,12 +26,7 @@ void main() {
         'roles': roles,
         if (roles.contains('catalog'))
           'catalogs': [
-            {
-              'id': 'c',
-              'name': 'C',
-              'category': 'live',
-              'kind': 'liveEvent',
-            },
+            {'id': 'c', 'name': 'C', 'category': 'live', 'kind': 'liveEvent'},
           ],
       },
     ],
@@ -42,11 +37,44 @@ void main() {
     ref: MediaRef(extensionId: 'roles', providerId: 'roles.p', id: '7'),
     kind: MediaKind.liveEvent,
     title: 'Home vs Away',
-    participants: [Participant(name: 'Home'), Participant(name: 'Away')],
+    participants: [
+      Participant(name: 'Home'),
+      Participant(name: 'Away'),
+    ],
   );
 
   JsExtension load(String bundle, {List<String> roles = const ['stream']}) =>
       JsExtension.load(manifest: manifestWith(roles), source: bundle);
+
+  test('catalogVersioned decodes with the manifest apiVersion', () async {
+    final extension = load(
+      '''
+globalThis.__extension = {
+  async catalog() {
+    return {
+      items: [{
+        ref: { extensionId: "roles", providerId: "roles.p", id: "event-1" },
+        kind: "liveEvent",
+        title: "Scheduled event",
+        startsAt: "2026-08-20T10:00:00Z",
+        group: "Featured"
+      }]
+    };
+  }
+};
+''',
+      roles: ['catalog'],
+    );
+    addTearDown(extension.dispose);
+
+    final page = await extension.catalogVersioned(
+      const CatalogQuery(providerId: 'roles.p', catalogId: 'c'),
+    );
+
+    expect(page.sections.single.title, 'Featured');
+    expect(page.items.single.item, isA<EventItemV2>());
+    expect(page.items.single.requiresLegacyRequest, isTrue);
+  });
 
   test('sources: the whole item and the enabled set reach the bundle', () {
     final extension = load('''
