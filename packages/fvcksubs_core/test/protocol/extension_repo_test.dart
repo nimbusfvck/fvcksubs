@@ -110,7 +110,7 @@ void main() {
   });
 
   group('optional metadata', () {
-    test('description/author/iconUrl round-trip when present', () {
+    test('optional listing metadata round-trips when present', () {
       final entry = ExtensionRepoEntry.fromJson({
         'id': 'a',
         'name': 'A',
@@ -121,15 +121,20 @@ void main() {
         'description': 'Does a thing.',
         'author': 'Someone',
         'iconUrl': 'https://x/a/icon.png',
+        'releaseNotes': ['Added live events.', 'Fixed source labels.'],
       });
 
       expect(entry.description, 'Does a thing.');
       expect(entry.author, 'Someone');
       expect(entry.iconUrl, 'https://x/a/icon.png');
+      expect(entry.releaseNotes, [
+        'Added live events.',
+        'Fixed source labels.',
+      ]);
       expect(ExtensionRepoEntry.fromJson(entry.toJson()), entry);
     });
 
-    test('all three are optional — absent means null, not an error', () {
+    test('listing metadata is optional', () {
       final entry = ExtensionRepoEntry.fromJson({
         'id': 'a',
         'name': 'A',
@@ -142,6 +147,7 @@ void main() {
       expect(entry.description, isNull);
       expect(entry.author, isNull);
       expect(entry.iconUrl, isNull);
+      expect(entry.releaseNotes, isEmpty);
       expect(entry.toJson().containsKey('description'), isFalse);
     });
   });

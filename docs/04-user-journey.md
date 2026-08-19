@@ -73,7 +73,8 @@ sequenceDiagram
     IC->>IC: compare against installed versions
     IC-->>AD: rows marked Install or Update
 
-    U->>AD: taps Install
+    U->>AD: taps Install or Update
+    AD-->>U: version, release notes, and permission changes
     AD->>IC: install
     IC->>IC: which hosts are new versus already granted?
     alt the install would widen access
@@ -98,8 +99,8 @@ Install behavior:
   granted.
 - **Consent defaults to refusal.** If no way to ask exists, the answer is no.
 
-An update that does not widen access installs without re-asking. One that does asks again,
-showing only the difference.
+Every update shows its version and release notes before installation. Permission details
+highlight only newly requested hosts; previously granted hosts remain visually secondary.
 
 ## 4.4 Browsing
 

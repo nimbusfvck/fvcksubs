@@ -36,6 +36,7 @@ class ExtensionRepoEntry extends Equatable {
     this.description,
     this.author,
     this.iconUrl,
+    this.releaseNotes = const [],
   });
 
   /// Parses one entry from JSON.
@@ -52,6 +53,7 @@ class ExtensionRepoEntry extends Equatable {
         description: json['description'] as String?,
         author: json['author'] as String?,
         iconUrl: json['iconUrl'] as String?,
+        releaseNotes: stringList(json['releaseNotes']),
       );
     } on TypeError catch (e) {
       throw ExtensionRepoException('malformed repo entry: $e');
@@ -95,6 +97,9 @@ class ExtensionRepoEntry extends Equatable {
   /// Icon/logo URL, optional.
   final String? iconUrl;
 
+  /// Short user-facing changes for this release, shown before an update.
+  final List<String> releaseNotes;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -107,6 +112,7 @@ class ExtensionRepoEntry extends Equatable {
     if (description != null) 'description': description,
     if (author != null) 'author': author,
     if (iconUrl != null) 'iconUrl': iconUrl,
+    if (releaseNotes.isNotEmpty) 'releaseNotes': releaseNotes,
   };
 
   @override
@@ -121,6 +127,7 @@ class ExtensionRepoEntry extends Equatable {
     description,
     author,
     iconUrl,
+    releaseNotes,
   ];
 }
 

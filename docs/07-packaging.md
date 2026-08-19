@@ -66,7 +66,8 @@ route would break both.
 | `manifestUrl`, `bundleUrl` | Where the two files live |
 | `bundleSha256` | What the downloaded bundle must hash to |
 | `hosts` | **Duplicated from the manifest** so the consent prompt can be shown *before* anything is downloaded |
-| `description`, `author`, `iconUrl` | Optional, same reason — the prompt precedes the download |
+| `description`, `author`, `iconUrl` | Optional listing metadata shown before download |
+| `releaseNotes` | Optional list of user-facing changes shown before an update |
 
 Serve it from a real CDN rather than raw repository URLs, and version by tag.
 
@@ -172,5 +173,6 @@ Test guidelines:
 4. The bundle is regenerated and the freshness test passes.
 5. Tests pass against fixtures, including the failure paths.
 6. `repo.json` is updated: version, `bundleSha256`, and `hosts` mirrored from the manifest.
-7. If the update widens `hosts`, expect users to be asked again — make sure the additions
+7. Add concise `releaseNotes` for changes users will notice.
+8. If the update widens `hosts`, expect users to be asked again — make sure the additions
    are ones you can justify on a consent sheet.
