@@ -70,10 +70,25 @@
     return JSON.parse(host.codec.base64ToText(base64));
   }
 
+  /**
+   * Creates an opaque, restart-safe source ID from a provider key and JSON payload.
+   * Pass the returned value as `StreamSource.id`, then decode it in `resolve()`.
+   *
+   * @param {string} providerKey Short key registered with `defineStream`.
+   * @param {*} payload JSON-serializable data needed to resolve the stream.
+   * @returns {string}
+   */
   function sourceId(providerKey, payload) {
     return `${requiredString(providerKey, 'providerKey')}:${base64UrlEncode(payload)}`;
   }
 
+  /**
+   * Decodes a source ID created by `sourceId` and optionally checks its provider key.
+   *
+   * @param {string} id Source ID received by `resolve()`.
+   * @param {string} [expectedProviderKey] Expected prefix, such as `demo`.
+   * @returns {*}
+   */
   function sourcePayload(id, expectedProviderKey) {
     requiredString(id, 'sourceId');
     const prefix = providerPrefix(id);
@@ -83,6 +98,11 @@
     return base64UrlDecode(id.slice(prefix.length + 1));
   }
 
+  /**
+   * Registers a catalog handler. The pair of provider ID and catalog ID must be unique.
+   *
+   * @param {object} definition Catalog registration.
+   */
   function defineCatalog(definition) {
     const providerId = requiredString(definition && definition.providerId, 'catalog.providerId');
     const catalogId = requiredString(definition && definition.catalogId, 'catalog.catalogId');
@@ -95,6 +115,11 @@
     catalogs.push({ providerId, catalogId, catalog });
   }
 
+  /**
+   * Registers the detail handler for a provider ID.
+   *
+   * @param {object} definition Metadata registration.
+   */
   function defineMeta(definition) {
     const providerId = requiredString(definition && definition.providerId, 'meta.providerId');
     const meta = requiredFunction(definition && definition.meta, 'meta.meta');
@@ -102,6 +127,12 @@
     metas.push({ providerId, meta });
   }
 
+  /**
+   * Registers stream discovery and resolution handlers.
+   * `providerKey` becomes the prefix of every source ID owned by this handler.
+   *
+   * @param {object} definition Stream registration.
+   */
   function defineStream(definition) {
     const providerId = requiredString(definition && definition.providerId, 'stream.providerId');
     const providerKey = requiredString(definition && definition.providerKey, 'stream.providerKey');
@@ -112,6 +143,11 @@
     streams.push({ providerId, providerKey, sources, resolve });
   }
 
+  /**
+   * Registers a search handler. Results from all enabled handlers are merged.
+   *
+   * @param {object} definition Search registration.
+   */
   function defineSearch(definition) {
     const providerId = requiredString(definition && definition.providerId, 'search.providerId');
     const search = requiredFunction(definition && definition.search, 'search.search');
@@ -119,6 +155,11 @@
     searches.push({ providerId, search });
   }
 
+  /**
+   * Registers a fallback subtitle lookup handler.
+   *
+   * @param {object} definition Subtitle registration.
+   */
   function defineSubtitles(definition) {
     const providerId = requiredString(definition && definition.providerId, 'subtitles.providerId');
     const lookup = requiredFunction(definition && definition.subtitles, 'subtitles.subtitles');
