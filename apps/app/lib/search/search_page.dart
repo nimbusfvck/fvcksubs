@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
-import '../catalog/media_grid.dart';
-import '../detail/open_item.dart';
+import '../catalog/media_grid_v2.dart';
+import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 
 class SearchPage extends StatefulWidget {
@@ -19,7 +19,7 @@ class _SearchPageState extends State<SearchPage> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   String _query = '';
-  Future<List<MediaItem>>? _results;
+  Future<List<VersionedMediaItem>>? _results;
 
   @override
   void dispose() {
@@ -39,7 +39,7 @@ class _SearchPageState extends State<SearchPage> {
     _debounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       setState(() {
-        _results = AppScope.of(context).registry.search(trimmed);
+        _results = AppScope.of(context).registry.searchVersioned(trimmed);
       });
     });
   }
@@ -72,7 +72,10 @@ class _SearchPageState extends State<SearchPage> {
     ),
     body: _query.isEmpty
         ? const _Prompt()
-        : _Results(future: _results, onTap: (item) => openItem(context, item)),
+        : _Results(
+            future: _results,
+            onTap: (item) => openVersionedItem(context, item),
+          ),
   );
 }
 
@@ -162,11 +165,11 @@ class _Prompt extends StatelessWidget {
 class _Results extends StatelessWidget {
   const _Results({required this.future, required this.onTap});
 
-  final Future<List<MediaItem>>? future;
-  final ValueChanged<MediaItem> onTap;
+  final Future<List<VersionedMediaItem>>? future;
+  final ValueChanged<VersionedMediaItem> onTap;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<MediaItem>>(
+  Widget build(BuildContext context) => FutureBuilder<List<VersionedMediaItem>>(
     future: future,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
@@ -180,7 +183,7 @@ class _Results extends StatelessWidget {
           ),
         );
       }
-      final items = snapshot.data ?? const <MediaItem>[];
+      final items = snapshot.data ?? const <VersionedMediaItem>[];
       if (items.isEmpty) {
         return Center(
           child: Text(
@@ -191,7 +194,10 @@ class _Results extends StatelessWidget {
       }
       return Padding(
         padding: const EdgeInsets.only(top: AppSpacing.md),
-        child: MediaGrid(items: items, onTap: onTap),
+        child: MediaGridV2(
+          sections: [CatalogSectionV2(id: 'search', items: items)],
+          onTap: onTap,
+        ),
       );
     },
   );
