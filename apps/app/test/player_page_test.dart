@@ -1,4 +1,6 @@
 import 'package:better_player_plus/better_player_plus.dart';
+import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart'
+    show DurationRange;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
@@ -29,6 +31,18 @@ void main() {
 
   double fakePlayerY(WidgetTester tester) =>
       tester.getCenter(find.byKey(const Key('fake-player'))).dy;
+
+  test('live seek edge survives a missing duration', () {
+    final value = VideoPlayerValue(
+      duration: null,
+      position: const Duration(seconds: 12),
+      buffered: const [
+        DurationRange(Duration(seconds: 8), Duration(seconds: 30)),
+      ],
+    );
+
+    expect(liveSeekEdge(value), const Duration(seconds: 30));
+  });
 
   Future<void> pumpPlayer(
     WidgetTester tester, {

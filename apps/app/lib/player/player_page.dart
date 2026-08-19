@@ -48,6 +48,16 @@ List<BetterPlayerAsmsTrack> dedupedQualityTracks(
     ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
 }
 
+Duration liveSeekEdge(VideoPlayerValue? value) {
+  if (value == null) return Duration.zero;
+  var edge = value.duration ?? Duration.zero;
+  if (value.position > edge) edge = value.position;
+  for (final range in value.buffered) {
+    if (range.end > edge) edge = range.end;
+  }
+  return edge;
+}
+
 class ResolvedSource {
   const ResolvedSource({required this.source, required this.stream});
 
@@ -703,6 +713,13 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   Timer? _suppressBufferingTimer;
   bool _suppressBufferingIndicator = false;
   bool _valueUpdateScheduled = false;
+  Duration _liveEdge = Duration.zero;
+
+  bool _isReady(VideoPlayerValue? value) =>
+      value?.initialized == true ||
+      (widget.isLive &&
+          value != null &&
+          (value.isPlaying || liveSeekEdge(value) > Duration.zero));
 
   bool get _isBuffering =>
       !_suppressBufferingIndicator && (_videoValue?.value.isBuffering ?? true);
@@ -734,6 +751,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
         widget.controller?.videoPlayerController;
     if (identical(next, _videoValue)) return;
     _videoValue?.removeListener(_onValueChanged);
+    _liveEdge = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
   }
 
@@ -751,7 +769,12 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     final value = _videoValue?.value;
     final bool isPlaying = value?.isPlaying ?? false;
     final bool isBuffering = value?.isBuffering ?? true;
-    final bool isInitialized = value?.initialized ?? false;
+    final bool isInitialized = _isReady(value);
+
+    if (widget.isLive) {
+      final edge = liveSeekEdge(value);
+      if (edge > _liveEdge) _liveEdge = edge;
+    }
 
     if (_wasBuffering && !isBuffering && isPlaying) {
       _restartHideTimer();
@@ -780,7 +803,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 
   void _restartHideTimer() {
     if (widget.controller == null) return;
-    final isInitialized = _videoValue?.value.initialized ?? false;
+    final isInitialized = _isReady(_videoValue?.value);
     if (_isBuffering || !isInitialized) return;
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 3), () => _setVisible(false));
@@ -807,7 +830,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     }
 
     if (_controlsVisible) {
-      final isInitialized = _videoValue?.value.initialized ?? false;
+      final isInitialized = _isReady(_videoValue?.value);
       if (_isBuffering || !isInitialized) return;
       _hideTimer?.cancel();
       _setVisible(false);
@@ -917,14 +940,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   @override
   Widget build(BuildContext context) {
     final value = _videoValue?.value;
-    final isInitialized = value?.initialized ?? false;
     final isPlaying = value?.isPlaying ?? false;
     final position = value?.position ?? Duration.zero;
     final duration = value?.duration ?? Duration.zero;
+    final timelineExtent = widget.isLive
+        ? (_liveEdge > liveSeekEdge(value) ? _liveEdge : liveSeekEdge(value))
+        : duration;
     final isBuffering =
         widget.controller != null &&
         !_suppressBufferingIndicator &&
-        ((value?.isBuffering ?? false) || !isInitialized);
+        ((value?.isBuffering ?? false) || !_isReady(value));
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1251,14 +1276,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                                       .toDouble())
                                               .clamp(
                                                 0.0,
-                                                duration.inMilliseconds
+                                                timelineExtent.inMilliseconds
                                                     .toDouble(),
                                               ),
                                       min: 0.0,
-                                      max: duration > Duration.zero
-                                          ? duration.inMilliseconds.toDouble()
+                                      max: timelineExtent > Duration.zero
+                                          ? timelineExtent.inMilliseconds
+                                                .toDouble()
                                           : 1.0,
-                                      onChangeStart: duration > Duration.zero
+                                      onChangeStart:
+                                          timelineExtent > Duration.zero
                                           ? (val) {
                                               _hideTimer?.cancel();
                                               setState(
@@ -1266,14 +1293,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                               );
                                             }
                                           : null,
-                                      onChanged: duration > Duration.zero
+                                      onChanged: timelineExtent > Duration.zero
                                           ? (val) {
                                               setState(
                                                 () => _dragValueMs = val,
                                               );
                                             }
                                           : null,
-                                      onChangeEnd: duration > Duration.zero
+                                      onChangeEnd:
+                                          timelineExtent > Duration.zero
                                           ? (val) {
                                               _seekTo(
                                                 Duration(
