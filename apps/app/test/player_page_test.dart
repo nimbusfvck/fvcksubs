@@ -185,6 +185,10 @@ void main() {
       expect(find.text('LIVE'), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('Live broadcast')), findsOneWidget);
       expect(find.byType(Slider), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('player-live-indicator'))).dx,
+        lessThan(tester.getTopLeft(find.byType(Slider)).dx),
+      );
       expect(find.byIcon(Icons.replay_10_rounded), findsNothing);
       expect(find.byIcon(Icons.forward_10_rounded), findsNothing);
       expect(find.byIcon(Icons.picture_in_picture_alt_rounded), findsNothing);

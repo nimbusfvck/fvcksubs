@@ -1083,11 +1083,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (widget.isLive) ...[
-                                    const _PlayerLiveIndicator(),
-                                    if (widget.resolvedSources.length > 1)
-                                      const SizedBox(width: AppSpacing.xs),
-                                  ],
                                   if (widget.resolvedSources.length > 1)
                                     InkWell(
                                       onTap: () {
@@ -1229,12 +1224,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                           if (widget.isLive || duration > Duration.zero) ...[
                             Row(
                               children: [
-                                Text(
-                                  _formatDuration(position),
-                                  style: AppTypography.caption.copyWith(
-                                    color: Colors.white70,
+                                if (widget.isLive)
+                                  const _PlayerLiveIndicator()
+                                else
+                                  Text(
+                                    _formatDuration(position),
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white70,
+                                    ),
                                   ),
-                                ),
                                 Expanded(
                                   child: SliderTheme(
                                     data: const SliderThemeData(
@@ -1291,12 +1289,13 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                     ),
                                   ),
                                 ),
-                                Text(
-                                  _formatDuration(duration),
-                                  style: AppTypography.caption.copyWith(
-                                    color: Colors.white70,
+                                if (!widget.isLive)
+                                  Text(
+                                    _formatDuration(duration),
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white70,
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ],
