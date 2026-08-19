@@ -996,6 +996,10 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                             onPressed: widget.onBack,
                           ),
                           const SizedBox(width: AppSpacing.xs),
+                          if (widget.isLive) ...[
+                            const _PlayerLiveIndicator(),
+                            const SizedBox(width: AppSpacing.xs),
+                          ],
                           Expanded(
                             child: Text(
                               widget.media.title,
@@ -1338,6 +1342,30 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
       ),
     );
   }
+}
+
+class _PlayerLiveIndicator extends StatelessWidget {
+  const _PlayerLiveIndicator();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Live broadcast',
+    child: Container(
+      key: const Key('player-live-indicator'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.liveAccent,
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text(
+        'LIVE',
+        style: AppTypography.liveBadge.copyWith(color: AppColors.primary),
+      ),
+    ),
+  );
 }
 
 class _UpNextCard extends StatefulWidget {

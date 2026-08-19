@@ -176,6 +176,16 @@ void main() {
       expect(find.byIcon(Icons.closed_caption_rounded), findsNothing);
     });
 
+    testWidgets('live controls identify the broadcast', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpPlayer(tester, isLive: true);
+
+      expect(find.byKey(const Key('player-live-indicator')), findsOneWidget);
+      expect(find.text('LIVE'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Live broadcast')), findsOneWidget);
+      semantics.dispose();
+    });
+
     testWidgets('same-language tracks collapse into one row with a count', (
       tester,
     ) async {
