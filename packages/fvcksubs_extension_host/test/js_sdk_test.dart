@@ -11,7 +11,7 @@ void main() {
   final sdk = File('../../sdk/js/fvcksubs.js').readAsStringSync();
 
   Manifest manifest() => Manifest.parse({
-    'apiVersion': 1,
+    'apiVersion': 2,
     'id': 'sdk_test',
     'name': 'SDK test',
     'version': '1.0.0',
@@ -26,7 +26,6 @@ void main() {
             'id': 'main',
             'name': 'Main',
             'categories': ['live'],
-            'kind': 'liveEvent',
           },
         ],
       },
@@ -53,37 +52,38 @@ void main() {
   JsExtension load(String providers) =>
       JsExtension.load(manifest: manifest(), source: '$sdk\n$providers');
 
-  const item = MediaItem(
+  final item = EventItemV2(
     ref: MediaRef(
       extensionId: 'sdk_test',
       providerId: 'sdk_test.catalog',
       id: 'event-7',
     ),
-    kind: MediaKind.liveEvent,
     title: 'Home vs Away',
+    schedule: Schedule(startsAt: DateTime.utc(2026, 8, 19)),
   );
 
   test('catalog and meta route by protocol provider ids', () async {
     final extension = load(r'''
 fvcksubs.defineCatalog({
   providerId: 'sdk_test.catalog', catalogId: 'main',
-  catalog: (query) => ({ items: [{
+  catalog: (query) => ({ sections: [{ id: 'main', items: [{
     ref: { extensionId: 'sdk_test', providerId: query.providerId, id: '1' },
-    kind: 'liveEvent', title: query.catalogId,
-  }] }),
+    kind: 'event', title: query.catalogId,
+    schedule: { startsAt: '2026-08-19T12:00:00Z' },
+  }] }] }),
 });
 fvcksubs.defineMeta({
   providerId: 'sdk_test.catalog',
-  meta: ({ ref }) => ({ item: { ref, kind: 'liveEvent', title: 'detail ' + ref.id } }),
+  meta: ({ ref }) => ({ item: { ref, kind: 'video', title: 'detail ' + ref.id } }),
 });
 ''');
     addTearDown(extension.dispose);
 
-    final page = await extension.catalog(
+    final page = await extension.catalogVersioned(
       const CatalogQuery(providerId: 'sdk_test.catalog', catalogId: 'main'),
     );
-    expect(page.items.single.title, 'main');
-    expect((await extension.meta(item.ref)).item.title, 'detail event-7');
+    expect(page.items.single.item.title, 'main');
+    expect((await extension.metaV2(item.ref)).item.title, 'detail event-7');
   });
 
   test(
@@ -109,7 +109,7 @@ fvcksubs.defineStream({
 ''');
       addTearDown(extension.dispose);
 
-      final sources = await extension.sources(
+      final sources = await extension.sourcesV2(
         item,
         enabledProviders: {'sdk_test.good', 'sdk_test.bad'},
       );
@@ -124,7 +124,7 @@ fvcksubs.defineStream({
       );
 
       expect(
-        await extension.sources(item, enabledProviders: {'sdk_test.bad'}),
+        await extension.sourcesV2(item, enabledProviders: {'sdk_test.bad'}),
         isEmpty,
       );
     },
@@ -135,10 +135,11 @@ fvcksubs.defineStream({
 fvcksubs.defineSearch({
   providerId: 'sdk_test.search',
   search: ({ query, page }) => ({
-    items: [{
+    sections: [{ id: 'results', items: [{
       ref: { extensionId: 'sdk_test', providerId: 'sdk_test.catalog', id: query },
-      kind: 'liveEvent', title: query + ':' + (page || 'first'),
-    }],
+      kind: 'event', title: query + ':' + (page || 'first'),
+      schedule: { startsAt: '2026-08-19T12:00:00Z' },
+    }] }],
     nextPage: page ? undefined : 'second',
   }),
 });
@@ -151,13 +152,13 @@ fvcksubs.defineSubtitles({
 ''');
     addTearDown(extension.dispose);
 
-    final first = await extension.search('aew');
-    expect(first.items.single.title, 'aew:first');
+    final first = await extension.searchVersioned('aew');
+    expect(first.items.single.item.title, 'aew:first');
     expect(first.nextPage, isNotNull);
-    final second = await extension.search('aew', page: first.nextPage);
-    expect(second.items.single.title, 'aew:second');
+    final second = await extension.searchVersioned('aew', page: first.nextPage);
+    expect(second.items.single.item.title, 'aew:second');
 
-    final tracks = await extension.externalSubtitles(item);
+    final tracks = await extension.externalSubtitlesV2(item);
     expect(tracks.single.url, 'https://sub.invalid/event-7.vtt');
   });
 

@@ -20,7 +20,9 @@ fvcksubs.defineCatalog({
   async catalog(query) {
     const response = await fetch('https://api.example.com/items');
     if (response.status !== 200) throw new Error(`catalog failed: ${response.status}`);
-    return { items: JSON.parse(response.body).map(toMediaItem) };
+    return {
+      sections: [{ id: 'main', items: JSON.parse(response.body).map(toMediaItem) }],
+    };
   },
 });
 

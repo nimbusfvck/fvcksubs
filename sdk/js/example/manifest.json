@@ -1,11 +1,11 @@
 {
-  "apiVersion": 1,
+  "apiVersion": 2,
   "id": "hello",
   "name": "Hello SDK",
   "version": "1.0.0",
   "runtime": "js",
   "entry": "bundle.js",
-  "categories": ["movie"],
+  "categories": ["featured"],
   "providers": [
     {
       "id": "hello.catalog",
@@ -14,8 +14,7 @@
         {
           "id": "main",
           "name": "Hello",
-          "categories": ["movie"],
-          "kind": "movie",
+          "categories": ["featured"],
           "display": "grid"
         }
       ]

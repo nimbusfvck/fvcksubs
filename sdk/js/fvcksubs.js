@@ -46,6 +46,23 @@
     return result;
   }
 
+  function catalogPage(value, role) {
+    const result = objectResult(value, role);
+    if (!Array.isArray(result.sections)) {
+      throw new Error(`${role} must return { sections: [...] }`);
+    }
+    for (const section of result.sections) {
+      if (section === null || typeof section !== 'object' || Array.isArray(section)) {
+        throw new Error(`${role}.sections must contain objects`);
+      }
+      requiredString(section.id, `${role}.sections[].id`);
+      if (!Array.isArray(section.items)) {
+        throw new Error(`${role}.sections[].items must be a list`);
+      }
+    }
+    return result;
+  }
+
   function enabled(args, providerId) {
     return !Array.isArray(args.enabledProviders) || args.enabledProviders.indexOf(providerId) !== -1;
   }
@@ -188,7 +205,7 @@
         else providerArgs.page = cursor;
         return Promise.resolve()
           .then(() => entry[role](providerArgs))
-          .then((value) => objectResult(value, role))
+          .then((value) => catalogPage(value, role))
           .catch(() => null);
       }),
     );
@@ -200,8 +217,19 @@
         next[entries[i].providerId] = page.nextPage;
       }
     }
+    const sections = [];
+    for (let i = 0; i < settled.length; i++) {
+      const page = settled[i];
+      if (!page) continue;
+      for (const section of page.sections) {
+        sections.push({
+          ...section,
+          id: `${entries[i].providerId}:${section.id}`,
+        });
+      }
+    }
     return {
-      items: pages.flatMap((page) => (Array.isArray(page.items) ? page.items : [])),
+      sections,
       ...(Object.keys(next).length > 0 ? { nextPage: sourceId('sdk-page', next) } : {}),
       ...(pages.some((page) => Array.isArray(page.subCategories))
         ? { subCategories: pages.flatMap((page) => page.subCategories || []) }
@@ -215,7 +243,7 @@
       (entry) => entry.providerId === query.providerId && entry.catalogId === query.catalogId,
     );
     if (!provider) throw new Error(`No catalog registered for ${query.providerId}/${query.catalogId}`);
-    return objectResult(await provider.catalog(query), 'catalog');
+    return catalogPage(await provider.catalog(query), 'catalog');
   };
   globalThis.__extension.meta = async (args) => {
     const provider = metas.find((entry) => entry.providerId === args.ref.providerId);

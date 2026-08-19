@@ -45,10 +45,6 @@ void main() {
         ProviderRole.stream,
       ]);
       expect(manifest.providers.single.name, 'Atlas');
-      expect(
-        manifest.providers.single.catalogs.single.kind,
-        MediaKind.liveEvent,
-      );
       expect(manifest.permissions.hosts, hasLength(3));
       // Not declared in the fixture, so it falls back to the safe default.
       expect(

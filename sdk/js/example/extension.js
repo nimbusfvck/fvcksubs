@@ -3,10 +3,13 @@ fvcksubs.defineCatalog({
   catalogId: 'main',
   async catalog() {
     return {
-      items: [{
-        ref: { extensionId: 'hello', providerId: 'hello.catalog', id: 'welcome' },
-        kind: 'movie',
-        title: 'Hello fvcksubs',
+      sections: [{
+        id: 'main',
+        items: [{
+          ref: { extensionId: 'hello', providerId: 'hello.catalog', id: 'welcome' },
+          kind: 'video',
+          title: 'Hello fvcksubs',
+        }],
       }],
     };
   },

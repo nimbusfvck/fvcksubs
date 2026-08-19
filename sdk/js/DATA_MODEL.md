@@ -25,21 +25,16 @@ changes.
 | Field | Required | Where the app uses it |
 |---|---:|---|
 | `ref` | yes | Routing, library records, playback history, and source lookup. It is not shown to the user. |
-| `kind` | yes | Selects the card and detail layout. Supported values are `liveEvent`, `channel`, `movie`, `series`, and `episode`. |
+| `kind` | yes | Selects the item's validated shape and behavior: `video`, `series`, `episode`, `channel`, or `event`. |
 | `title` | yes | Primary text on catalog cards, detail pages, library entries, and the player. |
 | `subtitle` | no | Secondary card text and the fallback description on a detail page. Examples include a year, competition, or episode name. |
-| `poster` | no | Portrait artwork used by movie and series cards. It is also a detail-header fallback. |
-| `thumbnail` | no | Landscape artwork used by event and channel cards. It is also a detail-header fallback. |
-| `startsAt` | no | ISO-8601 time used for schedule labels and time-aware matching. Use a UTC value such as `2026-08-19T12:30:00Z`. |
-| `status` | no | Controls scheduled, live, and ended presentation. Defaults to `unknown`. |
-| `statusLabel` | no | Short text shown verbatim beside the item, such as `HT` or `Lap 12/20`. |
-| `participants` | no | Supplies names, logos, colors, and scores for event cards. Exactly two participants enable the two-sided event layout and matcher. |
-| `group` | no | Section heading in a catalog. Keep items from the same group adjacent because the app preserves extension order. |
-| `extra` | no | JSON carried into later extension calls; it is never rendered. Episode items use `season`, `episode`, and `seriesTitle` for resume and playback. |
+| `artwork` | no | Shape-specific images. `portrait` is used by narrow cards, `landscape` by wide cards and detail headers, and `logo` for an optional title mark. |
 
-Use `poster` for portrait images and `thumbnail` for landscape images. When
-both are available, send both rather than putting the same cropped image in
-both fields.
+Only `event` accepts `schedule` and `participants`. Its schedule requires a
+UTC `startsAt`; `state` controls lifecycle indicators and `label` is optional
+display text. Only `episode` accepts `episode`, containing its `parentRef`,
+opaque `groupId`, and one-based `position`. Fields from another kind are
+rejected instead of ignored.
 
 ### `ImageRef`
 
@@ -62,9 +57,11 @@ The host supplies `providerId` and `catalogId`. `category`, `subCategory`, and
 `filters` contain the user's current selection. `page` is the opaque cursor
 previously returned by the extension.
 
-Return catalog entries in `items`. Return `nextPage` only when another page is
-available. The app sends the value back unchanged. `subCategories` supplies
-the IDs and labels for an optional secondary category selector.
+Return entries inside explicit `sections`. Every section requires a stable
+opaque `id`, may have a displayed `title`, and contains ordered `items`.
+Return `nextPage` only when another page is available; the app sends the value
+back unchanged. `subCategories` supplies IDs and labels for an optional
+secondary selector.
 
 ## Detail data
 
@@ -74,19 +71,15 @@ the IDs and labels for an optional secondary category selector.
 |---|---:|---|
 | `item` | yes | Current item and detail-header content. It should retain the same `ref` as the requested item. |
 | `description` | no | Full synopsis on the detail page. |
-| `genres` | no | Genre labels in the detail metadata row. |
-| `runtimeMinutes` | no | Runtime shown on movie details. Supply an integer number of minutes. |
-| `certification` | no | Content rating shown in detail metadata, such as `PG-13`. |
-| `cast` | no | Cast section on the detail page, in the supplied order. |
-| `seasons` | no | Season and episode selector for a series. Keep seasons and episodes in display order. |
-| `lastAiredSeason` | no | Season selected by default when the user starts or resumes a series. |
-| `lastAiredEpisode` | no | Episode selected by default within `lastAiredSeason`. Supply both last-aired fields together. |
+| `tags` | no | Short classification labels displayed in extension order. |
+| `facts` | no | Display-only `label` and `value` pairs. Use these for metadata the app does not need to interpret. |
+| `credits` | no | Credited people or entities with `name`, optional `role`, and optional `image`. |
+| `episodeGuide` | no | Typed episode navigation grouped by extension-defined IDs and titles. |
 
-`CastMember.name` is the displayed person name, `character` is the role below
-it, and `photoUrl` is the headshot. An episode uses `title` as its primary row,
-`description` as its synopsis, `thumbnailUrl` as its landscape still,
-`duration` as display-ready text such as `57m`, and `releaseDate` to determine
-whether it is available yet.
+Each episode summary has its own stable `ref`, a `title`, and optional
+`description`, `artwork`, positive `durationSeconds`, and UTC `availableAt`.
+`defaultEpisodeRef`, when supplied, must point to an episode listed in the
+guide. Groups are generic and may represent any extension-defined grouping.
 
 ## Source discovery and playback
 

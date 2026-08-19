@@ -10,16 +10,8 @@ interface MediaRef {
   id: string;
 }
 
-/**
- * Type of content returned by an extension.
- *
- * - `liveEvent`: scheduled or live event; may show participants, scores, and status.
- * - `channel`: continuously available channel without an episode structure.
- * - `movie`: standalone video displayed with portrait artwork.
- * - `series`: series container whose episodes are supplied by `MediaDetail.seasons`.
- * - `episode`: individual episode when an extension exposes episodes as catalog items.
- */
-type MediaKind = 'liveEvent' | 'channel' | 'movie' | 'series' | 'episode';
+/** Selects the protocol shape and behavior of an item. */
+type MediaKind = 'video' | 'series' | 'episode' | 'channel' | 'event';
 
 /**
  * Current state of a scheduled event.
@@ -29,7 +21,7 @@ type MediaKind = 'liveEvent' | 'channel' | 'movie' | 'series' | 'episode';
  * - `ended`: already finished.
  * - `unknown`: no reliable state is available.
  */
-type LiveStatus = 'scheduled' | 'live' | 'ended' | 'unknown';
+type ScheduleState = 'scheduled' | 'live' | 'ended' | 'unknown';
 
 /**
  * Media format used to configure playback.
@@ -40,6 +32,24 @@ type StreamFormat = 'dash' | 'hls' | 'other';
 interface ImageRef {
   /** Absolute image URL. The URL and redirect hosts must be allowed by the manifest. */
   url: string;
+}
+
+interface Artwork {
+  /** Portrait image used by narrow cards and portrait layouts. */
+  portrait?: ImageRef;
+  /** Landscape image used by wide cards and detail headers. */
+  landscape?: ImageRef;
+  /** Optional title or brand mark. */
+  logo?: ImageRef;
+}
+
+interface Schedule {
+  /** ISO-8601 UTC start time, for example `2026-08-19T12:30:00Z`. */
+  startsAt: string;
+  /** Machine-readable lifecycle state used for event indicators. */
+  state?: ScheduleState;
+  /** Optional short display text supplied verbatim by the extension. */
+  label?: string;
 }
 interface Participant {
   /** Full name shown on event cards and used for source matching. */
@@ -54,50 +64,46 @@ interface Participant {
   score?: string;
 }
 
-interface MediaItem {
+interface MediaBase {
   /** Stable identity used for routing, history, and library records. */
   ref: MediaRef;
-  /**
-   * Content type used by the app to choose its presentation and behavior.
-   * For example, `liveEvent` enables event status and participant presentation,
-   * while `movie` uses the poster-oriented movie layout.
-   */
   kind: MediaKind;
   /** Primary text on cards, details, library entries, and the player. */
   title: string;
   /** Secondary card text, such as a year, competition, or episode name. */
   subtitle?: string;
-  /** Portrait artwork used by movie and series cards and the detail header. */
-  poster?: ImageRef;
-  /** Landscape artwork used by event/channel cards and the detail header. */
-  thumbnail?: ImageRef;
-  /** ISO-8601 UTC start time used for schedule labels and time-aware matching. */
-  startsAt?: string;
-  /**
-   * Current event state. It controls scheduled/live/ended indicators.
-   * Omit it or use `unknown` when the upstream has no reliable state.
-   */
-  status?: LiveStatus;
-  /** Short status text shown verbatim, such as `HT` or `Lap 12/20`. */
-  statusLabel?: string;
-  /**
-   * People or teams taking part in an event.
-   * Exactly two entries enable the two-sided event card and name matcher.
-   * Omit this field for content that has no participants.
-   */
-  participants?: Participant[];
-  /**
-   * Heading used to divide a catalog into sections, such as a competition,
-   * genre, or year. Keep items with the same group next to each other because
-   * the app preserves the order returned by the extension.
-   */
-  group?: string;
-  /**
-   * JSON carried into later extension calls. It is not displayed.
-   * Series episode items use `season`, `episode`, and `seriesTitle` keys.
-   */
-  extra?: Record<string, JsonValue>;
+  /** Shape-specific images used by cards and detail layouts. */
+  artwork?: Artwork;
 }
+
+interface VideoItem extends MediaBase { kind: 'video'; }
+interface SeriesItem extends MediaBase { kind: 'series'; }
+interface ChannelItem extends MediaBase { kind: 'channel'; }
+
+interface EpisodeIdentity {
+  /** Stable reference of the series or collection containing this episode. */
+  parentRef: MediaRef;
+  /** Opaque group ID matching an `EpisodeGroup.id`. */
+  groupId: string;
+  /** One-based display position inside the group. */
+  position: number;
+}
+
+interface EpisodeItem extends MediaBase {
+  kind: 'episode';
+  /** Typed navigation context. The item's own `ref` must identify the episode. */
+  episode: EpisodeIdentity;
+}
+
+interface EventItem extends MediaBase {
+  kind: 'event';
+  /** Required timing and lifecycle data for the event. */
+  schedule: Schedule;
+  /** Optional participants in display order. */
+  participants?: Participant[];
+}
+
+type MediaItem = VideoItem | SeriesItem | EpisodeItem | ChannelItem | EventItem;
 
 interface CatalogQuery {
   /** Provider selected by the host. Matches a provider ID in the manifest. */
@@ -121,64 +127,83 @@ interface SubCategory {
   name: string;
 }
 interface CatalogPage {
-  /** Catalog entries in display order. */
-  items: MediaItem[];
+  /** Explicit groups rendered in order. At least one section is expected. */
+  sections: CatalogSection[];
   /** Opaque cursor for the next page. Omit when there is no next page. */
   nextPage?: string;
   /** Optional secondary category choices displayed by the catalog screen. */
   subCategories?: SubCategory[];
 }
 
-interface CastMember {
-  /** Person name shown in the detail cast section. */
-  name: string;
-  /** Role shown below the person's name. */
-  character?: string;
-  /** Absolute headshot URL shown in the cast section. */
-  photoUrl?: string;
+interface CatalogSection {
+  /** Stable opaque ID used when paginated pages are merged. */
+  id: string;
+  /** Optional heading shown above the section. */
+  title?: string;
+  /** Entries rendered in order inside this section. */
+  items: MediaItem[];
 }
-interface SeriesEpisode {
+
+interface Fact {
+  /** Short label shown beside the value. */
+  label: string;
+  /** Display-ready value; the app does not parse it. */
+  value: string;
+}
+
+interface Credit {
+  /** Person or entity name shown in the credits section. */
+  name: string;
+  /** Optional contribution or role shown below the name. */
+  role?: string;
+  /** Optional profile image. */
+  image?: ImageRef;
+}
+
+interface EpisodeSummary {
+  /** Stable episode identity used by metadata, source, subtitle, and history calls. */
+  ref: MediaRef;
   /** Primary episode row text. */
   title: string;
-  /** Episode synopsis shown in the episode list. */
+  /** Optional synopsis shown in the episode list. */
   description?: string;
-  /** Absolute landscape still URL shown in the episode row. */
-  thumbnailUrl?: string;
-  /** Display-ready duration, such as `57m`. */
-  duration?: string;
-  /** ISO-8601 air date used to determine whether the episode is available. */
-  releaseDate?: string;
+  /** Optional episode-specific artwork. */
+  artwork?: Artwork;
+  /** Optional positive runtime in seconds. */
+  durationSeconds?: number;
+  /** Optional ISO-8601 UTC release or availability time. */
+  availableAt?: string;
 }
-interface SeriesSeason {
-  /** Season number. Use `0` for specials when applicable. */
-  number: number;
-  /** User-facing season selector label. */
-  name: string;
+
+interface EpisodeGroup {
+  /** Stable opaque ID used by episode identities. */
+  id: string;
+  /** User-facing selector label. */
+  title: string;
   /** Episodes in display order. */
-  episodes?: SeriesEpisode[];
+  episodes: EpisodeSummary[];
 }
+
+interface EpisodeGuide {
+  /** Extension-defined groups such as seasons, volumes, or years. */
+  groups: EpisodeGroup[];
+  /** Episode used by the primary Play action; must exist in `groups`. */
+  defaultEpisodeRef?: MediaRef;
+}
+
 interface MediaDetail {
   /** Item displayed in the detail header. Keep the requested `ref` unchanged. */
   item: MediaItem;
   /** Full synopsis shown on the detail page. */
   description?: string;
-  /** Genre labels shown in the detail metadata row. */
-  genres?: string[];
-  /** Runtime shown on movie details, as a whole number of minutes. */
-  runtimeMinutes?: number;
-  /** Content rating shown in detail metadata, such as `PG-13`. */
-  certification?: string;
-  /** People shown in the detail cast section, in display order. */
-  cast?: CastMember[];
-  /**
-   * Seasons and episodes displayed on a series detail page.
-   * This is normally omitted for movies, channels, and live events.
-   */
-  seasons?: SeriesSeason[];
-  /** Most recently aired season, used as the initial series playback target. */
-  lastAiredSeason?: number;
-  /** Most recently aired episode. Supply it together with `lastAiredSeason`. */
-  lastAiredEpisode?: number;
+  /** Short classification labels displayed in extension-provided order. */
+  tags?: string[];
+  /** Labelled display metadata such as runtime, year, or rating. */
+  facts?: Fact[];
+  /** Credited people or entities in display order. */
+  credits?: Credit[];
+  /** Optional typed navigation data for episodic content. */
+  episodeGuide?: EpisodeGuide;
 }
 
 interface StreamSource {

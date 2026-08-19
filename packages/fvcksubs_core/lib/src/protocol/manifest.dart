@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-import '../content/media_item.dart';
 import '../json_util.dart';
 
 /// A role a provider can fill. One provider may fill several.
@@ -42,18 +41,15 @@ class ManifestException implements Exception {
 /// long list meant to be scanned — the app can't infer it from the data. In
 /// Discover every catalog renders as a grid regardless.
 enum CatalogDisplay {
-  /// Horizontal carousel. For short, curated shelves ("Top Movies").
+  /// Horizontal carousel for short, curated shelves.
   row,
 
-  /// Vertical grid showing everything at once. For long lists worth scanning
-  /// (20 live matches). Column count is the app's call — it adapts to the
-  /// screen — so the extension is only saying "show it all", not how wide.
+  /// Vertical grid showing everything at once. Column count is the app's
+  /// responsibility, so the extension chooses intent rather than dimensions.
   grid,
 
   /// Vertical single-column list. Same "show it all" intent as [grid], but
-  /// for items whose content needs the full width to read — a two-sided
-  /// fixture spells out both names, which a half-width grid cell truncates
-  /// to nothing.
+  /// for items whose content needs the full width to read.
   ///
   /// Still a shape, not a measurement: the extension says "one per line",
   /// the app decides how tall a line is and what it holds.
@@ -69,14 +65,14 @@ enum CatalogDisplay {
 /// ```
 /// catalog                                  ← this declaration
 ///   └── category   live, sport             ← [categories], the Home chips
-///         └── subCategory  Football, …     ← CatalogPage.subCategories, per response
-///               └── group  Coppa Italia, … ← MediaItem.group, sections in one response
+///         └── subCategory                  ← optional response choices
+///               └── section                ← explicit response groups
 /// ```
 ///
 /// [categories] is a list, not a single value: one catalog legitimately spans
 /// several, and the same item may surface under more than one of them (a live
-/// football match belongs to both `live` and `sport`). Which category the user
-/// is browsing arrives as [CatalogQuery.category], so the extension answers
+/// item may surface under more than one of them. Which category the user is
+/// browsing arrives as [CatalogQuery.category], so the extension answers
 /// per-category from the one catalog rather than declaring a near-duplicate
 /// catalog for each.
 class CatalogDecl extends Equatable {
@@ -85,7 +81,6 @@ class CatalogDecl extends Equatable {
     required this.id,
     required this.name,
     required this.categories,
-    required this.kind,
     this.display = CatalogDisplay.grid,
     this.filters = const [],
     this.expanded = false,
@@ -102,7 +97,6 @@ class CatalogDecl extends Equatable {
     categories: json.containsKey('categories')
         ? stringList(json['categories'])
         : [json['category']! as String],
-    kind: enumByNameStrict(MediaKind.values, json['kind']),
     display: enumByName(
       CatalogDisplay.values,
       json['display'],
@@ -121,9 +115,6 @@ class CatalogDecl extends Equatable {
   /// Categories this catalog serves (`["live", "sport"]`) — each becomes a
   /// chip on Home, and arrives back as [CatalogQuery.category].
   final List<String> categories;
-
-  /// Kind of item this catalog yields.
-  final MediaKind kind;
 
   /// Requested layout on Home.
   final CatalogDisplay display;
@@ -148,22 +139,13 @@ class CatalogDecl extends Equatable {
     'id': id,
     'name': name,
     'categories': categories,
-    'kind': kind.name,
     'display': display.name,
     if (filters.isNotEmpty) 'filters': filters,
     if (expanded) 'expanded': expanded,
   };
 
   @override
-  List<Object?> get props => [
-    id,
-    name,
-    categories,
-    kind,
-    display,
-    filters,
-    expanded,
-  ];
+  List<Object?> get props => [id, name, categories, display, filters, expanded];
 }
 
 /// One provider declared by an extension.
