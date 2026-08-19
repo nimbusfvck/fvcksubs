@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
+import 'package:fvcksubs_app/library/library_controller_v2.dart';
 import 'package:fvcksubs_app/library/library_page.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -65,36 +66,67 @@ void main() {
     expect(find.text('In Progress Match'), findsNWidgets(2));
   });
 
-  testWidgets('tapping an available record opens it (a live match: straight to the player)', (
+  testWidgets('renders protocol v2 records and reacts to Cubit updates', (
     tester,
   ) async {
-    final favorited = fakeItem(id: 'fav', title: 'Favorited Match');
-    final controller = controllerWith([
-      UserMediaState(ref: favorited.ref, item: favorited, favorite: true),
-    ]);
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'v2'),
+      title: 'Saved v2 item',
+    );
+    const record = UserMediaStateV2(item: item, favorite: true);
+    final controller = LibraryControllerV2(
+      store: _MemoryLibraryStoreV2(),
+      initial: {record.key: record},
+    );
 
     await tester.pumpWidget(
       wrapApp(
         child: const LibraryPage(),
-        registry: ExtensionRegistry([
-          FakeExtension(
-            sourceList: const [StreamSource(id: 's', label: 'HD 1080p')],
-            resolved: const PlayableStream(
-              url: 'https://edge/live.m3u8',
-              format: StreamFormat.hls,
-            ),
-          ),
-        ]),
-        libraryController: controller,
+        registry: ExtensionRegistry([FakeExtension()]),
+        libraryControllerV2: controller,
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Favorited Match'));
-    await tester.pumpAndSettle();
+    expect(find.text('Favorites'), findsOneWidget);
+    expect(find.text('Saved v2 item'), findsOneWidget);
 
-    expect(find.byType(PlayerPage), findsOneWidget);
+    controller.toggleFavorite(item);
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing here yet'), findsOneWidget);
   });
+
+  testWidgets(
+    'tapping an available record opens it (a live match: straight to the player)',
+    (tester) async {
+      final favorited = fakeItem(id: 'fav', title: 'Favorited Match');
+      final controller = controllerWith([
+        UserMediaState(ref: favorited.ref, item: favorited, favorite: true),
+      ]);
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: const LibraryPage(),
+          registry: ExtensionRegistry([
+            FakeExtension(
+              sourceList: const [StreamSource(id: 's', label: 'HD 1080p')],
+              resolved: const PlayableStream(
+                url: 'https://edge/live.m3u8',
+                format: StreamFormat.hls,
+              ),
+            ),
+          ]),
+          libraryController: controller,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Favorited Match'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlayerPage), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'a record whose extension is no longer installed is dimmed and does not navigate',
@@ -133,4 +165,12 @@ void main() {
       expect(find.textContaining('Install'), findsOneWidget);
     },
   );
+}
+
+class _MemoryLibraryStoreV2 implements LibraryStoreV2 {
+  @override
+  Future<Map<String, UserMediaStateV2>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaStateV2> records) async {}
 }
