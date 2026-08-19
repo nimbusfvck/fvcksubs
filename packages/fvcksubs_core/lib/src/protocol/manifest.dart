@@ -256,7 +256,7 @@ class Manifest extends Equatable {
   /// A manifest above this is refused ([parse]); this is the single knob that
   /// keeps a newer extension from running against an app that predates the
   /// capability it needs.
-  static const int supportedApiVersion = 1;
+  static const int supportedApiVersion = 2;
 
   /// Parses and validates a manifest.
   ///

@@ -64,7 +64,8 @@ void main() {
     });
 
     test('rejects an apiVersion newer than this build', () {
-      final json = cricfyManifestJson()..['apiVersion'] = 2;
+      final json = cricfyManifestJson()
+        ..['apiVersion'] = Manifest.supportedApiVersion + 1;
       expect(
         () => Manifest.parse(json),
         throwsA(
@@ -75,6 +76,12 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('accepts protocol v2 manifests', () {
+      final json = cricfyManifestJson()..['apiVersion'] = 2;
+
+      expect(Manifest.parse(json).apiVersion, 2);
     });
 
     test('rejects a missing apiVersion', () {
