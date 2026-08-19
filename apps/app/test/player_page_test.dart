@@ -118,6 +118,41 @@ void main() {
     expect(fakePlayerY(tester), startY);
   });
 
+  testWidgets('protocol v2 item uses native title and library state', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'extension',
+        providerId: 'provider',
+        id: 'video',
+      ),
+      title: 'Protocol v2 video',
+    );
+    final resolved = [
+      const ResolvedSource(
+        source: StreamSource(id: 'source', label: 'Primary'),
+        stream: PlayableStream(
+          url: 'https://edge/video.m3u8',
+          format: StreamFormat.hls,
+        ),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage.v2(item: item, resolvedSources: resolved),
+        registry: ExtensionRegistry(const []),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Protocol v2 video'), findsOneWidget);
+    await tester.tap(find.byTooltip('Add to favorites'));
+    await tester.pump();
+    expect(find.byTooltip('Remove from favorites'), findsOneWidget);
+  });
+
   group('subtitle picker', () {
     Future<void> openPicker(WidgetTester tester) async {
       await tester.tap(find.byIcon(Icons.closed_caption_off_rounded));

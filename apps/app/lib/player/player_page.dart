@@ -3,15 +3,18 @@ import 'dart:async';
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
 import '../detail/episode_target.dart';
 import '../detail/favorite_button.dart';
 import '../library/library_controller.dart';
+import '../library/library_controller_v2.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'play_item.dart';
+import 'playback_media.dart';
 import 'stream_player_mapping.dart'
     show subtitleLanguageLabel, subtitleSourceFor, subtitlesForPicker;
 
@@ -53,18 +56,31 @@ class ResolvedSource {
 }
 
 class PlayerPage extends StatefulWidget {
-  const PlayerPage({
+  PlayerPage({
     super.key,
-    required this.item,
+    required MediaItem item,
     required this.resolvedSources,
     this.seasons = const [],
     this.pendingSources,
-  }) : assert(
-         resolvedSources.length > 0,
+  }) : media = PlaybackMedia.legacy(item),
+       assert(
+         resolvedSources.isNotEmpty,
          'Must provide at least one resolved source',
        );
 
-  final MediaItem item;
+  PlayerPage.v2({
+    super.key,
+    required MediaItemV2 item,
+    required this.resolvedSources,
+    this.pendingSources,
+  }) : media = PlaybackMedia.v2(item),
+       seasons = const [],
+       assert(
+         resolvedSources.isNotEmpty,
+         'Must provide at least one resolved source',
+       );
+
+  final PlaybackMedia media;
 
   final List<ResolvedSource> resolvedSources;
 
@@ -85,6 +101,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _advancing = false;
 
   LibraryController? _libraryController;
+  LibraryControllerV2? _libraryControllerV2;
 
   Timer? _progressTimer;
 
@@ -102,16 +119,17 @@ class _PlayerPageState extends State<PlayerPage> {
 
   BetterPlayerController? _errorListenerController;
 
-  bool get _isLive =>
-      widget.item.kind == MediaKind.liveEvent ||
-      widget.item.kind == MediaKind.channel;
+  bool get _isLive => widget.media.isLive;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = 0;
     _resolvedSources = widget.resolvedSources;
-    _nextEpisode = nextEpisodeOf(widget.item, widget.seasons);
+    final legacyItem = widget.media.legacyItem;
+    _nextEpisode = legacyItem == null
+        ? null
+        : nextEpisodeOf(legacyItem, widget.seasons);
     final pending = widget.pendingSources;
     if (pending != null) {
       unawaited(_awaitPendingSources(pending));
@@ -121,7 +139,9 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _libraryController = AppScope.of(context).libraryController;
+    final scope = AppScope.of(context);
+    _libraryController = scope.libraryController;
+    _libraryControllerV2 = scope.libraryControllerV2;
     _progressTimer ??= Timer.periodic(
       _kProgressReportInterval,
       (_) => _reportProgress(),
@@ -218,7 +238,7 @@ class _PlayerPageState extends State<PlayerPage> {
       // Resolve again because signed URLs and tokens may have expired.
       final scope = AppScope.of(context);
       final refreshed = await scope.registry.resolveSource(
-        widget.item.ref,
+        widget.media.ref,
         _current.source.id,
       );
       if (!PlaybackTarget.detect().canPlay(refreshed)) {
@@ -235,7 +255,7 @@ class _PlayerPageState extends State<PlayerPage> {
         _sourceRevision++;
         _retrying = false;
       });
-      scope.sourceCache.store(widget.item.ref, _resolvedSources);
+      scope.sourceCache.store(widget.media.ref, _resolvedSources);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -251,10 +271,11 @@ class _PlayerPageState extends State<PlayerPage> {
     final controller = _betterController;
     if (controller == null) return;
 
-    final record = _libraryController?.recordFor(widget.item.ref);
-    if (record == null || !_isSameEpisode(record.item, widget.item)) return;
+    final legacyItem = widget.media.legacyItem;
+    final progress = legacyItem == null
+        ? _libraryControllerV2?.recordFor(widget.media.ref)?.progress
+        : _legacyResumeProgress(legacyItem);
 
-    final progress = record.progress;
     if (progress == null || progress < _kMinResumeProgress) return;
     if (duration != null && duration - progress < _kResumeEndGuard) return;
 
@@ -265,7 +286,21 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_isLive) return;
     final position = _lastKnownPosition;
     if (position == null) return;
-    _libraryController?.recordWatched(widget.item, progress: position);
+    final legacyItem = widget.media.legacyItem;
+    if (legacyItem != null) {
+      _libraryController?.recordWatched(legacyItem, progress: position);
+    } else {
+      _libraryControllerV2?.recordWatched(
+        widget.media.v2Item!,
+        progress: position,
+      );
+    }
+  }
+
+  Duration? _legacyResumeProgress(MediaItem item) {
+    final record = _libraryController?.recordFor(item.ref);
+    if (record == null || !_isSameEpisode(record.item, item)) return null;
+    return record.progress;
   }
 
   void _handleNearEnd() {
@@ -333,7 +368,7 @@ class _PlayerPageState extends State<PlayerPage> {
         setState(() => _currentIndex = index);
         AppScope.of(
           context,
-        ).sourceCache.promote(widget.item.ref, picked.source.id);
+        ).sourceCache.promote(widget.media.ref, picked.source.id);
       }
     }
   }
@@ -346,7 +381,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _NetflixControlsOverlay(
         controller: controller,
         onVisibilityChanged: _onVisibilityChanged ?? (_) {},
-        item: widget.item,
+        media: widget.media,
         resolvedSources: _resolvedSources,
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
@@ -643,7 +678,7 @@ class _NetflixControlsOverlay extends StatefulWidget {
   const _NetflixControlsOverlay({
     required this.controller,
     required this.onVisibilityChanged,
-    required this.item,
+    required this.media,
     required this.resolvedSources,
     required this.currentIndex,
     required this.onChangeSource,
@@ -660,7 +695,7 @@ class _NetflixControlsOverlay extends StatefulWidget {
 
   final BetterPlayerController? controller;
   final void Function(bool visibility) onVisibilityChanged;
-  final MediaItem item;
+  final PlaybackMedia media;
   final List<ResolvedSource> resolvedSources;
   final int currentIndex;
   final VoidCallback onChangeSource;
@@ -842,7 +877,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) => _SubtitlePickerSheet(
-        item: widget.item,
+        media: widget.media,
         tracks: tracks,
         current: currentSub,
       ),
@@ -952,7 +987,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                           const SizedBox(width: AppSpacing.xs),
                           Expanded(
                             child: Text(
-                              widget.item.title,
+                              widget.media.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.titleMd.copyWith(
@@ -966,7 +1001,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                               ),
                             ),
                           ),
-                          FavoriteButton(item: widget.item),
+                          _PlaybackFavoriteButton(media: widget.media),
                           IconButton(
                             icon: const Icon(
                               Icons.picture_in_picture_alt_rounded,
@@ -1618,6 +1653,32 @@ class _QualityPickerSheet extends StatelessWidget {
   }
 }
 
+class _PlaybackFavoriteButton extends StatelessWidget {
+  const _PlaybackFavoriteButton({required this.media});
+
+  final PlaybackMedia media;
+
+  @override
+  Widget build(BuildContext context) {
+    final legacyItem = media.legacyItem;
+    if (legacyItem != null) return FavoriteButton(item: legacyItem);
+
+    final controller = AppScope.of(context).libraryControllerV2;
+    return BlocBuilder<LibraryControllerV2, LibraryStateV2>(
+      bloc: controller,
+      builder: (context, state) {
+        final favorited = state.isFavorite(media.ref);
+        return IconButton(
+          icon: Icon(favorited ? Icons.favorite : Icons.favorite_border),
+          color: favorited ? AppColors.liveAccent : null,
+          tooltip: favorited ? 'Remove from favorites' : 'Add to favorites',
+          onPressed: () => controller.toggleFavorite(media.v2Item!),
+        );
+      },
+    );
+  }
+}
+
 class _SubtitleGroup {
   _SubtitleGroup({required this.label, required this.tracks});
 
@@ -1627,12 +1688,12 @@ class _SubtitleGroup {
 
 class _SubtitlePickerSheet extends StatefulWidget {
   const _SubtitlePickerSheet({
-    required this.item,
+    required this.media,
     required this.tracks,
     required this.current,
   });
 
-  final MediaItem item;
+  final PlaybackMedia media;
 
   final List<SubtitleTrack> tracks;
   final BetterPlayerSubtitlesSource? current;
@@ -1663,9 +1724,11 @@ class _SubtitlePickerSheetState extends State<_SubtitlePickerSheet> {
 
   Future<void> _fetchExternal() async {
     setState(() => _externalState = _ExternalFetchState.loading);
-    final fetched = await AppScope.of(
-      context,
-    ).registry.externalSubtitles(widget.item);
+    final registry = AppScope.of(context).registry;
+    final legacyItem = widget.media.legacyItem;
+    final fetched = legacyItem == null
+        ? await registry.externalSubtitlesV2(widget.media.v2Item!)
+        : await registry.externalSubtitles(legacyItem);
     if (!mounted) return;
     setState(() {
       _externalTracks = fetched;
