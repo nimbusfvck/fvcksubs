@@ -8,6 +8,7 @@ import 'app_scope.dart';
 import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
+import 'library/library_controller_v2.dart';
 import 'platform/device_class.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
@@ -24,6 +25,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.addonsController,
     required this.installerController,
     required this.libraryController,
+    required this.libraryControllerV2,
     required this.pluginController,
     required this.catalogCache,
     required this.subtitlePreferenceController,
@@ -43,6 +45,8 @@ class FvcksubsApp extends StatelessWidget {
   final InstallerController installerController;
 
   final LibraryController libraryController;
+
+  final LibraryControllerV2 libraryControllerV2;
 
   final PluginController pluginController;
 
@@ -68,6 +72,7 @@ class FvcksubsApp extends StatelessWidget {
     addonsController: addonsController,
     installerController: installerController,
     libraryController: libraryController,
+    libraryControllerV2: libraryControllerV2,
     pluginController: pluginController,
     catalogCache: catalogCache,
     subtitlePreferenceController: subtitlePreferenceController,

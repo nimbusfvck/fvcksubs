@@ -7,6 +7,7 @@ import 'addons/installer_controller.dart';
 import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
+import 'library/library_controller_v2.dart';
 import 'platform/device_class.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
@@ -22,6 +23,7 @@ class AppScope extends InheritedWidget {
     required this.addonsController,
     required this.installerController,
     required this.libraryController,
+    required this.libraryControllerV2,
     required this.pluginController,
     required this.catalogCache,
     required this.subtitlePreferenceController,
@@ -42,6 +44,8 @@ class AppScope extends InheritedWidget {
   final InstallerController installerController;
 
   final LibraryController libraryController;
+
+  final LibraryControllerV2 libraryControllerV2;
 
   final PluginController pluginController;
 
@@ -69,6 +73,7 @@ class AppScope extends InheritedWidget {
       addonsController != oldWidget.addonsController ||
       installerController != oldWidget.installerController ||
       libraryController != oldWidget.libraryController ||
+      libraryControllerV2 != oldWidget.libraryControllerV2 ||
       pluginController != oldWidget.pluginController ||
       catalogCache != oldWidget.catalogCache ||
       subtitlePreferenceController != oldWidget.subtitlePreferenceController ||

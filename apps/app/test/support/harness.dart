@@ -9,6 +9,7 @@ import 'package:fvcksubs_app/player/source_cache.dart';
 import 'package:fvcksubs_app/player/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
+import 'package:fvcksubs_app/library/library_controller_v2.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
@@ -498,6 +499,7 @@ Widget wrapApp({
   AddonsController? addonsController,
   InstallerController? installerController,
   LibraryController? libraryController,
+  LibraryControllerV2? libraryControllerV2,
   PluginController? pluginController,
   CatalogCache? catalogCache,
   SubtitlePreferenceController? subtitlePreferenceController,
@@ -521,6 +523,8 @@ Widget wrapApp({
       ),
   libraryController:
       libraryController ?? LibraryController(store: FakeLibraryStore()),
+  libraryControllerV2:
+      libraryControllerV2 ?? LibraryControllerV2(store: _FakeLibraryStoreV2()),
   pluginController:
       pluginController ?? PluginController(store: FakePluginSelectionStore()),
   catalogCache: catalogCache ?? CatalogCache(),
@@ -537,3 +541,11 @@ Widget wrapApp({
   sourceCache: sourceCache ?? SourceCache(),
   child: MaterialApp(home: Scaffold(body: child)),
 );
+
+class _FakeLibraryStoreV2 implements LibraryStoreV2 {
+  @override
+  Future<Map<String, UserMediaStateV2>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaStateV2> records) async {}
+}
