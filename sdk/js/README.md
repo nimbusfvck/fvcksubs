@@ -103,3 +103,36 @@ be declared in `manifest.json.permissions.hosts`.
 
 The shipped extension is still exactly two files: `manifest.json` and
 `bundle.js`. This SDK is source input to that bundle, not a third runtime file.
+
+## Publish updates
+
+Users install extensions through a `repo.json` index. The index describes the
+download before the app fetches or evaluates the extension files. See
+[`example/repo.json`](example/repo.json) for a complete entry.
+
+Keep these values synchronized for every release:
+
+- `version` must match `manifest.json`.
+- `hosts` must mirror `manifest.json.permissions.hosts`.
+- `bundleSha256` must be the lowercase SHA-256 of the exact published
+  `bundle.js` bytes.
+- `manifestUrl` and `bundleUrl` must resolve over HTTPS.
+
+Add concise user-facing changes to `releaseNotes`:
+
+```json
+{
+  "releaseNotes": [
+    "Added Motorsport events.",
+    "Fixed source selection for live streams."
+  ]
+}
+```
+
+`releaseNotes` belongs to `repo.json`, not `manifest.json` or
+`fvcksubs.d.ts`. It is distribution metadata shown before an update; the
+extension runtime never receives it. An absent or empty list remains valid.
+
+Increase the version whenever published behavior or metadata changes. The app
+only offers an update when the repository version is newer than the installed
+version.

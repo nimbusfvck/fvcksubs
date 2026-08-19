@@ -1,0 +1,21 @@
+{
+  "extensions": [
+    {
+      "id": "hello",
+      "name": "Hello SDK",
+      "version": "1.0.0",
+      "description": "Example extension built with the fvcksubs JavaScript SDK.",
+      "author": "Example Publisher",
+      "hosts": [
+        "cdn.example.com"
+      ],
+      "releaseNotes": [
+        "Published the first catalog.",
+        "Added stream playback support."
+      ],
+      "manifestUrl": "https://extensions.example.com/hello/manifest.json",
+      "bundleUrl": "https://extensions.example.com/hello/bundle.js",
+      "bundleSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
