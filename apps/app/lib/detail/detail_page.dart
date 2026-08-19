@@ -201,7 +201,7 @@ class _DetailPageState extends State<DetailPage> {
                                 ),
                           label: Text(
                             _playLabel(target, watched?.progress),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Colors.black,

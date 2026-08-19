@@ -74,7 +74,7 @@ void main() {
     await tester.tap(find.text('Play'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining("No playable sources found."), findsOneWidget);
+    expect(find.textContaining('No playable sources found.'), findsOneWidget);
     expect(find.byKey(const Key('fake-player')), findsNothing);
     expect(player.played, isNull);
   });
@@ -107,7 +107,7 @@ void main() {
       await tester.tap(find.text('Play'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining("No playable sources found."), findsOneWidget);
+      expect(find.textContaining('No playable sources found.'), findsOneWidget);
       expect(player.played, isNull);
 
       // Must be unset before the test ends — TestWidgetsFlutterBinding
