@@ -4,7 +4,7 @@ abstract final class AppColors {
   static const Color primary = Color(0xFF111111);
   static const Color primaryActive = Color(0xFF242424);
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color brandAccent = Color(0xFF3B82F6);
+  static const Color brandAccent = Color(0xFF2563EB);
 
   static const Color surfaceDark = Color(0xFF101010);
   static const Color surfaceDarkElevated = Color(0xFF1A1A1A);
@@ -14,11 +14,14 @@ abstract final class AppColors {
   static const Color onDark = Color(0xFFFFFFFF);
   static const Color onDarkSoft = Color(0xFFA1A1AA);
 
+  // Decorative separators may stay subtle. Interactive boundaries use
+  // outlineDark so controls remain distinguishable from dark surfaces.
   static const Color hairlineDark = Color(0xFF3A3A3A);
+  static const Color outlineDark = Color(0xFF737373);
 
-  static const Color liveAccent = Color(0xFFEF4444);
+  static const Color liveAccent = Color(0xFFF87171);
   static const Color success = Color(0xFF10B981);
-  static const Color error = Color(0xFFEF4444);
+  static const Color error = Color(0xFFF87171);
 }
 
 abstract final class AppSpacing {

@@ -23,6 +23,7 @@ class _PermissionDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final entry = request.entry;
     return AlertDialog(
+      scrollable: true,
       backgroundColor: AppColors.surfaceDarkElevated,
       title: Text(
         request.isUpdate ? 'Update ${entry.name}?' : 'Install ${entry.name}?',

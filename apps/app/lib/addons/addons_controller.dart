@@ -1,11 +1,20 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
-class AddonsController extends ChangeNotifier {
-  AddonsController({required this.registry, required this.store});
+class AddonsState {
+  const AddonsState({this.revision = 0});
+
+  final int revision;
+
+  AddonsState next() => AddonsState(revision: revision + 1);
+}
+
+class AddonsController extends Cubit<AddonsState> {
+  AddonsController({required this.registry, required this.store})
+    : super(const AddonsState());
 
   final ExtensionRegistry registry;
 
@@ -14,13 +23,13 @@ class AddonsController extends ChangeNotifier {
   void setExtensionEnabled(String extensionId, bool enabled) {
     registry.setExtensionEnabled(extensionId, enabled);
     _persist();
-    notifyListeners();
+    emit(state.next());
   }
 
   void setProviderEnabled(String providerId, bool enabled) {
     registry.setProviderEnabled(providerId, enabled);
     _persist();
-    notifyListeners();
+    emit(state.next());
   }
 
   void _persist() {

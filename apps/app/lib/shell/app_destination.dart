@@ -5,7 +5,9 @@ enum AppDestination {
 
   library('Library', Icons.bookmark_border, Icons.bookmark),
 
-  addons('Addons', Icons.extension_outlined, Icons.extension);
+  addons('Addons', Icons.extension_outlined, Icons.extension),
+
+  settings('Settings', Icons.settings_outlined, Icons.settings);
 
   const AppDestination(this.label, this.icon, this.selectedIcon);
 

@@ -10,16 +10,16 @@ void main() {
     String? description,
     String? author,
   }) => ExtensionRepoEntry(
-        id: 'remote_ext',
-        name: 'Remote Extension',
-        version: '2.0.0',
-        manifestUrl: 'https://x/manifest.json',
-        bundleUrl: 'https://x/bundle.js',
-        bundleSha256: 'abc',
-        hosts: hosts,
-        description: description,
-        author: author,
-      );
+    id: 'remote_ext',
+    name: 'Remote Extension',
+    version: '2.0.0',
+    manifestUrl: 'https://x/manifest.json',
+    bundleUrl: 'https://x/bundle.js',
+    bundleSha256: 'abc',
+    hosts: hosts,
+    description: description,
+    author: author,
+  );
 
   /// Pumps the dialog and returns whatever it resolved to.
   Future<bool?> show(WidgetTester tester, PermissionRequest request) async {
@@ -198,5 +198,27 @@ void main() {
 
     expect(find.text('Install Remote Extension?'), findsOneWidget);
     expect(find.textContaining('by '), findsNothing);
+  });
+
+  testWidgets('a long host list scrolls without overflowing', (tester) async {
+    tester.view.physicalSize = const Size(390, 620);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final hosts = List.generate(30, (index) => 'host-$index.example');
+    await show(
+      tester,
+      PermissionRequest(
+        entry: entry(hosts: hosts, description: 'A long permission request.'),
+        newHosts: hosts,
+        alreadyGrantedHosts: const [],
+        isUpdate: false,
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SingleChildScrollView), findsWidgets);
+    expect(find.text('• host-0.example'), findsOneWidget);
   });
 }

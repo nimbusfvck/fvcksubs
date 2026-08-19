@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
-import '../player/subtitle_preference_controller.dart';
 import '../theme/tokens.dart';
 import 'addons_controller.dart';
 import 'installer_controller.dart';
@@ -14,46 +14,84 @@ class AddonsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    return ListenableBuilder(
-      listenable: Listenable.merge([
-        scope.addonsController,
-        scope.installerController,
-        scope.subtitlePreferenceController,
-      ]),
-      builder: (context, _) {
-        final installed = scope.registry.installed;
-        return ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            _SubtitlePreferenceSection(
-              controller: scope.subtitlePreferenceController,
+    return BlocBuilder<AddonsController, AddonsState>(
+      bloc: scope.addonsController,
+      builder: (context, _) => BlocBuilder<InstallerController, InstallerState>(
+        bloc: scope.installerController,
+        builder: (context, _) {
+          final installed = scope.registry.installed;
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.xxl,
             ),
-            const SizedBox(height: AppSpacing.md),
-            _RepoSection(controller: scope.installerController),
-            const SizedBox(height: AppSpacing.md),
-            if (installed.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            children: [
+              Semantics(
+                header: true,
                 child: Text(
-                  'No extensions installed.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMd.copyWith(
-                    color: AppColors.onDarkSoft,
+                  'Addons',
+                  style: AppTypography.displaySm.copyWith(
+                    color: AppColors.onDark,
                   ),
                 ),
-              )
-            else
-              for (final manifest in installed) ...[
-                _ExtensionTile(
-                  manifest: manifest,
-                  registry: scope.registry,
-                  controller: scope.addonsController,
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                'Manage extensions, sources, and playback preferences.',
+                style: AppTypography.bodyMd.copyWith(
+                  color: AppColors.onDarkSoft,
                 ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-          ],
-        );
-      },
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _RepoSection(controller: scope.installerController),
+              const SizedBox(height: AppSpacing.lg),
+              _SectionHeader(
+                title: 'Installed',
+                trailing: installed.isEmpty
+                    ? null
+                    : '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              if (installed.isEmpty)
+                _Panel(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.lg,
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.extension_off_outlined,
+                          color: AppColors.onDarkSoft,
+                          size: 32,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'No extensions installed.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodyMd.copyWith(
+                            color: AppColors.onDarkSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                for (final manifest in installed) ...[
+                  _ExtensionTile(
+                    manifest: manifest,
+                    registry: scope.registry,
+                    controller: scope.addonsController,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -86,47 +124,65 @@ class _RepoSectionState extends State<_RepoSection> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    return Material(
-      color: AppColors.surfaceDarkElevated,
-      borderRadius: AppRadius.lg,
-      clipBehavior: Clip.antiAlias,
+    return _Panel(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const _SectionHeader(
+              title: 'Extension repo',
+              icon: Icons.cloud_download_outlined,
+            ),
+            const SizedBox(height: AppSpacing.xs),
             Text(
-              'Extension repo',
-              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+              'Check a repository to install or update extensions.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _urlField,
-                    enabled: !controller.busy,
-                    autocorrect: false,
-                    keyboardType: TextInputType.url,
-                    style: AppTypography.bodyMd.copyWith(
-                      color: AppColors.onDark,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final field = TextField(
+                  controller: _urlField,
+                  enabled: !controller.busy,
+                  autocorrect: false,
+                  keyboardType: TextInputType.url,
+                  style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+                  decoration: InputDecoration(
+                    labelText: 'Repository URL',
+                    hintText: 'https://…/repo.json',
+                    prefixIcon: const Icon(Icons.link, size: 19),
+                    hintStyle: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onDarkSoft,
                     ),
-                    decoration: InputDecoration(
-                      hintText: 'https://…/repo.json',
-                      hintStyle: AppTypography.bodyMd.copyWith(
-                        color: AppColors.onDarkSoft,
-                      ),
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _refresh(),
+                    isDense: true,
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                FilledButton(
+                  autofillHints: const [AutofillHints.url],
+                  onSubmitted: (_) => _refresh(),
+                );
+                final button = FilledButton.icon(
                   onPressed: controller.busy ? null : _refresh,
-                  child: const Text('Check'),
-                ),
-              ],
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Check'),
+                );
+                if (constraints.maxWidth < 440) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      field,
+                      const SizedBox(height: AppSpacing.sm),
+                      button,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: field),
+                    const SizedBox(width: AppSpacing.sm),
+                    button,
+                  ],
+                );
+              },
             ),
             if (controller.busy) ...[
               const SizedBox(height: AppSpacing.md),
@@ -163,8 +219,23 @@ class _ListingRow extends StatelessWidget {
     final entry = listing.entry;
     final upToDate =
         listing.isUpdate && listing.installedVersion == entry.version;
-    return Row(
+    final details = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDarkHighest,
+            borderRadius: AppRadius.md,
+          ),
+          child: const Icon(
+            Icons.extension_outlined,
+            color: AppColors.onDarkSoft,
+            size: 19,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,26 +256,49 @@ class _ListingRow extends StatelessWidget {
                 ),
               ),
               if (entry.description != null)
-                Text(
-                  entry.description!,
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
+                _ExpandableDescription(text: entry.description!, maxLines: 2),
             ],
           ),
         ),
-        if (upToDate)
-          Text(
-            'Up to date',
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-          )
-        else
-          FilledButton.tonal(
-            onPressed: controller.busy ? null : () => controller.install(entry),
-            child: Text(listing.isUpdate ? 'Update' : 'Install'),
-          ),
       ],
+    );
+    final action = upToDate
+        ? const _StatusPill(label: 'Up to date', positive: true)
+        : !listing.isUpdate
+        ? FilledButton(
+            onPressed: controller.busy ? null : () => controller.install(entry),
+            child: const Text('Install'),
+          )
+        : OutlinedButton(
+            onPressed: controller.busy ? null : () => controller.install(entry),
+            child: const Text('Update'),
+          );
+    return Container(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.hairlineDark)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 400) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                details,
+                const SizedBox(height: AppSpacing.sm),
+                Align(alignment: Alignment.centerRight, child: action),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: details),
+              const SizedBox(width: AppSpacing.sm),
+              action,
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -228,14 +322,29 @@ class _ExtensionTile extends StatelessWidget {
         if (provider.roles.contains(ProviderRole.stream)) provider,
     ];
 
-    return Material(
-      color: AppColors.surfaceDarkElevated,
-      borderRadius: AppRadius.lg,
-      clipBehavior: Clip.antiAlias,
+    return _Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            secondary: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: enabled
+                    ? AppColors.brandAccent.withValues(alpha: 0.16)
+                    : AppColors.surfaceDarkHighest,
+                borderRadius: AppRadius.md,
+              ),
+              child: Icon(
+                Icons.extension_outlined,
+                color: enabled ? AppColors.brandAccent : AppColors.onDarkSoft,
+              ),
+            ),
             title: Text(
               manifest.name,
               style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
@@ -244,18 +353,23 @@ class _ExtensionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (manifest.description != null)
+                  _ExpandableDescription(
+                    text: manifest.description!,
+                    maxLines: 3,
+                  ),
+                if (manifest.categories.isNotEmpty)
                   Text(
-                    manifest.description!,
+                    manifest.categories.join(', '),
                     style: AppTypography.bodySm.copyWith(
                       color: AppColors.onDarkSoft,
                     ),
                   ),
                 Text(
                   [
-                    manifest.categories.join(', '),
+                    'v${manifest.version}',
                     if (manifest.author != null) 'by ${manifest.author}',
                   ].join(' · '),
-                  style: AppTypography.bodySm.copyWith(
+                  style: AppTypography.caption.copyWith(
                     color: AppColors.onDarkSoft,
                   ),
                 ),
@@ -266,10 +380,21 @@ class _ExtensionTile extends StatelessWidget {
                 controller.setExtensionEnabled(manifest.id, value),
           ),
           for (final provider in streamProviders)
-            Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.md),
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.hairlineDark)),
+              ),
               child: SwitchListTile(
                 dense: true,
+                contentPadding: const EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.md,
+                ),
+                secondary: const Icon(
+                  Icons.play_circle_outline,
+                  color: AppColors.onDarkSoft,
+                  size: 20,
+                ),
                 title: Text(
                   _sourceLabel(provider.id),
                   style: AppTypography.bodyMd.copyWith(
@@ -295,52 +420,124 @@ class _ExtensionTile extends StatelessWidget {
   }
 }
 
-class _SubtitlePreferenceSection extends StatelessWidget {
-  const _SubtitlePreferenceSection({required this.controller});
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child});
 
-  final SubtitlePreferenceController controller;
-
-  static const List<(String?, String)> _options = [
-    (null, 'No preference'),
-    ('id', 'Indonesia'),
-    ('en', 'English'),
-  ];
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        'Preferred subtitles',
-        style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
-      ),
-      const SizedBox(height: AppSpacing.xs),
-      Text(
-        'Played first when a source has it.',
-        style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      Wrap(
-        spacing: AppSpacing.xs,
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceDarkElevated,
+    borderRadius: AppRadius.lg,
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.icon, this.trailing});
+
+  final String title;
+  final IconData? icon;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    header: true,
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 19, color: AppColors.onDarkSoft),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+        Expanded(
+          child: Text(
+            title,
+            style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+          ),
+        ),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+          ),
+      ],
+    ),
+  );
+}
+
+class _ExpandableDescription extends StatefulWidget {
+  const _ExpandableDescription({required this.text, required this.maxLines});
+
+  final String text;
+  final int maxLines;
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final style = AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft);
+      final painter = TextPainter(
+        text: TextSpan(text: widget.text, style: style),
+        maxLines: widget.maxLines,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: constraints.maxWidth);
+      final overflows = painter.didExceedMaxLines;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final (code, label) in _options)
-            ChoiceChip(
-              label: Text(label),
-              selected: controller.languageCode == code,
-              onSelected: (_) => controller.select(code),
-              showCheckmark: false,
-              labelStyle: AppTypography.bodySm.copyWith(
-                color: controller.languageCode == code
-                    ? AppColors.surfaceDark
-                    : AppColors.onDark,
+          Text(
+            widget.text,
+            maxLines: _expanded ? null : widget.maxLines,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: style,
+          ),
+          if (overflows || _expanded)
+            TextButton(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(48, 44),
+                tapTargetSize: MaterialTapTargetSize.padded,
               ),
-              backgroundColor: AppColors.surfaceDarkContainer,
-              selectedColor: AppColors.onDark,
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+              child: Text(_expanded ? 'Show less' : 'Show more'),
             ),
         ],
+      );
+    },
+  );
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, this.positive = false});
+
+  final String label;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: positive
+          ? AppColors.success.withValues(alpha: 0.14)
+          : AppColors.surfaceDarkHighest,
+      borderRadius: AppRadius.pill,
+    ),
+    child: Text(
+      label,
+      style: AppTypography.caption.copyWith(
+        color: positive ? AppColors.success : AppColors.onDarkSoft,
       ),
-    ],
+    ),
   );
 }

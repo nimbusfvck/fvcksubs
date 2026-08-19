@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../addons/addons_controller.dart';
 import '../addons/addons_page.dart';
 import '../app_scope.dart';
 import '../home/home_page.dart';
 import '../library/library_page.dart';
+import '../settings/settings_page.dart';
 import 'app_destination.dart';
 
 class HomeShell extends StatefulWidget {
@@ -20,6 +23,7 @@ class _HomeShellState extends State<HomeShell> {
     AppDestination.home => const HomePage(),
     AppDestination.library => const LibraryPage(),
     AppDestination.addons => const AddonsPage(),
+    AppDestination.settings => const SettingsPage(),
   };
 
   void _select(int index) =>
@@ -29,12 +33,12 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final index = _destination.index;
     final scope = AppScope.of(context);
-    final body = ListenableBuilder(
-      listenable: Listenable.merge([
-        scope.addonsController,
-        scope.libraryController,
-      ]),
-      builder: (context, _) => _body,
+    final body = BlocBuilder<AddonsController, AddonsState>(
+      bloc: scope.addonsController,
+      builder: (context, _) => ListenableBuilder(
+        listenable: scope.libraryController,
+        builder: (context, _) => _body,
+      ),
     );
 
     if (scope.deviceClass.isTv) {

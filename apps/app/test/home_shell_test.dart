@@ -27,6 +27,7 @@ void main() {
       expect(find.widgetWithText(NavigationBar, 'Home'), findsOneWidget);
       expect(find.widgetWithText(NavigationBar, 'Library'), findsOneWidget);
       expect(find.widgetWithText(NavigationBar, 'Addons'), findsOneWidget);
+      expect(find.widgetWithText(NavigationBar, 'Settings'), findsOneWidget);
       // Search is not a destination — it opens from Home as its own screen.
       expect(find.widgetWithText(NavigationBar, 'Search'), findsNothing);
     }
@@ -41,12 +42,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(NavigationBar, 'Library'));
+    await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();
 
     // A real LibraryPage now — empty because nothing's been favorited or
     // watched in this fresh session, not because it isn't built.
     expect(find.text('Nothing here yet'), findsOneWidget);
+  });
+
+  testWidgets('settings is a real destination', (tester) async {
+    await tester.pumpWidget(
+      wrapApp(child: const HomeShell(), registry: ExtensionRegistry([])),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preferred subtitles'), findsOneWidget);
+    expect(find.text('Indonesia'), findsOneWidget);
   });
 
   testWidgets(

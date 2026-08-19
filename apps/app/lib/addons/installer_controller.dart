@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
@@ -34,7 +34,35 @@ class RepoListing {
   bool get isUpdate => installedVersion != null;
 }
 
-class InstallerController extends ChangeNotifier {
+class InstallerState {
+  const InstallerState({
+    this.repoUrl,
+    this.listings = const [],
+    this.busy = false,
+    this.error,
+  });
+
+  final String? repoUrl;
+  final List<RepoListing> listings;
+  final bool busy;
+  final String? error;
+
+  InstallerState copyWith({
+    String? repoUrl,
+    bool clearRepoUrl = false,
+    List<RepoListing>? listings,
+    bool? busy,
+    String? error,
+    bool clearError = false,
+  }) => InstallerState(
+    repoUrl: clearRepoUrl ? null : repoUrl ?? this.repoUrl,
+    listings: listings ?? this.listings,
+    busy: busy ?? this.busy,
+    error: clearError ? null : error ?? this.error,
+  );
+}
+
+class InstallerController extends Cubit<InstallerState> {
   InstallerController({
     required this.registry,
     required this.installer,
@@ -45,9 +73,9 @@ class InstallerController extends ChangeNotifier {
         _loadJsExtension,
     Future<bool> Function(PermissionRequest request) requestConsent =
         _refuseByDefault,
-  }) : _repoUrl = repoUrl,
-       _loadExtension = loadExtension,
-       _requestConsent = requestConsent;
+  }) : _loadExtension = loadExtension,
+       _requestConsent = requestConsent,
+       super(InstallerState(repoUrl: repoUrl));
 
   static ContentExtension _loadJsExtension(Manifest manifest, String source) =>
       JsExtension.load(manifest: manifest, source: source);
@@ -65,58 +93,60 @@ class InstallerController extends ChangeNotifier {
 
   final RepoStore repoStore;
 
-  String? _repoUrl;
-  List<RepoListing> _listings = const [];
-  bool _busy = false;
-  String? _error;
-
-  String? get repoUrl => _repoUrl;
-
-  List<RepoListing> get listings => _listings;
-
-  bool get busy => _busy;
-
-  String? get error => _error;
+  String? get repoUrl => state.repoUrl;
+  List<RepoListing> get listings => state.listings;
+  bool get busy => state.busy;
+  String? get error => state.error;
 
   Future<void> setRepoUrl(String? url) async {
     final trimmed = (url == null || url.trim().isEmpty) ? null : url.trim();
-    if (trimmed == _repoUrl) return;
-    _repoUrl = trimmed;
-    _listings = const [];
-    _error = null;
-    notifyListeners();
+    if (trimmed == state.repoUrl) return;
+    emit(
+      state.copyWith(
+        repoUrl: trimmed,
+        clearRepoUrl: trimmed == null,
+        listings: const [],
+        clearError: true,
+      ),
+    );
     await repoStore.save(trimmed);
   }
 
   Future<void> refresh() async {
-    final url = _repoUrl;
+    final url = state.repoUrl;
     if (url == null) {
-      _error = 'Set a repo URL first.';
-      notifyListeners();
+      emit(state.copyWith(error: 'Set a repo URL first.'));
       return;
     }
 
-    _busy = true;
-    _error = null;
-    notifyListeners();
+    emit(state.copyWith(busy: true, clearError: true));
 
     try {
       final repo = await installer.fetchRepo(url);
       final installed = await installedStore.loadAll();
-      _listings = [
+      final listings = [
         for (final entry in repo.extensions)
           RepoListing(
             entry: entry,
             installedVersion: installed[entry.id]?.version,
           ),
       ];
-      if (_listings.isEmpty) _error = 'This repo lists no extensions.';
+      emit(
+        state.copyWith(
+          listings: listings,
+          error: listings.isEmpty ? 'This repo lists no extensions.' : null,
+          clearError: listings.isNotEmpty,
+        ),
+      );
     } catch (e) {
-      _listings = const [];
-      _error = 'Could not read the repo: $e';
+      emit(
+        state.copyWith(
+          listings: const [],
+          error: 'Could not read the repo: $e',
+        ),
+      );
     } finally {
-      _busy = false;
-      notifyListeners();
+      emit(state.copyWith(busy: false));
     }
   }
 
@@ -158,9 +188,7 @@ class InstallerController extends ChangeNotifier {
   }
 
   Future<void> install(ExtensionRepoEntry entry) async {
-    _busy = true;
-    _error = null;
-    notifyListeners();
+    emit(state.copyWith(busy: true, clearError: true));
 
     ContentExtension? loaded;
     try {
@@ -191,18 +219,15 @@ class InstallerController extends ChangeNotifier {
 
       await refresh();
     } catch (e) {
-      _error = 'Install failed: $e';
+      emit(state.copyWith(error: 'Install failed: $e'));
     } finally {
       if (loaded is JsExtension) loaded.dispose();
-      _busy = false;
-      notifyListeners();
+      emit(state.copyWith(busy: false));
     }
   }
 
   Future<void> uninstall(String id) async {
-    _busy = true;
-    _error = null;
-    notifyListeners();
+    emit(state.copyWith(busy: true, clearError: true));
 
     try {
       final removed = registry.uninstall(id);
@@ -210,10 +235,9 @@ class InstallerController extends ChangeNotifier {
       await installedStore.remove(id);
       await refresh();
     } catch (e) {
-      _error = 'Uninstall failed: $e';
+      emit(state.copyWith(error: 'Uninstall failed: $e'));
     } finally {
-      _busy = false;
-      notifyListeners();
+      emit(state.copyWith(busy: false));
     }
   }
 }

@@ -231,10 +231,15 @@ class _EventLayout extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text, required this.color});
+  const _StatusPill({
+    required this.text,
+    required this.color,
+    this.foregroundColor = AppColors.onDark,
+  });
 
   final String text;
   final Color color;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -242,7 +247,7 @@ class _StatusPill extends StatelessWidget {
     decoration: BoxDecoration(color: color, borderRadius: AppRadius.sm),
     child: Text(
       text,
-      style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+      style: AppTypography.liveBadge.copyWith(color: foregroundColor),
     ),
   );
 }
@@ -251,8 +256,11 @@ class LiveBadge extends StatelessWidget {
   const LiveBadge({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const _StatusPill(text: 'LIVE', color: AppColors.liveAccent);
+  Widget build(BuildContext context) => const _StatusPill(
+    text: 'LIVE',
+    color: AppColors.liveAccent,
+    foregroundColor: AppColors.primary,
+  );
 }
 
 class UpcomingBadge extends StatelessWidget {

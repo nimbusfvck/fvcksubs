@@ -53,37 +53,38 @@ void main() {
     expect(tester.widget<SwitchListTile>(extensionSwitch).value, isFalse);
   });
 
-  testWidgets('a stream provider gets its own switch, independent of the extension', (
-    tester,
-  ) async {
-    final registry = ExtensionRegistry([
-      FakeExtension(id: 'fake', categories: ['sport']),
-    ]);
-    final controller = AddonsController(
-      registry: registry,
-      store: FakeAddonSettingsStore(),
-    );
-
-    await tester.pumpWidget(
-      wrapApp(
-        child: const AddonsPage(),
+  testWidgets(
+    'a stream provider gets its own switch, independent of the extension',
+    (tester) async {
+      final registry = ExtensionRegistry([
+        FakeExtension(id: 'fake', categories: ['sport']),
+      ]);
+      final controller = AddonsController(
         registry: registry,
-        addonsController: controller,
-      ),
-    );
-    await tester.pumpAndSettle();
+        store: FakeAddonSettingsStore(),
+      );
 
-    final switches = find.byType(SwitchListTile);
-    expect(switches, findsNWidgets(2));
-    final providerSwitch = switches.at(1);
+      await tester.pumpWidget(
+        wrapApp(
+          child: const AddonsPage(),
+          registry: registry,
+          addonsController: controller,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(providerSwitch);
-    await tester.pumpAndSettle();
+      final switches = find.byType(SwitchListTile);
+      expect(switches, findsNWidgets(2));
+      final providerSwitch = switches.at(1);
 
-    // The provider is off, but the extension itself is untouched.
-    expect(registry.isProviderEnabled('fake.p'), isFalse);
-    expect(registry.isExtensionEnabled('fake'), isTrue);
-  });
+      await tester.tap(providerSwitch);
+      await tester.pumpAndSettle();
+
+      // The provider is off, but the extension itself is untouched.
+      expect(registry.isProviderEnabled('fake.p'), isFalse);
+      expect(registry.isExtensionEnabled('fake'), isTrue);
+    },
+  );
 
   testWidgets('turning the extension off disables its provider switch too', (
     tester,
@@ -244,5 +245,41 @@ void main() {
 
     expect(find.text('fake'), findsOneWidget);
     expect(find.text('live'), findsOneWidget);
+  });
+
+  testWidgets('a long description can expand without breaking narrow reflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final description = List.filled(
+      18,
+      'A detailed explanation of the extension capabilities.',
+    ).join(' ');
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'verbose',
+        categories: ['live'],
+        description: description,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const AddonsPage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Show more'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Show more'));
+    await tester.tap(find.text('Show more'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show less'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
