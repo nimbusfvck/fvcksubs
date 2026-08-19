@@ -114,7 +114,9 @@ fvcksubs.defineStream({
         enabledProviders: {'sdk_test.good', 'sdk_test.bad'},
       );
       expect(sources, [
-        isA<StreamSource>().having((s) => s.label, 'label', 'Good'),
+        isA<StreamSource>()
+            .having((s) => s.label, 'label', 'Good')
+            .having((s) => s.providerId, 'providerId', 'sdk_test.good'),
       ]);
       expect(
         (await extension.resolve(sources.single.id)).url,

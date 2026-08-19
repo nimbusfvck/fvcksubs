@@ -233,7 +233,21 @@ class InstallerController extends Cubit<InstallerState> {
       final removed = registry.uninstall(id);
       if (removed is JsExtension) removed.dispose();
       await installedStore.remove(id);
-      await refresh();
+      if (state.repoUrl == null) {
+        emit(
+          state.copyWith(
+            listings: [
+              for (final listing in state.listings)
+                if (listing.entry.id == id)
+                  RepoListing(entry: listing.entry, installedVersion: null)
+                else
+                  listing,
+            ],
+          ),
+        );
+      } else {
+        await refresh();
+      }
     } catch (e) {
       emit(state.copyWith(error: 'Uninstall failed: $e'));
     } finally {

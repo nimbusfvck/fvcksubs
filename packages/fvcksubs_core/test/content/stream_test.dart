@@ -9,6 +9,7 @@ void main() {
       id: 'cricfy:link-3',
       label: 'HD 1080p',
       provider: 'Cricfy',
+      providerId: 'nimora.cricfy',
     );
     expectRoundTrips(
       source,

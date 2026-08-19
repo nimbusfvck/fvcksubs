@@ -30,7 +30,6 @@ void main() {
           ),
           Participant(name: 'Liverpool', score: '1'),
         ],
-        badges: const ['4K', 'ID Comm'],
         extra: const {'cricfyChannel': 'sports-hd-1'},
       );
 
@@ -99,11 +98,10 @@ void main() {
     );
   });
 
-  test('MediaDetail with tagline/genres/runtimeMinutes round-trips', () {
+  test('MediaDetail with genres/runtimeMinutes round-trips', () {
     const detail = MediaDetail(
       item: MediaItem(ref: ref, kind: MediaKind.movie, title: 'A Film'),
       description: 'A longer synopsis.',
-      tagline: 'Every act of vengeance has a cost.',
       genres: ['Action', 'Sci-Fi'],
       runtimeMinutes: 128,
     );
@@ -122,11 +120,9 @@ void main() {
 
     final json = detail.toJson();
     expect(json.containsKey('description'), isFalse);
-    expect(json.containsKey('tagline'), isFalse);
     expect(json.containsKey('genres'), isFalse);
     expect(json.containsKey('runtimeMinutes'), isFalse);
     expect(json.containsKey('certification'), isFalse);
-    expect(json.containsKey('networks'), isFalse);
     expect(json.containsKey('cast'), isFalse);
     expect(json.containsKey('seasons'), isFalse);
   });
@@ -171,11 +167,10 @@ void main() {
     );
   });
 
-  test('MediaDetail with cast/seasons/networks/certification round-trips', () {
+  test('MediaDetail with cast/seasons/certification round-trips', () {
     const detail = MediaDetail(
       item: MediaItem(ref: ref, kind: MediaKind.series, title: 'Lanterns'),
       certification: 'TV-MA',
-      networks: ['HBO'],
       cast: [CastMember(name: 'Kyle Chandler', character: 'Hal Jordan')],
       seasons: [
         SeriesSeason(

@@ -10,6 +10,7 @@ import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'platform/device_class.dart';
 import 'player/source_cache.dart';
+import 'player/source_priority_controller.dart';
 import 'player/stream_player.dart';
 import 'player/subtitle_preference_controller.dart';
 import 'shell/home_shell.dart';
@@ -26,6 +27,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.pluginController,
     required this.catalogCache,
     required this.subtitlePreferenceController,
+    required this.sourcePriorityController,
     required this.homeCategoryStore,
     required this.sourceCache,
     this.navigatorKey,
@@ -48,6 +50,8 @@ class FvcksubsApp extends StatelessWidget {
 
   final SubtitlePreferenceController subtitlePreferenceController;
 
+  final SourcePriorityController sourcePriorityController;
+
   final CategorySelectionStore homeCategoryStore;
 
   final SourceCache sourceCache;
@@ -67,6 +71,7 @@ class FvcksubsApp extends StatelessWidget {
     pluginController: pluginController,
     catalogCache: catalogCache,
     subtitlePreferenceController: subtitlePreferenceController,
+    sourcePriorityController: sourcePriorityController,
     homeCategoryStore: homeCategoryStore,
     sourceCache: sourceCache,
     child: MaterialApp(

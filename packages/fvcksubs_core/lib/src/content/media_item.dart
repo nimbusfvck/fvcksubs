@@ -59,11 +59,9 @@ class MediaItem extends Equatable {
     this.poster,
     this.thumbnail,
     this.startsAt,
-    this.endsAt,
     this.status = LiveStatus.unknown,
     this.statusLabel,
     this.participants = const [],
-    this.badges = const [],
     this.group,
     this.extra = const {},
   });
@@ -77,7 +75,6 @@ class MediaItem extends Equatable {
     poster: ImageRef.fromJson(json['poster']),
     thumbnail: ImageRef.fromJson(json['thumbnail']),
     startsAt: dateFromJson(json['startsAt']),
-    endsAt: dateFromJson(json['endsAt']),
     status: enumByName(
       LiveStatus.values,
       json['status'],
@@ -87,7 +84,6 @@ class MediaItem extends Equatable {
     participants: ((json['participants'] as List?) ?? const [])
         .map((e) => Participant.fromJson(e as Map<String, Object?>))
         .toList(),
-    badges: stringList(json['badges']),
     group: json['group'] as String?,
     extra: (json['extra'] as Map?)?.cast<String, Object?>() ?? const {},
   );
@@ -113,9 +109,6 @@ class MediaItem extends Equatable {
   /// Scheduled/actual start, UTC. `null` when not applicable (a channel).
   final DateTime? startsAt;
 
-  /// Scheduled/actual end, UTC, or `null`.
-  final DateTime? endsAt;
-
   /// Coarse live state.
   final LiveStatus status;
 
@@ -124,9 +117,6 @@ class MediaItem extends Equatable {
 
   /// Competitors. Empty for a film/channel, two for a match, N for a race.
   final List<Participant> participants;
-
-  /// Short display tags (`"4K"`, `"ID Comm"`).
-  final List<String> badges;
 
   /// Section heading this item sits under, or `null` for an ungrouped list.
   ///
@@ -141,7 +131,8 @@ class MediaItem extends Equatable {
   /// does not re-sort.
   final String? group;
 
-  /// Extension-private passthrough. The app carries it but never reads it.
+  /// JSON carried into later extension calls. Episode items also use the
+  /// `season`, `episode`, and `seriesTitle` keys for resume and playback.
   final Map<String, Object?> extra;
 
   /// Encodes to a JSON map.
@@ -153,12 +144,10 @@ class MediaItem extends Equatable {
     if (poster != null) 'poster': poster!.toJson(),
     if (thumbnail != null) 'thumbnail': thumbnail!.toJson(),
     if (startsAt != null) 'startsAt': dateToJson(startsAt),
-    if (endsAt != null) 'endsAt': dateToJson(endsAt),
     'status': status.name,
     if (statusLabel != null) 'statusLabel': statusLabel,
     if (participants.isNotEmpty)
       'participants': participants.map((p) => p.toJson()).toList(),
-    if (badges.isNotEmpty) 'badges': badges,
     if (group != null) 'group': group,
     if (extra.isNotEmpty) 'extra': extra,
   };
@@ -172,11 +161,9 @@ class MediaItem extends Equatable {
     poster,
     thumbnail,
     startsAt,
-    endsAt,
     status,
     statusLabel,
     participants,
-    badges,
     group,
     extra,
   ];
@@ -304,7 +291,8 @@ class SeriesSeason extends Equatable {
   Map<String, Object?> toJson() => {
     'number': number,
     'name': name,
-    if (episodes.isNotEmpty) 'episodes': episodes.map((e) => e.toJson()).toList(),
+    if (episodes.isNotEmpty)
+      'episodes': episodes.map((e) => e.toJson()).toList(),
   };
 
   @override
@@ -326,11 +314,9 @@ class MediaDetail extends Equatable {
   const MediaDetail({
     required this.item,
     this.description,
-    this.tagline,
     this.genres = const [],
     this.runtimeMinutes,
     this.certification,
-    this.networks = const [],
     this.cast = const [],
     this.seasons = const [],
     this.lastAiredSeason,
@@ -341,11 +327,9 @@ class MediaDetail extends Equatable {
   factory MediaDetail.fromJson(Map<String, Object?> json) => MediaDetail(
     item: MediaItem.fromJson(json['item']! as Map<String, Object?>),
     description: json['description'] as String?,
-    tagline: json['tagline'] as String?,
     genres: stringList(json['genres']),
     runtimeMinutes: (json['runtimeMinutes'] as num?)?.toInt(),
     certification: json['certification'] as String?,
-    networks: stringList(json['networks']),
     cast: ((json['cast'] as List?) ?? const [])
         .map((e) => CastMember.fromJson((e as Map).cast<String, Object?>()))
         .toList(),
@@ -362,10 +346,6 @@ class MediaDetail extends Equatable {
   /// Long-form description/synopsis, or `null`.
   final String? description;
 
-  /// Short marketing blurb (TMDB's "tagline"), distinct from [description] —
-  /// e.g. "Every act of vengeance has a cost." — or `null`.
-  final String? tagline;
-
   /// Genre names (`"Action"`, `"Sci-Fi"`), display-ready. Empty when the
   /// upstream has none or the item's kind has no concept of one.
   final List<String> genres;
@@ -376,10 +356,6 @@ class MediaDetail extends Equatable {
 
   /// Content rating (`"PG-13"`, `"TV-MA"`), or `null`.
   final String? certification;
-
-  /// Broadcaster/streamer names (`"HBO"`) — mainly a series concept. Empty
-  /// for a film, or when the upstream has none.
-  final List<String> networks;
 
   /// Cast, upstream order (typically billing order). Empty when the upstream
   /// sent none.
@@ -405,11 +381,9 @@ class MediaDetail extends Equatable {
   Map<String, Object?> toJson() => {
     'item': item.toJson(),
     if (description != null) 'description': description,
-    if (tagline != null) 'tagline': tagline,
     if (genres.isNotEmpty) 'genres': genres,
     if (runtimeMinutes != null) 'runtimeMinutes': runtimeMinutes,
     if (certification != null) 'certification': certification,
-    if (networks.isNotEmpty) 'networks': networks,
     if (cast.isNotEmpty) 'cast': cast.map((c) => c.toJson()).toList(),
     if (seasons.isNotEmpty) 'seasons': seasons.map((s) => s.toJson()).toList(),
     if (lastAiredSeason != null) 'lastAiredSeason': lastAiredSeason,
@@ -420,11 +394,9 @@ class MediaDetail extends Equatable {
   List<Object?> get props => [
     item,
     description,
-    tagline,
     genres,
     runtimeMinutes,
     certification,
-    networks,
     cast,
     seasons,
     lastAiredSeason,

@@ -227,7 +227,15 @@
       streams.map((provider) => {
         if (!enabled(args, provider.providerId)) return Promise.resolve({ sources: [] });
         return Promise.resolve().then(() => provider.sources(args)).then(
-          (value) => listResult(value, 'sources', 'sources'),
+          (value) => {
+            const result = listResult(value, 'sources', 'sources');
+            return {
+              sources: result.sources.map((source) => ({
+                ...source,
+                providerId: provider.providerId,
+              })),
+            };
+          },
           () => ({ sources: [] }),
         );
       }),

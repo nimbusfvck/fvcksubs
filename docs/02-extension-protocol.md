@@ -86,8 +86,8 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
         }
       ]
     },
-    { "id": "example.mirrorA", "roles": ["stream"] },
-    { "id": "example.mirrorB", "roles": ["stream"] }
+    { "id": "example.mirrorA", "name": "Atlas", "roles": ["stream"] },
+    { "id": "example.mirrorB", "name": "Boreal", "roles": ["stream"] }
   ],
 
   "permissions": {
@@ -102,6 +102,7 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
 | `id` | Namespaces everything the extension owns. Provider ids conventionally prefix it. |
 | `entry` | Names the bundle file. The loader reads this — it knows nothing extension-specific. |
 | `categories` | The union of what the catalogs declare. These become the shell's top-level chips. |
+| `providers[].name` | Optional user-facing provider name. Keep `id` stable for routing and saved settings; use `name` when the upstream identity should not be displayed. |
 | `permissions.hosts` | **Enforced on every network call**, and shown to the user before install. Not documentation. |
 | `description`, `author`, `iconUrl` | Optional and additive, so older manifests still parse and older builds ignore what they do not know. `author` is asserted by the manifest about itself and verified by nothing — it is a label. |
 
@@ -190,6 +191,7 @@ classDiagram
         String id
         String label
         String provider
+        String providerId
     }
     class PlayableStream {
         String url

@@ -85,6 +85,7 @@ class AddonsPage extends StatelessWidget {
                     manifest: manifest,
                     registry: scope.registry,
                     controller: scope.addonsController,
+                    installerController: scope.installerController,
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
@@ -308,11 +309,13 @@ class _ExtensionTile extends StatelessWidget {
     required this.manifest,
     required this.registry,
     required this.controller,
+    required this.installerController,
   });
 
   final Manifest manifest;
   final ExtensionRegistry registry;
   final AddonsController controller;
+  final InstallerController installerController;
 
   @override
   Widget build(BuildContext context) {
@@ -323,101 +326,204 @@ class _ExtensionTile extends StatelessWidget {
     ];
 
     return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SwitchListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.xs,
-            ),
-            secondary: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: enabled
-                    ? AppColors.brandAccent.withValues(alpha: 0.16)
-                    : AppColors.surfaceDarkHighest,
-                borderRadius: AppRadius.md,
-              ),
-              child: Icon(
-                Icons.extension_outlined,
-                color: enabled ? AppColors.brandAccent : AppColors.onDarkSoft,
-              ),
-            ),
-            title: Text(
-              manifest.name,
-              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (manifest.description != null)
-                  _ExpandableDescription(
-                    text: manifest.description!,
-                    maxLines: 3,
-                  ),
-                if (manifest.categories.isNotEmpty)
-                  Text(
-                    manifest.categories.join(', '),
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onDarkSoft,
-                    ),
-                  ),
-                Text(
-                  [
-                    'v${manifest.version}',
-                    if (manifest.author != null) 'by ${manifest.author}',
-                  ].join(' · '),
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-              ],
-            ),
-            value: enabled,
-            onChanged: (value) =>
-                controller.setExtensionEnabled(manifest.id, value),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: enabled
+                ? AppColors.brandAccent.withValues(alpha: 0.16)
+                : AppColors.surfaceDarkHighest,
+            borderRadius: AppRadius.md,
           ),
-          for (final provider in streamProviders)
-            Container(
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.hairlineDark)),
-              ),
-              child: SwitchListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.only(
-                  left: AppSpacing.lg,
-                  right: AppSpacing.md,
-                ),
-                secondary: const Icon(
-                  Icons.play_circle_outline,
+          child: Icon(
+            Icons.extension_outlined,
+            color: enabled ? AppColors.brandAccent : AppColors.onDarkSoft,
+          ),
+        ),
+        title: Text(
+          manifest.name,
+          style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (manifest.description != null)
+              Text(
+                manifest.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(
                   color: AppColors.onDarkSoft,
-                  size: 20,
                 ),
-                title: Text(
-                  _sourceLabel(provider.id),
-                  style: AppTypography.bodyMd.copyWith(
-                    color: enabled ? AppColors.onDark : AppColors.onDarkSoft,
-                  ),
+              ),
+            if (manifest.categories.isNotEmpty)
+              Text(
+                manifest.categories.join(', '),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.onDarkSoft,
                 ),
-                value: enabled && registry.isProviderEnabled(provider.id),
-                onChanged: enabled
-                    ? (value) =>
-                          controller.setProviderEnabled(provider.id, value)
-                    : null,
+              ),
+            Text(
+              [
+                'v${manifest.version}',
+                if (manifest.author != null) 'by ${manifest.author}',
+                '${streamProviders.length} sources',
+              ].join(' · '),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.onDarkSoft,
               ),
             ),
-        ],
+          ],
+        ),
+        trailing: Switch(
+          value: enabled,
+          onChanged: (value) =>
+              controller.setExtensionEnabled(manifest.id, value),
+        ),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _ExtensionDetailsPage(
+              manifest: manifest,
+              registry: registry,
+              controller: controller,
+              installerController: installerController,
+            ),
+          ),
+        ),
       ),
     );
   }
+}
 
-  static String _sourceLabel(String providerId) {
-    final name = providerId.split('.').last;
-    if (name.isEmpty) return providerId;
-    return name[0].toUpperCase() + name.substring(1);
+class _ExtensionDetailsPage extends StatelessWidget {
+  const _ExtensionDetailsPage({
+    required this.manifest,
+    required this.registry,
+    required this.controller,
+    required this.installerController,
+  });
+
+  final Manifest manifest;
+  final ExtensionRegistry registry;
+  final AddonsController controller;
+  final InstallerController installerController;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(manifest.name)),
+    body: BlocBuilder<AddonsController, AddonsState>(
+      bloc: controller,
+      builder: (context, _) {
+        final enabled = registry.isExtensionEnabled(manifest.id);
+        final providers = [
+          for (final provider in manifest.providers)
+            if (provider.roles.contains(ProviderRole.stream)) provider,
+        ];
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            _Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (manifest.description != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.md,
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                      ),
+                      child: Text(
+                        manifest.description!,
+                        style: AppTypography.bodyMd.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.hairlineDark),
+                  ],
+                  SwitchListTile(
+                    title: Text(manifest.name),
+                    subtitle: const Text('Extension enabled'),
+                    value: enabled,
+                    onChanged: (value) =>
+                        controller.setExtensionEnabled(manifest.id, value),
+                  ),
+                  for (final provider in providers)
+                    SwitchListTile(
+                      secondary: const Icon(Icons.play_circle_outline),
+                      title: Text(provider.name ?? _providerLabel(provider.id)),
+                      value: enabled && registry.isProviderEnabled(provider.id),
+                      onChanged: enabled
+                          ? (value) => controller.setProviderEnabled(
+                              provider.id,
+                              value,
+                            )
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            OutlinedButton.icon(
+              onPressed: installerController.busy
+                  ? null
+                  : () => _remove(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove extension'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  Future<void> _remove(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Remove ${manifest.name}?'),
+        content: const Text(
+          'The extension and its downloaded code will be removed. Library '
+          'items and watch history will stay available.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.primary,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await installerController.uninstall(manifest.id);
+    if (navigator.mounted) navigator.pop();
   }
+}
+
+String _providerLabel(String providerId) {
+  final name = providerId.split('.').last;
+  if (name.isEmpty) return providerId;
+  return name[0].toUpperCase() + name.substring(1);
 }
 
 class _Panel extends StatelessWidget {

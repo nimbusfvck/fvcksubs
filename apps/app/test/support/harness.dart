@@ -6,6 +6,7 @@ import 'package:fvcksubs_app/app_scope.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/player/source_cache.dart';
+import 'package:fvcksubs_app/player/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
@@ -35,6 +36,7 @@ class FakeExtension extends ContentExtension {
     this.searchable = false,
     this.searchResults = const [],
     String? name,
+    String? providerName,
     String? catalogName,
     String? description,
     String? author,
@@ -50,6 +52,7 @@ class FakeExtension extends ContentExtension {
          'providers': [
            {
              'id': '$id.p',
+             'name': ?providerName,
              'roles': ['catalog', 'stream', if (searchable) 'search'],
              // One catalog listing every category it serves — the shape the
              // protocol expects, with the taxonomy inside the catalog rather
@@ -216,10 +219,7 @@ class FakeExtension extends ContentExtension {
 /// the real ones do, and what ordering by preferred language depends on.
 class SubtitleFakeExtension extends ContentExtension {
   /// Creates a fake offering one source per key, resolving to those languages.
-  SubtitleFakeExtension({
-    required this.subtitlesBySourceId,
-    this.resolveDelay,
-  })
+  SubtitleFakeExtension({required this.subtitlesBySourceId, this.resolveDelay})
     : _manifest = Manifest.parse({
         'apiVersion': 1,
         'id': 'subs',
@@ -274,10 +274,11 @@ class SubtitleFakeExtension extends ContentExtension {
   Future<PlayableStream> resolve(String sourceId) async {
     if (resolveDelay != null) await Future<void>.delayed(resolveDelay!);
     return PlayableStream(
-    url: 'https://edge/$sourceId.m3u8',
-    format: StreamFormat.hls,
-    subtitles: [
-      for (final language in subtitlesBySourceId[sourceId] ?? const <String>[])
+      url: 'https://edge/$sourceId.m3u8',
+      format: StreamFormat.hls,
+      subtitles: [
+        for (final language
+            in subtitlesBySourceId[sourceId] ?? const <String>[])
           SubtitleTrack(language: language, url: 'https://edge/$language.vtt'),
       ],
     );
@@ -438,6 +439,16 @@ class FakeSubtitlePreferenceStore implements SubtitlePreferenceStore {
   Future<void> save(String? languageCode) async => saved = languageCode;
 }
 
+class FakeSourcePriorityStore implements SourcePriorityStore {
+  List<String> saved = const [];
+
+  @override
+  Future<List<String>> load() async => saved;
+
+  @override
+  Future<void> save(List<String> providerIds) async => saved = providerIds;
+}
+
 /// In-memory [CategorySelectionStore].
 class FakeCategorySelectionStore implements CategorySelectionStore {
   /// Seeds the store as if [initial] had already been saved — for tests that
@@ -488,6 +499,7 @@ Widget wrapApp({
   PluginController? pluginController,
   CatalogCache? catalogCache,
   SubtitlePreferenceController? subtitlePreferenceController,
+  SourcePriorityController? sourcePriorityController,
   CategorySelectionStore? homeCategoryStore,
   SourceCache? sourceCache,
 }) => AppScope(
@@ -506,14 +518,19 @@ Widget wrapApp({
         repoStore: FakeRepoStore(),
       ),
   libraryController:
-      libraryController ??
-      LibraryController(store: FakeLibraryStore()),
+      libraryController ?? LibraryController(store: FakeLibraryStore()),
   pluginController:
       pluginController ?? PluginController(store: FakePluginSelectionStore()),
   catalogCache: catalogCache ?? CatalogCache(),
   subtitlePreferenceController:
       subtitlePreferenceController ??
       SubtitlePreferenceController(store: FakeSubtitlePreferenceStore()),
+  sourcePriorityController:
+      sourcePriorityController ??
+      SourcePriorityController(
+        registry: registry,
+        store: FakeSourcePriorityStore(),
+      ),
   homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
   child: MaterialApp(home: Scaffold(body: child)),

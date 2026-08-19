@@ -12,6 +12,7 @@ import 'app.dart';
 import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'player/source_cache.dart';
+import 'player/source_priority_controller.dart';
 import 'player/subtitle_preference_controller.dart';
 import 'library/library_controller.dart';
 import 'platform/device_class.dart';
@@ -68,6 +69,13 @@ Future<void> main() async {
     initial: await subtitleStore.load(),
   );
 
+  const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
+  final sourcePriorityController = SourcePriorityController(
+    registry: registry,
+    store: sourcePriorityStore,
+    initial: await sourcePriorityStore.load(),
+  );
+
   final sourceListStore = SharedPreferencesSourceListStore();
   final sourceCache = SourceCache(
     sourceListStore: sourceListStore,
@@ -84,6 +92,7 @@ Future<void> main() async {
       pluginController: pluginController,
       catalogCache: CatalogCache(),
       subtitlePreferenceController: subtitlePreferenceController,
+      sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
       navigatorKey: navigatorKey,

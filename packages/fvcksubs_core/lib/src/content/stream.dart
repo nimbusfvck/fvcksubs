@@ -206,6 +206,7 @@ class StreamSource extends Equatable {
     required this.id,
     required this.label,
     this.provider = '',
+    this.providerId = '',
   });
 
   /// Builds a [StreamSource] from decoded JSON.
@@ -213,6 +214,7 @@ class StreamSource extends Equatable {
     id: json['id'] as String,
     label: json['label'] as String,
     provider: (json['provider'] as String?) ?? '',
+    providerId: (json['providerId'] as String?) ?? '',
   );
 
   /// Source id, valid for the current lookup session; passed back to resolve.
@@ -224,13 +226,17 @@ class StreamSource extends Equatable {
   /// Provider this source came from; the picker groups by it. Empty if unknown.
   final String provider;
 
+  /// Stable manifest provider id used for preferences and routing metadata.
+  final String providerId;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
     'label': label,
     if (provider.isNotEmpty) 'provider': provider,
+    if (providerId.isNotEmpty) 'providerId': providerId,
   };
 
   @override
-  List<Object?> get props => [id, label, provider];
+  List<Object?> get props => [id, label, provider, providerId];
 }

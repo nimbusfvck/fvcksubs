@@ -166,7 +166,7 @@ Every argument and every result below is plain JSON.
 |---|---|---|
 | `catalog` | `{ providerId, catalogId, category?, page?, filters?, subCategory? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
 | `search` | `{ query, page? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
-| `meta` | `{ ref: { extensionId, providerId, id } }` | `{ item, description?, tagline?, genres?, runtimeMinutes?, certification?, networks?, cast?, seasons? }` |
+| `meta` | `{ ref: { extensionId, providerId, id } }` | `{ item, description?, genres?, runtimeMinutes?, certification?, cast?, seasons? }` |
 | `sources` | `{ item, enabledProviders?: [providerId, …] }` | `{ sources: [ { id, label, provider? }, … ] }` |
 | `resolve` | `{ sourceId }` | `{ url, headers?, format?, drm?, audioUrl?, label?, subtitles? }` |
 | `subtitles` | `{ item }` | `{ subtitles: [ { language, url, label? }, … ] }` |

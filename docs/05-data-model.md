@@ -23,11 +23,9 @@ classDiagram
         ImageRef? poster
         ImageRef? thumbnail
         DateTime? startsAt
-        DateTime? endsAt
         LiveStatus status
         String? statusLabel
         Participant[] participants
-        String[] badges
         String? group
         Map extra
     }
@@ -40,11 +38,9 @@ classDiagram
     class MediaDetail {
         MediaItem item
         String? description
-        String? tagline
         String[] genres
         int? runtimeMinutes
         String? certification
-        String[] networks
         CastMember[] cast
         SeriesSeason[] seasons
     }
@@ -204,6 +200,7 @@ flowchart LR
         F["Last-browsed category"]
         G["Selected extension"]
         H["Subtitle preference"]
+        I["Source priority"]
     end
 ```
 
@@ -217,6 +214,7 @@ flowchart LR
 | Last-browsed category | Where the user was | one value |
 | Selected extension | Whose data the browse screens use | one value |
 | Subtitle preference | Which language to prefer | one value |
+| Source priority | Stable stream-provider ids from first choice to last | by provider count |
 
 The source-list store is capped because it is derived cache data. Library records are retained
 because they represent user state.

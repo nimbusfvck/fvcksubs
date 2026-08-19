@@ -43,14 +43,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final extensionSwitch = find.byType(SwitchListTile).first;
-    expect(tester.widget<SwitchListTile>(extensionSwitch).value, isTrue);
+    final extensionSwitch = find.byType(Switch).first;
+    expect(tester.widget<Switch>(extensionSwitch).value, isTrue);
 
     await tester.tap(extensionSwitch);
     await tester.pumpAndSettle();
 
     expect(registry.isExtensionEnabled('fake'), isFalse);
-    expect(tester.widget<SwitchListTile>(extensionSwitch).value, isFalse);
+    expect(tester.widget<Switch>(extensionSwitch).value, isFalse);
   });
 
   testWidgets(
@@ -73,6 +73,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('fake'));
+      await tester.pumpAndSettle();
+
       final switches = find.byType(SwitchListTile);
       expect(switches, findsNWidgets(2));
       final providerSwitch = switches.at(1);
@@ -85,6 +88,69 @@ void main() {
       expect(registry.isExtensionEnabled('fake'), isTrue);
     },
   );
+
+  testWidgets('uses the provider display name without exposing its id', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'fake', providerName: 'Atlas'),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const AddonsPage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('fake'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Atlas'), findsOneWidget);
+    expect(find.text('P'), findsNothing);
+  });
+
+  testWidgets('remove asks for confirmation and uninstalls the extension', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([FakeExtension(id: 'fake')]);
+    final store = FakeInstalledExtensionStore();
+    await store.save(
+      const InstalledExtension(
+        id: 'fake',
+        version: '1.0.0',
+        manifestJson: '{}',
+        bundleJs: '',
+      ),
+    );
+    final installerController = InstallerController(
+      registry: registry,
+      installer: ExtensionInstaller(),
+      installedStore: store,
+      repoStore: FakeRepoStore(),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const AddonsPage(),
+        registry: registry,
+        installerController: installerController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('fake'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Remove extension'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove fake?'), findsOneWidget);
+    expect(registry.installed, isNotEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+
+    expect(registry.installed, isEmpty);
+    expect(store.saved, isEmpty);
+    expect(find.text('No extensions installed.'), findsOneWidget);
+  });
 
   testWidgets('turning the extension off disables its provider switch too', (
     tester,
@@ -104,6 +170,9 @@ void main() {
         addonsController: controller,
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('fake'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(SwitchListTile).first);
@@ -247,39 +316,40 @@ void main() {
     expect(find.text('live'), findsOneWidget);
   });
 
-  testWidgets('a long description can expand without breaking narrow reflow', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 700);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'a long description is truncated on the card and full in detail',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final description = List.filled(
-      18,
-      'A detailed explanation of the extension capabilities.',
-    ).join(' ');
-    final registry = ExtensionRegistry([
-      FakeExtension(
-        id: 'verbose',
-        categories: ['live'],
-        description: description,
-      ),
-    ]);
+      final description = List.filled(
+        18,
+        'A detailed explanation of the extension capabilities.',
+      ).join(' ');
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          id: 'verbose',
+          categories: ['live'],
+          description: description,
+        ),
+      ]);
 
-    await tester.pumpWidget(
-      wrapApp(child: const AddonsPage(), registry: registry),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrapApp(child: const AddonsPage(), registry: registry),
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-    expect(find.text('Show more'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Show more'), findsNothing);
+      expect(tester.widget<Text>(find.text(description)).maxLines, 2);
 
-    await tester.ensureVisible(find.text('Show more'));
-    await tester.tap(find.text('Show more'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('verbose'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Show less'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.widget<Text>(find.text(description)).maxLines, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

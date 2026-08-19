@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'player_page.dart';
+import 'source_priority_controller.dart';
 import 'subtitle_preference_controller.dart';
 
 Future<void> playItem(
@@ -117,7 +118,11 @@ void _openPlayer(
   bool replaceCurrent, {
   Future<List<ResolvedSource>?>? pendingSources,
 }) {
-  final resolved = _preferredFirst(sources, scope.subtitlePreferenceController);
+  final resolved = _preferredFirst(
+    sources,
+    scope.sourcePriorityController,
+    scope.subtitlePreferenceController,
+  );
   scope.libraryController.recordWatched(item);
   final route = MaterialPageRoute<void>(
     builder: (_) => PlayerPage(
@@ -134,19 +139,27 @@ void _openPlayer(
 
 List<ResolvedSource> _preferredFirst(
   List<ResolvedSource> sources,
-  SubtitlePreferenceController preference,
+  SourcePriorityController sourcePriority,
+  SubtitlePreferenceController subtitlePreference,
 ) {
-  if (preference.languageCode == null) return sources;
-  final matching = <ResolvedSource>[];
-  final rest = <ResolvedSource>[];
-  for (final source in sources) {
-    if (preference.isSatisfiedBy(source.stream.subtitles)) {
-      matching.add(source);
-    } else {
-      rest.add(source);
-    }
-  }
-  return [...matching, ...rest];
+  final indexed = sources.indexed.toList();
+  indexed.sort((a, b) {
+    final providerResult = sourcePriority
+        .rankOf(a.$2.source.providerId)
+        .compareTo(sourcePriority.rankOf(b.$2.source.providerId));
+    if (providerResult != 0) return providerResult;
+    final aHasSubtitle = subtitlePreference.isSatisfiedBy(
+      a.$2.stream.subtitles,
+    );
+    final bHasSubtitle = subtitlePreference.isSatisfiedBy(
+      b.$2.stream.subtitles,
+    );
+    final subtitleResult = (bHasSubtitle ? 1 : 0).compareTo(
+      aHasSubtitle ? 1 : 0,
+    );
+    return subtitleResult == 0 ? a.$1.compareTo(b.$1) : subtitleResult;
+  });
+  return [for (final entry in indexed) entry.$2];
 }
 
 Future<List<ResolvedSource>> _playableSources(
@@ -172,6 +185,7 @@ Future<List<ResolvedSource>> _resolveKnownSources(
   List<StreamSource> sources,
   _ResolveProgress progress,
 ) async {
+  sources = scope.sourcePriorityController.order(sources);
   progress.begin([for (final source in sources) source.label]);
 
   final target = PlaybackTarget.detect();

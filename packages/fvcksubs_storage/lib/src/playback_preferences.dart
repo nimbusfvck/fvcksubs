@@ -46,3 +46,32 @@ class SharedPreferencesSubtitlePreferenceStore
     await prefs.setString(_key, languageCode);
   }
 }
+
+/// Persists the preferred order of stable stream-provider ids.
+abstract class SourcePriorityStore {
+  /// Loads provider ids from highest to lowest priority.
+  Future<List<String>> load();
+
+  /// Replaces the saved provider order.
+  Future<void> save(List<String> providerIds);
+}
+
+/// [SourcePriorityStore] backed by `shared_preferences`.
+class SharedPreferencesSourcePriorityStore implements SourcePriorityStore {
+  /// Creates the shared-preferences-backed store.
+  const SharedPreferencesSourcePriorityStore();
+
+  static const String _key = 'playback.sourcePriority';
+
+  @override
+  Future<List<String>> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_key) ?? const [];
+  }
+
+  @override
+  Future<void> save(List<String> providerIds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, providerIds);
+  }
+}

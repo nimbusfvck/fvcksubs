@@ -93,7 +93,7 @@ void main() {
       // land on the right destination for items near the middle.
       await tester.tap(find.text('Addons'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(SwitchListTile).first);
+      await tester.tap(find.byType(Switch).first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Home'));

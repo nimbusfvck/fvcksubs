@@ -10,6 +10,9 @@ Copy `fvcksubs.js` into your extension source tree and concatenate it **first**
 when producing `bundle.js`. Copy `fvcksubs.d.ts` beside your source files for
 editor autocomplete; it is not included in the shipped extension.
 
+See [Data model](DATA_MODEL.md) for every request and response field, where it
+appears in the app, and which values must remain stable.
+
 ```js
 fvcksubs.defineCatalog({
   providerId: 'demo.catalog',
@@ -43,13 +46,41 @@ fvcksubs.defineStream({
 The generated source id contains a base64url JSON payload, so `resolve()` can
 work after an app restart without relying on an in-memory map.
 
+`defineStream` adds its stable `providerId` to every returned source. The app
+uses that value for source priority, so source IDs stay opaque and extension
+authors should not encode UI preferences into them.
+
+## Manifest provider names
+
+Declare every registered provider in `manifest.json`. A provider may include a
+user-facing `name`; its `id` remains the stable value used by registration,
+routing, saved settings, and source priority.
+
+```json
+{
+  "providers": [
+    {
+      "id": "demo.stream",
+      "name": "Atlas",
+      "roles": ["stream"]
+    }
+  ]
+}
+```
+
+Use a neutral `name` when the upstream identity should not be displayed. Do
+not change `id` merely to rename a provider, because that discards the user's
+enabled state and saved priority. The SDK handles `StreamSource.providerId`
+automatically; `provider` remains an optional user-facing grouping label.
+
 ## Registration API
 
 - `defineCatalog({ providerId, catalogId, catalog })`: routes using both ids.
 - `defineMeta({ providerId, meta })`: routes using `ref.providerId`.
 - `defineStream({ providerId, providerKey, sources, resolve })`: respects the
   user's enabled-provider set, fans discovery out safely, and routes resolve
-  calls by source-id prefix.
+  calls by source-id prefix. Returned sources receive the registered
+  `providerId` automatically.
 - `defineSearch({ providerId, search })`: merges all search providers; one
   failure does not discard other results.
 - `defineSubtitles({ providerId, subtitles })`: merges subtitle providers with

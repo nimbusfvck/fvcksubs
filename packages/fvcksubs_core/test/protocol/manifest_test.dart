@@ -15,6 +15,7 @@ Map<String, Object?> cricfyManifestJson() => {
   'providers': [
     {
       'id': 'cricfy.events',
+      'name': 'Atlas',
       'roles': ['catalog', 'stream'],
       'catalogs': [
         {
@@ -43,6 +44,7 @@ void main() {
         ProviderRole.catalog,
         ProviderRole.stream,
       ]);
+      expect(manifest.providers.single.name, 'Atlas');
       expect(
         manifest.providers.single.catalogs.single.kind,
         MediaKind.liveEvent,

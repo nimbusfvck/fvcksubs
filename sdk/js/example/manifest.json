@@ -20,7 +20,7 @@
         }
       ]
     },
-    { "id": "hello.stream", "roles": ["stream"] }
+    { "id": "hello.stream", "name": "Hello Stream", "roles": ["stream"] }
   ],
   "permissions": { "hosts": ["cdn.example.com"] }
 }

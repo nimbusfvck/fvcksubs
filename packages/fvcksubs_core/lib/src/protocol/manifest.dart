@@ -172,6 +172,7 @@ class ProviderDecl extends Equatable {
   const ProviderDecl({
     required this.id,
     required this.roles,
+    this.name,
     this.catalogs = const [],
   });
 
@@ -181,6 +182,7 @@ class ProviderDecl extends Equatable {
     roles: ((json['roles'] as List?) ?? const [])
         .map((r) => enumByNameStrict(ProviderRole.values, r))
         .toList(),
+    name: json['name'] as String?,
     catalogs: ((json['catalogs'] as List?) ?? const [])
         .map((c) => CatalogDecl.fromJson(c as Map<String, Object?>))
         .toList(),
@@ -192,6 +194,9 @@ class ProviderDecl extends Equatable {
   /// Roles this provider fills.
   final List<ProviderRole> roles;
 
+  /// Optional user-facing name. The stable [id] remains the routing identity.
+  final String? name;
+
   /// Catalogs this provider exposes (empty unless it fills [ProviderRole.catalog]).
   final List<CatalogDecl> catalogs;
 
@@ -199,12 +204,13 @@ class ProviderDecl extends Equatable {
   Map<String, Object?> toJson() => {
     'id': id,
     'roles': roles.map((r) => r.name).toList(),
+    if (name != null) 'name': name,
     if (catalogs.isNotEmpty)
       'catalogs': catalogs.map((c) => c.toJson()).toList(),
   };
 
   @override
-  List<Object?> get props => [id, roles, catalogs];
+  List<Object?> get props => [id, roles, name, catalogs];
 }
 
 /// What an extension is allowed to do. Enforced by the host, not documentation.

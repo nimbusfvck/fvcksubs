@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/installer_controller.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
@@ -150,7 +151,9 @@ void main() {
           }),
         );
       } else if (path == '/manifest.json') {
-        request.response.write(jsonEncode(manifestFor('remote_ext', repoVersion)));
+        request.response.write(
+          jsonEncode(manifestFor('remote_ext', repoVersion)),
+        );
       } else if (path == '/bundle.js') {
         request.response.write(bundleJs);
       } else {
@@ -214,12 +217,15 @@ void main() {
       );
     });
 
-    test('an empty string clears the saved URL rather than saving blank', () async {
-      final t = build();
-      await t.controller.setRepoUrl('   ');
-      expect(t.controller.repoUrl, isNull);
-      expect(t.repos.saved, isNull);
-    });
+    test(
+      'an empty string clears the saved URL rather than saving blank',
+      () async {
+        final t = build();
+        await t.controller.setRepoUrl('   ');
+        expect(t.controller.repoUrl, isNull);
+        expect(t.repos.saved, isNull);
+      },
+    );
   });
 
   group('refresh', () {
@@ -242,15 +248,18 @@ void main() {
       expect(listing.isUpdate, isFalse);
     });
 
-    test('an unreachable repo surfaces an error and empties listings', () async {
-      final t = build();
-      await t.controller.setRepoUrl('$baseUrl/does-not-exist.json');
-      await t.controller.refresh();
+    test(
+      'an unreachable repo surfaces an error and empties listings',
+      () async {
+        final t = build();
+        await t.controller.setRepoUrl('$baseUrl/does-not-exist.json');
+        await t.controller.refresh();
 
-      expect(t.controller.error, contains('Could not read the repo'));
-      expect(t.controller.listings, isEmpty);
-      expect(t.controller.busy, isFalse, reason: 'must not stay stuck busy');
-    });
+        expect(t.controller.error, contains('Could not read the repo'));
+        expect(t.controller.listings, isEmpty);
+        expect(t.controller.busy, isFalse, reason: 'must not stay stuck busy');
+      },
+    );
 
     test('a repo with no extensions says so', () async {
       final t = build();
@@ -289,23 +298,26 @@ void main() {
       expect(listing.isUpdate, isTrue);
     });
 
-    test('installing a newer version replaces rather than duplicates', () async {
-      final t = build();
-      await t.controller.setRepoUrl('$baseUrl/repo.json');
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+    test(
+      'installing a newer version replaces rather than duplicates',
+      () async {
+        final t = build();
+        await t.controller.setRepoUrl('$baseUrl/repo.json');
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      repoVersion = '2.0.0';
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+        repoVersion = '2.0.0';
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      expect(
-        t.registry.installed.map((m) => m.id),
-        ['builtin', 'remote_ext'],
-        reason: 'one entry per id, not two',
-      );
-      expect(t.store.saved['remote_ext']!.version, '2.0.0');
-    });
+        expect(
+          t.registry.installed.map((m) => m.id),
+          ['builtin', 'remote_ext'],
+          reason: 'one entry per id, not two',
+        );
+        expect(t.store.saved['remote_ext']!.version, '2.0.0');
+      },
+    );
 
     test('a bundle that verifies but will not load is not persisted', () async {
       // The ordering guarantee in install()'s doc comment: persist only
@@ -328,7 +340,11 @@ void main() {
       await controller.install(controller.listings.single.entry);
 
       expect(controller.error, contains('Install failed'));
-      expect(store.saved, isEmpty, reason: 'never persist a bundle that will not run');
+      expect(
+        store.saved,
+        isEmpty,
+        reason: 'never persist a bundle that will not run',
+      );
       expect(registry.installed.map((m) => m.id), ['builtin']);
     });
 
@@ -363,6 +379,25 @@ void main() {
       expect(t.store.saved, isEmpty);
       expect(t.controller.listings.single.installedVersion, isNull);
     });
+
+    test('works without a configured repository', () async {
+      final t = build();
+      t.registry.install(FakeExtension(id: 'remote_ext'));
+      await t.store.save(
+        const InstalledExtension(
+          id: 'remote_ext',
+          version: '1.0.0',
+          manifestJson: '{}',
+          bundleJs: '',
+        ),
+      );
+
+      await t.controller.uninstall('remote_ext');
+
+      expect(t.registry.installed.map((manifest) => manifest.id), ['builtin']);
+      expect(t.store.saved, isEmpty);
+      expect(t.controller.error, isNull);
+    });
   });
 
   group('permission consent', () {
@@ -380,18 +415,21 @@ void main() {
       expect(request.alreadyGrantedHosts, isEmpty);
     });
 
-    test('declining installs nothing and is not reported as an error', () async {
-      final t = build(consent: false);
-      await t.controller.setRepoUrl('$baseUrl/repo.json');
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+    test(
+      'declining installs nothing and is not reported as an error',
+      () async {
+        final t = build(consent: false);
+        await t.controller.setRepoUrl('$baseUrl/repo.json');
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      expect(t.registry.installed.map((m) => m.id), ['builtin']);
-      expect(t.store.saved, isEmpty);
-      // Declining is a choice, not a failure.
-      expect(t.controller.error, isNull);
-      expect(t.controller.busy, isFalse);
-    });
+        expect(t.registry.installed.map((m) => m.id), ['builtin']);
+        expect(t.store.saved, isEmpty);
+        // Declining is a choice, not a failure.
+        expect(t.controller.error, isNull);
+        expect(t.controller.busy, isFalse);
+      },
+    );
 
     test('an extension wanting no hosts still asks, saying so', () async {
       final t = build();
@@ -422,24 +460,27 @@ void main() {
       expect(t.store.saved['remote_ext']!.version, '2.0.0');
     });
 
-    test('an update that wants a new host asks again, showing only the new one', () async {
-      final t = build();
-      await t.controller.setRepoUrl('$baseUrl/repo.json');
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+    test(
+      'an update that wants a new host asks again, showing only the new one',
+      () async {
+        final t = build();
+        await t.controller.setRepoUrl('$baseUrl/repo.json');
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      // Same extension, next version, one extra host.
-      repoVersion = '2.0.0';
-      repoHosts = ['cdn.example', 'api.example', 'tracker.example'];
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+        // Same extension, next version, one extra host.
+        repoVersion = '2.0.0';
+        repoHosts = ['cdn.example', 'api.example', 'tracker.example'];
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      expect(t.asked, hasLength(2));
-      final second = t.asked.last;
-      expect(second.isUpdate, isTrue);
-      expect(second.newHosts, ['tracker.example']);
-      expect(second.alreadyGrantedHosts, ['cdn.example', 'api.example']);
-    });
+        expect(t.asked, hasLength(2));
+        final second = t.asked.last;
+        expect(second.isUpdate, isTrue);
+        expect(second.newHosts, ['tracker.example']);
+        expect(second.alreadyGrantedHosts, ['cdn.example', 'api.example']);
+      },
+    );
 
     test('declining an update leaves the installed version alone', () async {
       final t = build();
@@ -470,24 +511,30 @@ void main() {
       );
     });
 
-    test('a manifest wanting more than repo.json advertised is refused', () async {
-      // The check that makes consent mean anything: repo.json's hosts are a
-      // preview, but the manifest is what builds the engine allowlist. A repo
-      // that understates its hosts to get a friendlier prompt must not win.
-      final t = build();
-      await t.controller.setRepoUrl('$baseUrl/repo-understates.json');
-      await t.controller.refresh();
-      await t.controller.install(t.controller.listings.single.entry);
+    test(
+      'a manifest wanting more than repo.json advertised is refused',
+      () async {
+        // The check that makes consent mean anything: repo.json's hosts are a
+        // preview, but the manifest is what builds the engine allowlist. A repo
+        // that understates its hosts to get a friendlier prompt must not win.
+        final t = build();
+        await t.controller.setRepoUrl('$baseUrl/repo-understates.json');
+        await t.controller.refresh();
+        await t.controller.install(t.controller.listings.single.entry);
 
-      expect(t.asked.single.newHosts, ['cdn.example'],
-          reason: 'the user was only shown what the repo claimed');
-      expect(t.controller.error, contains('did not list'));
-      expect(
-        t.registry.installed.map((m) => m.id),
-        ['builtin'],
-        reason: 'never install with more access than was consented to',
-      );
-      expect(t.store.saved, isEmpty);
-    });
+        expect(
+          t.asked.single.newHosts,
+          ['cdn.example'],
+          reason: 'the user was only shown what the repo claimed',
+        );
+        expect(t.controller.error, contains('did not list'));
+        expect(
+          t.registry.installed.map((m) => m.id),
+          ['builtin'],
+          reason: 'never install with more access than was consented to',
+        );
+        expect(t.store.saved, isEmpty);
+      },
+    );
   });
 }
