@@ -15,9 +15,7 @@ void main() {
   }
 
   group('filters', () {
-    testWidgets('no filter bar when the catalog declares none', (
-      tester,
-    ) async {
+    testWidgets('no filter bar when the catalog declares none', (tester) async {
       final fake = FakeExtension(
         categories: ['sport'],
         items: [fakeItem(title: 'Item')],
@@ -26,7 +24,10 @@ void main() {
       final binding = registry.catalogsFor('sport').single;
 
       await tester.pumpWidget(
-        wrapApp(child: CatalogView(binding: binding), registry: registry),
+        wrapApp(
+          child: CatalogView(binding: binding),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -45,7 +46,10 @@ void main() {
       final binding = registry.catalogsFor('sport').single;
 
       await tester.pumpWidget(
-        wrapApp(child: CatalogView(binding: binding), registry: registry),
+        wrapApp(
+          child: CatalogView(binding: binding),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -74,14 +78,21 @@ void main() {
       final binding = registry.catalogsFor('sport').single;
 
       await tester.pumpWidget(
-        wrapApp(child: CatalogView(binding: binding), registry: registry),
+        wrapApp(
+          child: CatalogView(binding: binding),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('Match 0'), findsOneWidget);
       expect(find.text('Match 10'), findsNothing);
 
-      await tester.fling(find.byType(GridView), const Offset(0, -600), 3000);
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, -600),
+        3000,
+      );
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(find.text('Match 10'), 200);
@@ -99,11 +110,18 @@ void main() {
       final binding = registry.catalogsFor('sport').single;
 
       await tester.pumpWidget(
-        wrapApp(child: CatalogView(binding: binding), registry: registry),
+        wrapApp(
+          child: CatalogView(binding: binding),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 
-      await tester.fling(find.byType(GridView), const Offset(0, -600), 3000);
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, -600),
+        3000,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Only Item'), findsOneWidget);
@@ -118,7 +136,10 @@ void main() {
       final binding = registry.catalogsFor('sport').single;
 
       await tester.pumpWidget(
-        wrapApp(child: CatalogView(binding: binding), registry: registry),
+        wrapApp(
+          child: CatalogView(binding: binding),
+          registry: registry,
+        ),
       );
       await tester.pumpAndSettle();
 

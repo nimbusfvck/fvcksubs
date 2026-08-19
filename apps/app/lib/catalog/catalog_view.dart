@@ -6,7 +6,8 @@ import '../app_scope.dart';
 import '../detail/open_item.dart';
 import '../theme/tokens.dart';
 import 'catalog_filter_bar.dart';
-import 'media_grid.dart';
+import 'catalog_cache.dart';
+import 'media_grid_v2.dart';
 import 'sub_category_chips.dart';
 
 class CatalogView extends StatefulWidget {
@@ -31,7 +32,7 @@ class _CatalogViewState extends State<CatalogView> {
   final ScrollController _scrollController = ScrollController();
 
   late Map<String, String> _filters = _defaultFilters();
-  List<MediaItem> _items = const [];
+  VersionedCatalogPage? _page;
   List<SubCategory> _subCategories = const [];
   late String? _subCategory = widget.initialSubCategory;
   String? _nextPage;
@@ -89,7 +90,7 @@ class _CatalogViewState extends State<CatalogView> {
       _error = null;
     });
     try {
-      final page = await AppScope.of(context).registry.loadCatalog(
+      final page = await AppScope.of(context).registry.loadCatalogVersioned(
         widget.binding,
         category: widget.category,
         filters: _filters,
@@ -97,7 +98,7 @@ class _CatalogViewState extends State<CatalogView> {
       );
       if (!mounted) return;
       setState(() {
-        _items = page.items;
+        _page = page;
         _nextPage = page.nextPage;
         _subCategories = page.subCategories;
         _loading = false;
@@ -114,7 +115,7 @@ class _CatalogViewState extends State<CatalogView> {
   Future<void> _loadMore() async {
     setState(() => _loadingMore = true);
     try {
-      final page = await AppScope.of(context).registry.loadCatalog(
+      final page = await AppScope.of(context).registry.loadCatalogVersioned(
         widget.binding,
         category: widget.category,
         page: _nextPage,
@@ -123,7 +124,7 @@ class _CatalogViewState extends State<CatalogView> {
       );
       if (!mounted) return;
       setState(() {
-        _items = [..._items, ...page.items];
+        _page = _page == null ? page : mergeVersionedCatalogPages(_page!, page);
         _nextPage = page.nextPage;
         _loadingMore = false;
       });
@@ -136,7 +137,7 @@ class _CatalogViewState extends State<CatalogView> {
   void _onFilterChanged(String key, String value) {
     setState(() {
       _filters = {..._filters, key: value};
-      _items = const [];
+      _page = null;
       _nextPage = null;
     });
     _load();
@@ -146,13 +147,22 @@ class _CatalogViewState extends State<CatalogView> {
     if (id == _subCategory) return;
     setState(() {
       _subCategory = id;
-      _items = const [];
+      _page = null;
       _nextPage = null;
     });
     _load();
   }
 
-  void _open(MediaItem item) => openItem(context, item);
+  void _open(VersionedMediaItem item) {
+    final legacy = item.legacyItem;
+    if (legacy != null) {
+      openItem(context, legacy);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This item requires protocol v2 playback.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -190,7 +200,8 @@ class _CatalogViewState extends State<CatalogView> {
         ),
       );
     }
-    if (_items.isEmpty) {
+    final page = _page;
+    if (page == null || page.items.isEmpty) {
       return Center(
         child: Text(
           'Nothing here right now.',
@@ -203,11 +214,11 @@ class _CatalogViewState extends State<CatalogView> {
       child: Column(
         children: [
           Expanded(
-            child: MediaGrid(
-              items: _items,
+            child: MediaGridV2(
+              sections: page.sections,
               onTap: _open,
               controller: _scrollController,
-              showGroupHeaders: true,
+              showSectionHeaders: true,
               columns: widget.binding.catalog.display == CatalogDisplay.list
                   ? 1
                   : null,
