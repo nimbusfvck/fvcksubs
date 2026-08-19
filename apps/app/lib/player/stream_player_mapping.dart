@@ -27,8 +27,6 @@ BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
   StreamFormat.other => BetterPlayerVideoFormat.other,
 };
 
-const _kAllowedSubtitleLanguages = {'en', 'id'};
-
 List<BetterPlayerSubtitlesSource>? _subtitles(
   List<SubtitleTrack> tracks,
   String? preferredLanguage,
@@ -59,9 +57,7 @@ BetterPlayerSubtitlesSource subtitleSourceFor(
 );
 
 List<SubtitleTrack> subtitlesForPicker(List<SubtitleTrack> tracks) {
-  final filtered = tracks
-      .where((t) => _kAllowedSubtitleLanguages.contains(_primary(t.language)))
-      .toList();
+  final filtered = tracks.toList();
 
   filtered.sort((a, b) {
     final pa = _primary(a.language);

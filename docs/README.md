@@ -28,6 +28,8 @@ Browse or search → Select content → Select source → Resolve → Play
 | 6 | [App Layer](06-app-layer.md) | Shell, screens, controllers, caches, player |
 | 7 | [Packaging & Distribution](07-packaging.md) | Bundling, hosting, installing, and updating an extension |
 | 8 | [Roadmap](08-roadmap.md) | Work required before public extension distribution and a stable release |
+| 9 | [Protocol v2](09-protocol-v2.md) | Proposed strict content contract and v1 migration rules |
+| 10 | [Hardcode Audit](10-hardcode-audit.md) | Values that must move to protocol data, configuration, or shared policy |
 
 Extension authors can use the dependency-free [JavaScript SDK](../sdk/js/README.md)
 for provider registration, role dispatch, restart-safe source ids, and editor

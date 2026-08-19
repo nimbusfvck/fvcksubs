@@ -163,7 +163,7 @@ void main() {
     expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
   });
 
-  test('non-English/Indonesian tracks are dropped', () {
+  test('tracks are not restricted to hardcoded languages', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(
         url: 'https://edge/movie.m3u8',
@@ -177,12 +177,16 @@ void main() {
       ),
       isLive: false,
     );
-    // Only the English track survives the filter.
-    expect(ds.subtitles, hasLength(1));
-    expect(ds.subtitles?[0].name, '🇬🇧 English');
+    expect(ds.subtitles, hasLength(4));
+    expect(ds.subtitles?.map((track) => track.name), [
+      '🇸🇦 العربية',
+      '🇬🇧 English',
+      '🇫🇷 Français',
+      '🇧🇷 Português (BR)',
+    ]);
   });
 
-  test('all-filtered tracks returns null, not an empty list', () {
+  test('non-preferred languages remain available', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(
         url: 'https://edge/movie.m3u8',
@@ -194,7 +198,11 @@ void main() {
       ),
       isLive: false,
     );
-    expect(ds.subtitles, isNull);
+    expect(ds.subtitles, hasLength(2));
+    expect(ds.subtitles?.map((track) => track.name), [
+      '🇫🇷 Français',
+      '🇧🇷 Português (BR)',
+    ]);
   });
 
   test('region-tagged English gets flag + region disambiguator', () {
@@ -239,13 +247,13 @@ void main() {
   });
 
   group('subtitlesForPicker', () {
-    test('filters and sorts the same way betterPlayerDataSource does', () {
+    test('keeps every language and sorts by language tag', () {
       final result = subtitlesForPicker(const [
         SubtitleTrack(language: 'fr', url: 'https://subs/fr.srt'),
         SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
         SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
       ]);
-      expect(result.map((t) => t.language), ['en', 'id']);
+      expect(result.map((t) => t.language), ['en', 'fr', 'id']);
     });
 
     test('drops a duplicate of an already-seen url', () {
