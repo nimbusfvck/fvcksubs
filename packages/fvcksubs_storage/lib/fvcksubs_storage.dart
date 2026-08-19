@@ -7,6 +7,8 @@ export 'src/browse_selection.dart';
 export 'src/installed_extension_store.dart';
 export 'src/playback_preferences.dart';
 export 'src/library_store.dart';
+export 'src/library_store_v2.dart';
 export 'src/repo_store.dart';
 export 'src/source_list_store.dart';
 export 'src/user_media_state.dart';
+export 'src/user_media_state_v2.dart';
