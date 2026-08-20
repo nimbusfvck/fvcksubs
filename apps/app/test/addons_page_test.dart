@@ -108,6 +108,36 @@ void main() {
     expect(find.text('P'), findsNothing);
   });
 
+  testWidgets('installed detail exposes a manual update check', (tester) async {
+    final registry = ExtensionRegistry([FakeExtension(id: 'fake')]);
+    final installerController = InstallerController(
+      registry: registry,
+      installer: ExtensionInstaller(),
+      installedStore: FakeInstalledExtensionStore(),
+      repoStore: FakeRepoStore(),
+      repoUrl: 'https://example.invalid/repo.json',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const AddonsPage(),
+        registry: registry,
+        installerController: installerController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('fake'));
+    await tester.pumpAndSettle();
+
+    final checkButton = find.widgetWithText(
+      OutlinedButton,
+      'Check for updates',
+    );
+    expect(checkButton, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(checkButton).onPressed, isNotNull);
+  });
+
   testWidgets('remove asks for confirmation and uninstalls the extension', (
     tester,
   ) async {

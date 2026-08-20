@@ -504,6 +504,9 @@ class _ExtensionDetailsPage extends StatelessWidget {
                   onUpdate: listing?.isUpdate == true
                       ? () => installerController.install(listing!.entry)
                       : null,
+                  onCheckUpdates: installerController.repoUrl == null
+                      ? null
+                      : () => installerController.refresh(),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -563,12 +566,14 @@ class _ReleaseDetails extends StatelessWidget {
     required this.listing,
     required this.checking,
     required this.onUpdate,
+    required this.onCheckUpdates,
   });
 
   final Manifest manifest;
   final RepoListing? listing;
   final bool checking;
   final VoidCallback? onUpdate;
+  final VoidCallback? onCheckUpdates;
 
   @override
   Widget build(BuildContext context) {
@@ -604,7 +609,12 @@ class _ReleaseDetails extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          if (onUpdate != null)
+          if (checking)
+            Text(
+              'Checking for updates…',
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            )
+          else if (onUpdate != null)
             OutlinedButton.icon(
               onPressed: onUpdate,
               icon: const Icon(Icons.download_outlined, size: 17),
@@ -612,13 +622,21 @@ class _ReleaseDetails extends StatelessWidget {
             )
           else if (listing?.isUpToDate ?? false)
             const _StatusPill(label: 'Up to date', positive: true)
-          else if (checking)
-            Text(
-              'Checking for updates…',
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-            )
           else
             const _StatusPill(label: 'Update status unavailable'),
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: checking ? null : onCheckUpdates,
+            icon: checking
+                ? const SizedBox.square(
+                    dimension: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 17),
+            label: Text(
+              checking ? 'Checking for updates…' : 'Check for updates',
+            ),
+          ),
           if (entry?.releaseNotes.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
