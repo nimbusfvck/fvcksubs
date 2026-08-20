@@ -140,7 +140,7 @@ The application starts with an empty registry and populates it from persisted in
 
 The repository URL is persisted separately from the installed bundles. When a saved URL is
 available, the app checks it in the background during startup. The check updates the installed
-extension status in Addons; it does not block startup or show a failure screen when the network
+extension details in Addons; it does not block startup or show a failure screen when the network
 is unavailable. Opening Addons is not required to start the check.
 
 ## 7.6 Testing an extension
