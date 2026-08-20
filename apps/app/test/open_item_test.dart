@@ -117,6 +117,96 @@ void main() {
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
   });
 
+  testWidgets('protocol v2 video opens its native detail page', (tester) async {
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'video'),
+      title: 'Example movie',
+    );
+    final registry = ExtensionRegistry([
+      _DetailV2Extension(detail: const MediaDetailV2(item: item)),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => openVersionedItem(
+              context,
+              const VersionedMediaItem(item: item),
+            ),
+            child: const Text('open video'),
+          ),
+        ),
+        registry: registry,
+      ),
+    );
+    await tester.tap(find.text('open video'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailPageV2), findsOneWidget);
+    expect(find.byType(PlayerPage), findsNothing);
+  });
+
+  testWidgets('protocol v2 series resumes the last watched episode', (
+    tester,
+  ) async {
+    const series = SeriesItemV2(
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'series'),
+      title: 'Resume series',
+    );
+    const episodeRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'episode-3',
+    );
+    const watchedEpisode = EpisodeItemV2(
+      ref: episodeRef,
+      title: 'Episode 3',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'fake',
+          providerId: 'fake.p',
+          id: 'series',
+        ),
+        groupId: 'season-2',
+        position: 3,
+      ),
+    );
+    const record = UserMediaState(
+      item: watchedEpisode,
+      progress: Duration(minutes: 12),
+    );
+    const detail = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season-2',
+            title: 'Season 2',
+            episodes: [
+              EpisodeSummary(ref: episodeRef, title: 'Episode 3', position: 3),
+            ],
+          ),
+        ],
+      ),
+    );
+    final libraryController = LibraryController(
+      store: _MemoryLibraryStoreV2(),
+      initial: {record.key: record},
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: series),
+        registry: ExtensionRegistry([_DetailV2Extension(detail: detail)]),
+        libraryController: libraryController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue S2E3'), findsOneWidget);
+  });
+
   testWidgets('protocol v2 movie with progress offers to continue watching', (
     tester,
   ) async {

@@ -48,24 +48,63 @@ class _DetailPageV2State extends State<DetailPageV2> {
     );
   }
 
-  ({EpisodeGroup group, int index})? _primaryEpisode(MediaDetailV2 detail) {
+  ({EpisodeGroup group, int index, bool resuming})? _primaryEpisode(
+    MediaDetailV2 detail,
+    LibraryState library,
+  ) {
     final guide = detail.episodeGuide;
     final target = guide?.defaultEpisodeRef;
     if (guide == null || guide.groups.isEmpty) return null;
+    final resumed = _resumedEpisode(guide, detail.item.ref, library);
+    if (resumed != null) return resumed;
     if (target != null) {
       for (final group in guide.groups) {
         final index = group.episodes.indexWhere(
           (episode) => episode.ref == target,
         );
         if (index >= 0 && _isAvailable(group.episodes[index])) {
-          return (group: group, index: index);
+          return (group: group, index: index, resuming: false);
         }
       }
     }
     for (final group in guide.groups.reversed) {
       for (final entry in group.episodes.indexed.toList().reversed) {
         if (_isAvailable(entry.$2)) {
-          return (group: group, index: entry.$1);
+          return (group: group, index: entry.$1, resuming: false);
+        }
+      }
+    }
+    return null;
+  }
+
+  ({EpisodeGroup group, int index, bool resuming})? _resumedEpisode(
+    EpisodeGuide guide,
+    MediaRef parentRef,
+    LibraryState library,
+  ) {
+    final watchedEpisodes =
+        library.records.values
+            .where(
+              (record) =>
+                  record.progress != null &&
+                  record.progress! > Duration.zero &&
+                  record.item is EpisodeItemV2 &&
+                  (record.item as EpisodeItemV2).episode.parentRef == parentRef,
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                  a.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0),
+                ),
+          );
+    for (final record in watchedEpisodes) {
+      for (final group in guide.groups) {
+        final index = group.episodes.indexWhere(
+          (candidate) => candidate.ref == record.item.ref,
+        );
+        if (index >= 0 && _isAvailable(group.episodes[index])) {
+          return (group: group, index: index, resuming: true);
         }
       }
     }
@@ -81,14 +120,19 @@ class _DetailPageV2State extends State<DetailPageV2> {
     return availableAt == null || !availableAt.isAfter(DateTime.now().toUtc());
   }
 
-  MediaItemV2? _primaryTarget(MediaDetailV2 detail) {
-    final target = _primaryEpisode(detail);
+  MediaItemV2? _primaryTarget(
+    MediaDetailV2 detail,
+    ({EpisodeGroup group, int index, bool resuming})? target,
+  ) {
     if (target == null) return _hasEpisodes(detail) ? null : detail.item;
     return _episodeItem(detail.item, target.group, target.index);
   }
 
-  String _playLabel(MediaDetailV2 detail, Duration? movieProgress) {
-    final target = _primaryEpisode(detail);
+  String _playLabel(
+    MediaDetailV2 detail,
+    ({EpisodeGroup group, int index, bool resuming})? target,
+    Duration? movieProgress,
+  ) {
     if (target == null) {
       if (_hasEpisodes(detail)) return 'Coming soon';
       return (movieProgress ?? Duration.zero) > Duration.zero
@@ -99,8 +143,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
       r'\b(?:season|s)\s*([0-9]+)\b',
       caseSensitive: false,
     ).firstMatch(target.group.title)?.group(1);
-    if (season == null) return 'Play';
-    return 'Play S${season}E${target.group.episodes[target.index].position}';
+    if (season == null) return target.resuming ? 'Continue' : 'Play';
+    final label = 'S${season}E${target.group.episodes[target.index].position}';
+    return target.resuming ? 'Continue $label' : 'Play $label';
   }
 
   @override
@@ -122,7 +167,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
   Widget _buildDetail(MediaDetailV2 detail) {
     final item = detail.item;
-    final primaryTarget = _primaryTarget(detail);
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
@@ -154,18 +198,26 @@ class _DetailPageV2State extends State<DetailPageV2> {
                       height: 48,
                       child: BlocBuilder<LibraryController, LibraryState>(
                         bloc: libraryController,
-                        builder: (context, state) => ElevatedButton.icon(
-                          onPressed: primaryTarget == null
-                              ? null
-                              : () => playItemV2(context, primaryTarget),
-                          icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                          label: Text(
-                            _playLabel(
-                              detail,
-                              state.recordFor(item.ref)?.progress,
+                        builder: (context, state) {
+                          final target = _primaryEpisode(detail, state);
+                          final primaryTarget = _primaryTarget(detail, target);
+                          return ElevatedButton.icon(
+                            onPressed: primaryTarget == null
+                                ? null
+                                : () => playItemV2(context, primaryTarget),
+                            icon: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 28,
                             ),
-                          ),
-                        ),
+                            label: Text(
+                              _playLabel(
+                                detail,
+                                target,
+                                state.recordFor(item.ref)?.progress,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),

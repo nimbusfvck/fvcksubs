@@ -12,7 +12,7 @@ void openVersionedItem(BuildContext context, VersionedMediaItem item) {
     return;
   }
   final current = item.item;
-  if (current is SeriesItemV2) {
+  if (current is VideoItemV2 || current is SeriesItemV2) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => DetailPageV2(item: current)),
     );
