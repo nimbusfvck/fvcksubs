@@ -8,7 +8,6 @@ import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
-import '../utils/media_item_metadata.dart';
 
 class DetailPageV2 extends StatefulWidget {
   const DetailPageV2({super.key, required this.item});
@@ -288,16 +287,67 @@ class _Header extends StatelessWidget {
               children: [
                 Text(
                   item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.displaySm.copyWith(
                     color: AppColors.onDark,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (mediaItemSecondaryText(item) case final detail?)
+                if (item.releaseYear != null || item.rating != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: AppSpacing.xs,
+                      children: [
+                        if (item.releaseYear case final releaseYear?)
+                          Text(
+                            releaseYear.toString(),
+                            style: AppTypography.bodyMd.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                        if (item.releaseYear != null && item.rating != null)
+                          Text(
+                            '-',
+                            style: AppTypography.bodyMd.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                        if (item.rating case final rating?)
+                          Semantics(
+                            label: 'Rating $rating',
+                            child: ExcludeSemantics(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 18,
+                                    color: AppColors.onDark,
+                                  ),
+                                  const SizedBox(width: AppSpacing.xxs),
+                                  Text(
+                                    rating.toString(),
+                                    style: AppTypography.bodyMd.copyWith(
+                                      color: AppColors.onDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (item.subtitle case final subtitle?)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Text(
-                      detail,
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMd.copyWith(
                         color: AppColors.onDarkSoft,
                       ),

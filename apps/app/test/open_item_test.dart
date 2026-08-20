@@ -372,32 +372,37 @@ void main() {
     expect(find.text('50 minutes'), findsOneWidget);
   });
 
-  testWidgets('protocol v2 header composes structured item metadata', (
-    tester,
-  ) async {
-    const item = SeriesItemV2(
-      ref: MediaRef(
-        extensionId: 'fake',
-        providerId: 'fake.p',
-        id: 'series-subtitle-meta',
-      ),
-      title: 'Reacher',
-      subtitle: 'Drama',
-      releaseYear: 2025,
-      rating: 8.7,
-    );
-    const detail = MediaDetailV2(item: item);
+  testWidgets(
+    'protocol v2 header displays structured metadata with a rating icon',
+    (tester) async {
+      const item = SeriesItemV2(
+        ref: MediaRef(
+          extensionId: 'fake',
+          providerId: 'fake.p',
+          id: 'series-subtitle-meta',
+        ),
+        title: 'Reacher',
+        subtitle: 'Drama',
+        releaseYear: 2025,
+        rating: 8.7,
+      );
+      const detail = MediaDetailV2(item: item);
 
-    await tester.pumpWidget(
-      wrapApp(
-        child: const DetailPageV2(item: item),
-        registry: ExtensionRegistry([_DetailV2Extension(detail: detail)]),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrapApp(
+          child: const DetailPageV2(item: item),
+          registry: ExtensionRegistry([_DetailV2Extension(detail: detail)]),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Drama • 2025 • ★ 8.7'), findsOneWidget);
-  });
+      expect(find.text('2025'), findsOneWidget);
+      expect(find.text('-'), findsOneWidget);
+      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+      expect(find.text('8.7'), findsOneWidget);
+      expect(find.text('Drama'), findsOneWidget);
+    },
+  );
 
   testWidgets('protocol v2 season selector fits a narrow screen', (
     tester,
