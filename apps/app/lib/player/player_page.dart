@@ -91,6 +91,7 @@ class PlayerPage extends StatefulWidget {
     required this.resolvedSources,
     this.seasons = const [],
     this.pendingSources,
+    this.returnToDetail = false,
   }) : media = PlaybackMedia.legacy(item),
        assert(
          resolvedSources.isNotEmpty,
@@ -102,6 +103,7 @@ class PlayerPage extends StatefulWidget {
     required MediaItemV2 item,
     required this.resolvedSources,
     this.pendingSources,
+    this.returnToDetail = false,
   }) : media = PlaybackMedia.v2(item),
        seasons = const [],
        assert(
@@ -116,6 +118,8 @@ class PlayerPage extends StatefulWidget {
   final List<SeriesSeason> seasons;
 
   final Future<List<ResolvedSource>?>? pendingSources;
+
+  final bool returnToDetail;
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -377,7 +381,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller != null && controller.isFullScreen) {
       controller.exitFullScreen();
     }
-    Navigator.of(context).pop();
+    final navigator = Navigator.of(context);
+    if (widget.returnToDetail) {
+      navigator.popUntil((route) => route.settings.name == 'detail');
+      return;
+    }
+    navigator.pop();
   }
 
   Future<void> _changeSource() async {

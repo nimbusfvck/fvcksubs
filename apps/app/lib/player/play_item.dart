@@ -16,25 +16,33 @@ Future<void> playItem(
   MediaItem item, {
   List<SeriesSeason> seasons = const [],
   bool replaceCurrent = false,
+  bool returnToDetail = false,
 }) => _playMedia(
   context,
   PlaybackMedia.legacy(item),
   seasons: seasons,
   replaceCurrent: replaceCurrent,
+  returnToDetail: returnToDetail,
 );
 
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
   bool replaceCurrent = false,
-}) =>
-    _playMedia(context, PlaybackMedia.v2(item), replaceCurrent: replaceCurrent);
+  bool returnToDetail = false,
+}) => _playMedia(
+  context,
+  PlaybackMedia.v2(item),
+  replaceCurrent: replaceCurrent,
+  returnToDetail: returnToDetail,
+);
 
 Future<void> _playMedia(
   BuildContext context,
   PlaybackMedia item, {
   List<SeriesSeason> seasons = const [],
   bool replaceCurrent = false,
+  bool returnToDetail = false,
 }) async {
   final scope = AppScope.of(context);
   final navigator = Navigator.of(context);
@@ -42,7 +50,15 @@ Future<void> _playMedia(
 
   final cached = scope.sourceCache.peek(item.ref);
   if (cached != null) {
-    _openPlayer(navigator, scope, item, cached, seasons, replaceCurrent);
+    _openPlayer(
+      navigator,
+      scope,
+      item,
+      cached,
+      seasons,
+      replaceCurrent,
+      returnToDetail: returnToDetail,
+    );
     if (scope.sourceCache.isStale(item.ref)) {
       unawaited(_revalidate(scope, item));
     }
@@ -69,6 +85,7 @@ Future<void> _playMedia(
         seasons,
         replaceCurrent,
         pendingSources: pendingSources,
+        returnToDetail: returnToDetail,
       );
       return;
     }
@@ -89,7 +106,15 @@ Future<void> _playMedia(
   }
 
   scope.sourceCache.store(item.ref, sources);
-  _openPlayer(navigator, scope, item, sources, seasons, replaceCurrent);
+  _openPlayer(
+    navigator,
+    scope,
+    item,
+    sources,
+    seasons,
+    replaceCurrent,
+    returnToDetail: returnToDetail,
+  );
 }
 
 Future<List<ResolvedSource>?> _resolveWithOverlay(
@@ -137,6 +162,7 @@ void _openPlayer(
   List<SeriesSeason> seasons,
   bool replaceCurrent, {
   Future<List<ResolvedSource>?>? pendingSources,
+  bool returnToDetail = false,
 }) {
   final resolved = _preferredFirst(
     sources,
@@ -156,12 +182,14 @@ void _openPlayer(
             item: item.v2Item!,
             resolvedSources: resolved,
             pendingSources: pendingSources,
+            returnToDetail: returnToDetail,
           )
         : PlayerPage(
             item: legacyItem,
             resolvedSources: resolved,
             seasons: seasons,
             pendingSources: pendingSources,
+            returnToDetail: returnToDetail,
           ),
   );
   unawaited(

@@ -205,7 +205,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
                           return _PrimaryPlayButton(
                             onPressed: primaryTarget == null
                                 ? null
-                                : () => playItemV2(context, primaryTarget),
+                                : () => playItemV2(
+                                    context,
+                                    primaryTarget,
+                                    returnToDetail: true,
+                                  ),
                             label: _playLabel(
                               detail,
                               target,
@@ -290,6 +294,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                       onTap: () => playItemV2(
                         context,
                         _episodeItem(item, selectedGroup, entry.$1),
+                        returnToDetail: true,
                       ),
                     ),
                   ),

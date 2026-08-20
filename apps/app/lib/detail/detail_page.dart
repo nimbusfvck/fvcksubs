@@ -47,7 +47,12 @@ class _DetailPageState extends State<DetailPage> {
   Future<void> _play({
     MediaItem? overrideItem,
     List<SeriesSeason> seasons = const [],
-  }) => playItem(context, overrideItem ?? widget.item, seasons: seasons);
+  }) => playItem(
+    context,
+    overrideItem ?? widget.item,
+    seasons: seasons,
+    returnToDetail: true,
+  );
 
   Future<void> _playTarget(
     EpisodeTarget? target,

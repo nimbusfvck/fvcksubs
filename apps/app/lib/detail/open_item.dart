@@ -10,7 +10,10 @@ void openItem(BuildContext context, MediaItem item) {
     playItem(context, item);
     return;
   }
-  Navigator.of(
-    context,
-  ).push(MaterialPageRoute<void>(builder: (_) => DetailPage(item: item)));
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: 'detail'),
+      builder: (_) => DetailPage(item: item),
+    ),
+  );
 }
