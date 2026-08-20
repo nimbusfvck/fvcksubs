@@ -111,8 +111,10 @@ content. Remaining slots use a combined editorial, freshness, rating, and artwor
 Soft per-kind limits keep the carousel varied when several kinds are available without
 leaving it short when the catalog contains only one kind. Duplicate references and ended
 events are removed. Items without portrait or landscape artwork are left out because the
-hero is artwork-led. Equal candidates use a stable daily tie-break so their order does
-not change during a session.
+hero is artwork-led, except events and channels: those receive deterministic full-bleed
+artwork from their opaque identity, participant colors, and participant logos. The same
+generator is used when a supplied live artwork URL fails. Equal candidates use a stable
+daily tie-break so their order does not change during a session.
 
 Play resolves the selected item immediately, Favorite writes to the app library, and
 Info follows the normal detail-or-play navigation rule.

@@ -503,6 +503,101 @@ void main() {
     });
   });
 
+  group('generated live artwork', () {
+    testWidgets('uses a broadcast mark when no identity logo is available', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 520,
+            child: GeneratedLiveArtwork(seed: 'live-channel'),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.live_tv_outlined), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('uses participant logos for non-poster live artwork', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 520,
+            child: GeneratedLiveArtwork(
+              seed: 'live-event',
+              participants: [
+                Participant(
+                  name: 'Participant',
+                  logo: ImageRef('https://cdn.example/participant.png'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(CachedNetworkImage), findsOneWidget);
+      expect(find.byIcon(Icons.live_tv_outlined), findsNothing);
+    });
+
+    testWidgets('uses an item logo when the event has no participants', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 520,
+            child: GeneratedLiveArtwork(
+              seed: 'single-identity-event',
+              logo: ImageRef('https://cdn.example/event.png'),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(CachedNetworkImage), findsOneWidget);
+      expect(find.byIcon(Icons.live_tv_outlined), findsNothing);
+    });
+
+    testWidgets('three participants fit a narrow hero without overflow', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 420,
+            child: GeneratedLiveArtwork(
+              seed: 'multi-participant-event',
+              participants: [
+                Participant(name: 'One'),
+                Participant(name: 'Two'),
+                Participant(name: 'Three'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.shield_outlined), findsNWidgets(3));
+      expect(tester.takeException(), isNull);
+    });
+
+    test('the same identity keeps the same generated colors', () {
+      final first = GeneratedLiveArtwork.fillsFor('stable-live-id');
+      final second = GeneratedLiveArtwork.fillsFor('stable-live-id');
+
+      expect(second, first);
+    });
+  });
+
   group('poster layout', () {
     testWidgets('a poster takes priority over the event layout', (
       tester,

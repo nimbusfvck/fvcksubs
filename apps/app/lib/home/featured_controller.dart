@@ -370,13 +370,17 @@ abstract final class FeaturedAlgorithm {
   }
 
   static bool _isEligible(MediaItemV2 item) {
+    if (item case EventItemV2(
+      schedule: final schedule,
+    ) when schedule.state == ScheduleState.ended) {
+      return false;
+    }
     final artwork = item.artwork;
-    if (artwork?.landscape == null && artwork?.portrait == null) return false;
-    return switch (item) {
-      EventItemV2(schedule: final schedule) =>
-        schedule.state != ScheduleState.ended,
-      _ => true,
-    };
+    if (artwork?.landscape != null || artwork?.portrait != null) return true;
+
+    // Live surfaces have a deterministic generated fallback. Other kinds stay
+    // excluded because a generic placeholder is not strong enough for a hero.
+    return item is EventItemV2 || item is ChannelItemV2;
   }
 
   static bool _isRicher(

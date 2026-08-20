@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/catalog/catalog_screen.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
+import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/catalog/media_grid.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/addons/installer_controller.dart';
@@ -190,8 +191,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // The same item appears in the hero and the source catalog shelf.
-    expect(find.text('Featured movie'), findsNWidgets(2));
+    expect(_catalogText('Featured movie'), findsOneWidget);
+    expect(find.text('Live item'), findsOneWidget);
+    expect(find.byType(GeneratedLiveArtwork), findsOneWidget);
     expect(find.byKey(const Key('featured-play')), findsOneWidget);
     expect(find.byKey(const Key('featured-favorite')), findsOneWidget);
     expect(find.byKey(const Key('featured-info')), findsOneWidget);
@@ -216,14 +218,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Live Item'), findsOneWidget);
-    expect(find.text('Sport Item'), findsNothing);
+    expect(_catalogText('Live Item'), findsOneWidget);
+    expect(_catalogText('Sport Item'), findsNothing);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Sport'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sport Item'), findsOneWidget);
-    expect(find.text('Live Item'), findsNothing);
+    expect(_catalogText('Sport Item'), findsOneWidget);
+    expect(_catalogText('Live Item'), findsNothing);
   });
 
   testWidgets('shows an empty state outside the all category', (tester) async {
@@ -616,8 +618,8 @@ void main() {
 
       // The first plugin supplies content by default.
       expect(find.byType(PluginSelector), findsOneWidget);
-      expect(find.text('From fvck'), findsOneWidget);
-      expect(find.text('From example extension'), findsNothing);
+      expect(_catalogText('From fvck'), findsOneWidget);
+      expect(_catalogText('From example extension'), findsNothing);
 
       await tester.tap(find.byType(PluginSelector));
       await tester.pumpAndSettle();
@@ -627,8 +629,8 @@ void main() {
       await tester.tap(find.text('fvck (JS)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('From example extension'), findsOneWidget);
-      expect(find.text('From fvck'), findsNothing);
+      expect(_catalogText('From example extension'), findsOneWidget);
+      expect(_catalogText('From fvck'), findsNothing);
     });
 
     testWidgets('is hidden when only one plugin serves the category', (
@@ -753,7 +755,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Still Here'), findsOneWidget);
+      expect(_catalogText('Still Here'), findsOneWidget);
     });
   });
 
@@ -789,7 +791,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The whole point: already in hand, so shown rather than fetched again.
-      expect(find.text('Live Item'), findsOneWidget);
+      expect(_catalogText('Live Item'), findsOneWidget);
       expect(extension.catalogCalls, 2);
     });
 
@@ -820,7 +822,7 @@ void main() {
       // One frame only — no waiting for a future to settle.
       await tester.pump();
 
-      expect(find.text('Live Item'), findsOneWidget);
+      expect(_catalogText('Live Item'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
@@ -856,7 +858,7 @@ void main() {
       await pumpHome();
       await tester.pumpAndSettle();
 
-      expect(find.text('Live Item'), findsOneWidget);
+      expect(_catalogText('Live Item'), findsOneWidget);
       expect(extension.catalogCalls, 2);
     });
 
@@ -879,7 +881,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(extension.catalogCalls, 3);
-      expect(find.text('Live Item'), findsOneWidget);
+      expect(_catalogText('Live Item'), findsOneWidget);
     });
 
     testWidgets('an installed update replaces the visible cached catalog', (
@@ -909,7 +911,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Old catalog'), findsOneWidget);
+      expect(_catalogText('Old catalog'), findsOneWidget);
 
       registry.install(
         FakeExtension(
@@ -922,11 +924,16 @@ void main() {
       await controller.setRepoUrl('https://example.invalid/repo.json');
       await tester.pumpAndSettle();
 
-      expect(find.text('Old catalog'), findsNothing);
-      expect(find.text('Updated catalog'), findsOneWidget);
+      expect(_catalogText('Old catalog'), findsNothing);
+      expect(_catalogText('Updated catalog'), findsOneWidget);
     });
   });
 }
+
+Finder _catalogText(String value) => find.descendant(
+  of: find.byKey(const Key('home-catalog-content')),
+  matching: find.text(value),
+);
 
 class _DetailExtension extends FakeExtension {
   _DetailExtension({required this.detail})

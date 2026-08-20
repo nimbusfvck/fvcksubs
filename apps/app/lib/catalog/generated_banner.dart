@@ -18,7 +18,19 @@ const List<Color> _bannerPalette = [
   Color(0xFFBE123C), // rose
 ];
 
-int _paletteIndex(String name) => name.hashCode.abs() % _bannerPalette.length;
+const _fnvOffsetBasis = 2166136261;
+const _fnvPrime = 16777619;
+const _positiveHashMask = 0x7fffffff;
+
+int _stableHash(String value) {
+  var hash = _fnvOffsetBasis;
+  for (final unit in value.codeUnits) {
+    hash = ((hash ^ unit) * _fnvPrime) & _positiveHashMask;
+  }
+  return hash;
+}
+
+int _paletteIndex(String name) => _stableHash(name) % _bannerPalette.length;
 
 Color? _parseHex(String? hex) {
   if (hex == null) return null;
@@ -66,7 +78,7 @@ enum BannerPattern {
 
   static BannerPattern forKey(String? key) => key == null
       ? BannerPattern.sunburst
-      : BannerPattern.values[key.hashCode.abs() % BannerPattern.values.length];
+      : BannerPattern.values[_stableHash(key) % BannerPattern.values.length];
 }
 
 class GeneratedBanner extends StatelessWidget {
@@ -162,11 +174,227 @@ class GeneratedBanner extends StatelessWidget {
   }
 }
 
+/// Full-bleed fallback artwork for a live channel or scheduled event.
+///
+/// The background is deterministic for the same item. Participant colors and
+/// logos are used when present; otherwise the title-derived palette and a
+/// broadcast mark keep the artwork useful without provider-specific assets.
+class GeneratedLiveArtwork extends StatelessWidget {
+  const GeneratedLiveArtwork({
+    super.key,
+    required this.seed,
+    this.participants = const [],
+    this.logo,
+  });
+
+  final String seed;
+  final List<Participant> participants;
+  final ImageRef? logo;
+
+  @visibleForTesting
+  static (Color, Color) fillsFor(
+    String seed, {
+    List<Participant> participants = const [],
+  }) {
+    if (participants.length >= 2) {
+      return GeneratedBanner.fillsFor(participants);
+    }
+
+    final participant = participants.isEmpty ? null : participants.first;
+    final primaryKey = participant?.name ?? seed;
+    final primaryIndex = _paletteIndex(primaryKey);
+    var secondaryIndex = _paletteIndex('$seed:secondary');
+    if (secondaryIndex == primaryIndex) {
+      secondaryIndex = (secondaryIndex + 1) % _bannerPalette.length;
+    }
+
+    final primary = _legibleFill(
+      _parseHex(participant?.color) ?? _bannerPalette[primaryIndex],
+    );
+    final secondary = _legibleFill(_bannerPalette[secondaryIndex]);
+    return (primary, _separated(primary, secondary));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (primary, secondary) = fillsFor(seed, participants: participants);
+    final pattern = BannerPattern.forKey(seed);
+
+    return ExcludeSemantics(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final shortestSide = math.min(
+            constraints.maxWidth,
+            constraints.maxHeight,
+          );
+          final scale = shortestSide.isFinite ? shortestSide : 320.0;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(
+                painter: _BannerArtwork(
+                  home: primary,
+                  away: secondary,
+                  pattern: pattern,
+                ),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    radius: 0.8,
+                    colors: [
+                      AppColors.onDark.withValues(alpha: 0.15),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+              const CustomPaint(painter: _LiveAtmosphereArtwork()),
+              Center(
+                child: _LiveIdentity(
+                  participants: participants,
+                  logo: logo,
+                  availableWidth: constraints.maxWidth,
+                  scale: scale,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LiveIdentity extends StatelessWidget {
+  const _LiveIdentity({
+    required this.participants,
+    required this.logo,
+    required this.availableWidth,
+    required this.scale,
+  });
+
+  final List<Participant> participants;
+  final ImageRef? logo;
+  final double availableWidth;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = participants.take(3).toList(growable: false);
+    if (visible.isEmpty) {
+      final size = math.min(scale * 0.28, 124.0);
+      if (logo != null) {
+        return _Crest(
+          imageUrl: logo!.url,
+          size: size,
+          showFallbackWhileLoading: true,
+        );
+      }
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark.withValues(alpha: 0.28),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppColors.onDark.withValues(alpha: 0.32),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.surfaceDark.withValues(alpha: 0.3),
+              blurRadius: 28,
+              spreadRadius: 8,
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.live_tv_outlined,
+          size: size * 0.48,
+          color: AppColors.onDark.withValues(alpha: 0.9),
+        ),
+      );
+    }
+
+    final count = visible.length;
+    final widthPerCrest = availableWidth / (count * 1.55 + 1);
+    final crestSize = math.min(math.min(scale * 0.27, widthPerCrest), 136.0);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < visible.length; index++) ...[
+          if (index > 0)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: crestSize * 0.22),
+              child: Transform.rotate(
+                angle: math.pi / 4,
+                child: Container(
+                  width: crestSize * 0.08,
+                  height: crestSize * 0.08,
+                  decoration: BoxDecoration(
+                    color: AppColors.onDark.withValues(alpha: 0.72),
+                    borderRadius: AppRadius.sm,
+                  ),
+                ),
+              ),
+            ),
+          _Crest(
+            imageUrl:
+                visible[index].logo?.url ?? (index == 0 ? logo?.url : null),
+            size: crestSize,
+            showFallbackWhileLoading: true,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LiveAtmosphereArtwork extends CustomPainter {
+  const _LiveAtmosphereArtwork();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseRadius = math.min(size.width, size.height) * 0.2;
+    final ringPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.09)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.25;
+
+    for (var index = 1; index <= 4; index++) {
+      canvas.drawCircle(center, baseRadius * index, ringPaint);
+    }
+
+    final linePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.055)
+      ..strokeWidth = 1;
+    final gap = math.max(28.0, size.width / 12);
+    for (var offset = -size.height; offset < size.width; offset += gap) {
+      canvas.drawLine(
+        Offset(offset, size.height),
+        Offset(offset + size.height, 0),
+        linePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveAtmosphereArtwork oldDelegate) => false;
+}
+
 class _Crest extends StatelessWidget {
-  const _Crest({required this.imageUrl, required this.size});
+  const _Crest({
+    required this.imageUrl,
+    required this.size,
+    this.showFallbackWhileLoading = false,
+  });
 
   final String? imageUrl;
   final double size;
+  final bool showFallbackWhileLoading;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -178,7 +406,9 @@ class _Crest extends StatelessWidget {
             imageUrl: imageUrl!,
             fit: BoxFit.contain,
             fadeInDuration: Duration.zero,
-            placeholder: (context, url) => const SizedBox.shrink(),
+            placeholder: (context, url) => showFallbackWhileLoading
+                ? _CrestFallback(size: size)
+                : const SizedBox.shrink(),
             errorWidget: (context, url, error) => _CrestFallback(size: size),
           ),
   );

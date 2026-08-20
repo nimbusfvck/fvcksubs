@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
+import '../catalog/generated_banner.dart';
 import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
@@ -101,7 +102,8 @@ class _FeaturedSlide extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = item.item;
     final artwork = media.artwork;
-    final image = artwork?.portrait ?? artwork?.landscape ?? artwork?.logo;
+    final image = artwork?.portrait ?? artwork?.landscape;
+    final fallbackArtwork = _fallbackArtwork(media);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -113,17 +115,10 @@ class _FeaturedSlide extends StatelessWidget {
             fadeInDuration: Duration.zero,
             placeholder: (_, _) =>
                 const ColoredBox(color: AppColors.surfaceDarkElevated),
-            errorWidget: (_, _, _) => const ColoredBox(
-              color: AppColors.surfaceDarkElevated,
-              child: Icon(
-                Icons.movie_outlined,
-                color: AppColors.onDarkSoft,
-                size: 48,
-              ),
-            ),
+            errorWidget: (_, _, _) => fallbackArtwork,
           )
         else
-          const ColoredBox(color: AppColors.surfaceDarkElevated),
+          fallbackArtwork,
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -157,6 +152,27 @@ class _FeaturedSlide extends StatelessWidget {
       ],
     );
   }
+}
+
+Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
+  EventItemV2(:final participants) => GeneratedLiveArtwork(
+    seed: _artworkSeed(item),
+    participants: participants,
+    logo: item.artwork?.logo,
+  ),
+  ChannelItemV2() => GeneratedLiveArtwork(
+    seed: _artworkSeed(item),
+    logo: item.artwork?.logo,
+  ),
+  _ => const ColoredBox(
+    color: AppColors.surfaceDarkElevated,
+    child: Icon(Icons.movie_outlined, color: AppColors.onDarkSoft, size: 48),
+  ),
+};
+
+String _artworkSeed(MediaItemV2 item) {
+  final ref = item.ref;
+  return '${ref.extensionId}|${ref.providerId}|${ref.id}|${item.title}';
 }
 
 class _FeaturedDetails extends StatelessWidget {

@@ -252,6 +252,7 @@ class _HomePageState extends State<HomePage> {
                   )
                 else
                   SliverPadding(
+                    key: const Key('home-catalog-content'),
                     padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, i) {

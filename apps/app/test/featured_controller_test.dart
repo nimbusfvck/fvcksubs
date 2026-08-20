@@ -111,6 +111,37 @@ void main() {
     expect(featured.map((item) => item.item.title), ['Eligible']);
   });
 
+  test('keeps live events that can use generated artwork', () {
+    final featured = FeaturedAlgorithm.select([
+      _event(
+        'live-no-artwork',
+        'Live without artwork',
+        ScheduleState.live,
+        startsAt: now.subtract(const Duration(minutes: 5)),
+        artwork: null,
+      ),
+    ], now: now);
+
+    expect(featured.single.item.title, 'Live without artwork');
+  });
+
+  test('keeps live channels that can use generated artwork', () {
+    const channel = VersionedMediaItem(
+      item: ChannelItemV2(
+        ref: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.p',
+          id: 'channel-no-artwork',
+        ),
+        title: 'Channel without artwork',
+      ),
+    );
+
+    final featured = FeaturedAlgorithm.select([channel], now: now);
+
+    expect(featured.single.item.title, 'Channel without artwork');
+  });
+
   test('relaxes kind limits when only one kind is available', () {
     final featured = FeaturedAlgorithm.select(
       [
@@ -172,11 +203,12 @@ VersionedMediaItem _event(
   String title,
   ScheduleState state, {
   required DateTime startsAt,
+  Artwork? artwork = _artwork,
 }) => VersionedMediaItem(
   item: EventItemV2(
     ref: MediaRef(extensionId: 'test', providerId: 'test.p', id: id),
     title: title,
     schedule: Schedule(startsAt: startsAt, state: state),
-    artwork: _artwork,
+    artwork: artwork,
   ),
 );

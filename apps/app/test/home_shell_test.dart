@@ -98,7 +98,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Some Match'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('home-catalog-content')),
+          matching: find.text('Some Match'),
+        ),
+        findsOneWidget,
+      );
 
       // Not find.widgetWithText(NavigationBar, ...): that resolves to the
       // whole bar and taps its bounding-box center, which only happens to
@@ -114,7 +120,13 @@ void main() {
       // The registry's own state changed in place — HomePage only reflects
       // it because HomeShell listens to the same AddonsController and
       // rebuilds whichever tab is showing.
-      expect(find.text('Some Match'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('home-catalog-content')),
+          matching: find.text('Some Match'),
+        ),
+        findsNothing,
+      );
     },
   );
 
