@@ -172,7 +172,7 @@ flowchart TB
 
 | Concern | Decision |
 |---|---|
-| Live versus on-demand | Derived from the item's kind and threaded into the player, so on-demand content gets a real scrubber rather than a live-edge indicator. |
+| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and snaps a scrub near its right edge to the latest available position after resuming; on-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. |

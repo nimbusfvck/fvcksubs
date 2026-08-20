@@ -27,6 +27,7 @@ const Duration _kMinResumeProgress = Duration(seconds: 5);
 const Duration _kResumeEndGuard = Duration(seconds: 30);
 
 const Duration _kProgressReportInterval = Duration(seconds: 10);
+const Duration _kLiveEdgeSnapThreshold = Duration(seconds: 2);
 
 bool _isSameEpisode(MediaItem a, MediaItem b) =>
     a.extra['season'] == b.extra['season'] &&
@@ -56,6 +57,13 @@ Duration liveSeekEdge(VideoPlayerValue? value) {
     if (range.end > edge) edge = range.end;
   }
   return edge;
+}
+
+/// Keeps an almost-rightmost live scrub request at the freshest known edge.
+Duration liveSeekTarget(Duration target, Duration edge) {
+  if (edge <= Duration.zero) return target;
+  final snapStart = edge - _kLiveEdgeSnapThreshold;
+  return target >= snapStart ? edge : target;
 }
 
 class ResolvedSource {
@@ -711,6 +719,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   String? _activeQualityLabel; // null = Auto
 
   Timer? _suppressBufferingTimer;
+  Timer? _liveEdgeRefreshTimer;
   bool _suppressBufferingIndicator = false;
   bool _valueUpdateScheduled = false;
   Duration _liveEdge = Duration.zero;
@@ -742,6 +751,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   void dispose() {
     _hideTimer?.cancel();
     _suppressBufferingTimer?.cancel();
+    _liveEdgeRefreshTimer?.cancel();
     _videoValue?.removeListener(_onValueChanged);
     super.dispose();
   }
@@ -844,8 +854,17 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
       unawaited(widget.controller?.pause());
     } else {
       unawaited(widget.controller?.play());
+      _refreshLiveEdgeAfterResume();
     }
     _revealControls();
+  }
+
+  void _refreshLiveEdgeAfterResume() {
+    if (!widget.isLive) return;
+    _liveEdgeRefreshTimer?.cancel();
+    _liveEdgeRefreshTimer = Timer(const Duration(milliseconds: 750), () {
+      if (mounted) _applyVideoValue();
+    });
   }
 
   void _skip(int seconds) {
@@ -1303,10 +1322,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                       onChangeEnd:
                                           timelineExtent > Duration.zero
                                           ? (val) {
+                                              final target = Duration(
+                                                milliseconds: val.round(),
+                                              );
                                               _seekTo(
-                                                Duration(
-                                                  milliseconds: val.round(),
-                                                ),
+                                                widget.isLive
+                                                    ? liveSeekTarget(
+                                                        target,
+                                                        timelineExtent,
+                                                      )
+                                                    : target,
                                               );
                                               setState(
                                                 () => _dragValueMs = null,

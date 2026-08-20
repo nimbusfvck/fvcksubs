@@ -44,6 +44,16 @@ void main() {
     expect(liveSeekEdge(value), const Duration(seconds: 30));
   });
 
+  test('a live scrub close to the end snaps to the freshest edge', () {
+    const edge = Duration(seconds: 30);
+
+    expect(liveSeekTarget(const Duration(seconds: 29), edge), edge);
+    expect(
+      liveSeekTarget(const Duration(seconds: 27), edge),
+      const Duration(seconds: 27),
+    );
+  });
+
   Future<void> pumpPlayer(
     WidgetTester tester, {
     List<SubtitleTrack> subtitles = const [],
