@@ -413,7 +413,7 @@ void main() {
         title: 'Reacher',
         subtitle: 'Drama',
         releaseYear: 2025,
-        rating: 8.7,
+        rating: 8.76,
       );
       const detail = MediaDetailV2(item: item);
 
@@ -428,7 +428,7 @@ void main() {
       expect(find.text('2025'), findsOneWidget);
       expect(find.text('-'), findsOneWidget);
       expect(find.byIcon(Icons.star_rounded), findsOneWidget);
-      expect(find.text('8.7'), findsOneWidget);
+      expect(find.text('8.8'), findsOneWidget);
       expect(find.text('Drama'), findsOneWidget);
     },
   );

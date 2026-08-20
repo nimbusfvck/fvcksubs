@@ -329,7 +329,7 @@ class _Header extends StatelessWidget {
                           ),
                         if (item.rating case final rating?)
                           Semantics(
-                            label: 'Rating $rating',
+                            label: 'Rating ${rating.toStringAsFixed(1)}',
                             child: ExcludeSemantics(
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -341,7 +341,7 @@ class _Header extends StatelessWidget {
                                   ),
                                   const SizedBox(width: AppSpacing.xxs),
                                   Text(
-                                    rating.toString(),
+                                    rating.toStringAsFixed(1),
                                     style: AppTypography.bodyMd.copyWith(
                                       color: AppColors.onDark,
                                     ),
