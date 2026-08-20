@@ -22,6 +22,7 @@ abstract final class AppColors {
   static const Color outlineDark = Color(0xFF737373);
 
   static const Color liveAccent = Color(0xFFF87171);
+  static const Color ratingAccent = Color(0xFFFBBF24);
   static const Color success = Color(0xFF10B981);
   static const Color error = Color(0xFFF87171);
 }

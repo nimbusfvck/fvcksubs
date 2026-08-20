@@ -42,6 +42,10 @@ void main() {
         _contrast(AppColors.success, AppColors.surfaceDarkElevated),
         greaterThanOrEqualTo(4.5),
       );
+      expect(
+        _contrast(AppColors.ratingAccent, AppColors.surfaceDarkElevated),
+        greaterThanOrEqualTo(3),
+      );
     });
 
     test('interactive outlines pass non-text contrast', () {

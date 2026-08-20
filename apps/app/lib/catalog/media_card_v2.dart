@@ -122,11 +122,16 @@ class _Summary extends StatelessWidget {
             style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
           ),
           if (detail != null)
-            Text(
-              detail,
+            Text.rich(
+              mediaItemSecondarySpan(
+                item,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.onDarkSoft,
+                ),
+                ratingColor: AppColors.ratingAccent,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
             ),
         ],
       ),
@@ -155,12 +160,26 @@ class _Text extends StatelessWidget {
             style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
           ),
           if (detail != null)
-            Text(
-              detail,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-            ),
+            secondary != null
+                ? Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  )
+                : Text.rich(
+                    mediaItemSecondarySpan(
+                      item,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
+                      ratingColor: AppColors.ratingAccent,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
         ],
       ),
     );

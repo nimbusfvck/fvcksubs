@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
+import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 void main() {
@@ -47,6 +48,23 @@ void main() {
     );
 
     expect(find.text('★ 8.8'), findsOneWidget);
+    final metadata = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (widget) => widget is RichText && widget.text.toPlainText() == '★ 8.8',
+      ),
+    );
+    TextSpan? star;
+    void findStar(InlineSpan span) {
+      if (span is TextSpan) {
+        if (span.text == '★') star = span;
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          findStar(child);
+        }
+      }
+    }
+
+    findStar(metadata.text);
+    expect(star?.style?.color, AppColors.ratingAccent);
   });
 
   testWidgets('event renders schedule and participants', (tester) async {
