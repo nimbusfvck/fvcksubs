@@ -175,10 +175,6 @@ List<ResolvedSource> _preferredFirst(
 ) {
   final indexed = sources.indexed.toList();
   indexed.sort((a, b) {
-    final providerResult = sourcePriority
-        .rankOf(a.$2.source.providerId)
-        .compareTo(sourcePriority.rankOf(b.$2.source.providerId));
-    if (providerResult != 0) return providerResult;
     final aHasSubtitle = subtitlePreference.isSatisfiedBy(
       a.$2.stream.subtitles,
     );
@@ -188,7 +184,11 @@ List<ResolvedSource> _preferredFirst(
     final subtitleResult = (bHasSubtitle ? 1 : 0).compareTo(
       aHasSubtitle ? 1 : 0,
     );
-    return subtitleResult == 0 ? a.$1.compareTo(b.$1) : subtitleResult;
+    if (subtitleResult != 0) return subtitleResult;
+    final providerResult = sourcePriority
+        .rankOf(a.$2.source.providerId)
+        .compareTo(sourcePriority.rankOf(b.$2.source.providerId));
+    return providerResult == 0 ? a.$1.compareTo(b.$1) : providerResult;
   });
   return [for (final entry in indexed) entry.$2];
 }
