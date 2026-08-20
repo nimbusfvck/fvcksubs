@@ -102,6 +102,17 @@ flowchart TB
     CAR & GRD -->|see more| FULL["Full catalog, already narrowed"]
 ```
 
+When catalog data is available, Home starts with one edge-to-edge featured carousel.
+It merges the enabled category feeds, removes duplicate references, and keeps the
+highest-ranked item from each media kind before filling the remaining slots. The score
+uses only protocol data: rating and available artwork, with a small lifecycle priority
+for live and scheduled events. Items without artwork are left out because the hero is
+poster-led. Play resolves the selected item immediately, Favorite writes to the app
+library, and Info follows the normal detail-or-play navigation rule.
+
+The featured artwork and gradient extend behind the status bar on handhelds. Category
+chips remain in the floating app bar, so they hide and reappear with the browsing chrome.
+
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.
 

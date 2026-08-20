@@ -158,6 +158,38 @@ void main() {
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
   });
 
+  testWidgets('featured feed combines poster content with actions', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'movies',
+        categories: ['movie', 'live'],
+        itemsByCategory: {
+          'movie': [
+            fakeItem(
+              id: 'featured',
+              title: 'Featured movie',
+              poster: const ImageRef('https://cdn.example/poster.jpg'),
+            ),
+          ],
+          'live': [fakeItem(id: 'live', title: 'Live item')],
+        },
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const HomePage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    // The same item appears in the hero and the source catalog shelf.
+    expect(find.text('Featured movie'), findsNWidgets(2));
+    expect(find.byKey(const Key('featured-play')), findsOneWidget);
+    expect(find.byKey(const Key('featured-favorite')), findsOneWidget);
+    expect(find.byKey(const Key('featured-info')), findsOneWidget);
+  });
+
   testWidgets('tapping a chip switches which category is loaded', (
     tester,
   ) async {
@@ -739,7 +771,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(extension.catalogCalls, 1);
+      expect(extension.catalogCalls, 2);
 
       await tester.tap(find.widgetWithText(ChoiceChip, 'Sport'));
       await tester.pumpAndSettle();
@@ -804,7 +836,7 @@ void main() {
 
       await pumpHome();
       await tester.pumpAndSettle();
-      expect(extension.catalogCalls, 1);
+      expect(extension.catalogCalls, 2);
 
       // Away, and back to a freshly-built HomePage.
       await tester.pumpWidget(
@@ -818,7 +850,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Live Item'), findsOneWidget);
-      expect(extension.catalogCalls, 1);
+      expect(extension.catalogCalls, 2);
     });
 
     testWidgets('pull to refresh is what fetches again', (tester) async {
@@ -830,7 +862,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(extension.catalogCalls, 1);
+      expect(extension.catalogCalls, 2);
 
       await tester.fling(
         find.byType(CustomScrollView),
@@ -839,7 +871,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(extension.catalogCalls, 2);
+      expect(extension.catalogCalls, 3);
       expect(find.text('Live Item'), findsOneWidget);
     });
 

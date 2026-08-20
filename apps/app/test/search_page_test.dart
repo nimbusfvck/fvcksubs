@@ -17,7 +17,7 @@ void main() {
     ),
   ]);
 
-  testWidgets('Home shows a search field that opens the search screen', (
+  testWidgets('Home shows a search action that opens the search screen', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -26,9 +26,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SearchPage), findsNothing);
-    expect(find.text('Search'), findsOneWidget);
+    expect(find.byIcon(Icons.search), findsOneWidget);
 
-    await tester.tap(find.text('Search'));
+    await tester.tap(find.byIcon(Icons.search));
     await tester.pumpAndSettle();
 
     expect(find.byType(SearchPage), findsOneWidget);
@@ -41,7 +41,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // Nothing is searched until something is typed.
-    expect(find.text('Search across every installed extension.'), findsOneWidget);
+    expect(
+      find.text('Search across every installed extension.'),
+      findsOneWidget,
+    );
 
     await tester.enterText(find.byType(TextField), 'anything');
     // Past the debounce window — every keystroke would otherwise fan out to
@@ -67,7 +70,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Search Hit'), findsNothing);
-    expect(find.text('Search across every installed extension.'), findsOneWidget);
+    expect(
+      find.text('Search across every installed extension.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a query with no hits says so', (tester) async {

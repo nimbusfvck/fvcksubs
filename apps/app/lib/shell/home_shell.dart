@@ -66,7 +66,9 @@ class _HomeShellState extends State<HomeShell> {
     }
 
     return Scaffold(
-      body: SafeArea(child: body),
+      // Home owns an edge-to-edge hero so its artwork and gradients continue
+      // behind the status bar. Other destinations keep the shared safe inset.
+      body: _destination == AppDestination.home ? body : SafeArea(child: body),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: _select,
