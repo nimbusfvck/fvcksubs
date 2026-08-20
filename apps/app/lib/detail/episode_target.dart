@@ -82,14 +82,13 @@ EpisodeTarget? episodeTargetFor(
     if (lastAired != null) return lastAired;
   }
 
-  final first = playable.firstWhere(
-    (season) => season.number == 1,
-    orElse: () => playable.first,
-  );
+  final latest = [...playable]
+    ..sort((a, b) => b.number.compareTo(a.number));
+  final season = latest.first;
   return EpisodeTarget(
-    season: first.number,
-    episode: 1,
-    title: first.episodes.first.title,
+    season: season.number,
+    episode: season.episodes.length,
+    title: season.episodes.last.title,
     resuming: false,
   );
 }

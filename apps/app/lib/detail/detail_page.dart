@@ -8,6 +8,7 @@ import '../app_scope.dart';
 import '../player/play_item.dart';
 import 'episode_target.dart';
 import 'latest_available_episode.dart';
+import '../utils/date_formatters.dart';
 import '../catalog/media_card.dart';
 import '../theme/tokens.dart';
 
@@ -692,24 +693,6 @@ class _EpisodeTile extends StatelessWidget {
   final bool unreleased;
   final VoidCallback onTap;
 
-  static const List<String> _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  static String _formatReleaseDate(DateTime date) =>
-      '${_months[date.month - 1]} ${date.day}, ${date.year}';
-
   @override
   Widget build(BuildContext context) => Opacity(
     opacity: unreleased ? 0.5 : 1,
@@ -766,7 +749,7 @@ class _EpisodeTile extends StatelessWidget {
                   if (unreleased)
                     Text(
                       episode.releaseDate != null
-                          ? 'Releases ${_formatReleaseDate(episode.releaseDate!)}'
+                          ? 'Releases ${formatReleaseDate(episode.releaseDate!)}'
                           : 'Not yet released',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.onDarkSoft,

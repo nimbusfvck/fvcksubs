@@ -37,22 +37,22 @@ void main() {
     lastWatched: DateTime(2026, 8, 17),
   );
 
-  test('nothing watched starts at the first episode of season 1', () {
+  test('nothing watched starts at the latest episode of the latest season', () {
     final target = episodeTargetFor([season(1, 10), season(2, 8)], null);
 
-    expect(target!.season, 1);
-    expect(target.episode, 1);
+    expect(target!.season, 2);
+    expect(target.episode, 8);
     expect(target.resuming, isFalse);
-    expect(target.label, 'S1E1');
+    expect(target.label, 'S2E8');
   });
 
-  test('a specials season does not become the starting point', () {
+  test('a specials season does not become the latest episode', () {
     // Specials are conventionally season 0 and often lead the list; "Play"
     // on a series means start the show, not its extras.
     final target = episodeTargetFor([season(0, 3), season(1, 10)], null);
 
     expect(target!.season, 1);
-    expect(target.episode, 1);
+    expect(target.episode, 10);
   });
 
   test('resumes the episode last watched', () {
@@ -73,11 +73,11 @@ void main() {
     // onto a gone episode would fail where the viewer can least act on it.
     final target = episodeTargetFor([season(1, 10)], watched(4, 2));
     expect(target!.season, 1);
-    expect(target.episode, 1);
+    expect(target.episode, 10);
     expect(target.resuming, isFalse);
 
     final past = episodeTargetFor([season(1, 10)], watched(1, 99));
-    expect(past!.episode, 1);
+    expect(past!.episode, 10);
     expect(past.resuming, isFalse);
   });
 
@@ -93,7 +93,7 @@ void main() {
     );
 
     expect(target!.resuming, isFalse);
-    expect(target.episode, 1);
+    expect(target.episode, 10);
   });
 
   test(
@@ -129,7 +129,7 @@ void main() {
   });
 
   test(
-    'a last-aired hint pointing past what seasons actually holds falls back to S1E1',
+    'a last-aired hint pointing past what seasons actually holds falls back to the latest episode',
     () {
       // TMDB can say more has aired than this app's own seasons list carries
       // yet (a stale fetch, a mid-air-date race) — don't point Play at
@@ -142,7 +142,7 @@ void main() {
       );
 
       expect(target!.season, 1);
-      expect(target.episode, 1);
+      expect(target.episode, 10);
     },
   );
 

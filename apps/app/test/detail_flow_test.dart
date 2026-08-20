@@ -208,8 +208,7 @@ void main() {
     );
 
     testWidgets(
-      'shows the metadata guess in the label before any tap — S1E1 with '
-      'no last-aired hint to say otherwise',
+      'shows the latest season and episode in the label before any tap',
       (tester) async {
         final item = fakeItem(poster: const ImageRef('https://cdn/x.jpg'));
         final registry = ExtensionRegistry([
@@ -233,7 +232,7 @@ void main() {
 
         // Shown right away — episodeTargetFor's own guess, not yet
         // confirmed streamable by the probe that runs on tap.
-        expect(find.text('Play S1E1'), findsOneWidget);
+        expect(find.text('Play S2E8'), findsOneWidget);
       },
     );
 
@@ -268,9 +267,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // No last-aired hint here, so the label's own guess is S1E1 — the
+      // No last-aired hint here, so the label's own guess is the final
+      // catalog episode — the
       // probe below is what actually finds episode 3.
-      await tester.tap(find.text('Play S1E1'));
+      await tester.tap(find.text('Play S1E10'));
       await tester.pumpAndSettle();
 
       expect(controller.history, hasLength(1));
@@ -351,10 +351,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Play S1E1'));
+      await tester.tap(find.text('Play S1E3'));
       await tester.pumpAndSettle();
 
-      // The probe found nothing, fell back to S1E1, and playItem itself
+      // The probe found nothing, fell back to the latest catalog episode, and playItem itself
       // then found no sources for that either — same honest message as
       // any other item with nothing playable.
       expect(find.textContaining('No playable sources found.'), findsOneWidget);

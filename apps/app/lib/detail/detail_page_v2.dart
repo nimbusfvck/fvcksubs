@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../theme/tokens.dart';
+import '../utils/date_formatters.dart';
 
 class DetailPageV2 extends StatefulWidget {
   const DetailPageV2({super.key, required this.item});
@@ -47,17 +48,41 @@ class _DetailPageV2State extends State<DetailPageV2> {
     );
   }
 
-  MediaItemV2 _primaryTarget(MediaDetailV2 detail) {
+  ({EpisodeGroup group, int index})? _primaryEpisode(MediaDetailV2 detail) {
     final guide = detail.episodeGuide;
     final target = guide?.defaultEpisodeRef;
-    if (guide == null || target == null) return detail.item;
-    for (final group in guide.groups) {
-      final index = group.episodes.indexWhere(
-        (episode) => episode.ref == target,
-      );
-      if (index >= 0) return _episodeItem(detail.item, group, index);
+    if (guide == null || guide.groups.isEmpty) return null;
+    if (target != null) {
+      for (final group in guide.groups) {
+        final index = group.episodes.indexWhere(
+          (episode) => episode.ref == target,
+        );
+        if (index >= 0) return (group: group, index: index);
+      }
     }
-    return detail.item;
+    for (final group in guide.groups.reversed) {
+      if (group.episodes.isNotEmpty) {
+        return (group: group, index: group.episodes.length - 1);
+      }
+    }
+    return null;
+  }
+
+  MediaItemV2 _primaryTarget(MediaDetailV2 detail) {
+    final target = _primaryEpisode(detail);
+    if (target == null) return detail.item;
+    return _episodeItem(detail.item, target.group, target.index);
+  }
+
+  String _playLabel(MediaDetailV2 detail) {
+    final target = _primaryEpisode(detail);
+    if (target == null) return 'Play';
+    final season = RegExp(
+      r'\b(?:season|s)\s*([0-9]+)\b',
+      caseSensitive: false,
+    ).firstMatch(target.group.title)?.group(1);
+    if (season == null) return 'Play';
+    return 'Play S${season}E${target.group.episodes[target.index].position}';
   }
 
   @override
@@ -85,12 +110,14 @@ class _DetailPageV2State extends State<DetailPageV2> {
         ? null
         : groups.firstWhere(
             (group) => group.id == _selectedGroupId,
-            orElse: () => groups.first,
+            orElse: () => groups.last,
           );
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: _Header(item: item)),
+        SliverToBoxAdapter(
+          child: _Header(item: item, facts: detail.facts),
+        ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -102,16 +129,24 @@ class _DetailPageV2State extends State<DetailPageV2> {
             children: [
               if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
               if (detail.tags.isNotEmpty) const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () => playItemV2(context, _primaryTarget(detail)),
-                  icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                  label: const Text('Play'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            playItemV2(context, _primaryTarget(detail)),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 28),
+                        label: Text(_playLabel(detail)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _FavoriteAction(item: item),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
-              _FavoriteAction(item: item),
               if (detail.description case final description?) ...[
                 const SizedBox(height: AppSpacing.lg),
                 Text(
@@ -132,12 +167,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   child: Text(_descriptionExpanded ? 'Show less' : 'Show more'),
                 ),
               ],
-              if (detail.facts.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.lg),
-                const _SectionTitle('Details'),
-                const SizedBox(height: AppSpacing.sm),
-                _Facts(values: detail.facts),
-              ],
               if (detail.credits.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
                 const _SectionTitle('Credits'),
@@ -150,18 +179,24 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   children: [
                     const Expanded(child: _SectionTitle('Episodes')),
                     if (groups.length > 1)
-                      DropdownButton<String>(
-                        value: selectedGroup.id,
-                        dropdownColor: AppColors.surfaceDarkElevated,
-                        items: [
-                          for (final group in groups)
-                            DropdownMenuItem(
-                              value: group.id,
-                              child: Text(group.title),
-                            ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedGroupId = value),
+                      Flexible(
+                        child: DropdownButton<String>(
+                          value: selectedGroup.id,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surfaceDarkElevated,
+                          items: [
+                            for (final group in groups)
+                              DropdownMenuItem(
+                                value: group.id,
+                                child: Text(
+                                  group.title,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _selectedGroupId = value),
+                        ),
                       ),
                   ],
                 ),
@@ -184,13 +219,71 @@ class _DetailPageV2State extends State<DetailPageV2> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.item});
+  const _Header({required this.item, required this.facts});
 
   final MediaItemV2 item;
+  final List<MediaFact> facts;
+
+  String? _subtitleMatch(RegExp pattern) => item.subtitle == null
+      ? null
+      : pattern.firstMatch(item.subtitle!)?.group(0);
+
+  String? _factValue(bool Function(MediaFact fact) predicate) {
+    for (final fact in facts) {
+      if (predicate(fact)) return fact.value;
+    }
+    return null;
+  }
+
+  String? _year() =>
+      _factValue(
+        (fact) =>
+            fact.label.toLowerCase().contains('year') ||
+            RegExp(r'^\d{4}$').hasMatch(fact.value.trim()),
+      ) ??
+      _subtitleMatch(RegExp(r'\b(?:19|20)\d{2}\b'));
+
+  String? _certification() =>
+      _factValue(
+        (fact) =>
+            fact.label.toLowerCase().contains('cert') ||
+            RegExp(
+              r'^(?:TV-|G$|PG$|PG-13$|R$|NC-17$)',
+              caseSensitive: false,
+            ).hasMatch(fact.value.trim()),
+      ) ??
+      _subtitleMatch(
+        RegExp(
+          r'\b(?:TV-(?:Y|Y7|G|PG|14|MA)|G|PG|PG-13|R|NC-17)\b',
+          caseSensitive: false,
+        ),
+      );
+
+  String? _score() =>
+      _factValue(
+        (fact) =>
+            RegExp(
+              r'^(?:score|rating|imdb)',
+              caseSensitive: false,
+            ).hasMatch(fact.label.trim()) &&
+            double.tryParse(fact.value.trim()) != null,
+      ) ??
+      _subtitleMatch(RegExp(r'(?<!\d)(?:10(?:\.0)?|[0-9](?:\.[0-9])?)(?!\d)'));
 
   @override
   Widget build(BuildContext context) {
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
+    final year = _year();
+    final certification = _certification();
+    final score = _score();
+    final subtitle = item.subtitle;
+    final subtitleIsMetadata =
+        subtitle != null &&
+        (year != null || certification != null || score != null) &&
+        (year == null || subtitle.contains(year)) &&
+        (certification == null ||
+            subtitle.toLowerCase().contains(certification.toLowerCase())) &&
+        (score == null || subtitle.contains(score));
     return SizedBox(
       height: 340,
       child: Stack(
@@ -238,13 +331,70 @@ class _Header extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (item.subtitle case final subtitle?)
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodyMd.copyWith(
-                      color: AppColors.onDarkSoft,
+                if (year != null || certification != null || score != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xxs,
+                      children: [
+                        if (year != null)
+                          Text(
+                            year,
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.onDark,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        if (year != null && certification != null)
+                          Text(
+                            '-',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                        if (certification != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: AppSpacing.xxs,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: AppColors.outlineDark),
+                              borderRadius: AppRadius.sm,
+                            ),
+                            child: Text(
+                              certification,
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.onDark,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        if (score != null)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star,
+                                size: 17,
+                                color: Colors.amber,
+                              ),
+                              const SizedBox(width: AppSpacing.xxs),
+                              Text(
+                                score,
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.onDark,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
                     ),
                   ),
+                
               ],
             ),
           ),
@@ -266,10 +416,18 @@ class _FavoriteAction extends StatelessWidget {
       bloc: controller,
       builder: (context, state) {
         final active = state.isFavorite(item.ref);
-        return OutlinedButton.icon(
-          onPressed: () => controller.toggleFavorite(item),
-          icon: Icon(active ? Icons.check : Icons.add),
-          label: Text(active ? 'In favorites' : 'Add to favorites'),
+        return SizedBox.square(
+          dimension: 48,
+          child: IconButton(
+            tooltip: active ? 'In favorites' : 'Add to favorites',
+            onPressed: () => controller.toggleFavorite(item),
+            icon: Icon(active ? Icons.check : Icons.add),
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.onDark,
+              side: const BorderSide(color: AppColors.outlineDark),
+              shape: const StadiumBorder(),
+            ),
+          ),
         );
       },
     );
@@ -285,7 +443,13 @@ class _Tags extends StatelessWidget {
   Widget build(BuildContext context) => Wrap(
     spacing: AppSpacing.xs,
     runSpacing: AppSpacing.xs,
-    children: [for (final value in values) Chip(label: Text(value))],
+    children: [
+      for (final value in values)
+        Text(
+          '• $value',
+          style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+        ),
+    ],
   );
 }
 
@@ -427,44 +591,57 @@ class _EpisodeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final availableAt = episode.availableAt;
+    final unreleased =
+        availableAt != null && availableAt.isAfter(DateTime.now().toUtc());
     final image = episode.artwork?.landscape ?? episode.artwork?.portrait;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      minVerticalPadding: AppSpacing.sm,
-      leading: ClipRRect(
-        borderRadius: AppRadius.sm,
-        child: SizedBox(
-          width: 104,
-          height: 60,
-          child: image == null
-              ? const _EpisodeImageFallback()
-              : CachedNetworkImage(
-                  imageUrl: image.url,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => const _EpisodeImageFallback(),
-                  errorWidget: (_, _, _) => const _EpisodeImageFallback(),
-                ),
-        ),
-      ),
-      title: Text(
-        'Episode ${episode.position}',
-        style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            episode.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+    return Opacity(
+      opacity: unreleased ? 0.5 : 1,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        minVerticalPadding: AppSpacing.sm,
+        leading: ClipRRect(
+          borderRadius: AppRadius.sm,
+          child: SizedBox(
+            width: 104,
+            height: 60,
+            child: image == null
+                ? const _EpisodeImageFallback()
+                : CachedNetworkImage(
+                    imageUrl: image.url,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => const _EpisodeImageFallback(),
+                    errorWidget: (_, _, _) => const _EpisodeImageFallback(),
+                  ),
           ),
-          if (episode.description case final description?)
-            Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
-        ],
+        ),
+        title: Text(
+          'Episode ${episode.position}',
+          style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              episode.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+            ),
+            if (unreleased)
+              Text(
+                'Releases ${formatReleaseDate(availableAt.toLocal())}',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.onDarkSoft,
+                ),
+              )
+            else if (episode.description case final description?)
+              Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        trailing: unreleased ? null : const Icon(Icons.play_circle_outline),
+        onTap: unreleased ? null : onTap,
       ),
-      trailing: const Icon(Icons.play_circle_outline),
-      onTap: onTap,
     );
   }
 }

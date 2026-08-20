@@ -110,6 +110,9 @@ Users install extensions through a `repo.json` index. The index describes the
 download before the app fetches or evaluates the extension files. See
 [`example/repo.json`](example/repo.json) for a complete entry.
 
+For the complete build, hash, hosting, installation, and update workflow, see
+[Publishing an extension](PUBLISHING.md).
+
 Keep these values synchronized for every release:
 
 - `version` must match `manifest.json`.
