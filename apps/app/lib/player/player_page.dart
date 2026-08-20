@@ -16,7 +16,11 @@ import '../theme/tokens.dart';
 import 'play_item.dart';
 import 'playback_media.dart';
 import 'stream_player_mapping.dart'
-    show subtitleLanguageLabel, subtitleSourceFor, subtitlesForPicker;
+    show
+        subtitleIndicatorLabel,
+        subtitleLanguageLabel,
+        subtitleSourceFor,
+        subtitlesForPicker;
 
 const Duration _upNextTriggerRemaining = Duration(minutes: 2);
 
@@ -825,7 +829,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     final label = subtitle?.type == BetterPlayerSubtitlesSourceType.none
         ? null
         : subtitle?.name;
-    _activeSubtitleLabel = label;
+    _activeSubtitleLabel = label == null ? null : subtitleIndicatorLabel(label);
   }
 
   void _restartHideTimer() {
@@ -934,7 +938,9 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
       unawaited(widget.controller?.setupSubtitleSource(picked));
       final isOff = picked.type == BetterPlayerSubtitlesSourceType.none;
       setState(() {
-        _activeSubtitleLabel = isOff ? null : (picked.name ?? 'CC');
+        _activeSubtitleLabel = isOff
+            ? null
+            : subtitleIndicatorLabel(picked.name);
       });
     }
     _revealControls();

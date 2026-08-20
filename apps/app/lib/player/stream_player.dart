@@ -159,15 +159,6 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      BetterPlayer(key: _betterPlayerKey, controller: _controller),
-      if (_waitingForPreferredSubtitle)
-        const ColoredBox(
-          color: Colors.black54,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      BetterPlayer(key: _betterPlayerKey, controller: _controller);
 }

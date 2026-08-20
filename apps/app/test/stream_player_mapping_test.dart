@@ -339,4 +339,14 @@ void main() {
       expect(subtitleLanguageLabel('xx-yy'), 'XX-YY');
     });
   });
+
+  group('subtitleIndicatorLabel', () {
+    test('keeps a leading flag without the language name', () {
+      expect(subtitleIndicatorLabel('🇮🇩 Indonesia'), '🇮🇩');
+    });
+
+    test('falls back to CC when the source name has no leading flag', () {
+      expect(subtitleIndicatorLabel('Indonesian'), 'CC');
+    });
+  });
 }

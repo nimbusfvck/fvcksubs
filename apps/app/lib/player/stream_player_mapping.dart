@@ -104,6 +104,15 @@ String _primary(String lang) {
 String _subtitleLabel(SubtitleTrack track) =>
     subtitleLanguageLabel(track.language);
 
+/// Returns the compact label used for the active subtitle control.
+String subtitleIndicatorLabel(String? sourceName) {
+  final firstToken = sourceName?.trim().split(RegExp(r'\s+')).first ?? '';
+  if (firstToken.isEmpty || RegExp(r'[a-zA-Z0-9]').hasMatch(firstToken)) {
+    return 'CC';
+  }
+  return firstToken;
+}
+
 String subtitleLanguageLabel(String languageCode) {
   final lang = languageCode.toLowerCase();
   final entry = _kLangMap[lang] ?? _kLangMap[_primary(lang)];
