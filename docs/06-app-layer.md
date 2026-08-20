@@ -103,8 +103,8 @@ Pull-to-refresh refetches what is on screen while keeping it visible. It is the 
 that refetches a category the app already holds.
 
 When an extension declares an `all` category, Home places the app-owned Continue Watching
-shelf above its catalogs. It uses the saved landscape artwork and the persisted playback
-fraction; unavailable extensions are omitted.
+shelf above its catalogs. It uses the saved landscape artwork and a compact persisted playback
+indicator; unavailable extensions are omitted.
 
 ### Full catalog
 
@@ -123,7 +123,8 @@ synopsis, cast, and episodes. Source discovery is **gated behind Play** — the 
 what metadata returned and pays for nothing more until the viewer commits.
 
 The Play button's label is computed rather than fixed, so it states what will actually
-happen: start, continue, or continue at a named episode.
+happen: start, continue, or continue at a named episode. When saved progress and duration are
+available, a progress ring around its play icon shows the current completion fraction.
 
 ### Library
 

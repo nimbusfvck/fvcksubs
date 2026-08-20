@@ -214,7 +214,11 @@ void main() {
       ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie'),
       title: 'Resume movie',
     );
-    const record = UserMediaState(item: item, progress: Duration(minutes: 20));
+    const record = UserMediaState(
+      item: item,
+      progress: Duration(minutes: 20),
+      duration: Duration(minutes: 40),
+    );
     final libraryController = LibraryController(
       store: _MemoryLibraryStoreV2(),
       initial: {record.key: record},
@@ -233,6 +237,7 @@ void main() {
 
     expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
   testWidgets('protocol v2 detail renders credit and episode artwork', (

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import '../app_scope.dart';
 import '../library/library_controller.dart';
@@ -201,14 +202,16 @@ class _DetailPageV2State extends State<DetailPageV2> {
                         builder: (context, state) {
                           final target = _primaryEpisode(detail, state);
                           final primaryTarget = _primaryTarget(detail, target);
+                          final progress = primaryTarget == null
+                              ? null
+                              : _progressFraction(
+                                  state.recordFor(primaryTarget.ref),
+                                );
                           return ElevatedButton.icon(
                             onPressed: primaryTarget == null
                                 ? null
                                 : () => playItemV2(context, primaryTarget),
-                            icon: const Icon(
-                              Icons.play_arrow_rounded,
-                              size: 28,
-                            ),
+                            icon: _PlayIcon(progress: progress),
                             label: Text(
                               _playLabel(
                                 detail,
@@ -297,6 +300,46 @@ class _DetailPageV2State extends State<DetailPageV2> {
           ),
         ),
       ],
+    );
+  }
+
+  double? _progressFraction(UserMediaState? record) {
+    final progress = record?.progress;
+    final duration = record?.duration;
+    if (progress == null || duration == null || duration <= Duration.zero) {
+      return null;
+    }
+    return (progress.inMilliseconds / duration.inMilliseconds)
+        .clamp(0, 1)
+        .toDouble();
+  }
+}
+
+class _PlayIcon extends StatelessWidget {
+  const _PlayIcon({this.progress});
+
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = const Icon(Icons.play_arrow_rounded, size: 28);
+    if (progress == null) return icon;
+    return ExcludeSemantics(
+      child: SizedBox.square(
+        dimension: 32,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 2.5,
+              color: AppColors.onPrimary,
+              backgroundColor: AppColors.outlineDark,
+            ),
+            icon,
+          ],
+        ),
+      ),
     );
   }
 }
