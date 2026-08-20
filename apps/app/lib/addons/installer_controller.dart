@@ -5,6 +5,8 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
+import '../utils/user_facing_error.dart';
+
 class PermissionRequest {
   const PermissionRequest({
     required this.entry,
@@ -41,40 +43,6 @@ class RepoListing {
       ExtensionInstaller.isVersionNewer(entry.version, installedVersion!);
 
   bool get isUpToDate => isInstalled && !isUpdate;
-}
-
-String _repoErrorMessage(Object error) {
-  final message = error.toString().toLowerCase();
-  if (message.contains('404') || message.contains('not found')) {
-    return 'Repository not found. Check the URL.';
-  }
-  if (message.contains('401') || message.contains('403')) {
-    return 'Repository access was denied. Make sure the URL is public.';
-  }
-  if (message.contains('timeout') || message.contains('timed out')) {
-    return 'The repository took too long to respond. Try again.';
-  }
-  if (message.contains('handshake') ||
-      message.contains('certificate') ||
-      message.contains('tls')) {
-    return 'The secure connection to the repository failed.';
-  }
-  if (message.contains('socket') ||
-      message.contains('connection') ||
-      message.contains('host lookup')) {
-    return 'Could not connect to the repository. Check your connection and URL.';
-  }
-  if (message.contains('json') ||
-      message.contains('malformed') ||
-      message.contains('format')) {
-    return 'The repository format is invalid. Use a valid repo.json file.';
-  }
-  if (message.contains('invalid uri') ||
-      message.contains('invalid url') ||
-      message.contains('no host specified')) {
-    return 'Enter a valid repository URL.';
-  }
-  return 'Could not load the repository. Check the URL and try again.';
 }
 
 class InstallerState {
@@ -196,7 +164,12 @@ class InstallerController extends Cubit<InstallerState> {
       if (silent) {
         emit(state.copyWith(clearError: true));
       } else {
-        emit(state.copyWith(listings: const [], error: _repoErrorMessage(e)));
+        emit(
+          state.copyWith(
+            listings: const [],
+            error: userFacingErrorMessage(e, resource: 'repository'),
+          ),
+        );
       }
     } finally {
       emit(state.copyWith(busy: false));
