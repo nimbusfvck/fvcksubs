@@ -6,8 +6,10 @@ import 'package:fvcksubs_app/detail/detail_page.dart';
 import 'package:fvcksubs_app/detail/open_item.dart';
 import 'package:fvcksubs_app/detail/detail_page_v2.dart';
 import 'package:fvcksubs_app/detail/open_versioned_item.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -113,6 +115,34 @@ void main() {
     expect(find.byType(DetailPageV2), findsOneWidget);
     expect(find.text('Example collection'), findsOneWidget);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
+  });
+
+  testWidgets('protocol v2 movie with progress offers to continue watching', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie'),
+      title: 'Resume movie',
+    );
+    const record = UserMediaState(item: item, progress: Duration(minutes: 20));
+    final libraryController = LibraryController(
+      store: _MemoryLibraryStoreV2(),
+      initial: {record.key: record},
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([
+          _DetailV2Extension(detail: const MediaDetailV2(item: item)),
+        ]),
+        libraryController: libraryController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('Play'), findsNothing);
   });
 
   testWidgets('protocol v2 detail renders credit and episode artwork', (
@@ -474,4 +504,12 @@ class _DetailV2Extension extends FakeExtension {
 
   @override
   Future<MediaDetailV2> metaV2(MediaRef ref) async => detail;
+}
+
+class _MemoryLibraryStoreV2 implements LibraryStore {
+  @override
+  Future<Map<String, UserMediaState>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

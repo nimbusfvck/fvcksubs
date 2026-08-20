@@ -87,9 +87,14 @@ class _DetailPageV2State extends State<DetailPageV2> {
     return _episodeItem(detail.item, target.group, target.index);
   }
 
-  String _playLabel(MediaDetailV2 detail) {
+  String _playLabel(MediaDetailV2 detail, Duration? movieProgress) {
     final target = _primaryEpisode(detail);
-    if (target == null) return _hasEpisodes(detail) ? 'Coming soon' : 'Play';
+    if (target == null) {
+      if (_hasEpisodes(detail)) return 'Coming soon';
+      return (movieProgress ?? Duration.zero) > Duration.zero
+          ? 'Continue Watching'
+          : 'Play';
+    }
     final season = RegExp(
       r'\b(?:season|s)\s*([0-9]+)\b',
       caseSensitive: false,
@@ -120,6 +125,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final primaryTarget = _primaryTarget(detail);
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
+    final libraryController = AppScope.of(context).libraryController;
     final selectedGroup = groups.isEmpty
         ? null
         : groups.firstWhere(
@@ -146,12 +152,20 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   Expanded(
                     child: SizedBox(
                       height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: primaryTarget == null
-                            ? null
-                            : () => playItemV2(context, primaryTarget),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                        label: Text(_playLabel(detail)),
+                      child: BlocBuilder<LibraryController, LibraryState>(
+                        bloc: libraryController,
+                        builder: (context, state) => ElevatedButton.icon(
+                          onPressed: primaryTarget == null
+                              ? null
+                              : () => playItemV2(context, primaryTarget),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 28),
+                          label: Text(
+                            _playLabel(
+                              detail,
+                              state.recordFor(item.ref)?.progress,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
