@@ -31,10 +31,11 @@ class ExtensionInstaller {
   ExtensionInstaller({Dio? dio}) : _dio = dio ?? Dio();
 
   final Dio _dio;
+  int _cacheBustNonce = 0;
 
   /// Fetches and parses a repo's `repo.json`.
   Future<ExtensionRepo> fetchRepo(String repoUrl) async {
-    final text = await _getText(repoUrl);
+    final text = await _getText(_cacheBusted(repoUrl));
     return ExtensionRepo.fromJson(jsonDecode(text) as Map<String, Object?>);
   }
 
@@ -49,8 +50,7 @@ class ExtensionInstaller {
     Map<String, String> installedVersions,
   ) => [
     for (final entry in repo.extensions)
-      if (_isNewerOrMissing(entry.version, installedVersions[entry.id]))
-        entry,
+      if (_isNewerOrMissing(entry.version, installedVersions[entry.id])) entry,
   ];
 
   /// Downloads [entry]'s manifest and bundle, verifies the bundle's SHA-256
@@ -73,12 +73,10 @@ class ExtensionInstaller {
   /// partially-verified result — either every check passes, or nothing is
   /// handed back for the caller to persist.
   Future<InstalledExtension> download(ExtensionRepoEntry entry) async {
-    final manifestJson = await _getText(entry.manifestUrl);
-    final bundleJs = await _getText(entry.bundleUrl);
+    final manifestJson = await _getText(_cacheBusted(entry.manifestUrl));
+    final bundleJs = await _getText(_cacheBusted(entry.bundleUrl));
 
-    final actualHash = crypto.sha256
-        .convert(utf8.encode(bundleJs))
-        .toString();
+    final actualHash = crypto.sha256.convert(utf8.encode(bundleJs)).toString();
     final expectedHash = entry.bundleSha256.toLowerCase();
     if (actualHash != expectedHash) {
       throw ExtensionInstallException(
@@ -116,6 +114,17 @@ class ExtensionInstaller {
       options: Options(responseType: ResponseType.plain),
     );
     return response.data ?? '';
+  }
+
+  /// Repository artifacts are commonly served from a mutable `main` branch.
+  /// Raw GitHub and other CDNs may cache the same URL for several minutes, so
+  /// an update check must use a fresh URL on every request.
+  String _cacheBusted(String url) {
+    final uri = Uri.parse(url);
+    final query = Map<String, String>.from(uri.queryParameters)
+      ..['fvcksubs_refresh'] =
+          '${DateTime.now().microsecondsSinceEpoch}-${_cacheBustNonce++}';
+    return uri.replace(queryParameters: query).toString();
   }
 
   static bool _isNewerOrMissing(String candidate, String? installed) {

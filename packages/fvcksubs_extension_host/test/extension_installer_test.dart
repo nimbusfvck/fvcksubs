@@ -13,6 +13,7 @@ import 'package:test/test.dart';
 void main() {
   late HttpServer server;
   late String baseUrl;
+  final requestedUris = <Uri>[];
 
   const manifestJson = {
     'apiVersion': 1,
@@ -49,11 +50,13 @@ void main() {
   late String bundleHash;
 
   setUp(() async {
+    requestedUris.clear();
     bundleHash = crypto.sha256.convert(utf8.encode(bundleJs)).toString();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     baseUrl = 'http://${server.address.address}:${server.port}';
 
     server.listen((request) async {
+      requestedUris.add(request.uri);
       final path = request.uri.path;
       request.response.headers.contentType = ContentType.json;
       if (path == '/repo.json') {
@@ -124,6 +127,16 @@ void main() {
     expect(repo.extensions.single.bundleSha256, bundleHash);
   });
 
+  test('fetchRepo bypasses mutable CDN responses', () async {
+    await ExtensionInstaller().fetchRepo('$baseUrl/repo.json');
+
+    expect(requestedUris, hasLength(1));
+    expect(
+      requestedUris.single.queryParameters['fvcksubs_refresh'],
+      isNotEmpty,
+    );
+  });
+
   group('checkForUpdates', () {
     late ExtensionRepo repo;
 
@@ -180,52 +193,61 @@ void main() {
   });
 
   group('download', () {
-    test('succeeds, hash-verifies, and returns a loadable InstalledExtension', () async {
-      final installer = ExtensionInstaller();
-      final repo = await installer.fetchRepo('$baseUrl/repo.json');
-      final installed = await installer.download(repo.extensions.single);
+    test(
+      'succeeds, hash-verifies, and returns a loadable InstalledExtension',
+      () async {
+        final installer = ExtensionInstaller();
+        final repo = await installer.fetchRepo('$baseUrl/repo.json');
+        final installed = await installer.download(repo.extensions.single);
 
-      expect(installed.id, 'test_ext');
-      expect(installed.version, '0.2.0');
-      expect(jsonDecode(installed.manifestJson), manifestJson);
-      expect(installed.bundleJs, bundleJs);
+        expect(installed.id, 'test_ext');
+        expect(installed.version, '0.2.0');
+        expect(jsonDecode(installed.manifestJson), manifestJson);
+        expect(installed.bundleJs, bundleJs);
 
-      // The actual proof: this isn't just text moved around, it's a
-      // genuinely loadable extension.
-      final manifest = Manifest.parse(
-        jsonDecode(installed.manifestJson) as Map<String, Object?>,
-      );
-      final extension = JsExtension.load(
-        manifest: manifest,
-        source: installed.bundleJs,
-      );
-      addTearDown(extension.dispose);
+        // The actual proof: this isn't just text moved around, it's a
+        // genuinely loadable extension.
+        final manifest = Manifest.parse(
+          jsonDecode(installed.manifestJson) as Map<String, Object?>,
+        );
+        final extension = JsExtension.load(
+          manifest: manifest,
+          source: installed.bundleJs,
+        );
+        addTearDown(extension.dispose);
 
-      final page = await extension.catalog(
-        const CatalogQuery(providerId: 'test_ext.items', catalogId: 'main'),
-      );
-      expect(page.items, hasLength(1));
-      expect(page.items.single.title, 'Hello from the installed bundle');
-    });
+        final page = await extension.catalog(
+          const CatalogQuery(providerId: 'test_ext.items', catalogId: 'main'),
+        );
+        expect(page.items, hasLength(1));
+        expect(page.items.single.title, 'Hello from the installed bundle');
+      },
+    );
 
-    test('a bundle that does not match the declared hash is rejected', () async {
-      final installer = ExtensionInstaller();
-      final repo = await installer.fetchRepo('$baseUrl/repo-bad-hash.json');
+    test(
+      'a bundle that does not match the declared hash is rejected',
+      () async {
+        final installer = ExtensionInstaller();
+        final repo = await installer.fetchRepo('$baseUrl/repo-bad-hash.json');
 
-      await expectLater(
-        installer.download(repo.extensions.single),
-        throwsA(isA<ExtensionInstallException>()),
-      );
-    });
+        await expectLater(
+          installer.download(repo.extensions.single),
+          throwsA(isA<ExtensionInstallException>()),
+        );
+      },
+    );
 
-    test('a manifest whose id does not match the repo entry is rejected', () async {
-      final installer = ExtensionInstaller();
-      final repo = await installer.fetchRepo('$baseUrl/repo-wrong-id.json');
+    test(
+      'a manifest whose id does not match the repo entry is rejected',
+      () async {
+        final installer = ExtensionInstaller();
+        final repo = await installer.fetchRepo('$baseUrl/repo-wrong-id.json');
 
-      await expectLater(
-        installer.download(repo.extensions.single),
-        throwsA(isA<ExtensionInstallException>()),
-      );
-    });
+        await expectLater(
+          installer.download(repo.extensions.single),
+          throwsA(isA<ExtensionInstallException>()),
+        );
+      },
+    );
   });
 }

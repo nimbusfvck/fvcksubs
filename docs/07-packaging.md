@@ -143,6 +143,10 @@ available, the app checks it in the background during startup. The check updates
 extension details in Addons; it does not block startup or show a failure screen when the network
 is unavailable. Opening Addons is not required to start the check.
 
+Repository metadata and mutable release artifacts are fetched with a cache-busting query so a
+CDN response for an older `main` revision cannot hide a published update. Concurrent checks are
+serialized by generation: a result from an older request cannot replace a newer check.
+
 ## 7.6 Testing an extension
 
 Test extensions with the production engine and a local HTTP fixture server.

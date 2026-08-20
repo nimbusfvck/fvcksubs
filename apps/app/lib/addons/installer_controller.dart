@@ -104,6 +104,8 @@ class InstallerController extends Cubit<InstallerState> {
 
   final RepoStore repoStore;
 
+  int _refreshGeneration = 0;
+
   String? get repoUrl => state.repoUrl;
   List<RepoListing> get listings => state.listings;
   List<RepoListing> get installableListings => [
@@ -121,6 +123,7 @@ class InstallerController extends Cubit<InstallerState> {
   }
 
   Future<void> setRepoUrl(String? url) async {
+    _refreshGeneration++;
     final trimmed = (url == null || url.trim().isEmpty) ? null : url.trim();
     if (trimmed == state.repoUrl) return;
     emit(
@@ -135,6 +138,7 @@ class InstallerController extends Cubit<InstallerState> {
   }
 
   Future<void> refresh({bool silent = false}) async {
+    final generation = ++_refreshGeneration;
     final url = state.repoUrl;
     if (url == null) {
       if (!silent) emit(state.copyWith(error: 'Set a repo URL first.'));
@@ -153,6 +157,7 @@ class InstallerController extends Cubit<InstallerState> {
             installedVersion: installed[entry.id]?.version,
           ),
       ];
+      if (generation != _refreshGeneration) return;
       emit(
         state.copyWith(
           listings: listings,
@@ -161,6 +166,7 @@ class InstallerController extends Cubit<InstallerState> {
         ),
       );
     } catch (e) {
+      if (generation != _refreshGeneration) return;
       if (silent) {
         emit(state.copyWith(clearError: true));
       } else {
@@ -172,7 +178,9 @@ class InstallerController extends Cubit<InstallerState> {
         );
       }
     } finally {
-      emit(state.copyWith(busy: false));
+      if (generation == _refreshGeneration) {
+        emit(state.copyWith(busy: false));
+      }
     }
   }
 
