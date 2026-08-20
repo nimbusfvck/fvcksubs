@@ -791,6 +791,8 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     if (widget.isLive) {
       final edge = liveSeekEdge(value);
       if (edge > _liveEdge) _liveEdge = edge;
+    } else {
+      _syncActiveSubtitleLabel();
     }
 
     if (_wasBuffering && !isBuffering && isPlaying) {
@@ -816,6 +818,14 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     }
 
     setState(() {});
+  }
+
+  void _syncActiveSubtitleLabel() {
+    final subtitle = widget.controller?.betterPlayerSubtitlesSource;
+    final label = subtitle?.type == BetterPlayerSubtitlesSourceType.none
+        ? null
+        : subtitle?.name;
+    _activeSubtitleLabel = label;
   }
 
   void _restartHideTimer() {

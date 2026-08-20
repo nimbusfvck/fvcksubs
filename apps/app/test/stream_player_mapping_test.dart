@@ -133,23 +133,26 @@ void main() {
     expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
   });
 
-  test('a track matching the preferred subtitle language is pre-selected', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-        ],
-      ),
-      isLive: false,
-      preferredSubtitleLanguage: 'id',
-    );
-    final byLanguage = {for (final s in ds.subtitles!) s.name: s};
-    expect(byLanguage['🇮🇩 Indonesia']!.selectedByDefault, isTrue);
-    expect(byLanguage['🇬🇧 English']!.selectedByDefault, isNot(true));
-  });
+  test(
+    'a track matching the preferred subtitle language is pre-selected from the stream',
+    () {
+      final ds = betterPlayerDataSource(
+        const PlayableStream(
+          url: 'https://edge/movie.m3u8',
+          format: StreamFormat.hls,
+          subtitles: [
+            SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
+            SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
+          ],
+        ),
+        isLive: false,
+        preferredSubtitleLanguage: 'id',
+      );
+      final byLanguage = {for (final s in ds.subtitles!) s.name: s};
+      expect(byLanguage['🇮🇩 Indonesia']!.selectedByDefault, isTrue);
+      expect(byLanguage['🇬🇧 English']!.selectedByDefault, isNot(true));
+    },
+  );
 
   test('a region variant matches by primary language subtag', () {
     final ds = betterPlayerDataSource(

@@ -81,7 +81,7 @@ flowchart LR
 | Settings (addons) | **the registry itself** | The registry stays framework-free with no notification mechanism of its own; this is the persisting front end over it. |
 | Library | its own record map | Recording a watch must never wipe a saved resume position. |
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
-| Subtitle preference | its own language code | Decides the **order** sources are tried in; never filters any out. |
+| Subtitle preference | its own language code | Prefers resolved sources that carry a matching track, then activates that stream-provided track for on-demand playback. It never filters other sources; external subtitles remain an explicit viewer action. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
 
 ## 6.4 Screens
