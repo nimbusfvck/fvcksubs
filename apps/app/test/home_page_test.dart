@@ -154,6 +154,7 @@ void main() {
     expect(appBar.floating, isFalse);
     expect(appBar.pinned, isTrue);
     expect(appBar.snap, isFalse);
+    expect(find.byKey(const Key('home-category-header')), findsOneWidget);
     expect(find.byIcon(Icons.search), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Live'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);

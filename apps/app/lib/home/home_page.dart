@@ -204,16 +204,15 @@ class _HomePageState extends State<HomePage> {
                       onSelected: (id) => _selectPlugin(scope, id),
                     ),
                 ],
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(48),
-                  child: SizedBox(
-                    height: 48,
-                    child: CategoryChips(
-                      categories: categories,
-                      selected: selected,
-                      onSelected: _selectCategory,
-                    ),
-                  ),
+              ),
+              SliverPersistentHeader(
+                key: const Key('home-category-header'),
+                floating: true,
+                pinned: true,
+                delegate: _CategoryHeaderDelegate(
+                  categories: categories,
+                  selected: selected,
+                  onSelected: _selectCategory,
                 ),
               ),
               if (selected.toLowerCase() == 'all')
@@ -260,6 +259,48 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _CategoryHeaderDelegate({
+    required this.categories,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> categories;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  double get minExtent => 48;
+
+  @override
+  double get maxExtent => 48;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => Material(
+    color: AppColors.surfaceDark,
+    elevation: overlapsContent ? 2 : 0,
+    child: SizedBox(
+      height: 48,
+      child: CategoryChips(
+        categories: categories,
+        selected: selected,
+        onSelected: onSelected,
+      ),
+    ),
+  );
+
+  @override
+  bool shouldRebuild(covariant _CategoryHeaderDelegate oldDelegate) =>
+      oldDelegate.categories != categories ||
+      oldDelegate.selected != selected ||
+      oldDelegate.onSelected != onSelected;
 }
 
 class _NoExtensions extends StatelessWidget {
