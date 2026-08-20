@@ -9,6 +9,7 @@ import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/shimmer_placeholder.dart';
 
 class CatalogShelf extends StatefulWidget {
   const CatalogShelf({
@@ -94,7 +95,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
     builder: (context, snapshot) {
       if (!snapshot.hasData &&
           snapshot.connectionState == ConnectionState.waiting) {
-        return const _ShelfMessage(child: CircularProgressIndicator());
+        return const ShimmerPlaceholder(height: 120);
       }
       if (snapshot.hasError) {
         return _ShelfMessage(
