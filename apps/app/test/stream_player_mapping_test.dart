@@ -345,8 +345,13 @@ void main() {
       expect(subtitleIndicatorLabel('🇮🇩 Indonesia'), '🇮🇩');
     });
 
-    test('falls back to CC when the source name has no leading flag', () {
-      expect(subtitleIndicatorLabel('Indonesian'), 'CC');
+    test('normalizes a built-in language name to its flag', () {
+      expect(subtitleIndicatorLabel('INDONESIA'), '🇮🇩');
+      expect(subtitleIndicatorLabel('Indonesian SDH'), '🇮🇩');
+    });
+
+    test('falls back to CC when the source name is unknown', () {
+      expect(subtitleIndicatorLabel('Custom captions'), 'CC');
     });
   });
 }
