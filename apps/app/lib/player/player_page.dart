@@ -139,6 +139,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _hasResumed = false;
 
   Duration? _lastKnownPosition;
+  Duration? _lastKnownDuration;
 
   String? _playbackError;
 
@@ -218,6 +219,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final value = _trackedVideoValue?.value;
     if (value == null || !value.initialized) return;
     _lastKnownPosition = value.position;
+    _lastKnownDuration = value.duration;
     if (!_hasResumed) {
       _hasResumed = true;
       _maybeResumePosition(value.duration);
@@ -323,6 +325,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _libraryController?.recordWatched(
         widget.media.v2Item!,
         progress: position,
+        duration: _lastKnownDuration,
       );
     }
   }

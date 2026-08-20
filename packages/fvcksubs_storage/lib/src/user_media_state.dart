@@ -8,6 +8,7 @@ class UserMediaState extends Equatable {
     required this.item,
     this.favorite = false,
     this.progress,
+    this.duration,
     this.lastWatched,
   });
 
@@ -25,6 +26,13 @@ class UserMediaState extends Equatable {
       );
     }
     final lastWatched = json['lastWatched'];
+    final duration = json['durationMs'];
+    if (duration != null &&
+        (duration is! num || duration.toInt() != duration || duration <= 0)) {
+      throw const FormatException(
+        'library durationMs must be a positive integer',
+      );
+    }
     if (lastWatched != null && lastWatched is! String) {
       throw const FormatException('library lastWatched must be a string');
     }
@@ -38,6 +46,9 @@ class UserMediaState extends Equatable {
       progress: progress == null
           ? null
           : Duration(milliseconds: (progress as num).toInt()),
+      duration: duration == null
+          ? null
+          : Duration(milliseconds: (duration as num).toInt()),
       lastWatched: lastWatched == null
           ? null
           : DateTime.parse(lastWatched as String),
@@ -56,6 +67,9 @@ class UserMediaState extends Equatable {
   /// Last playback position, when known.
   final Duration? progress;
 
+  /// Total playback duration, when the native player reports one.
+  final Duration? duration;
+
   /// Last playback activity time, when known.
   final DateTime? lastWatched;
 
@@ -71,6 +85,7 @@ class UserMediaState extends Equatable {
     MediaItemV2? item,
     bool? favorite,
     Object? progress = _unset,
+    Object? duration = _unset,
     Object? lastWatched = _unset,
   }) => UserMediaState(
     item: item ?? this.item,
@@ -78,6 +93,9 @@ class UserMediaState extends Equatable {
     progress: identical(progress, _unset)
         ? this.progress
         : progress as Duration?,
+    duration: identical(duration, _unset)
+        ? this.duration
+        : duration as Duration?,
     lastWatched: identical(lastWatched, _unset)
         ? this.lastWatched
         : lastWatched as DateTime?,
@@ -90,10 +108,11 @@ class UserMediaState extends Equatable {
     'item': item.toJson(),
     'favorite': favorite,
     if (progress != null) 'progressMs': progress!.inMilliseconds,
+    if (duration != null) 'durationMs': duration!.inMilliseconds,
     if (lastWatched != null)
       'lastWatched': lastWatched!.toUtc().toIso8601String(),
   };
 
   @override
-  List<Object?> get props => [item, favorite, progress, lastWatched];
+  List<Object?> get props => [item, favorite, progress, duration, lastWatched];
 }

@@ -9,11 +9,51 @@ import 'package:fvcksubs_app/addons/installer_controller.dart';
 import 'package:fvcksubs_app/catalog/plugin_selector.dart';
 import 'package:fvcksubs_app/home/catalog_shelf.dart';
 import 'package:fvcksubs_app/home/home_page.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
 void main() {
+  testWidgets('All places Continue Watching above extension catalogs', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'watch', providerId: 'watch.p', id: 'video'),
+      title: 'Resume video',
+      artwork: Artwork(
+        landscape: ImageRef('https://cdn.example/thumbnail.jpg'),
+        portrait: ImageRef('https://cdn.example/poster.jpg'),
+      ),
+    );
+    const record = UserMediaState(
+      item: item,
+      progress: Duration(minutes: 20),
+      duration: Duration(minutes: 40),
+    );
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'watch', categories: ['all'], items: const []),
+    ]);
+    final library = LibraryController(
+      store: _HomeLibraryStore(),
+      initial: {record.key: record},
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: registry,
+        libraryController: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('Resume video'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
   testWidgets('chips come from installed extensions, first one selected', (
     tester,
   ) async {
@@ -750,4 +790,12 @@ void main() {
       expect(find.text('Updated catalog'), findsOneWidget);
     });
   });
+}
+
+class _HomeLibraryStore implements LibraryStore {
+  @override
+  Future<Map<String, UserMediaState>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

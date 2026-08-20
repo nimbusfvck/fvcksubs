@@ -13,6 +13,7 @@ import '../theme/tokens.dart';
 import 'catalog_grid_section.dart';
 import 'catalog_shelf.dart';
 import 'category_chips.dart';
+import 'continue_watching_shelf.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -152,6 +153,13 @@ class _HomePageState extends State<HomePage> {
               onSelected: _selectCategory,
             ),
           ),
+          if (selected.toLowerCase() == 'all')
+            SliverToBoxAdapter(
+              child: ContinueWatchingShelf(
+                controller: scope.libraryController,
+                registry: registry,
+              ),
+            ),
           if (bindings.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,

@@ -102,6 +102,10 @@ flowchart TB
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.
 
+When an extension declares an `all` category, Home places the app-owned Continue Watching
+shelf above its catalogs. It uses the saved landscape artwork and the persisted playback
+fraction; unavailable extensions are omitted.
+
 ### Full catalog
 
 Filter bar, subcategory chips, grid, and endless scrolling driven by the opaque cursor an

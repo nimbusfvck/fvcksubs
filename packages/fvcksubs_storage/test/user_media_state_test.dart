@@ -17,6 +17,7 @@ void main() {
       item: item,
       favorite: true,
       progress: const Duration(seconds: 12),
+      duration: const Duration(minutes: 42),
       lastWatched: DateTime.utc(2026, 8, 19),
     );
 

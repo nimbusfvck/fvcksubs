@@ -64,18 +64,21 @@ class LibraryController extends Cubit<LibraryState> {
     );
   }
 
-  void recordWatched(MediaItemV2 item, {Object? progress = _unspecified}) {
+  void recordWatched(
+    MediaItemV2 item, {
+    Object? progress = _unspecified,
+    Object? duration = _unspecified,
+  }) {
     final existing = recordFor(item.ref);
     final base = existing ?? UserMediaState(item: item);
-    _upsert(
-      identical(progress, _unspecified)
-          ? base.copyWith(item: item, lastWatched: _now())
-          : base.copyWith(
-              item: item,
-              progress: progress as Duration?,
-              lastWatched: _now(),
-            ),
-    );
+    var next = base.copyWith(item: item, lastWatched: _now());
+    if (!identical(progress, _unspecified)) {
+      next = next.copyWith(progress: progress);
+    }
+    if (!identical(duration, _unspecified)) {
+      next = next.copyWith(duration: duration);
+    }
+    _upsert(next);
   }
 
   static const Object _unspecified = Object();
