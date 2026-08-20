@@ -131,7 +131,7 @@ void main() {
       providerId: 'fake.p',
       id: 'episode-7',
     );
-    const detail = MediaDetailV2(
+    final detail = MediaDetailV2(
       item: item,
       credits: [
         MediaCredit(
@@ -242,9 +242,20 @@ void main() {
 
     expect(find.textContaining('Releases'), findsOneWidget);
     expect(find.byIcon(Icons.play_circle_outline), findsNothing);
+    final playButton = tester.widget<ElevatedButton>(
+      find.byType(ElevatedButton),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ElevatedButton),
+        matching: find.text('Coming soon'),
+      ),
+      findsOneWidget,
+    );
+    expect(playButton.onPressed, isNull);
   });
 
-  testWidgets('protocol v2 detail defaults to the latest season and episode', (
+  testWidgets('protocol v2 detail defaults to the latest available episode', (
     tester,
   ) async {
     const item = SeriesItemV2(
@@ -255,7 +266,7 @@ void main() {
       ),
       title: 'Reacher',
     );
-    const detail = MediaDetailV2(
+    final detail = MediaDetailV2(
       item: item,
       episodeGuide: EpisodeGuide(
         groups: [
@@ -295,6 +306,7 @@ void main() {
                 ),
                 title: 'Fourth latest',
                 position: 2,
+                availableAt: DateTime.utc(2099),
               ),
             ],
           ),
@@ -310,7 +322,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Play S4E2'), findsOneWidget);
+    expect(find.text('Play S4E1'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Fourth latest'),
       250,
@@ -321,7 +333,7 @@ void main() {
     expect(find.text('First'), findsNothing);
   });
 
-  testWidgets('protocol v2 header shows year certification and score', (
+  testWidgets('protocol v2 detail renders facts without interpreting them', (
     tester,
   ) async {
     const item = SeriesItemV2(
@@ -338,6 +350,7 @@ void main() {
         MediaFact(label: 'Year', value: '2025'),
         MediaFact(label: 'Certification', value: 'TV-MA'),
         MediaFact(label: 'Rating', value: '8.7'),
+        MediaFact(label: 'Runtime', value: '50 minutes'),
       ],
     );
 
@@ -349,13 +362,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2025'), findsNWidgets(2));
-    expect(find.text('TV-MA'), findsNWidgets(2));
-    expect(find.text('8.7'), findsNWidgets(2));
-    expect(find.byIcon(Icons.star), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Year'), findsOneWidget);
+    expect(find.text('2025'), findsOneWidget);
+    expect(find.text('Certification'), findsOneWidget);
+    expect(find.text('TV-MA'), findsOneWidget);
+    expect(find.text('Rating'), findsOneWidget);
+    expect(find.text('8.7'), findsOneWidget);
+    expect(find.text('Runtime'), findsOneWidget);
+    expect(find.text('50 minutes'), findsOneWidget);
   });
 
-  testWidgets('protocol v2 header parses metadata from subtitle', (
+  testWidgets('protocol v2 header renders the supplied subtitle unchanged', (
     tester,
   ) async {
     const item = SeriesItemV2(
@@ -377,10 +395,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2025'), findsOneWidget);
-    expect(find.text('TV-MA'), findsOneWidget);
-    expect(find.text('8.7'), findsOneWidget);
-    expect(find.text('2025 • TV-MA • 8.7'), findsNothing);
+    expect(find.text('2025 • TV-MA • 8.7'), findsOneWidget);
   });
 
   testWidgets('protocol v2 season selector fits a narrow screen', (

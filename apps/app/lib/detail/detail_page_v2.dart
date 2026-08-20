@@ -57,26 +57,39 @@ class _DetailPageV2State extends State<DetailPageV2> {
         final index = group.episodes.indexWhere(
           (episode) => episode.ref == target,
         );
-        if (index >= 0) return (group: group, index: index);
+        if (index >= 0 && _isAvailable(group.episodes[index])) {
+          return (group: group, index: index);
+        }
       }
     }
     for (final group in guide.groups.reversed) {
-      if (group.episodes.isNotEmpty) {
-        return (group: group, index: group.episodes.length - 1);
+      for (final entry in group.episodes.indexed.toList().reversed) {
+        if (_isAvailable(entry.$2)) {
+          return (group: group, index: entry.$1);
+        }
       }
     }
     return null;
   }
 
-  MediaItemV2 _primaryTarget(MediaDetailV2 detail) {
+  bool _hasEpisodes(MediaDetailV2 detail) =>
+      detail.episodeGuide?.groups.any((group) => group.episodes.isNotEmpty) ??
+      false;
+
+  bool _isAvailable(EpisodeSummary episode) {
+    final availableAt = episode.availableAt;
+    return availableAt == null || !availableAt.isAfter(DateTime.now().toUtc());
+  }
+
+  MediaItemV2? _primaryTarget(MediaDetailV2 detail) {
     final target = _primaryEpisode(detail);
-    if (target == null) return detail.item;
+    if (target == null) return _hasEpisodes(detail) ? null : detail.item;
     return _episodeItem(detail.item, target.group, target.index);
   }
 
   String _playLabel(MediaDetailV2 detail) {
     final target = _primaryEpisode(detail);
-    if (target == null) return 'Play';
+    if (target == null) return _hasEpisodes(detail) ? 'Coming soon' : 'Play';
     final season = RegExp(
       r'\b(?:season|s)\s*([0-9]+)\b',
       caseSensitive: false,
@@ -104,6 +117,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
   Widget _buildDetail(MediaDetailV2 detail) {
     final item = detail.item;
+    final primaryTarget = _primaryTarget(detail);
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final selectedGroup = groups.isEmpty
@@ -115,9 +129,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: _Header(item: item, facts: detail.facts),
-        ),
+        SliverToBoxAdapter(child: _Header(item: item)),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -135,8 +147,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
                     child: SizedBox(
                       height: 48,
                       child: ElevatedButton.icon(
-                        onPressed: () =>
-                            playItemV2(context, _primaryTarget(detail)),
+                        onPressed: primaryTarget == null
+                            ? null
+                            : () => playItemV2(context, primaryTarget),
                         icon: const Icon(Icons.play_arrow_rounded, size: 28),
                         label: Text(_playLabel(detail)),
                       ),
@@ -166,6 +179,12 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   ),
                   child: Text(_descriptionExpanded ? 'Show less' : 'Show more'),
                 ),
+              ],
+              if (detail.facts.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const _SectionTitle('Details'),
+                const SizedBox(height: AppSpacing.sm),
+                _Facts(values: detail.facts),
               ],
               if (detail.credits.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
@@ -219,71 +238,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.item, required this.facts});
+  const _Header({required this.item});
 
   final MediaItemV2 item;
-  final List<MediaFact> facts;
-
-  String? _subtitleMatch(RegExp pattern) => item.subtitle == null
-      ? null
-      : pattern.firstMatch(item.subtitle!)?.group(0);
-
-  String? _factValue(bool Function(MediaFact fact) predicate) {
-    for (final fact in facts) {
-      if (predicate(fact)) return fact.value;
-    }
-    return null;
-  }
-
-  String? _year() =>
-      _factValue(
-        (fact) =>
-            fact.label.toLowerCase().contains('year') ||
-            RegExp(r'^\d{4}$').hasMatch(fact.value.trim()),
-      ) ??
-      _subtitleMatch(RegExp(r'\b(?:19|20)\d{2}\b'));
-
-  String? _certification() =>
-      _factValue(
-        (fact) =>
-            fact.label.toLowerCase().contains('cert') ||
-            RegExp(
-              r'^(?:TV-|G$|PG$|PG-13$|R$|NC-17$)',
-              caseSensitive: false,
-            ).hasMatch(fact.value.trim()),
-      ) ??
-      _subtitleMatch(
-        RegExp(
-          r'\b(?:TV-(?:Y|Y7|G|PG|14|MA)|G|PG|PG-13|R|NC-17)\b',
-          caseSensitive: false,
-        ),
-      );
-
-  String? _score() =>
-      _factValue(
-        (fact) =>
-            RegExp(
-              r'^(?:score|rating|imdb)',
-              caseSensitive: false,
-            ).hasMatch(fact.label.trim()) &&
-            double.tryParse(fact.value.trim()) != null,
-      ) ??
-      _subtitleMatch(RegExp(r'(?<!\d)(?:10(?:\.0)?|[0-9](?:\.[0-9])?)(?!\d)'));
 
   @override
   Widget build(BuildContext context) {
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
-    final year = _year();
-    final certification = _certification();
-    final score = _score();
-    final subtitle = item.subtitle;
-    final subtitleIsMetadata =
-        subtitle != null &&
-        (year != null || certification != null || score != null) &&
-        (year == null || subtitle.contains(year)) &&
-        (certification == null ||
-            subtitle.toLowerCase().contains(certification.toLowerCase())) &&
-        (score == null || subtitle.contains(score));
     return SizedBox(
       height: 340,
       child: Stack(
@@ -331,70 +292,16 @@ class _Header extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (year != null || certification != null || score != null)
+                if (item.subtitle case final subtitle?)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xxs,
-                      children: [
-                        if (year != null)
-                          Text(
-                            year,
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.onDark,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        if (year != null && certification != null)
-                          Text(
-                            '-',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        if (certification != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.xs,
-                              vertical: AppSpacing.xxs,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: AppColors.outlineDark),
-                              borderRadius: AppRadius.sm,
-                            ),
-                            child: Text(
-                              certification,
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.onDark,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        if (score != null)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star,
-                                size: 17,
-                                color: Colors.amber,
-                              ),
-                              const SizedBox(width: AppSpacing.xxs),
-                              Text(
-                                score,
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.onDark,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
+                    child: Text(
+                      subtitle,
+                      style: AppTypography.bodyMd.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
                     ),
                   ),
-                
               ],
             ),
           ),
