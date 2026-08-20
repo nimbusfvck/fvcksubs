@@ -160,16 +160,13 @@ class _ContinueCard extends StatelessWidget {
                     ),
                   if (progress != null) ...[
                     const SizedBox(height: AppSpacing.xs),
-                    SizedBox(
-                      width: 72,
-                      child: ClipRRect(
-                        borderRadius: AppRadius.pill,
-                        child: LinearProgressIndicator(
-                          value: progress.clamp(0, 1),
-                          minHeight: 4,
-                          color: AppColors.brandAccent,
-                          backgroundColor: Colors.white24,
-                        ),
+                    ClipRRect(
+                      borderRadius: AppRadius.pill,
+                      child: LinearProgressIndicator(
+                        value: progress.clamp(0, 1),
+                        minHeight: 4,
+                        color: AppColors.brandAccent,
+                        backgroundColor: Colors.white24,
                       ),
                     ),
                   ],
