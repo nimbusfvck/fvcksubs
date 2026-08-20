@@ -83,6 +83,16 @@ class CatalogCache {
     return loadVersioned(registry, binding, category: category);
   }
 
+  /// Uses the session cache unless an explicit refresh is requested.
+  Future<VersionedCatalogPage> fetchCatalog(
+    ExtensionRegistry registry,
+    CatalogBinding binding, {
+    required String category,
+    bool refresh = false,
+  }) => refresh
+      ? reloadVersioned(registry, binding, category: category)
+      : loadVersioned(registry, binding, category: category);
+
   void clear() {
     _entries.clear();
     _completed.clear();

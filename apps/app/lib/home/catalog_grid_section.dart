@@ -65,7 +65,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   Future<void> _load() async {
     final scope = AppScope.of(context);
     try {
-      final page = await scope.catalogCache.loadVersioned(
+      final page = await scope.catalogCache.fetchCatalog(
         scope.registry,
         widget.binding,
         category: widget.category,

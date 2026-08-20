@@ -52,7 +52,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
   Future<VersionedCatalogPage> _load() {
     final scope = AppScope.of(context);
-    return scope.catalogCache.loadVersioned(
+    return scope.catalogCache.fetchCatalog(
       scope.registry,
       widget.binding,
       category: widget.category,
@@ -63,10 +63,11 @@ class _CatalogShelfState extends State<CatalogShelf> {
     final scope = AppScope.of(context);
     setState(() {
       _cached = null;
-      _future = scope.catalogCache.reloadVersioned(
+      _future = scope.catalogCache.fetchCatalog(
         scope.registry,
         widget.binding,
         category: widget.category,
+        refresh: true,
       );
     });
   }

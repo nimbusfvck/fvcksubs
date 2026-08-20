@@ -61,7 +61,12 @@ class _HomePageState extends State<HomePage> {
     await Future.wait([
       for (final binding in bindings)
         scope.catalogCache
-            .reloadVersioned(scope.registry, binding, category: category)
+            .fetchCatalog(
+              scope.registry,
+              binding,
+              category: category,
+              refresh: true,
+            )
             .then<void>((_) {}, onError: (_, _) {}),
     ]);
     if (!mounted) return;
