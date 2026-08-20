@@ -908,7 +908,9 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     if (widget.isLive) return;
     _hideTimer?.cancel();
     final currentSub = widget.controller?.betterPlayerSubtitlesSource;
-    final tracks = subtitlesForPicker(_current.stream.subtitles);
+    final tracks = AppScope.of(
+      context,
+    ).subtitlePreferenceController.tracksForPicker(_current.stream.subtitles);
 
     final picked = await showModalBottomSheet<BetterPlayerSubtitlesSource>(
       context: context,
@@ -921,6 +923,9 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
         media: widget.media,
         tracks: tracks,
         current: currentSub,
+        filterTracks: AppScope.of(
+          context,
+        ).subtitlePreferenceController.tracksForPicker,
       ),
     );
 
@@ -1802,12 +1807,14 @@ class _SubtitlePickerSheet extends StatefulWidget {
     required this.media,
     required this.tracks,
     required this.current,
+    required this.filterTracks,
   });
 
   final PlaybackMedia media;
 
   final List<SubtitleTrack> tracks;
   final BetterPlayerSubtitlesSource? current;
+  final List<SubtitleTrack> Function(List<SubtitleTrack> tracks) filterTracks;
 
   @override
   State<_SubtitlePickerSheet> createState() => _SubtitlePickerSheetState();
@@ -1841,9 +1848,10 @@ class _SubtitlePickerSheetState extends State<_SubtitlePickerSheet> {
         ? await registry.externalSubtitlesV2(widget.media.v2Item!)
         : await registry.externalSubtitles(legacyItem);
     if (!mounted) return;
+    final visibleTracks = widget.filterTracks(fetched);
     setState(() {
-      _externalTracks = fetched;
-      _externalState = fetched.isEmpty
+      _externalTracks = visibleTracks;
+      _externalState = visibleTracks.isEmpty
           ? _ExternalFetchState.foundNone
           : _ExternalFetchState.idle;
     });
@@ -1994,7 +2002,7 @@ class _SubtitlePickerSheetState extends State<_SubtitlePickerSheet> {
                                 ),
                           title: Text(
                             _externalState == _ExternalFetchState.foundNone
-                                ? 'No external subtitles found'
+                                ? 'No supported external subtitles found'
                                 : 'Fetch external subtitles',
                             style: AppTypography.bodyMd.copyWith(
                               color: AppColors.onDarkSoft,

@@ -1,6 +1,8 @@
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
+import 'subtitle_preference_controller.dart';
+
 BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {
   required bool isLive,
@@ -54,7 +56,8 @@ BetterPlayerSubtitlesSource? preferredSubtitleSource(
 ) {
   if (preferredLanguage == null) return null;
   for (final track in subtitlesForPicker(tracks)) {
-    if (_primary(track.language) == _primary(preferredLanguage)) {
+    if (subtitleLanguageKey(track.language) ==
+        subtitleLanguageKey(preferredLanguage)) {
       return subtitleSourceFor(track, selectedByDefault: true);
     }
   }

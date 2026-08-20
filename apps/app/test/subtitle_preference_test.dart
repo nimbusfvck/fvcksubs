@@ -189,6 +189,35 @@ void main() {
   });
 
   group('the preference itself', () {
+    test('filters the picker to languages supported by Settings', () {
+      final controller = SubtitlePreferenceController(
+        store: FakeSubtitlePreferenceStore(),
+        initial: 'id',
+      );
+      const tracks = [
+        SubtitleTrack(language: 'id', url: 'https://subs/id.vtt'),
+        SubtitleTrack(language: 'English', url: 'https://subs/en.vtt'),
+        SubtitleTrack(language: 'ja', url: 'https://subs/ja.vtt'),
+      ];
+
+      expect(
+        controller.tracksForPicker(tracks).map((track) => track.language),
+        ['id', 'English'],
+      );
+    });
+
+    test('shows every picker track when no preference is selected', () {
+      final controller = SubtitlePreferenceController(
+        store: FakeSubtitlePreferenceStore(),
+      );
+      const tracks = [
+        SubtitleTrack(language: 'id', url: 'https://subs/id.vtt'),
+        SubtitleTrack(language: 'ja', url: 'https://subs/ja.vtt'),
+      ];
+
+      expect(controller.tracksForPicker(tracks), tracks);
+    });
+
     test('is remembered', () async {
       final store = FakeSubtitlePreferenceStore();
       SubtitlePreferenceController(store: store).select('id');

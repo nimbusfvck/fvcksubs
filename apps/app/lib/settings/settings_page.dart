@@ -175,11 +175,11 @@ class _SubtitlePreference extends StatelessWidget {
 
   final SubtitlePreferenceController controller;
 
-  static const options = <(String?, String, String)>[
-    (null, 'No preference', 'Keep the order provided by the source.'),
-    ('id', 'Indonesia', 'Prefer Indonesian subtitles when available.'),
-    ('en', 'English', 'Prefer English subtitles when available.'),
-  ];
+  static const (String?, String, String) noPreference = (
+    null,
+    'No preference',
+    'Keep the order provided by the source.',
+  );
 
   @override
   Widget build(BuildContext context) => Material(
@@ -223,7 +223,11 @@ class _SubtitlePreference extends StatelessWidget {
           onChanged: controller.select,
           child: Column(
             children: [
-              for (final (code, title, description) in options)
+              for (final (code, title, description)
+                  in <(String?, String, String)>[
+                    noPreference,
+                    ...supportedSubtitleLanguages,
+                  ])
                 RadioListTile<String?>(
                   value: code,
                   title: Text(

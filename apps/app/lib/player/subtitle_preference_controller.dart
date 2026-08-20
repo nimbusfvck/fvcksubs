@@ -4,6 +4,29 @@ import 'package:flutter/foundation.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
+const supportedSubtitleLanguages =
+    <(String code, String name, String description)>[
+      ('id', 'Indonesia', 'Prefer Indonesian subtitles when available.'),
+      ('en', 'English', 'Prefer English subtitles when available.'),
+    ];
+
+String subtitleLanguageKey(String value) {
+  final normalized = value.trim().toLowerCase();
+  final primary = normalized.split(RegExp('[-_]')).first;
+  return switch (primary) {
+    'indonesia' || 'indonesian' => 'id',
+    'english' => 'en',
+    _ => primary,
+  };
+}
+
+bool isSupportedSubtitleTrack(SubtitleTrack track) =>
+    supportedSubtitleLanguages.any(
+      (language) =>
+          subtitleLanguageKey(language.$1) ==
+          subtitleLanguageKey(track.language),
+    );
+
 class SubtitlePreferenceController extends ChangeNotifier {
   SubtitlePreferenceController({required this.store, String? initial})
     : _languageCode = initial;
@@ -25,12 +48,13 @@ class SubtitlePreferenceController extends ChangeNotifier {
     final wanted = _languageCode;
     if (wanted == null) return true;
     return tracks.any(
-      (track) => _primarySubtag(track.language) == _primarySubtag(wanted),
+      (track) =>
+          subtitleLanguageKey(track.language) == subtitleLanguageKey(wanted),
     );
   }
 
-  static String _primarySubtag(String tag) {
-    final cut = tag.indexOf(RegExp('[-_]'));
-    return (cut < 0 ? tag : tag.substring(0, cut)).toLowerCase();
-  }
+  List<SubtitleTrack> tracksForPicker(List<SubtitleTrack> tracks) =>
+      _languageCode == null
+      ? tracks
+      : tracks.where(isSupportedSubtitleTrack).toList();
 }
