@@ -174,7 +174,6 @@ class _HomePageState extends State<HomePage> {
                     ? null
                     : FeaturedHero(items: featured.items),
                 floating: true,
-                snap: true,
                 backgroundColor: AppColors.surfaceDark,
                 foregroundColor: AppColors.onDark,
                 surfaceTintColor: Colors.transparent,

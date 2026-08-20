@@ -133,11 +133,22 @@ class _FeaturedSlide extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: AppSpacing.md,
-          right: AppSpacing.xxl,
-          bottom: 64,
-          child: _FeaturedDetails(item: item),
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              72,
+              AppSpacing.md,
+              76,
+            ),
+            child: Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: _FeaturedDetails(item: item),
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -153,13 +164,14 @@ class _FeaturedDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = item.item;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           media.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTypography.displaySm.copyWith(color: AppColors.onDark),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -170,12 +182,14 @@ class _FeaturedDetails extends StatelessWidget {
             media.subtitle!,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
           ),
         ],
         const SizedBox(height: AppSpacing.sm),
         Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             FilledButton.icon(
               key: const Key('featured-play'),
@@ -267,6 +281,7 @@ class _FeaturedMeta extends StatelessWidget {
         ),
     ];
     return Wrap(
+      alignment: WrapAlignment.center,
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.xxs,
       crossAxisAlignment: WrapCrossAlignment.center,

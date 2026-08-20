@@ -152,7 +152,7 @@ void main() {
 
     final appBar = tester.widget<SliverAppBar>(find.byType(SliverAppBar));
     expect(appBar.floating, isTrue);
-    expect(appBar.snap, isTrue);
+    expect(appBar.snap, isFalse);
     expect(find.byIcon(Icons.search), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Live'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
