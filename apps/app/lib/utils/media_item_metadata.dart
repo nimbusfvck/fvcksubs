@@ -5,7 +5,7 @@ String? mediaItemSecondaryText(MediaItemV2 item) {
   final values = [
     if (item.subtitle != null) item.subtitle!,
     if (item.releaseYear != null) item.releaseYear!.toString(),
-    if (item.rating != null) '★ ${item.rating}',
+    if (item.rating != null) '★ ${item.rating!.toStringAsFixed(1)}',
   ];
   return values.isEmpty ? null : values.join(' • ');
 }

@@ -30,6 +30,25 @@ void main() {
     expect(find.text('LIVE'), findsNothing);
   });
 
+  testWidgets('rounds a rating in the card metadata', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: VideoItemV2(ref: ref, title: 'Rated video', rating: 8.76),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('★ 8.8'), findsOneWidget);
+  });
+
   testWidgets('event renders schedule and participants', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
