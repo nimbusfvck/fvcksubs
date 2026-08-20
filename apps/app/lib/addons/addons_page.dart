@@ -363,6 +363,7 @@ class _ExtensionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = registry.isExtensionEnabled(manifest.id);
+    final listing = installerController.listingFor(manifest.id);
     final streamProviders = [
       for (final provider in manifest.providers)
         if (provider.roles.contains(ProviderRole.stream)) provider,
@@ -421,6 +422,47 @@ class _ExtensionTile extends StatelessWidget {
                 color: AppColors.onDarkSoft,
               ),
             ),
+            if (listing?.isUpdate ?? false)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.brandAccent.withValues(alpha: 0.12),
+                    borderRadius: AppRadius.sm,
+                    border: Border.all(
+                      color: AppColors.brandAccent.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xs,
+                      vertical: AppSpacing.xxs,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.system_update_alt_outlined,
+                          size: 14,
+                          color: AppColors.brandAccent,
+                        ),
+                        const SizedBox(width: AppSpacing.xxs),
+                        Flexible(
+                          child: Text(
+                            'Version ${listing!.entry.version} available · Update now',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.onDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
         trailing: Switch(
