@@ -231,7 +231,6 @@ class _HomePageState extends State<HomePage> {
                 ),
                 SliverPersistentHeader(
                   key: const Key('home-category-header'),
-                  floating: true,
                   pinned: true,
                   delegate: _CategoryHeaderDelegate(
                     categories: categories,

@@ -155,6 +155,11 @@ void main() {
     expect(appBar.pinned, isTrue);
     expect(appBar.snap, isFalse);
     expect(find.byKey(const Key('home-category-header')), findsOneWidget);
+    final categoryHeader = tester.widget<SliverPersistentHeader>(
+      find.byKey(const Key('home-category-header')),
+    );
+    expect(categoryHeader.floating, isFalse);
+    expect(categoryHeader.pinned, isTrue);
     expect(find.byIcon(Icons.search), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Live'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
