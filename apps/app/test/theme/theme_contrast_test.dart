@@ -24,7 +24,7 @@ void main() {
 
     test('button labels and status text pass on their backgrounds', () {
       expect(
-        _contrast(AppColors.onPrimary, AppColors.brandAccent),
+        _contrast(AppColors.onPrimaryAction, AppColors.primaryAction),
         greaterThanOrEqualTo(4.5),
       );
       expect(

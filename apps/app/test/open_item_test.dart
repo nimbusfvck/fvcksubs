@@ -239,7 +239,7 @@ void main() {
 
     expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
-    expect(find.byType(OutlinedButton), findsOneWidget);
+    expect(find.byType(ElevatedButton), findsOneWidget);
   });
 
   testWidgets('protocol v2 detail renders credit and episode artwork', (
@@ -369,8 +369,8 @@ void main() {
 
     expect(find.textContaining('Releases'), findsOneWidget);
     expect(find.byIcon(Icons.play_circle_outline), findsNothing);
-    final playButton = tester.widget<OutlinedButton>(
-      find.byType(OutlinedButton),
+    final playButton = tester.widget<ElevatedButton>(
+      find.byType(ElevatedButton),
     );
     expect(find.text('Coming soon'), findsNWidgets(2));
     expect(playButton.onPressed, isNull);

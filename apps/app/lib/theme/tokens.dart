@@ -4,6 +4,8 @@ abstract final class AppColors {
   static const Color primary = Color(0xFF111111);
   static const Color primaryActive = Color(0xFF242424);
   static const Color onPrimary = Color(0xFFFFFFFF);
+  static const Color primaryAction = Color(0xFFFFFFFF);
+  static const Color onPrimaryAction = Color(0xFF111111);
   static const Color brandAccent = Color(0xFF2563EB);
 
   static const Color surfaceDark = Color(0xFF101010);

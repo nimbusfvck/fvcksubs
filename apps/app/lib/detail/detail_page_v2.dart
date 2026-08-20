@@ -193,27 +193,26 @@ class _DetailPageV2State extends State<DetailPageV2> {
               if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
               if (detail.tags.isNotEmpty) const SizedBox(height: AppSpacing.md),
               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: BlocBuilder<LibraryController, LibraryState>(
-                        bloc: libraryController,
-                        builder: (context, state) {
-                          final target = _primaryEpisode(detail, state);
-                          final primaryTarget = _primaryTarget(detail, target);
-                          return _PrimaryPlayButton(
-                            onPressed: primaryTarget == null
-                                ? null
-                                : () => playItemV2(context, primaryTarget),
-                            label: _playLabel(
-                              detail,
-                              target,
-                              state.recordFor(item.ref)?.progress,
-                            ),
-                          );
-                        },
-                      ),
+                  SizedBox(
+                    height: 48,
+                    child: BlocBuilder<LibraryController, LibraryState>(
+                      bloc: libraryController,
+                      builder: (context, state) {
+                        final target = _primaryEpisode(detail, state);
+                        final primaryTarget = _primaryTarget(detail, target);
+                        return _PrimaryPlayButton(
+                          onPressed: primaryTarget == null
+                              ? null
+                              : () => playItemV2(context, primaryTarget),
+                          label: _playLabel(
+                            detail,
+                            target,
+                            state.recordFor(item.ref)?.progress,
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -320,15 +319,11 @@ class _PrimaryPlayButton extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
+  Widget build(BuildContext context) => ElevatedButton.icon(
     onPressed: onPressed,
     icon: const Icon(Icons.play_arrow_rounded, size: 28),
     label: Text(label),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: AppColors.onDark,
-      side: const BorderSide(color: AppColors.onDark),
-      shape: const StadiumBorder(),
-    ),
+    style: ElevatedButton.styleFrom(shape: const StadiumBorder()),
   );
 }
 

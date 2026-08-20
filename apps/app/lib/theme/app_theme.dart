@@ -35,8 +35,8 @@ ThemeData buildDarkTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.brandAccent,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: AppColors.primaryAction,
+        foregroundColor: AppColors.onPrimaryAction,
         disabledBackgroundColor: AppColors.surfaceDarkHighest,
         disabledForegroundColor: AppColors.onDarkSoft,
         elevation: 0,
@@ -66,8 +66,8 @@ ThemeData buildDarkTheme() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.brandAccent,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: AppColors.primaryAction,
+        foregroundColor: AppColors.onPrimaryAction,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.md),
         elevation: 0,
         minimumSize: const Size(0, 44),
