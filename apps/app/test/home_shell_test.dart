@@ -47,7 +47,7 @@ void main() {
 
     // A real LibraryPage now — empty because nothing's been favorited or
     // watched in this fresh session, not because it isn't built.
-    expect(find.text('Nothing here yet'), findsOneWidget);
+    expect(find.text('No favorites yet'), findsOneWidget);
   });
 
   testWidgets('settings is a real destination', (tester) async {

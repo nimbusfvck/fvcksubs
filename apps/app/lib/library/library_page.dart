@@ -46,48 +46,22 @@ class _LibraryContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final empty =
-        legacy.continueWatching.isEmpty &&
-        legacy.favorites.isEmpty &&
-        legacy.history.isEmpty &&
-        v2.continueWatching.isEmpty &&
-        v2.favorites.isEmpty &&
-        v2.history.isEmpty;
+    final empty = legacy.favorites.isEmpty && v2.favorites.isEmpty;
     if (empty) return const _EmptyLibrary();
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
       children: [
-        if (v2.continueWatching.isNotEmpty)
-          _SectionV2(
-            title: 'Continue Watching',
-            records: v2.continueWatching,
-            registry: registry,
-          ),
         if (v2.favorites.isNotEmpty)
           _SectionV2(
             title: 'Favorites',
             records: v2.favorites,
             registry: registry,
           ),
-        if (v2.history.isNotEmpty)
-          _SectionV2(title: 'History', records: v2.history, registry: registry),
-        if (legacy.continueWatching.isNotEmpty)
-          _Section(
-            title: 'Continue Watching',
-            records: legacy.continueWatching,
-            registry: registry,
-          ),
         if (legacy.favorites.isNotEmpty)
           _Section(
             title: 'Favorites',
             records: legacy.favorites,
-            registry: registry,
-          ),
-        if (legacy.history.isNotEmpty)
-          _Section(
-            title: 'History',
-            records: legacy.history,
             registry: registry,
           ),
       ],
@@ -106,18 +80,18 @@ class _EmptyLibrary extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            Icons.bookmark_border,
+            Icons.favorite_border,
             size: 48,
             color: AppColors.onDarkSoft,
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Nothing here yet',
+            'No favorites yet',
             style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Your favourites and watch history will live here.',
+            'Save a title to find it here later.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
           ),

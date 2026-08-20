@@ -131,8 +131,10 @@ fraction when its position and duration are available.
 
 ### Library
 
-Favourites, history, and continue-watching, rendered with the same cards used everywhere
-else. Records whose extension is no longer installed render dimmed and marked unavailable.
+Favorites, rendered with the same cards used everywhere else. Continue Watching belongs on Home;
+watch history remains stored for playback decisions but is not a Library surface. Records whose
+extension is no longer installed render dimmed and marked unavailable. Custom user lists are a
+separate future library model rather than a variant of watch history.
 
 ### Addons
 

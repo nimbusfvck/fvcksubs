@@ -28,12 +28,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Nothing here yet'), findsOneWidget);
+    expect(find.text('No favorites yet'), findsOneWidget);
   });
 
-  testWidgets('renders Continue Watching, Favorites, and History sections', (
-    tester,
-  ) async {
+  testWidgets('renders favorites without watch history', (tester) async {
     final favorited = fakeItem(id: 'fav', title: 'Favorited Match');
     final watching = fakeItem(id: 'watching', title: 'In Progress Match');
 
@@ -56,14 +54,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
-    // Every watched record also shows in History.
-    expect(find.text('History'), findsOneWidget);
     expect(find.text('Favorited Match'), findsOneWidget);
-    // Both progressed and watched, so it legitimately appears in both
-    // Continue Watching and History.
-    expect(find.text('In Progress Match'), findsNWidgets(2));
+    expect(find.text('In Progress Match'), findsNothing);
   });
 
   testWidgets('renders protocol v2 records and reacts to Cubit updates', (
@@ -93,7 +86,7 @@ void main() {
 
     controller.toggleFavorite(item);
     await tester.pumpAndSettle();
-    expect(find.text('Nothing here yet'), findsOneWidget);
+    expect(find.text('No favorites yet'), findsOneWidget);
   });
 
   testWidgets(
