@@ -235,6 +235,13 @@ void main() {
       expect(t.controller.error, contains('Set a repo URL'));
     });
 
+    test('silent refresh with no repo set leaves the UI error-free', () async {
+      final t = build();
+      await t.controller.refresh(silent: true);
+      expect(t.controller.error, isNull);
+      expect(t.controller.busy, isFalse);
+    });
+
     test('lists a not-yet-installed extension as an install', () async {
       final t = build();
       await t.controller.setRepoUrl('$baseUrl/repo.json');
