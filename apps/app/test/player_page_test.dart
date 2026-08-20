@@ -54,6 +54,13 @@ void main() {
     );
   });
 
+  test('live edge state becomes stale after the playback tolerance', () {
+    const edge = Duration(seconds: 30);
+
+    expect(isAtLiveEdge(const Duration(seconds: 26), edge), isTrue);
+    expect(isAtLiveEdge(const Duration(seconds: 24), edge), isFalse);
+  });
+
   Future<void> pumpPlayer(
     WidgetTester tester, {
     List<SubtitleTrack> subtitles = const [],

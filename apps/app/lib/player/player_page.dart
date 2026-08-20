@@ -28,6 +28,7 @@ const Duration _kResumeEndGuard = Duration(seconds: 30);
 
 const Duration _kProgressReportInterval = Duration(seconds: 10);
 const Duration _kLiveEdgeSnapThreshold = Duration(seconds: 2);
+const Duration _kLiveEdgeSyncTolerance = Duration(seconds: 5);
 
 bool _isSameEpisode(MediaItem a, MediaItem b) =>
     a.extra['season'] == b.extra['season'] &&
@@ -64,6 +65,12 @@ Duration liveSeekTarget(Duration target, Duration edge) {
   if (edge <= Duration.zero) return target;
   final snapStart = edge - _kLiveEdgeSnapThreshold;
   return target >= snapStart ? edge : target;
+}
+
+/// Whether playback is close enough to the current live edge to be in sync.
+bool isAtLiveEdge(Duration position, Duration edge) {
+  if (edge <= Duration.zero) return true;
+  return position >= edge - _kLiveEdgeSyncTolerance;
 }
 
 class ResolvedSource {
@@ -965,6 +972,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     final timelineExtent = widget.isLive
         ? (_liveEdge > liveSeekEdge(value) ? _liveEdge : liveSeekEdge(value))
         : duration;
+    final atLiveEdge = isAtLiveEdge(position, timelineExtent);
     final isBuffering =
         widget.controller != null &&
         !_suppressBufferingIndicator &&
@@ -1269,7 +1277,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                             Row(
                               children: [
                                 if (widget.isLive)
-                                  const _PlayerLiveIndicator()
+                                  _PlayerLiveIndicator(isAtLiveEdge: atLiveEdge)
                                 else
                                   Text(
                                     _formatDuration(position),
@@ -1386,11 +1394,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 }
 
 class _PlayerLiveIndicator extends StatelessWidget {
-  const _PlayerLiveIndicator();
+  const _PlayerLiveIndicator({required this.isAtLiveEdge});
+
+  final bool isAtLiveEdge;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Live broadcast',
+    label: isAtLiveEdge
+        ? 'Live broadcast, at live edge'
+        : 'Live broadcast, behind live edge',
     child: Container(
       key: const Key('player-live-indicator'),
       padding: const EdgeInsets.symmetric(
@@ -1398,12 +1410,17 @@ class _PlayerLiveIndicator extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.liveAccent,
+        color: isAtLiveEdge
+            ? AppColors.liveAccent
+            : AppColors.surfaceDarkHighest,
+        border: isAtLiveEdge ? null : Border.all(color: AppColors.outlineDark),
         borderRadius: AppRadius.sm,
       ),
       child: Text(
         'LIVE',
-        style: AppTypography.liveBadge.copyWith(color: AppColors.primary),
+        style: AppTypography.liveBadge.copyWith(
+          color: isAtLiveEdge ? AppColors.primary : AppColors.onDarkSoft,
+        ),
       ),
     ),
   );
