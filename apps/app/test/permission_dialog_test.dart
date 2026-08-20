@@ -129,10 +129,7 @@ void main() {
     expect(find.text('• Added Motorsport event artwork.'), findsOneWidget);
     expect(find.text('• Fixed live catalog refresh.'), findsNothing);
     expect(find.textContaining('no new network access'), findsNothing);
-
-    await tester.tap(find.text('Network access'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('no new network access'), findsOneWidget);
+    expect(find.text('Network access'), findsNothing);
   });
 
   testWidgets('Install resolves true, Cancel resolves false', (tester) async {

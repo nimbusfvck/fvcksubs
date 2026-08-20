@@ -72,7 +72,7 @@ class _PermissionDialog extends StatelessWidget {
               ),
           ],
           const SizedBox(height: AppSpacing.md),
-          if (request.isUpdate)
+          if (request.isUpdate && request.newHosts.isNotEmpty)
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
@@ -86,7 +86,7 @@ class _PermissionDialog extends StatelessWidget {
               textColor: AppColors.onDark,
               children: [_NetworkAccessDetails(request: request)],
             )
-          else
+          else if (!request.isUpdate)
             _NetworkAccessDetails(request: request),
         ],
       ),
