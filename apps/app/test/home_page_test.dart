@@ -166,6 +166,32 @@ void main() {
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
   });
 
+  testWidgets('featured loading keeps the hero height with a shimmer', (
+    tester,
+  ) async {
+    final extension = FakeExtension(
+      id: 'slow',
+      categories: ['live'],
+      catalogDelay: const Duration(milliseconds: 300),
+      items: [fakeItem(id: 'hero', title: 'Hero')],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: ExtensionRegistry([extension]),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('featured-hero-placeholder')), findsOneWidget);
+    final appBar = tester.widget<SliverAppBar>(find.byType(SliverAppBar));
+    expect(appBar.expandedHeight, isNotNull);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('featured feed combines poster content with actions', (
     tester,
   ) async {

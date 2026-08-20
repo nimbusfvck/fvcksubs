@@ -125,6 +125,9 @@ text title.
 The featured artwork and gradient extend behind the status bar on handhelds. Category
 chips are a separate pinned sliver below the app bar. This keeps the current category
 available while the hero collapses normally.
+While the featured feed is loading, the hero keeps the same expanded height and shows a
+shimmer placeholder. An empty or failed feed removes the hero instead of leaving a blank
+surface.
 
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.

@@ -12,6 +12,7 @@ import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/shimmer_placeholder.dart';
 
 class FeaturedHero extends StatefulWidget {
   const FeaturedHero({super.key, required this.items});
@@ -20,6 +21,86 @@ class FeaturedHero extends StatefulWidget {
 
   @override
   State<FeaturedHero> createState() => _FeaturedHeroState();
+}
+
+/// Keeps the expanded app bar stable while the featured feed is loading.
+class FeaturedHeroPlaceholder extends StatelessWidget {
+  const FeaturedHeroPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Stack(
+      key: const Key('featured-hero-placeholder'),
+      fit: StackFit.expand,
+      children: [
+        const Positioned.fill(child: ShimmerPlaceholder(height: null)),
+        const DecoratedBox(
+          decoration: BoxDecoration(gradient: _featuredGradient),
+        ),
+        Positioned(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          bottom: 64,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const ShimmerPlaceholder(
+                width: 180,
+                height: 24,
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ShimmerPlaceholder(
+                    width: 56,
+                    height: 14,
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                  SizedBox(width: AppSpacing.xs),
+                  ShimmerPlaceholder(
+                    width: 56,
+                    height: 14,
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const ShimmerPlaceholder(
+                width: 280,
+                height: 14,
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppSpacing.xs,
+                children: [
+                  ShimmerPlaceholder(
+                    width: 92,
+                    height: 40,
+                    borderRadius: AppRadius.md,
+                  ),
+                  ShimmerPlaceholder(
+                    width: 40,
+                    height: 40,
+                    borderRadius: AppRadius.md,
+                  ),
+                  ShimmerPlaceholder(
+                    width: 40,
+                    height: 40,
+                    borderRadius: AppRadius.md,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _FeaturedHeroState extends State<FeaturedHero> {
@@ -120,19 +201,7 @@ class _FeaturedSlide extends StatelessWidget {
         else
           fallbackArtwork,
         const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xD9000000),
-                Color(0x40000000),
-                Color(0xF0101010),
-                Color(0xFF101010),
-              ],
-              stops: [0, 0.24, 0.58, 1],
-            ),
-          ),
+          decoration: BoxDecoration(gradient: _featuredGradient),
         ),
         Positioned(
           left: AppSpacing.md,
@@ -397,3 +466,15 @@ String _kindLabel(MediaItemV2 item) => switch (item.kind) {
 const _featuredTextShadows = [
   Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
 ];
+
+const _featuredGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [
+    Color(0xD9000000),
+    Color(0x40000000),
+    Color(0xF0101010),
+    Color(0xFF101010),
+  ],
+  stops: [0, 0.24, 0.58, 1],
+);

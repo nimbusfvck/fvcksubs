@@ -156,7 +156,8 @@ class _HomePageState extends State<HomePage> {
     return BlocBuilder<FeaturedController, FeaturedState>(
       bloc: _featuredController,
       builder: (context, featured) {
-        final featuredHeight = featured.items.isEmpty
+        final showFeatured = featured.items.isNotEmpty || featured.isLoading;
+        final featuredHeight = !showFeatured
             ? null
             : math
                   .min(
@@ -194,7 +195,9 @@ class _HomePageState extends State<HomePage> {
                               ignoring: progress < 0.5,
                               child: Opacity(
                                 opacity: progress,
-                                child: FeaturedHero(items: featured.items),
+                                child: featured.items.isEmpty
+                                    ? const FeaturedHeroPlaceholder()
+                                    : FeaturedHero(items: featured.items),
                               ),
                             );
                           },
