@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -204,13 +202,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                         builder: (context, state) {
                           final target = _primaryEpisode(detail, state);
                           final primaryTarget = _primaryTarget(detail, target);
-                          final progress = primaryTarget == null
-                              ? null
-                              : _progressFraction(
-                                  state.recordFor(primaryTarget.ref),
-                                );
                           return _PrimaryPlayButton(
-                            progress: progress,
                             onPressed: primaryTarget == null
                                 ? null
                                 : () => playItemV2(context, primaryTarget),
@@ -288,11 +280,17 @@ class _DetailPageV2State extends State<DetailPageV2> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 for (final entry in selectedGroup.episodes.indexed)
-                  _EpisodeTile(
-                    episode: entry.$2,
-                    onTap: () => playItemV2(
-                      context,
-                      _episodeItem(item, selectedGroup, entry.$1),
+                  BlocBuilder<LibraryController, LibraryState>(
+                    bloc: libraryController,
+                    builder: (context, state) => _EpisodeTile(
+                      episode: entry.$2,
+                      progress: _progressFraction(
+                        state.recordFor(entry.$2.ref),
+                      ),
+                      onTap: () => playItemV2(
+                        context,
+                        _episodeItem(item, selectedGroup, entry.$1),
+                      ),
                     ),
                   ),
               ],
@@ -316,90 +314,22 @@ class _DetailPageV2State extends State<DetailPageV2> {
 }
 
 class _PrimaryPlayButton extends StatelessWidget {
-  const _PrimaryPlayButton({
-    required this.progress,
-    required this.onPressed,
-    required this.label,
-  });
+  const _PrimaryPlayButton({required this.onPressed, required this.label});
 
-  final double? progress;
   final VoidCallback? onPressed;
   final String label;
 
   @override
-  Widget build(BuildContext context) {
-    final button = SizedBox.square(
-      dimension: 48,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          shape: const CircleBorder(),
-        ),
-        child: const Icon(Icons.play_arrow_rounded, size: 28),
-      ),
-    );
-    final fraction = progress;
-    final action = fraction == null
-        ? button
-        : CustomPaint(
-            key: const Key('primary-play-progress'),
-            foregroundPainter: _PlayProgressPainter(progress: fraction),
-            child: button,
-          );
-    return Semantics(
-      button: true,
-      label: label,
-      child: ExcludeSemantics(
-        child: Row(
-          children: [
-            action,
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                label,
-                style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayProgressPainter extends CustomPainter {
-  const _PlayProgressPainter({required this.progress});
-
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const strokeWidth = 2.5;
-    final track = Paint()
-      ..color = AppColors.outlineDark
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-    final indicator = Paint()
-      ..color = AppColors.brandAccent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    final center = size.center(Offset.zero);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    canvas.drawCircle(center, radius, track);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      math.pi * 2 * progress,
-      false,
-      indicator,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PlayProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onPressed,
+    icon: const Icon(Icons.play_arrow_rounded, size: 28),
+    label: Text(label),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: AppColors.onDark,
+      side: const BorderSide(color: AppColors.onDark),
+      shape: const StadiumBorder(),
+    ),
+  );
 }
 
 class _Header extends StatelessWidget {
@@ -707,9 +637,14 @@ class _CreditAvatar extends StatelessWidget {
 }
 
 class _EpisodeTile extends StatelessWidget {
-  const _EpisodeTile({required this.episode, required this.onTap});
+  const _EpisodeTile({
+    required this.episode,
+    required this.progress,
+    required this.onTap,
+  });
 
   final EpisodeSummary episode;
+  final double? progress;
   final VoidCallback onTap;
 
   @override
@@ -760,6 +695,23 @@ class _EpisodeTile extends StatelessWidget {
               )
             else if (episode.description case final description?)
               Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (progress case final value?) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Semantics(
+                label: '${(value * 100).round()} percent watched',
+                child: ExcludeSemantics(
+                  child: ClipRRect(
+                    borderRadius: AppRadius.pill,
+                    child: LinearProgressIndicator(
+                      value: value,
+                      minHeight: 3,
+                      color: AppColors.brandAccent,
+                      backgroundColor: AppColors.surfaceDarkHighest,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         trailing: unreleased ? null : const Icon(Icons.play_circle_outline),

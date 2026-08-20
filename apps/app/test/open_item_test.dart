@@ -175,6 +175,7 @@ void main() {
     const record = UserMediaState(
       item: watchedEpisode,
       progress: Duration(minutes: 12),
+      duration: Duration(minutes: 24),
     );
     const detail = MediaDetailV2(
       item: series,
@@ -205,6 +206,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Continue S2E3'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
   testWidgets('protocol v2 movie with progress offers to continue watching', (
@@ -237,7 +239,7 @@ void main() {
 
     expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
-    expect(find.byKey(const Key('primary-play-progress')), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsOneWidget);
   });
 
   testWidgets('protocol v2 detail renders credit and episode artwork', (
@@ -367,8 +369,8 @@ void main() {
 
     expect(find.textContaining('Releases'), findsOneWidget);
     expect(find.byIcon(Icons.play_circle_outline), findsNothing);
-    final playButton = tester.widget<ElevatedButton>(
-      find.byType(ElevatedButton),
+    final playButton = tester.widget<OutlinedButton>(
+      find.byType(OutlinedButton),
     );
     expect(find.text('Coming soon'), findsNWidgets(2));
     expect(playButton.onPressed, isNull);
