@@ -133,9 +133,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
+            AppSpacing.xs,
             AppSpacing.md,
             AppSpacing.md,
-            AppSpacing.xxl,
           ),
           sliver: SliverList.list(
             children: [
@@ -182,8 +182,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
               ],
               if (detail.facts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle('Details'),
-                const SizedBox(height: AppSpacing.sm),
                 _Facts(values: detail.facts),
               ],
               if (detail.credits.isNotEmpty) ...[

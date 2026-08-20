@@ -361,7 +361,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Details'), findsOneWidget);
     expect(find.text('Year'), findsOneWidget);
     expect(find.text('2025'), findsOneWidget);
     expect(find.text('Certification'), findsOneWidget);
