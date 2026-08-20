@@ -3,9 +3,16 @@ import 'package:flutter/material.dart';
 import '../theme/tokens.dart';
 
 class ShimmerPlaceholder extends StatefulWidget {
-  const ShimmerPlaceholder({super.key, this.height = 120});
+  const ShimmerPlaceholder({
+    super.key,
+    this.width,
+    this.height = 120,
+    this.borderRadius = BorderRadius.zero,
+  });
 
-  final double height;
+  final double? width;
+  final double? height;
+  final BorderRadiusGeometry borderRadius;
 
   @override
   State<ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
@@ -41,9 +48,12 @@ class _ShimmerPlaceholderState extends State<ShimmerPlaceholder>
           ],
         ).createShader(bounds);
       },
-      child: ColoredBox(
-        color: AppColors.surfaceDarkContainer,
-        child: SizedBox(height: widget.height, width: double.infinity),
+      child: ClipRRect(
+        borderRadius: widget.borderRadius,
+        child: ColoredBox(
+          color: AppColors.surfaceDarkContainer,
+          child: SizedBox(width: widget.width, height: widget.height),
+        ),
       ),
     ),
   );

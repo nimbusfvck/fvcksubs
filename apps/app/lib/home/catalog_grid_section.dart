@@ -8,7 +8,7 @@ import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/shimmer_placeholder.dart';
+import 'catalog_shimmer.dart';
 
 class CatalogGridSection extends StatefulWidget {
   const CatalogGridSection({
@@ -125,7 +125,10 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const ShimmerPlaceholder(height: 240);
+      return CatalogShimmer(
+        display: widget.binding.catalog.display,
+        sections: 1,
+      );
     }
     if (_error != null) {
       return Padding(
