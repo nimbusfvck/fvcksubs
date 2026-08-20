@@ -164,8 +164,17 @@ class _HomePageState extends State<HomePage> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverAppBar(
+                expandedHeight: featured.items.isEmpty
+                    ? null
+                    : math.min(
+                        560,
+                        math.max(420, MediaQuery.sizeOf(context).height * 0.62),
+                      ),
                 pinned: true,
-                floating: true,
+                floating: false,
+                flexibleSpace: featured.items.isEmpty
+                    ? null
+                    : FeaturedHero(items: featured.items),
                 backgroundColor: AppColors.surfaceDark,
                 foregroundColor: AppColors.onDark,
                 surfaceTintColor: Colors.transparent,
@@ -207,16 +216,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              if (featured.items.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: math.min(
-                      560,
-                      math.max(420, MediaQuery.sizeOf(context).height * 0.62),
-                    ),
-                    child: FeaturedHero(items: featured.items),
-                  ),
-                ),
               if (selected.toLowerCase() == 'all')
                 SliverToBoxAdapter(
                   child: ContinueWatchingShelf(

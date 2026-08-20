@@ -103,7 +103,7 @@ flowchart TB
 ```
 
 When catalog data is available, Home starts with one edge-to-edge featured carousel
-sliver.
+inside the app bar's expanded area.
 It merges the enabled category feeds, removes duplicate references, and keeps the
 highest-ranked item from each media kind before filling the remaining slots. The score
 uses only protocol data: rating and available artwork, with a small lifecycle priority
@@ -112,8 +112,8 @@ poster-led. Play resolves the selected item immediately, Favorite writes to the 
 library, and Info follows the normal detail-or-play navigation rule.
 
 The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips live in a pinned app bar above the hero, keeping the current category available
-while the hero scrolls away normally.
+chips live in the app bar's pinned bottom area, keeping the current category available
+while the hero collapses normally.
 
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.
@@ -125,8 +125,8 @@ indicator; unavailable extensions are omitted.
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
 so the user can distinguish a temporary problem from an empty section.
 
-Home uses a floating, pinned app bar above the featured hero. Its category chips stay available
-while the hero scrolls as ordinary content and does not snap with the toolbar.
+Home uses a pinned app bar with the featured hero in its expanded area. Its category chips stay
+available while the hero collapses normally; no snap animation is used.
 
 ### Full catalog
 

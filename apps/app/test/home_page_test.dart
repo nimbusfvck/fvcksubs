@@ -138,7 +138,7 @@ void main() {
     expect(first.selected, isTrue);
   });
 
-  testWidgets('home uses a floating app bar with search and categories', (
+  testWidgets('home uses a pinned app bar with search and categories', (
     tester,
   ) async {
     final registry = ExtensionRegistry([
@@ -151,7 +151,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final appBar = tester.widget<SliverAppBar>(find.byType(SliverAppBar));
-    expect(appBar.floating, isTrue);
+    expect(appBar.floating, isFalse);
     expect(appBar.pinned, isTrue);
     expect(appBar.snap, isFalse);
     expect(find.byIcon(Icons.search), findsOneWidget);
