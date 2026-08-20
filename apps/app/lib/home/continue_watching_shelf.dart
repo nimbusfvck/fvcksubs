@@ -5,6 +5,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
+import '../detail/detail_page_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
 import '../theme/tokens.dart';
@@ -89,6 +90,21 @@ class _ContinueCard extends StatelessWidget {
     _ => null,
   };
 
+  void _open(BuildContext context) {
+    final item = record.item;
+    if (item case EpisodeItemV2(:final episode, :final subtitle?)) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DetailPageV2(
+            item: SeriesItemV2(ref: episode.parentRef, title: subtitle),
+          ),
+        ),
+      );
+      return;
+    }
+    openVersionedItem(context, VersionedMediaItem(item: item));
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = record.item;
@@ -98,7 +114,7 @@ class _ContinueCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => openVersionedItem(context, VersionedMediaItem(item: item)),
+        onTap: () => _open(context),
         child: Stack(
           fit: StackFit.expand,
           children: [

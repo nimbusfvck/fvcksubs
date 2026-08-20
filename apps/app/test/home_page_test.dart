@@ -7,6 +7,7 @@ import 'package:fvcksubs_app/catalog/media_grid.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/addons/installer_controller.dart';
 import 'package:fvcksubs_app/catalog/plugin_selector.dart';
+import 'package:fvcksubs_app/detail/detail_page_v2.dart';
 import 'package:fvcksubs_app/home/catalog_shelf.dart';
 import 'package:fvcksubs_app/home/home_page.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
@@ -81,7 +82,11 @@ void main() {
       progress: Duration(minutes: 8),
     );
     final registry = ExtensionRegistry([
-      FakeExtension(id: 'watch', categories: ['all'], items: const []),
+      _DetailExtension(
+        detail: const MediaDetailV2(
+          item: SeriesItemV2(ref: seriesRef, title: 'The series title'),
+        ),
+      ),
     ]);
     final library = LibraryController(
       store: _HomeLibraryStore(),
@@ -100,6 +105,11 @@ void main() {
     expect(find.text('The series title'), findsOneWidget);
     expect(find.text('Episode 4'), findsOneWidget);
     expect(find.text('An episode title'), findsNothing);
+
+    await tester.tap(find.text('The series title'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailPageV2), findsOneWidget);
   });
 
   testWidgets('chips come from installed extensions, first one selected', (
@@ -838,6 +848,16 @@ void main() {
       expect(find.text('Updated catalog'), findsOneWidget);
     });
   });
+}
+
+class _DetailExtension extends FakeExtension {
+  _DetailExtension({required this.detail})
+    : super(id: 'watch', categories: const ['all'], items: const []);
+
+  final MediaDetailV2 detail;
+
+  @override
+  Future<MediaDetailV2> metaV2(MediaRef ref) async => detail;
 }
 
 class _HomeLibraryStore implements LibraryStore {
