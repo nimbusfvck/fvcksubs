@@ -171,7 +171,6 @@ class _FeaturedPageIndicator extends StatelessWidget {
     child: DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surfaceDark.withValues(alpha: 0.82),
-        border: Border.all(color: AppColors.outlineDark.withValues(alpha: 0.7)),
         borderRadius: AppRadius.pill,
       ),
       child: Padding(
