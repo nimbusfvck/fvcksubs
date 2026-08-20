@@ -150,6 +150,35 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
+  testWidgets('retries a transient empty live source result', (tester) async {
+    final item = fakeItem();
+    var calls = 0;
+    final extension = FakeExtension(
+      sourceListFor: (_) {
+        calls++;
+        return calls == 1
+            ? const []
+            : const [StreamSource(id: 'live', label: 'Live')];
+      },
+      resolved: const PlayableStream(
+        url: 'https://edge/live.m3u8',
+        format: StreamFormat.hls,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: playButton(item),
+        registry: ExtensionRegistry([extension]),
+      ),
+    );
+    await tester.tap(find.text('play'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(calls, 2);
+  });
+
   testWidgets('a stream this platform cannot play is dropped', (tester) async {
     final item = fakeItem();
     final registry = ExtensionRegistry([

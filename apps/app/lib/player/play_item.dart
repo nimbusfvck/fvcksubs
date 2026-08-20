@@ -94,7 +94,7 @@ Future<void> _playMedia(
   final sources = await _resolveWithOverlay(
     context,
     navigator,
-    (progress) => _playableSources(scope, item, progress),
+    (progress) => _playableSourcesWithRetry(scope, item, progress),
   );
   if (sources == null) return;
 
@@ -147,11 +147,28 @@ Future<List<ResolvedSource>?> _revalidate(
   PlaybackMedia item,
 ) async {
   final progress = _ResolveProgress();
-  final sources = await _playableSources(scope, item, progress);
+  final sources = await _playableSourcesWithRetry(scope, item, progress);
   progress.dispose();
   if (sources.isEmpty) return null;
   scope.sourceCache.store(item.ref, sources);
   return sources;
+}
+
+const _sourceRetryDelay = Duration(milliseconds: 250);
+
+/// A live event can be visible before a provider's event feed or stream
+/// endpoint has settled. Give that transient window one automatic retry so a
+/// first tap does not incorrectly report that the event has no sources.
+Future<List<ResolvedSource>> _playableSourcesWithRetry(
+  AppScope scope,
+  PlaybackMedia item,
+  _ResolveProgress progress,
+) async {
+  final firstAttempt = await _playableSources(scope, item, progress);
+  if (firstAttempt.isNotEmpty || !item.isLive) return firstAttempt;
+
+  await Future<void>.delayed(_sourceRetryDelay);
+  return _playableSources(scope, item, progress);
 }
 
 void _openPlayer(
