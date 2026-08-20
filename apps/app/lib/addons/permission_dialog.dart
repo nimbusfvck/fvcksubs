@@ -43,7 +43,7 @@ class _PermissionDialog extends StatelessWidget {
             ].join(' · '),
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
           ),
-          if (entry.description != null) ...[
+          if (!request.isUpdate && entry.description != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
               entry.description!,

@@ -110,6 +110,7 @@ void main() {
       tester,
       PermissionRequest(
         entry: entry(
+          description: 'The extension provides live streams.',
           releaseNotes: const [
             'Added Motorsport event artwork.',
             'Fixed live catalog refresh.',
@@ -124,6 +125,7 @@ void main() {
 
     expect(find.text('Version 1.4.0 → 2.0.0'), findsOneWidget);
     expect(find.text("What's new"), findsOneWidget);
+    expect(find.text('The extension provides live streams.'), findsNothing);
     expect(find.text('• Added Motorsport event artwork.'), findsOneWidget);
     expect(find.text('• Fixed live catalog refresh.'), findsNothing);
     expect(find.textContaining('no new network access'), findsNothing);
