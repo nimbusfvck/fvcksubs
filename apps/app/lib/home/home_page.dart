@@ -153,110 +153,135 @@ class _HomePageState extends State<HomePage> {
       for (final binding in registry.catalogsFor(selected))
         if (binding.extensionId == pluginId) binding,
     ];
-
     return BlocBuilder<FeaturedController, FeaturedState>(
       bloc: _featuredController,
-      builder: (context, featured) => Scaffold(
-        body: RefreshIndicator(
-          onRefresh: () => _refresh(bindings, selected),
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverAppBar(
-                expandedHeight: featured.items.isEmpty
-                    ? null
-                    : math.min(
-                        560,
-                        math.max(420, MediaQuery.sizeOf(context).height * 0.62),
-                      ),
-                pinned: true,
-                floating: false,
-                flexibleSpace: featured.items.isEmpty
-                    ? null
-                    : FeaturedHero(items: featured.items),
-                backgroundColor: AppColors.surfaceDark,
-                foregroundColor: AppColors.onDark,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                titleSpacing: AppSpacing.md,
-                title: Text(
-                  'fvcksubs',
-                  style: AppTypography.titleLg.copyWith(
-                    color: AppColors.onDark,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Search',
-                    icon: const Icon(Icons.search),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SearchPage(),
-                      ),
+      builder: (context, featured) {
+        final featuredHeight = featured.items.isEmpty
+            ? null
+            : math
+                  .min(
+                    560,
+                    math.max(420, MediaQuery.sizeOf(context).height * 0.62),
+                  )
+                  .toDouble();
+        return Scaffold(
+          body: RefreshIndicator(
+            onRefresh: () => _refresh(bindings, selected),
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: featuredHeight,
+                  pinned: true,
+                  floating: false,
+                  flexibleSpace: featuredHeight == null
+                      ? null
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final minHeight =
+                                MediaQuery.paddingOf(context).top +
+                                kToolbarHeight;
+                            final range = math.max(
+                              1,
+                              featuredHeight - minHeight,
+                            );
+                            final progress =
+                                ((constraints.maxHeight - minHeight) / range)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
+                            return IgnorePointer(
+                              ignoring: progress < 0.5,
+                              child: Opacity(
+                                opacity: progress,
+                                child: FeaturedHero(items: featured.items),
+                              ),
+                            );
+                          },
+                        ),
+                  backgroundColor: AppColors.surfaceDark,
+                  foregroundColor: AppColors.onDark,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  titleSpacing: AppSpacing.md,
+                  title: Text(
+                    'fvcksubs',
+                    style: AppTypography.titleLg.copyWith(
+                      color: AppColors.onDark,
                     ),
                   ),
-                  if (plugins.length > 1 && pluginId != null)
-                    PluginSelector(
-                      plugins: plugins,
-                      selectedId: pluginId,
-                      onSelected: (id) => _selectPlugin(scope, id),
+                  actions: [
+                    IconButton(
+                      tooltip: 'Search',
+                      icon: const Icon(Icons.search),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SearchPage(),
+                        ),
+                      ),
                     ),
-                ],
-              ),
-              SliverPersistentHeader(
-                key: const Key('home-category-header'),
-                floating: true,
-                pinned: true,
-                delegate: _CategoryHeaderDelegate(
-                  categories: categories,
-                  selected: selected,
-                  onSelected: _selectCategory,
+                    if (plugins.length > 1 && pluginId != null)
+                      PluginSelector(
+                        plugins: plugins,
+                        selectedId: pluginId,
+                        onSelected: (id) => _selectPlugin(scope, id),
+                      ),
+                  ],
                 ),
-              ),
-              if (selected.toLowerCase() == 'all')
-                SliverToBoxAdapter(
-                  child: ContinueWatchingShelf(
-                    controller: scope.libraryController,
-                    registry: registry,
+                SliverPersistentHeader(
+                  key: const Key('home-category-header'),
+                  floating: true,
+                  pinned: true,
+                  delegate: _CategoryHeaderDelegate(
+                    categories: categories,
+                    selected: selected,
+                    onSelected: _selectCategory,
                   ),
                 ),
-              if (bindings.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _EmptyCategory(category: selected),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, i) {
-                      final key = ValueKey(
-                        '$_generation/$selected/${bindings[i].extensionId}/'
-                        '${bindings[i].extension.manifest.version}/'
-                        '${bindings[i].catalog.id}',
-                      );
-                      if (bindings[i].catalog.expanded) {
-                        return CatalogGridSection(
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: ContinueWatchingShelf(
+                      controller: scope.libraryController,
+                      registry: registry,
+                    ),
+                  ),
+                if (bindings.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyCategory(category: selected),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, i) {
+                        final key = ValueKey(
+                          '$_generation/$selected/${bindings[i].extensionId}/'
+                          '${bindings[i].extension.manifest.version}/'
+                          '${bindings[i].catalog.id}',
+                        );
+                        if (bindings[i].catalog.expanded) {
+                          return CatalogGridSection(
+                            key: key,
+                            binding: bindings[i],
+                            category: selected,
+                            scrollController: _scrollController,
+                          );
+                        }
+                        return CatalogShelf(
                           key: key,
                           binding: bindings[i],
                           category: selected,
-                          scrollController: _scrollController,
                         );
-                      }
-                      return CatalogShelf(
-                        key: key,
-                        binding: bindings[i],
-                        category: selected,
-                      );
-                    }, childCount: bindings.length),
+                      }, childCount: bindings.length),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

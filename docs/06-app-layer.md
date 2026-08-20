@@ -127,6 +127,7 @@ so the user can distinguish a temporary problem from an empty section.
 
 Home uses a pinned app bar with the featured hero in its expanded area, followed by a separate
 floating category header. The hero collapses normally; no snap animation is used.
+When collapsed, the hero fades out completely so its artwork does not remain behind the toolbar.
 
 ### Full catalog
 
