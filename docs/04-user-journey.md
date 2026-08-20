@@ -342,6 +342,10 @@ Extension-level and provider-level switches are **independent**: an extension ca
 with one of its sources disabled. Enabling it again restores the previous configuration.
 The disabled state is stored by id and retained across updates.
 
+The index URL is retained across launches. If it is available, the app checks it in the
+background at startup, so each installed extension card can show `Up to date` or an `Update`
+action before the user opens the repository section.
+
 ## 4.11 What the user never has to think about
 
 | Hidden work | Effect they notice |

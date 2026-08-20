@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -106,6 +107,10 @@ Future<void> main() async {
       navigatorKey: navigatorKey,
     ),
   );
+
+  // A saved repository is checked in the background so installed cards can
+  // show update status without making the user open Addons first.
+  unawaited(installerController.refresh(silent: true));
 }
 
 Future<void> loadInstalledExtensions(

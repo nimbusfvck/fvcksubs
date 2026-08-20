@@ -218,8 +218,7 @@ class _ListingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entry = listing.entry;
-    final upToDate =
-        listing.isUpdate && listing.installedVersion == entry.version;
+    final upToDate = listing.isUpToDate;
     final details = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -247,7 +246,7 @@ class _ListingRow extends StatelessWidget {
               ),
               Text(
                 [
-                  listing.isUpdate
+                  listing.isInstalled
                       ? 'installed ${listing.installedVersion} · repo ${entry.version}'
                       : 'v${entry.version}',
                   if (entry.author != null) 'by ${entry.author}',
@@ -265,7 +264,7 @@ class _ListingRow extends StatelessWidget {
     );
     final action = upToDate
         ? const _StatusPill(label: 'Up to date', positive: true)
-        : !listing.isUpdate
+        : !listing.isInstalled
         ? FilledButton(
             onPressed: controller.busy ? null : () => controller.install(entry),
             child: const Text('Install'),
@@ -320,6 +319,7 @@ class _ExtensionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = registry.isExtensionEnabled(manifest.id);
+    final listing = installerController.listingFor(manifest.id);
     final streamProviders = [
       for (final provider in manifest.providers)
         if (provider.roles.contains(ProviderRole.stream)) provider,
@@ -378,6 +378,28 @@ class _ExtensionTile extends StatelessWidget {
                 color: AppColors.onDarkSoft,
               ),
             ),
+            const SizedBox(height: AppSpacing.xs),
+            if (listing?.isUpdate ?? false)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: installerController.busy
+                      ? null
+                      : () => installerController.install(listing!.entry),
+                  icon: const Icon(Icons.download_outlined, size: 17),
+                  label: Text('Update to v${listing!.entry.version}'),
+                ),
+              )
+            else if (listing?.isUpToDate ?? false)
+              const _StatusPill(label: 'Up to date', positive: true)
+            else if (installerController.busy &&
+                installerController.repoUrl != null)
+              Text(
+                'Checking for updates…',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.onDarkSoft,
+                ),
+              ),
           ],
         ),
         trailing: Switch(

@@ -120,8 +120,13 @@ class ExtensionInstaller {
 
   static bool _isNewerOrMissing(String candidate, String? installed) {
     if (installed == null) return true;
-    return _compareVersions(candidate, installed) > 0;
+    return isVersionNewer(candidate, installed);
   }
+
+  /// Whether [candidate] is newer than [installed] using the repo's dotted
+  /// integer version rules.
+  static bool isVersionNewer(String candidate, String installed) =>
+      _compareVersions(candidate, installed) > 0;
 
   /// Compares two dotted-integer version strings ("0.2.0" vs "0.10.0"),
   /// numeric per segment rather than lexicographic — "0.10.0" is newer than

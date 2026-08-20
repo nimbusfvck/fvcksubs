@@ -34,7 +34,13 @@ class RepoListing {
 
   final String? installedVersion;
 
-  bool get isUpdate => installedVersion != null;
+  bool get isInstalled => installedVersion != null;
+
+  bool get isUpdate =>
+      installedVersion != null &&
+      ExtensionInstaller.isVersionNewer(entry.version, installedVersion!);
+
+  bool get isUpToDate => isInstalled && !isUpdate;
 }
 
 class InstallerState {
@@ -101,6 +107,13 @@ class InstallerController extends Cubit<InstallerState> {
   bool get busy => state.busy;
   String? get error => state.error;
 
+  RepoListing? listingFor(String extensionId) {
+    for (final listing in state.listings) {
+      if (listing.entry.id == extensionId) return listing;
+    }
+    return null;
+  }
+
   Future<void> setRepoUrl(String? url) async {
     final trimmed = (url == null || url.trim().isEmpty) ? null : url.trim();
     if (trimmed == state.repoUrl) return;
@@ -115,10 +128,10 @@ class InstallerController extends Cubit<InstallerState> {
     await repoStore.save(trimmed);
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool silent = false}) async {
     final url = state.repoUrl;
     if (url == null) {
-      emit(state.copyWith(error: 'Set a repo URL first.'));
+      if (!silent) emit(state.copyWith(error: 'Set a repo URL first.'));
       return;
     }
 
@@ -142,12 +155,16 @@ class InstallerController extends Cubit<InstallerState> {
         ),
       );
     } catch (e) {
-      emit(
-        state.copyWith(
-          listings: const [],
-          error: 'Could not read the repo: $e',
-        ),
-      );
+      if (silent) {
+        emit(state.copyWith(clearError: true));
+      } else {
+        emit(
+          state.copyWith(
+            listings: const [],
+            error: 'Could not read the repo: $e',
+          ),
+        );
+      }
     } finally {
       emit(state.copyWith(busy: false));
     }

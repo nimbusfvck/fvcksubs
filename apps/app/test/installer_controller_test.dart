@@ -295,7 +295,9 @@ void main() {
 
       final listing = t.controller.listings.single;
       expect(listing.installedVersion, '1.0.0');
-      expect(listing.isUpdate, isTrue);
+      expect(listing.isInstalled, isTrue);
+      expect(listing.isUpToDate, isTrue);
+      expect(listing.isUpdate, isFalse);
     });
 
     test(
@@ -308,6 +310,8 @@ void main() {
 
         repoVersion = '2.0.0';
         await t.controller.refresh();
+        expect(t.controller.listings.single.isUpdate, isTrue);
+        expect(t.controller.listings.single.isUpToDate, isFalse);
         await t.controller.install(t.controller.listings.single.entry);
 
         expect(
