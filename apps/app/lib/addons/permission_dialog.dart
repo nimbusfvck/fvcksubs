@@ -57,7 +57,10 @@ class _PermissionDialog extends StatelessWidget {
               style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
             ),
             const SizedBox(height: AppSpacing.xs),
-            for (final note in entry.releaseNotes)
+            for (final note
+                in (request.isUpdate
+                    ? entry.releaseNotes.take(1)
+                    : entry.releaseNotes))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Text(
@@ -69,47 +72,22 @@ class _PermissionDialog extends StatelessWidget {
               ),
           ],
           const SizedBox(height: AppSpacing.md),
-          if (request.newHosts.isEmpty)
-            Text(
-              request.isUpdate
-                  ? 'This update requests no new network access.'
-                  : 'This extension requests no network access.',
-              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+          if (request.isUpdate)
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Text(
+                'Network access',
+                style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+              ),
+              collapsedIconColor: AppColors.onDarkSoft,
+              collapsedTextColor: AppColors.onDark,
+              iconColor: AppColors.onDark,
+              textColor: AppColors.onDark,
+              children: [_NetworkAccessDetails(request: request)],
             )
-          else ...[
-            Text(
-              request.isUpdate
-                  ? 'This update wants access to new sites:'
-                  : 'This extension will be able to reach:',
-              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            for (final host in request.newHosts)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  '• $host',
-                  style: AppTypography.bodyMd.copyWith(
-                    color: AppColors.liveAccent,
-                  ),
-                ),
-              ),
-          ],
-          if (request.alreadyGrantedHosts.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'Already allowed:',
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-            ),
-            const SizedBox(height: 2),
-            for (final host in request.alreadyGrantedHosts)
-              Text(
-                '• $host',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.onDarkSoft,
-                ),
-              ),
-          ],
+          else
+            _NetworkAccessDetails(request: request),
         ],
       ),
       actions: [
@@ -124,4 +102,54 @@ class _PermissionDialog extends StatelessWidget {
       ],
     );
   }
+}
+
+class _NetworkAccessDetails extends StatelessWidget {
+  const _NetworkAccessDetails({required this.request});
+
+  final PermissionRequest request;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (request.newHosts.isEmpty)
+        Text(
+          request.isUpdate
+              ? 'This update requests no new network access.'
+              : 'This extension requests no network access.',
+          style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+        )
+      else ...[
+        Text(
+          request.isUpdate
+              ? 'This update wants access to new sites:'
+              : 'This extension will be able to reach:',
+          style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final host in request.newHosts)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              '• $host',
+              style: AppTypography.bodyMd.copyWith(color: AppColors.liveAccent),
+            ),
+          ),
+      ],
+      if (request.alreadyGrantedHosts.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Already allowed:',
+          style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+        ),
+        const SizedBox(height: 2),
+        for (final host in request.alreadyGrantedHosts)
+          Text(
+            '• $host',
+            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+          ),
+      ],
+    ],
+  );
 }

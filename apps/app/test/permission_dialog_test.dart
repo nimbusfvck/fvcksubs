@@ -89,9 +89,16 @@ void main() {
     );
 
     expect(find.text('Update Remote Extension?'), findsOneWidget);
-    expect(find.textContaining('wants access to new sites'), findsOneWidget);
+    expect(find.text('Network access'), findsOneWidget);
+    expect(find.textContaining('wants access to new sites'), findsNothing);
     // The new host is what needs attention; the old one is shown separately
     // under "Already allowed" rather than mixed in with it.
+    expect(find.text('• tracker.example'), findsNothing);
+    expect(find.text('Already allowed:'), findsNothing);
+
+    await tester.tap(find.text('Network access'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('wants access to new sites'), findsOneWidget);
     expect(find.text('• tracker.example'), findsOneWidget);
     expect(find.text('Already allowed:'), findsOneWidget);
   });
@@ -118,7 +125,11 @@ void main() {
     expect(find.text('Version 1.4.0 → 2.0.0'), findsOneWidget);
     expect(find.text("What's new"), findsOneWidget);
     expect(find.text('• Added Motorsport event artwork.'), findsOneWidget);
-    expect(find.text('• Fixed live catalog refresh.'), findsOneWidget);
+    expect(find.text('• Fixed live catalog refresh.'), findsNothing);
+    expect(find.textContaining('no new network access'), findsNothing);
+
+    await tester.tap(find.text('Network access'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('no new network access'), findsOneWidget);
   });
 
