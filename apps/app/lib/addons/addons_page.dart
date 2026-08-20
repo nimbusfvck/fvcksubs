@@ -656,19 +656,21 @@ class _ReleaseDetails extends StatelessWidget {
             const _StatusPill(label: 'Up to date', positive: true)
           else
             const _StatusPill(label: 'Update status unavailable'),
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: checking ? null : onCheckUpdates,
-            icon: checking
-                ? const SizedBox.square(
-                    dimension: 17,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 17),
-            label: Text(
-              checking ? 'Checking for updates…' : 'Check for updates',
+          if (onUpdate == null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: checking ? null : onCheckUpdates,
+              icon: checking
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 17),
+              label: Text(
+                checking ? 'Checking for updates…' : 'Check for updates',
+              ),
             ),
-          ),
+          ],
           if (entry?.releaseNotes.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
