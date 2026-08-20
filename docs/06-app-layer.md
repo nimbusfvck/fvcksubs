@@ -102,7 +102,8 @@ flowchart TB
     CAR & GRD -->|see more| FULL["Full catalog, already narrowed"]
 ```
 
-When catalog data is available, Home starts with one edge-to-edge featured carousel.
+When catalog data is available, Home starts with one edge-to-edge featured carousel
+sliver.
 It merges the enabled category feeds, removes duplicate references, and keeps the
 highest-ranked item from each media kind before filling the remaining slots. The score
 uses only protocol data: rating and available artwork, with a small lifecycle priority
@@ -111,7 +112,8 @@ poster-led. Play resolves the selected item immediately, Favorite writes to the 
 library, and Info follows the normal detail-or-play navigation rule.
 
 The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips remain in the floating app bar, so they hide and reappear with the browsing chrome.
+chips live in a pinned app bar below the hero, keeping the current category available
+while the hero scrolls away normally.
 
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.
@@ -123,9 +125,8 @@ indicator; unavailable extensions are omitted.
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
 so the user can distinguish a temporary problem from an empty section.
 
-Home uses a floating app bar. Its category chips live in the app bar's bottom area, so they hide
-with the bar while scrolling down and return when scrolling up. The featured hero scrolls as
-ordinary content and does not snap with the toolbar.
+Home uses a floating, pinned app bar below the featured hero. Its category chips stay available
+while the hero scrolls as ordinary content and does not snap with the toolbar.
 
 ### Full catalog
 

@@ -128,23 +128,26 @@ class _FeaturedSlide extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xC9000000), Color(0x18000000), Color(0xF2101010)],
-              stops: [0, 0.42, 1],
+              colors: [
+                Color(0xC9000000),
+                Color(0x18000000),
+                Color(0xB8101010),
+                Color(0xFF101010),
+              ],
+              stops: [0, 0.34, 0.72, 1],
             ),
           ),
         ),
-        Positioned.fill(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              72,
-              AppSpacing.md,
-              76,
-            ),
-            child: Align(
-              alignment: Alignment.center,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
+        Positioned(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          bottom: 64,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: SizedBox(
+                width: double.infinity,
                 child: _FeaturedDetails(item: item),
               ),
             ),

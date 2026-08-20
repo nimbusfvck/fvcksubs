@@ -163,16 +163,18 @@ class _HomePageState extends State<HomePage> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              if (featured.items.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: math.min(
+                      560,
+                      math.max(420, MediaQuery.sizeOf(context).height * 0.62),
+                    ),
+                    child: FeaturedHero(items: featured.items),
+                  ),
+                ),
               SliverAppBar(
-                expandedHeight: featured.items.isEmpty
-                    ? null
-                    : math.min(
-                        560,
-                        math.max(420, MediaQuery.sizeOf(context).height * 0.62),
-                      ),
-                flexibleSpace: featured.items.isEmpty
-                    ? null
-                    : FeaturedHero(items: featured.items),
+                pinned: true,
                 floating: true,
                 backgroundColor: AppColors.surfaceDark,
                 foregroundColor: AppColors.onDark,
