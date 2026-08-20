@@ -20,76 +20,86 @@ class AddonsPage extends StatelessWidget {
         bloc: scope.installerController,
         builder: (context, _) {
           final installed = scope.registry.installed;
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.xxl,
+          return Scaffold(
+            floatingActionButton: FloatingActionButton.extended(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) =>
+                    _AddExtensionDialog(controller: scope.installerController),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add'),
+              tooltip: 'Add extension',
             ),
-            children: [
-              Semantics(
-                header: true,
-                child: Text(
-                  'Addons',
-                  style: AppTypography.displaySm.copyWith(
-                    color: AppColors.onDark,
+            body: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.xxl,
+              ),
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Addons',
+                    style: AppTypography.displaySm.copyWith(
+                      color: AppColors.onDark,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xxs),
-              Text(
-                'Manage extensions, sources, and playback preferences.',
-                style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.onDarkSoft,
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Manage extensions, sources',
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _RepoSection(controller: scope.installerController),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionHeader(
-                title: 'Installed',
-                trailing: installed.isEmpty
-                    ? null
-                    : '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              if (installed.isEmpty)
-                _Panel(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.lg,
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.extension_off_outlined,
-                          color: AppColors.onDarkSoft,
-                          size: 32,
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'No extensions installed.',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.bodyMd.copyWith(
+                const SizedBox(height: AppSpacing.lg),
+                _SectionHeader(
+                  title: 'Installed',
+                  trailing: installed.isEmpty
+                      ? null
+                      : '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (installed.isEmpty)
+                  _Panel(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.lg,
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.extension_off_outlined,
                             color: AppColors.onDarkSoft,
+                            size: 32,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'No extensions installed.',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodyMd.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                )
-              else
-                for (final manifest in installed) ...[
-                  _ExtensionTile(
-                    manifest: manifest,
-                    registry: scope.registry,
-                    controller: scope.addonsController,
-                    installerController: scope.installerController,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-            ],
+                  )
+                else
+                  for (final manifest in installed) ...[
+                    _ExtensionTile(
+                      manifest: manifest,
+                      registry: scope.registry,
+                      controller: scope.addonsController,
+                      installerController: scope.installerController,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+              ],
+            ),
           );
         },
       ),
@@ -97,16 +107,16 @@ class AddonsPage extends StatelessWidget {
   }
 }
 
-class _RepoSection extends StatefulWidget {
-  const _RepoSection({required this.controller});
+class _AddExtensionDialog extends StatefulWidget {
+  const _AddExtensionDialog({required this.controller});
 
   final InstallerController controller;
 
   @override
-  State<_RepoSection> createState() => _RepoSectionState();
+  State<_AddExtensionDialog> createState() => _AddExtensionDialogState();
 }
 
-class _RepoSectionState extends State<_RepoSection> {
+class _AddExtensionDialogState extends State<_AddExtensionDialog> {
   late final TextEditingController _urlField = TextEditingController(
     text: widget.controller.repoUrl ?? '',
   );
@@ -117,7 +127,7 @@ class _RepoSectionState extends State<_RepoSection> {
     super.dispose();
   }
 
-  Future<void> _refresh() async {
+  Future<void> _check() async {
     await widget.controller.setRepoUrl(_urlField.text);
     await widget.controller.refresh();
   }
@@ -125,25 +135,27 @@ class _RepoSectionState extends State<_RepoSection> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    return _Panel(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _SectionHeader(
-              title: 'Extension repo',
-              icon: Icons.cloud_download_outlined,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Check a repository to install or update extensions.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final field = TextField(
+    return AlertDialog(
+      title: const Text('Add extension'),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 560,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.68,
+        ),
+        child: BlocBuilder<InstallerController, InstallerState>(
+          bloc: controller,
+          builder: (context, _) => SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Load a repository to install an extension.',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
                   controller: _urlField,
                   enabled: !controller.busy,
                   autocorrect: false,
@@ -159,52 +171,56 @@ class _RepoSectionState extends State<_RepoSection> {
                     isDense: true,
                   ),
                   autofillHints: const [AutofillHints.url],
-                  onSubmitted: (_) => _refresh(),
-                );
-                final button = FilledButton.icon(
-                  onPressed: controller.busy ? null : _refresh,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Check'),
-                );
-                if (constraints.maxWidth < 440) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      field,
-                      const SizedBox(height: AppSpacing.sm),
-                      button,
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: field),
-                    const SizedBox(width: AppSpacing.sm),
-                    button,
-                  ],
-                );
-              },
-            ),
-            if (controller.busy) ...[
-              const SizedBox(height: AppSpacing.md),
-              const LinearProgressIndicator(),
-            ],
-            if (controller.error != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                controller.error!,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.liveAccent,
+                  onSubmitted: (_) => _check(),
                 ),
-              ),
-            ],
-            for (final listing in controller.installableListings) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _ListingRow(listing: listing, controller: controller),
-            ],
-          ],
+                const SizedBox(height: AppSpacing.sm),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: controller.busy ? null : _check,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Check'),
+                  ),
+                ),
+                if (controller.busy) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const LinearProgressIndicator(),
+                ],
+                if (controller.error != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    controller.error!,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.liveAccent,
+                    ),
+                  ),
+                ],
+                for (final listing in controller.installableListings) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _ListingRow(listing: listing, controller: controller),
+                ],
+                if (!controller.busy &&
+                    controller.listings.isNotEmpty &&
+                    controller.installableListings.isEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'All extensions from this repository are installed.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }
@@ -658,10 +674,9 @@ class _Panel extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.icon, this.trailing});
+  const _SectionHeader({required this.title, this.trailing});
 
   final String title;
-  final IconData? icon;
   final String? trailing;
 
   @override
@@ -669,10 +684,6 @@ class _SectionHeader extends StatelessWidget {
     header: true,
     child: Row(
       children: [
-        if (icon != null) ...[
-          Icon(icon, size: 19, color: AppColors.onDarkSoft),
-          const SizedBox(width: AppSpacing.xs),
-        ],
         Expanded(
           child: Text(
             title,

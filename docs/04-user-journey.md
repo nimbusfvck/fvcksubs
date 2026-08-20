@@ -332,7 +332,7 @@ affected records remain marked as unavailable.
 flowchart TB
     AD["Addons screen"] --> E1["Per-extension switch"]
     AD --> E2["Per-provider switch — e.g. one source off, the rest on"]
-    AD --> E3["Index URL, check for updates, install"]
+AD --> E3["Add button → index URL, check, install"]
 
     E1 --> EFF["Turning an extension off empties whatever it contributed,<br/>immediately, on whatever screen is showing"]
     E2 --> EFF2["Turning one source off removes it from every future<br/>source list, without touching the rest of the extension"]
@@ -342,9 +342,10 @@ Extension-level and provider-level switches are **independent**: an extension ca
 with one of its sources disabled. Enabling it again restores the previous configuration.
 The disabled state is stored by id and retained across updates.
 
-The index URL is retained across launches. If it is available, the app checks it in the
-background at startup. The repository section only lists extensions that are not installed;
-installed extensions keep their release notes, version, and update status in their detail page.
+The Add button opens the repository dialog. The index URL is retained across launches. If it is
+available, the app checks it in the background at startup. The dialog only lists extensions that
+are not installed; installed extensions keep their release notes, version, and update status in
+their detail page.
 
 ## 4.11 What the user never has to think about
 

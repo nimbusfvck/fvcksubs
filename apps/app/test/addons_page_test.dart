@@ -196,7 +196,7 @@ void main() {
     expect(find.text('No extensions installed.'), findsOneWidget);
   });
 
-  group('the repo / installer section', () {
+  group('the add-extension dialog', () {
     /// A controller whose repo has already been "checked", without any
     /// network: the UI's job here is rendering what the controller holds,
     /// and installer_controller_test.dart covers the fetching itself.
@@ -222,7 +222,9 @@ void main() {
       );
     }
 
-    testWidgets('shows the saved repo URL in the field', (tester) async {
+    testWidgets('Add opens the saved repo URL in the install dialog', (
+      tester,
+    ) async {
       final registry = ExtensionRegistry([FakeExtension(id: 'fake')]);
       await tester.pumpWidget(
         wrapApp(
@@ -233,7 +235,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Extension repo'), findsOneWidget);
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add extension'), findsOneWidget);
       expect(find.text('https://example.invalid/repo.json'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Check'), findsOneWidget);
     });
@@ -251,6 +256,8 @@ void main() {
           installerController: controller,
         ),
       );
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Check'));
       await tester.pumpAndSettle();
 
@@ -259,9 +266,7 @@ void main() {
       expect(find.textContaining('Could not read the repo'), findsOneWidget);
     });
 
-    testWidgets('installed extensions still list below the repo section', (
-      tester,
-    ) async {
+    testWidgets('installed extensions stay on the Addons page', (tester) async {
       final registry = ExtensionRegistry([
         FakeExtension(id: 'fake', categories: ['live']),
       ]);
@@ -274,7 +279,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Extension repo'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.text('Extension repo'), findsNothing);
       expect(find.text('fake'), findsOneWidget);
     });
   });
