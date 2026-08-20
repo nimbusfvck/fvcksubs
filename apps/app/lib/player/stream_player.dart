@@ -13,6 +13,7 @@ typedef PlayerBuilder =
       PlayableStream stream, {
       required bool isLive,
       void Function(Object? controller)? onControllerCreated,
+      void Function(Object? controller)? onPlaybackReady,
       Widget Function(
         BuildContext context,
         Object? controller,
@@ -28,6 +29,7 @@ Widget defaultPlayerBuilder(
   PlayableStream stream, {
   required bool isLive,
   void Function(Object? controller)? onControllerCreated,
+  void Function(Object? controller)? onPlaybackReady,
   Widget Function(
     BuildContext context,
     Object? controller,
@@ -41,6 +43,7 @@ Widget defaultPlayerBuilder(
   stream: stream,
   isLive: isLive,
   onControllerCreated: onControllerCreated,
+  onPlaybackReady: onPlaybackReady,
   customControlsBuilder: customControlsBuilder,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
 );
@@ -51,6 +54,7 @@ class BetterPlayerView extends StatefulWidget {
     required this.stream,
     required this.isLive,
     this.onControllerCreated,
+    this.onPlaybackReady,
     this.customControlsBuilder,
     this.preferredSubtitleLanguage,
   });
@@ -60,6 +64,8 @@ class BetterPlayerView extends StatefulWidget {
   final bool isLive;
 
   final void Function(Object? controller)? onControllerCreated;
+
+  final void Function(Object? controller)? onPlaybackReady;
 
   final Widget Function(
     BuildContext context,
@@ -138,6 +144,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
         ),
       );
+      widget.onPlaybackReady?.call(_controller);
       final preferredSubtitle = _preferredSubtitle;
       if (preferredSubtitle != null) {
         await _controller.setupSubtitleSource(preferredSubtitle);

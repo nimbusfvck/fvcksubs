@@ -340,6 +340,7 @@ class RecordingPlayer {
     PlayableStream stream, {
     required bool isLive,
     void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
     Widget Function(
       BuildContext context,
       Object? controller,

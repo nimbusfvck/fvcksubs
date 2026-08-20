@@ -175,7 +175,7 @@ flowchart TB
 | Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer, dims its LIVE indicator when playback trails the edge, and snaps a scrub near its right edge to the latest available position after resuming; on-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
-| Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. |
+| Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
 | Source cache | Persists source descriptors but never resolved streams. The selected source stays first when discovery refreshes, so a restart resolves the same source before the remaining sources are refreshed in the background. |
 | Errors | **Never auto-advance.** Live streams report spurious errors, and auto-advancing skips good sources. |
 

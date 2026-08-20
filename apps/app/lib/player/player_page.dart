@@ -211,6 +211,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (identical(videoValue, _trackedVideoValue)) return;
     _trackedVideoValue?.removeListener(_onVideoValueChanged);
     _trackedVideoValue = videoValue?..addListener(_onVideoValueChanged);
+    _onVideoValueChanged();
   }
 
   void _onVideoValueChanged() {
@@ -446,12 +447,15 @@ class _PlayerPageState extends State<PlayerPage> {
                   onControllerCreated: (c) {
                     _betterController = c as BetterPlayerController?;
                     if (_betterController != null) {
-                      _trackPosition(_betterController!);
                       _attachErrorListener(_betterController!);
                     }
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) setState(() {});
                     });
+                  },
+                  onPlaybackReady: (c) {
+                    final controller = c as BetterPlayerController?;
+                    if (controller != null) _trackPosition(controller);
                   },
                   customControlsBuilder:
                       (context, controller, onVisibilityChanged) {
