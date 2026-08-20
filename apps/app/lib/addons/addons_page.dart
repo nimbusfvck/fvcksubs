@@ -32,62 +32,85 @@ class AddonsPage extends StatelessWidget {
               label: const Text('Add'),
               tooltip: 'Add extension',
             ),
-            body: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.xxl,
-              ),
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    'Addons',
-                    style: AppTypography.displaySm.copyWith(
-                      color: AppColors.onDark,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  'Manage extensions, sources',
-                  style: AppTypography.bodyMd.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-                if (installed.isEmpty)
-                  const EmptyState(
-                    title: 'No extensions installed.',
-                    description:
-                        'Tap Add to load a repository and install an extension.',
-                    icon: Icons.extension_off_outlined,
+            body: installed.isEmpty
+                ? const Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.md,
+                          AppSpacing.lg,
+                          AppSpacing.md,
+                          0,
+                        ),
+                        child: _AddonsHeader(),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: EmptyState(
+                            title: 'No extensions installed.',
+                            description:
+                                'Tap Add to load a repository and install an extension.',
+                            icon: Icons.extension_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ],
                   )
-                else ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  _SectionHeader(
-                    title: 'Installed',
-                    trailing:
-                        '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  for (final manifest in installed) ...[
-                    _ExtensionTile(
-                      manifest: manifest,
-                      registry: scope.registry,
-                      controller: scope.addonsController,
-                      installerController: scope.installerController,
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.xxl,
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
-                ],
-              ],
-            ),
+                    children: [
+                      const _AddonsHeader(),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SectionHeader(
+                        title: 'Installed',
+                        trailing:
+                            '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final manifest in installed) ...[
+                        _ExtensionTile(
+                          manifest: manifest,
+                          registry: scope.registry,
+                          controller: scope.addonsController,
+                          installerController: scope.installerController,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                    ],
+                  ),
           );
         },
       ),
     );
   }
+}
+
+class _AddonsHeader extends StatelessWidget {
+  const _AddonsHeader();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Semantics(
+        header: true,
+        child: Text(
+          'Addons',
+          style: AppTypography.displaySm.copyWith(color: AppColors.onDark),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xxs),
+      Text(
+        'Manage extensions, sources',
+        style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
+      ),
+    ],
+  );
 }
 
 class _AddExtensionDialog extends StatefulWidget {
