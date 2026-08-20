@@ -71,9 +71,9 @@ sequenceDiagram
     IC->>N: fetch the index
     N-->>IC: list of extensions: id, version, urls, hash, hosts
     IC->>IC: compare against installed versions
-    IC-->>AD: rows marked Install or Update
+    IC-->>AD: opens a separate selection dialog with Install or Update rows
 
-    U->>AD: taps Install or Update
+    U->>AD: selects one or more extensions from the dialog
     AD-->>U: version, release notes, and permission changes
     AD->>IC: install
     IC->>IC: which hosts are new versus already granted?

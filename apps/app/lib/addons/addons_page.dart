@@ -106,6 +106,11 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
   Future<void> _check() async {
     await widget.controller.setRepoUrl(_urlField.text);
     await widget.controller.refresh();
+    if (!mounted || widget.controller.listings.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ExtensionSelectionDialog(controller: widget.controller),
+    );
   }
 
   @override
@@ -117,11 +122,11 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
       title: const Text('Add extension'),
       content: SizedBox(
         width: dialogWidth,
-        height: screenSize.height * 0.68,
         child: BlocBuilder<InstallerController, InstallerState>(
           bloc: controller,
           builder: (context, _) => SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -171,24 +176,81 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
                     ),
                   ),
                 ],
-                for (final listing in controller.installableListings) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _ListingRow(listing: listing, controller: controller),
-                ],
-                if (!controller.busy &&
-                    controller.listings.isNotEmpty &&
-                    controller.installableListings.isEmpty) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'All extensions from this repository are installed.',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onDarkSoft,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExtensionSelectionDialog extends StatelessWidget {
+  const _ExtensionSelectionDialog({required this.controller});
+
+  final InstallerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final dialogWidth = math.min(560.0, screenSize.width - 80.0);
+    return AlertDialog(
+      title: const Text('Available extensions'),
+      content: SizedBox(
+        width: dialogWidth,
+        child: BlocBuilder<InstallerController, InstallerState>(
+          bloc: controller,
+          builder: (context, _) {
+            final listings = controller.installableListings;
+            return ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: screenSize.height * 0.68),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Choose which extensions to install.',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
+                    ),
+                    if (controller.busy) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      const LinearProgressIndicator(),
+                    ],
+                    if (controller.error != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        controller.error!,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.liveAccent,
+                        ),
+                      ),
+                    ],
+                    if (!controller.busy && listings.isEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'All extensions from this repository are installed.',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
+                      ),
+                    ],
+                    for (final listing in listings) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _ListingRow(listing: listing, controller: controller),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
       actions: [
