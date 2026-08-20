@@ -167,6 +167,25 @@ void main() {
     expect(find.text('Live Item'), findsNothing);
   });
 
+  testWidgets('hides a Home catalog section with no items', (tester) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'live-source',
+        name: 'Live source',
+        categories: const ['live'],
+        items: const [],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const HomePage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nothing here right now.'), findsNothing);
+    expect(find.text('Live source'), findsNothing);
+  });
+
   testWidgets('a row catalog carousels, a grid one lays out in columns', (
     tester,
   ) async {

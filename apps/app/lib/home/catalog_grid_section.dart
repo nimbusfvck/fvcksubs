@@ -146,17 +146,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
       );
     }
     final page = _page;
-    if (page == null || page.items.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-        child: Center(
-          child: Text(
-            'Nothing here right now.',
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-          ),
-        ),
-      );
-    }
+    if (page == null || page.items.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [
         MediaGridV2(sections: page.sections, onTap: _open, scrollable: false),

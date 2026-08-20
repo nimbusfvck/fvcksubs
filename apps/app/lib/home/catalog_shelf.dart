@@ -111,14 +111,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
       final page = snapshot.data;
       final items = page?.items ?? const <VersionedMediaItem>[];
-      if (items.isEmpty) {
-        return _ShelfMessage(
-          child: Text(
-            'Nothing here right now.',
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-          ),
-        );
-      }
+      if (items.isEmpty) return const SizedBox.shrink();
 
       final idsByName = {
         for (final subCategory in page!.subCategories)
@@ -129,17 +122,20 @@ class _CatalogShelfState extends State<CatalogShelf> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final section in page.sections)
-            _Section(
-              section: section,
-              display: widget.binding.catalog.display,
-              fallbackTitle: widget.binding.catalog.name,
-              subCategoryId: section.title == null
-                  ? null
-                  : idsByName[section.title],
-              onTap: _open,
-              onSeeMore: (subCategory) =>
-                  _openCatalog(subCategory: subCategory, title: section.title),
-            ),
+            if (section.items.isNotEmpty)
+              _Section(
+                section: section,
+                display: widget.binding.catalog.display,
+                fallbackTitle: widget.binding.catalog.name,
+                subCategoryId: section.title == null
+                    ? null
+                    : idsByName[section.title],
+                onTap: _open,
+                onSeeMore: (subCategory) => _openCatalog(
+                  subCategory: subCategory,
+                  title: section.title,
+                ),
+              ),
         ],
       );
     },

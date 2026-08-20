@@ -106,6 +106,9 @@ When an extension declares an `all` category, Home places the app-owned Continue
 shelf above its catalogs. It uses the saved landscape artwork and a compact persisted playback
 indicator; unavailable extensions are omitted.
 
+Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
+so the user can distinguish a temporary problem from an empty section.
+
 ### Full catalog
 
 Filter bar, subcategory chips, grid, and endless scrolling driven by the opaque cursor an
