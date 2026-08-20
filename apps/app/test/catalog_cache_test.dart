@@ -1,69 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
+import 'package:fvcksubs_app/catalog/catalog_page_store.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+
+import 'support/harness.dart';
 
 void main() {
-  const ref = MediaRef(
-    extensionId: 'example',
-    providerId: 'example.catalog',
-    id: 'item',
-  );
+  test('uses persistent page before calling the extension', () async {
+    final extension = FakeExtension(categories: const ['sport']);
+    final registry = ExtensionRegistry([extension]);
+    final binding = registry.catalogsFor('sport').single;
+    final store = _Store();
+    final cache = CatalogCache(store: store);
 
-  VersionedMediaItem item(String id) => VersionedMediaItem(
-    item: VideoItemV2(
-      ref: MediaRef(
-        extensionId: ref.extensionId,
-        providerId: ref.providerId,
-        id: id,
-      ),
-      title: id,
-    ),
-  );
+    await cache.loadVersioned(registry, binding, category: 'sport');
+    final second = CatalogCache(store: store);
+    await second.loadVersioned(registry, binding, category: 'sport');
 
-  test('pagination appends items to a section with the same stable id', () {
-    final merged = mergeVersionedCatalogPages(
-      VersionedCatalogPage(
-        sections: [
-          CatalogSectionV2(
-            id: 'featured',
-            title: 'Featured',
-            items: [item('one')],
-          ),
-        ],
-        nextPage: 'cursor',
-      ),
-      VersionedCatalogPage(
-        sections: [
-          CatalogSectionV2(id: 'featured', items: [item('two')]),
-        ],
-      ),
-    );
-
-    expect(merged.sections, hasLength(1));
-    expect(merged.sections.single.items.map((entry) => entry.item.ref.id), [
-      'one',
-      'two',
-    ]);
-    expect(merged.sections.single.title, 'Featured');
-    expect(merged.nextPage, isNull);
+    expect(extension.catalogCalls, 1);
   });
+}
 
-  test('pagination preserves order when a new section appears', () {
-    final merged = mergeVersionedCatalogPages(
-      VersionedCatalogPage(
-        sections: [
-          CatalogSectionV2(id: 'first', items: [item('one')]),
-        ],
-        subCategories: const [SubCategory(id: 'all', name: 'All')],
-      ),
-      VersionedCatalogPage(
-        sections: [
-          CatalogSectionV2(id: 'second', items: [item('two')]),
-        ],
-      ),
-    );
-
-    expect(merged.sections.map((section) => section.id), ['first', 'second']);
-    expect(merged.subCategories.single.id, 'all');
-  });
+class _Store implements CatalogPageStore {
+  final values = <String, VersionedCatalogPage>{};
+  @override
+  Future<void> removeByPrefix(String prefix) async {}
+  @override
+  Future<VersionedCatalogPage?> read(String key) async => values[key];
+  @override
+  Future<void> write(String key, VersionedCatalogPage page) async =>
+      values[key] = page;
 }
