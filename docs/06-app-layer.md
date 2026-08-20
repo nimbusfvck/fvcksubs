@@ -104,16 +104,22 @@ flowchart TB
 
 When catalog data is available, Home starts with one edge-to-edge featured carousel
 inside the app bar's expanded area.
-It merges the enabled category feeds, removes duplicate references, and keeps the
-highest-ranked item from each media kind before filling the remaining slots. The score
-uses only protocol data: rating and available artwork, with a small lifecycle priority
-for live and scheduled events. Items without artwork are left out because the hero is
-poster-led. Play resolves the selected item immediately, Favorite writes to the app
-library, and Info follows the normal detail-or-play navigation rule.
+It merges the enabled category feeds and preserves their section and item order as the
+extension's editorial signal. Selection fills distinct slots for live events, leading
+videos and series, events starting within 24 hours, recent releases, and top-rated
+content. Remaining slots use a combined editorial, freshness, rating, and artwork score.
+Soft per-kind limits keep the carousel varied when several kinds are available without
+leaving it short when the catalog contains only one kind. Duplicate references and ended
+events are removed. Items without portrait or landscape artwork are left out because the
+hero is artwork-led. Equal candidates use a stable daily tie-break so their order does
+not change during a session.
+
+Play resolves the selected item immediately, Favorite writes to the app library, and
+Info follows the normal detail-or-play navigation rule.
 
 The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips are a separate floating and pinned sliver below the app bar. This keeps the current
-category available while the hero collapses normally.
+chips are a separate pinned sliver below the app bar. This keeps the current category
+available while the hero collapses normally.
 
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
 that refetches a category the app already holds.
@@ -126,7 +132,7 @@ Catalog sections with no items are omitted from Home. A loading or failed catalo
 so the user can distinguish a temporary problem from an empty section.
 
 Home uses a pinned app bar with the featured hero in its expanded area, followed by a separate
-floating category header. The hero collapses normally; no snap animation is used.
+pinned category header. The hero collapses normally; no snap animation is used.
 When collapsed, the hero fades out completely so its artwork does not remain behind the toolbar.
 
 ### Full catalog
