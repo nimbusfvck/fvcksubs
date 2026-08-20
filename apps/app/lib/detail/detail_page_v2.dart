@@ -207,17 +207,15 @@ class _DetailPageV2State extends State<DetailPageV2> {
                               : _progressFraction(
                                   state.recordFor(primaryTarget.ref),
                                 );
-                          return ElevatedButton.icon(
+                          return _PrimaryPlayButton(
+                            progress: progress,
                             onPressed: primaryTarget == null
                                 ? null
                                 : () => playItemV2(context, primaryTarget),
-                            icon: _PlayIcon(progress: progress),
-                            label: Text(
-                              _playLabel(
-                                detail,
-                                target,
-                                state.recordFor(item.ref)?.progress,
-                              ),
+                            label: _playLabel(
+                              detail,
+                              target,
+                              state.recordFor(item.ref)?.progress,
                             ),
                           );
                         },
@@ -315,33 +313,71 @@ class _DetailPageV2State extends State<DetailPageV2> {
   }
 }
 
-class _PlayIcon extends StatelessWidget {
-  const _PlayIcon({this.progress});
+class _PrimaryPlayButton extends StatelessWidget {
+  const _PrimaryPlayButton({
+    required this.progress,
+    required this.onPressed,
+    required this.label,
+  });
 
   final double? progress;
+  final VoidCallback? onPressed;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final icon = const Icon(Icons.play_arrow_rounded, size: 28);
-    if (progress == null) return icon;
-    return ExcludeSemantics(
-      child: SizedBox.square(
-        dimension: 32,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 2.5,
-              color: AppColors.onPrimary,
-              backgroundColor: AppColors.outlineDark,
-            ),
-            icon,
-          ],
-        ),
-      ),
+    final button = ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.play_arrow_rounded, size: 28),
+      label: Text(label),
+    );
+    final fraction = progress;
+    if (fraction == null) return button;
+    return CustomPaint(
+      key: const Key('primary-play-progress'),
+      foregroundPainter: _StadiumProgressPainter(progress: fraction),
+      child: button,
     );
   }
+}
+
+class _StadiumProgressPainter extends CustomPainter {
+  const _StadiumProgressPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const strokeWidth = 2.5;
+    final rect = Offset.zero & size;
+    final outline = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          rect.deflate(strokeWidth / 2),
+          Radius.circular((size.height - strokeWidth) / 2),
+        ),
+      );
+    final track = Paint()
+      ..color = AppColors.outlineDark
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    final indicator = Paint()
+      ..color = AppColors.brandAccent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(outline, track);
+    for (final metric in outline.computeMetrics()) {
+      canvas.drawPath(
+        metric.extractPath(0, metric.length * progress),
+        indicator,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StadiumProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _Header extends StatelessWidget {

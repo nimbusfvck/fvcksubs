@@ -237,7 +237,7 @@ void main() {
 
     expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byKey(const Key('primary-play-progress')), findsOneWidget);
   });
 
   testWidgets('protocol v2 detail renders credit and episode artwork', (
