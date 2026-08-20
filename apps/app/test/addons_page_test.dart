@@ -260,6 +260,11 @@ void main() {
     testWidgets('Add opens the saved repo URL in the install dialog', (
       tester,
     ) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final registry = ExtensionRegistry([FakeExtension(id: 'fake')]);
       await tester.pumpWidget(
         wrapApp(
@@ -276,6 +281,7 @@ void main() {
       expect(find.text('Add extension'), findsOneWidget);
       expect(find.text('https://example.invalid/repo.json'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Check'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('an unreachable repo surfaces its error in the UI', (

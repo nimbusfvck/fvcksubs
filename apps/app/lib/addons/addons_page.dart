@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -141,13 +143,13 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    final screenSize = MediaQuery.sizeOf(context);
+    final dialogWidth = math.min(560.0, screenSize.width - 80.0);
     return AlertDialog(
       title: const Text('Add extension'),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 560,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.68,
-        ),
+      content: SizedBox(
+        width: dialogWidth,
+        height: screenSize.height * 0.68,
         child: BlocBuilder<InstallerController, InstallerState>(
           bloc: controller,
           builder: (context, _) => SingleChildScrollView(
