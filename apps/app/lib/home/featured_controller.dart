@@ -117,7 +117,13 @@ class _FeaturedLoadResult {
   final Object? error;
 }
 
+/// Selects a varied hero feed using only provider-agnostic protocol fields.
+///
+/// Catalog order is treated as the extension's editorial ranking. Schedule,
+/// release year, rating, and artwork refine that order without replacing it.
 abstract final class FeaturedAlgorithm {
+  // These limits apply while diversity is possible. They are relaxed during
+  // the final fill so a single-kind catalog can still populate the carousel.
   static const _maximumPerKind = <MediaKindV2, int>{
     MediaKindV2.event: 2,
     MediaKindV2.video: 2,
@@ -126,16 +132,20 @@ abstract final class FeaturedAlgorithm {
     MediaKindV2.episode: 1,
   };
 
+  // Time windows group events and releases by user relevance.
   static const _upcomingWindow = Duration(hours: 24);
   static const _imminentWindow = Duration(hours: 6);
   static const _nearFutureWindow = Duration(days: 3);
 
+  // Editorial weights favor the beginning of each page and section while
+  // allowing strong freshness and quality signals to affect later slots.
   static const _editorialPositionWeight = 36.0;
   static const _sectionWeight = 8.0;
   static const _sectionPenalty = 2.0;
   static const _pageWeight = 3.0;
   static const _pagePenalty = 1.0;
 
+  // Freshness scores keep live and imminent content ahead of distant events.
   static const _liveFreshnessScore = 40.0;
   static const _imminentFreshnessScore = 24.0;
   static const _upcomingFreshnessScore = 16.0;
@@ -148,6 +158,9 @@ abstract final class FeaturedAlgorithm {
   static const _previousReleaseAge = 1;
   static const _olderRecentReleaseAge = 2;
 
+  // Quality and artwork are secondary signals, not substitutes for catalog
+  // order. Episodes are deprioritized because their parent series is clearer
+  // in a mixed-content hero.
   static const _maximumRating = 10.0;
   static const _ratingWeight = 2.0;
   static const _landscapeScore = 5.0;
@@ -156,14 +169,20 @@ abstract final class FeaturedAlgorithm {
   static const _channelScore = 3.0;
   static const _episodeScore = -8.0;
 
+  // Duplicate refs keep the snapshot with the most useful display metadata.
   static const _metadataLandscapeScore = 4.0;
   static const _metadataPortraitScore = 2.0;
   static const _metadataPresenceScore = 1.0;
 
+  // FNV-1a provides a deterministic tie-break without relying on hashCode,
+  // whose result is not a persistence contract.
   static const _fnvOffsetBasis = 2166136261;
   static const _fnvPrime = 16777619;
   static const _positiveHashMask = 0x7fffffff;
 
+  /// Selects featured items from one flat editorial sequence.
+  ///
+  /// Prefer [selectPages] when section boundaries are available.
   static List<VersionedMediaItem> select(
     Iterable<VersionedMediaItem> input, {
     int maxItems = 8,
@@ -190,6 +209,7 @@ abstract final class FeaturedAlgorithm {
     );
   }
 
+  /// Selects featured items while preserving page, section, and item order.
   static List<VersionedMediaItem> selectPages(
     Iterable<VersionedCatalogPage> input, {
     int maxItems = 8,
@@ -234,6 +254,8 @@ abstract final class FeaturedAlgorithm {
   }) {
     if (maxItems <= 0) return const [];
 
+    // A ref can be repeated across sections. Keep one candidate before slot
+    // selection so the same title never occupies multiple hero pages.
     final unique = <MediaRef, _FeaturedCandidate>{};
     for (final candidate in input) {
       if (!_isEligible(candidate.entry.item)) continue;
@@ -270,6 +292,9 @@ abstract final class FeaturedAlgorithm {
     }
 
     final composite = _compositeComparator(now);
+
+    // Reserve high-value slots first. Each slot has its own comparator so a
+    // high rating cannot displace a live event or the extension's lead item.
     pick(_isLiveEvent, composite);
     pick(
       (candidate) => candidate.entry.item.kind == MediaKindV2.video,
@@ -290,6 +315,9 @@ abstract final class FeaturedAlgorithm {
       for (final candidate in candidates)
         if (!selectedRefs.contains(candidate.entry.item.ref)) candidate,
     ]..sort(composite);
+
+    // Prefer a balanced feed, then relax the limits rather than returning a
+    // partially empty carousel when only one media kind is available.
     _fill(
       selected,
       remaining,
@@ -328,6 +356,8 @@ abstract final class FeaturedAlgorithm {
       if (available.isEmpty) return;
 
       final lastKind = selected.isEmpty ? null : selected.last.entry.item.kind;
+      // Avoid adjacent items of the same kind when another ranked candidate
+      // is available. The source ranking remains the fallback.
       final chosen = available.firstWhere(
         (candidate) => candidate.entry.item.kind != lastKind,
         orElse: () => available.first,
@@ -541,6 +571,8 @@ abstract final class FeaturedAlgorithm {
   };
 
   static int _dailyTieBreak(_FeaturedCandidate candidate, DateTime now) {
+    // Include the UTC day so equally ranked items can rotate between days but
+    // remain stable across refreshes during the same day.
     final utc = now.toUtc();
     final day = utc.difference(DateTime.utc(utc.year)).inDays;
     final ref = candidate.entry.item.ref;
@@ -555,6 +587,7 @@ abstract final class FeaturedAlgorithm {
   }
 }
 
+/// A catalog item paired with its original editorial position.
 class _FeaturedCandidate {
   const _FeaturedCandidate({
     required this.entry,
