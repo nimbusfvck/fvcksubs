@@ -45,14 +45,29 @@ class SourceCache {
       _persisted[CachedSourceList.keyFor(ref)]?.sources;
 
   void recordSourceList(MediaRef ref, List<StreamSource> sources) {
+    final key = CachedSourceList.keyFor(ref);
+    final existing = _persisted[key]?.sources;
     final cached = CachedSourceList(
       ref: ref,
-      sources: sources,
+      sources: existing == null
+          ? sources
+          : _retainSourceOrder(existing, sources),
       fetchedAt: _now(),
     );
     _persisted[cached.key] = cached;
     _evictOldestPersisted();
     _persist();
+  }
+
+  List<StreamSource> _retainSourceOrder(
+    List<StreamSource> existing,
+    List<StreamSource> refreshed,
+  ) {
+    final refreshedById = {for (final source in refreshed) source.id: source};
+    final retained = <StreamSource>[
+      for (final source in existing) ?refreshedById.remove(source.id),
+    ];
+    return [...retained, ...refreshedById.values];
   }
 
   void _evictOldestPersisted() {

@@ -11,7 +11,8 @@ class FakeSourceListStore implements SourceListStore {
   Future<Map<String, CachedSourceList>> load() async => saved;
 
   @override
-  Future<void> save(Map<String, CachedSourceList> records) async => saved = records;
+  Future<void> save(Map<String, CachedSourceList> records) async =>
+      saved = records;
 }
 
 void main() {
@@ -19,7 +20,10 @@ void main() {
 
   ResolvedSource resolved(String id) => ResolvedSource(
     source: StreamSource(id: id, label: id),
-    stream: PlayableStream(url: 'https://edge/$id.m3u8', format: StreamFormat.hls),
+    stream: PlayableStream(
+      url: 'https://edge/$id.m3u8',
+      format: StreamFormat.hls,
+    ),
   );
 
   StreamSource source(String id) => StreamSource(id: id, label: id);
@@ -93,6 +97,20 @@ void main() {
       final sources = [source('a'), source('b')];
       cache.recordSourceList(ref, sources);
       expect(cache.peekSourceList(ref), sources);
+    });
+
+    test('retains the selected source order when discovery refreshes', () {
+      final cache = SourceCache();
+      cache.recordSourceList(ref, [source('a'), source('b')]);
+      cache.promote(ref, 'b');
+
+      cache.recordSourceList(ref, [source('a'), source('b'), source('c')]);
+
+      expect(cache.peekSourceList(ref)!.map((source) => source.id), [
+        'b',
+        'a',
+        'c',
+      ]);
     });
 
     test('recordSourceList persists through sourceListStore', () async {
@@ -179,13 +197,16 @@ void main() {
       expect(cache.peekSourceList(ref), isNull);
     });
 
-    test('persists the reordered persisted list through sourceListStore', () async {
-      final store = FakeSourceListStore();
-      final cache = SourceCache(sourceListStore: store);
-      cache.recordSourceList(ref, [source('a'), source('b')]);
-      cache.promote(ref, 'b');
-      await Future<void>.delayed(Duration.zero);
-      expect(store.saved.values.single.sources.map((s) => s.id), ['b', 'a']);
-    });
+    test(
+      'persists the reordered persisted list through sourceListStore',
+      () async {
+        final store = FakeSourceListStore();
+        final cache = SourceCache(sourceListStore: store);
+        cache.recordSourceList(ref, [source('a'), source('b')]);
+        cache.promote(ref, 'b');
+        await Future<void>.delayed(Duration.zero);
+        expect(store.saved.values.single.sources.map((s) => s.id), ['b', 'a']);
+      },
+    );
   });
 }

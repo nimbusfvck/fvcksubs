@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/player/play_item.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
+import 'package:fvcksubs_app/player/source_cache.dart';
 import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -48,6 +49,37 @@ void main() {
 
     final player = tester.widget<PlayerPage>(find.byType(PlayerPage));
     expect(player.resolvedSources.first.source.id, 'b');
+  });
+
+  testWidgets('the automatically selected source leads the restart cache', (
+    tester,
+  ) async {
+    final cache = SourceCache();
+    final registry = withSubtitles({
+      'a': ['en'],
+      'b': ['id'],
+    });
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: playButton(fakeItem(extensionId: 'subs')),
+        registry: registry,
+        sourceCache: cache,
+        subtitlePreferenceController: SubtitlePreferenceController(
+          store: FakeSubtitlePreferenceStore(),
+          initial: 'id',
+        ),
+      ),
+    );
+    await tester.tap(find.text('play'));
+    await tester.pumpAndSettle();
+
+    expect(
+      cache
+          .peekSourceList(fakeItem(extensionId: 'subs').ref)!
+          .map((source) => source.id),
+      ['b', 'a'],
+    );
   });
 
   testWidgets('the others are still offered, just not first', (tester) async {

@@ -143,6 +143,7 @@ void _openPlayer(
     scope.sourcePriorityController,
     scope.subtitlePreferenceController,
   );
+  scope.sourceCache.promote(item.ref, resolved.first.source.id);
   final legacyItem = item.legacyItem;
   if (legacyItem == null) {
     scope.libraryController.recordWatched(item.v2Item!);
