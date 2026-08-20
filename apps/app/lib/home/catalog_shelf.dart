@@ -115,9 +115,13 @@ class _CatalogShelfState extends State<CatalogShelf> {
       final page = snapshot.data;
       final items = page?.items ?? const <VersionedMediaItem>[];
       if (items.isEmpty) {
-        final title = widget.category.toLowerCase() == 'all'
-            ? _allSectionTitle(widget.binding)
-            : widget.binding.catalog.name;
+        if (widget.category.toLowerCase() != 'all') {
+          return const EmptyState(
+            title: 'Nothing here right now.',
+            icon: Icons.movie_filter_outlined,
+          );
+        }
+        final title = _allSectionTitle(widget.binding);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

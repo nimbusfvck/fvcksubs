@@ -146,6 +146,12 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
     final page = _page;
     if (page == null || page.items.isEmpty) {
+      if (widget.category.toLowerCase() != 'all') {
+        return const EmptyState(
+          title: 'Nothing here right now.',
+          icon: Icons.movie_filter_outlined,
+        );
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
