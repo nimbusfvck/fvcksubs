@@ -6,10 +6,12 @@ class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
     required this.title,
+    this.description,
     this.icon = Icons.inbox_outlined,
   });
 
   final String title;
+  final String? description;
   final IconData icon;
 
   @override
@@ -29,6 +31,14 @@ class EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
           ),
+          if (description != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              description!,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            ),
+          ],
         ],
       ),
     ),

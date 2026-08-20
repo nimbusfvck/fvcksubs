@@ -194,6 +194,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No extensions installed.'), findsOneWidget);
+    expect(
+      find.text('Tap Add to load a repository and install an extension.'),
+      findsOneWidget,
+    );
     expect(find.text('Installed'), findsNothing);
   });
 

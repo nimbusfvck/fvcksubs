@@ -59,6 +59,8 @@ class AddonsPage extends StatelessWidget {
                 if (installed.isEmpty)
                   const EmptyState(
                     title: 'No extensions installed.',
+                    description:
+                        'Tap Add to load a repository and install an extension.',
                     icon: Icons.extension_off_outlined,
                   )
                 else ...[
