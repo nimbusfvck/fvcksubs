@@ -83,4 +83,58 @@ void main() {
     expect(title.style?.fontSize, 18);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('page indicator is centered at the bottom', (tester) async {
+    final items = [
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.catalog',
+            id: 'first',
+          ),
+          title: 'First event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.catalog',
+            id: 'second',
+          ),
+          title: 'Second event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    final indicator = tester.widget<Positioned>(
+      find.byKey(const Key('featured-page-indicator')),
+    );
+    expect(indicator.left, 0);
+    expect(indicator.right, 0);
+    expect(indicator.bottom, isNotNull);
+    expect(find.byType(AnimatedContainer), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
 }

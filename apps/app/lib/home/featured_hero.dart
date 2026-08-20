@@ -143,35 +143,66 @@ class _FeaturedHeroState extends State<FeaturedHero> {
         ),
         if (widget.items.length > 1)
           Positioned(
-            right: AppSpacing.md,
+            key: const Key('featured-page-indicator'),
+            left: 0,
+            right: 0,
             bottom: AppSpacing.md,
-            child: Semantics(
-              label: 'Featured item ${_page + 1} of ${widget.items.length}',
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var index = 0; index < widget.items.length; index++)
-                    Padding(
-                      padding: const EdgeInsets.only(left: AppSpacing.xxs),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: index == _page ? 18 : 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: index == _page
-                              ? AppColors.onDark
-                              : AppColors.onDarkSoft.withValues(alpha: 0.65),
-                          borderRadius: AppRadius.pill,
-                        ),
-                      ),
-                    ),
-                ],
+            child: Center(
+              child: _FeaturedPageIndicator(
+                page: _page,
+                count: widget.items.length,
               ),
             ),
           ),
       ],
     );
   }
+}
+
+class _FeaturedPageIndicator extends StatelessWidget {
+  const _FeaturedPageIndicator({required this.page, required this.count});
+
+  final int page;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Featured item ${page + 1} of $count',
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.82),
+        border: Border.all(color: AppColors.outlineDark.withValues(alpha: 0.7)),
+        borderRadius: AppRadius.pill,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: AppSpacing.xxs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < count; index++)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  width: index == page ? 20 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: index == page
+                        ? AppColors.primaryAction
+                        : AppColors.onDarkSoft.withValues(alpha: 0.7),
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _FeaturedSlide extends StatelessWidget {
