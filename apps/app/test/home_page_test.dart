@@ -167,7 +167,7 @@ void main() {
     expect(find.text('Live Item'), findsNothing);
   });
 
-  testWidgets('hides a Home catalog section with no items', (tester) async {
+  testWidgets('shows an empty state outside the all category', (tester) async {
     final registry = ExtensionRegistry([
       FakeExtension(
         id: 'live-source',
@@ -182,7 +182,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Nothing here right now.'), findsNothing);
+    expect(find.text('Nothing here right now.'), findsOneWidget);
     expect(find.text('Live source'), findsNothing);
   });
 

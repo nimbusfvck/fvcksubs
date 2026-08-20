@@ -112,7 +112,18 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
       final page = snapshot.data;
       final items = page?.items ?? const <VersionedMediaItem>[];
-      if (items.isEmpty) return const SizedBox.shrink();
+      if (items.isEmpty) {
+        return widget.category.toLowerCase() == 'all'
+            ? const SizedBox.shrink()
+            : _ShelfMessage(
+                child: Text(
+                  'Nothing here right now.',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+              );
+      }
 
       final idsByName = {
         for (final subCategory in page!.subCategories)
