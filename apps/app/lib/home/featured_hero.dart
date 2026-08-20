@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
+import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
@@ -265,6 +266,11 @@ class _FeaturedMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final event = item is EventItemV2 ? item as EventItemV2 : null;
+    final eventLabel =
+        event == null || event.schedule.state == ScheduleState.live
+        ? null
+        : event.schedule.label ?? startTimeLabel(event.schedule.startsAt);
     final values = <Widget>[
       Text(
         _kindLabel(item),
@@ -291,8 +297,15 @@ class _FeaturedMeta extends StatelessWidget {
           ),
         ),
       ],
-      if (item is EventItemV2 &&
-          (item as EventItemV2).schedule.state == ScheduleState.live)
+      if (eventLabel != null)
+        Text(
+          eventLabel,
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDarkSoft,
+            shadows: _featuredTextShadows,
+          ),
+        ),
+      if (event?.schedule.state == ScheduleState.live)
         Text(
           'LIVE',
           style: AppTypography.caption.copyWith(
