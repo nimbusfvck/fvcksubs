@@ -343,8 +343,8 @@ with one of its sources disabled. Enabling it again restores the previous config
 The disabled state is stored by id and retained across updates.
 
 The index URL is retained across launches. If it is available, the app checks it in the
-background at startup, so each installed extension card can show `Up to date` or an `Update`
-action before the user opens the repository section.
+background at startup. The repository section only lists extensions that are not installed;
+installed extensions keep their release notes, version, and update status in their detail page.
 
 ## 4.11 What the user never has to think about
 

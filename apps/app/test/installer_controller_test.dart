@@ -305,6 +305,7 @@ void main() {
       expect(listing.isInstalled, isTrue);
       expect(listing.isUpToDate, isTrue);
       expect(listing.isUpdate, isFalse);
+      expect(t.controller.installableListings, isEmpty);
     });
 
     test(

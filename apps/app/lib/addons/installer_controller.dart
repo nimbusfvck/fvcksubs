@@ -104,6 +104,10 @@ class InstallerController extends Cubit<InstallerState> {
 
   String? get repoUrl => state.repoUrl;
   List<RepoListing> get listings => state.listings;
+  List<RepoListing> get installableListings => [
+    for (final listing in state.listings)
+      if (!listing.isInstalled) listing,
+  ];
   bool get busy => state.busy;
   String? get error => state.error;
 

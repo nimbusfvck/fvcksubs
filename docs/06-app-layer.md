@@ -138,8 +138,9 @@ separate future library model rather than a variant of watch history.
 
 ### Addons
 
-Per-extension switches, per-provider sub-switches, the extension index field, install and
-update rows, and the permission consent sheet.
+Per-extension switches, per-provider sub-switches, the extension index field, install rows for
+new extensions, installed-extension release details, update status, and the permission consent
+sheet.
 
 ### Search
 

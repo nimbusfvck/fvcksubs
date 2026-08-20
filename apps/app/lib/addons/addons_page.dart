@@ -198,7 +198,7 @@ class _RepoSectionState extends State<_RepoSection> {
                 ),
               ),
             ],
-            for (final listing in controller.listings) ...[
+            for (final listing in controller.installableListings) ...[
               const SizedBox(height: AppSpacing.sm),
               _ListingRow(listing: listing, controller: controller),
             ],
@@ -218,7 +218,6 @@ class _ListingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entry = listing.entry;
-    final upToDate = listing.isUpToDate;
     final details = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -246,9 +245,7 @@ class _ListingRow extends StatelessWidget {
               ),
               Text(
                 [
-                  listing.isInstalled
-                      ? 'installed ${listing.installedVersion} · repo ${entry.version}'
-                      : 'v${entry.version}',
+                  'v${entry.version}',
                   if (entry.author != null) 'by ${entry.author}',
                 ].join(' · '),
                 style: AppTypography.bodySm.copyWith(
@@ -262,17 +259,10 @@ class _ListingRow extends StatelessWidget {
         ),
       ],
     );
-    final action = upToDate
-        ? const _StatusPill(label: 'Up to date', positive: true)
-        : !listing.isInstalled
-        ? FilledButton(
-            onPressed: controller.busy ? null : () => controller.install(entry),
-            child: const Text('Install'),
-          )
-        : OutlinedButton(
-            onPressed: controller.busy ? null : () => controller.install(entry),
-            child: const Text('Update'),
-          );
+    final action = FilledButton(
+      onPressed: controller.busy ? null : () => controller.install(entry),
+      child: const Text('Install'),
+    );
     return Container(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       decoration: const BoxDecoration(
@@ -319,7 +309,6 @@ class _ExtensionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = registry.isExtensionEnabled(manifest.id);
-    final listing = installerController.listingFor(manifest.id);
     final streamProviders = [
       for (final provider in manifest.providers)
         if (provider.roles.contains(ProviderRole.stream)) provider,
@@ -378,32 +367,6 @@ class _ExtensionTile extends StatelessWidget {
                 color: AppColors.onDarkSoft,
               ),
             ),
-            if (listing != null ||
-                (installerController.busy &&
-                    installerController.repoUrl != null)) ...[
-              const SizedBox(height: AppSpacing.xs),
-              if (listing?.isUpdate ?? false)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: installerController.busy
-                        ? null
-                        : () => installerController.install(listing!.entry),
-                    icon: const Icon(Icons.download_outlined, size: 17),
-                    label: Text('Update to v${listing!.entry.version}'),
-                  ),
-                )
-              else if (listing?.isUpToDate ?? false)
-                const _StatusPill(label: 'Up to date', positive: true)
-              else if (installerController.busy &&
-                  installerController.repoUrl != null)
-                Text(
-                  'Checking for updates…',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-            ],
           ],
         ),
         trailing: Switch(
@@ -442,75 +405,101 @@ class _ExtensionDetailsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(manifest.name)),
-    body: BlocBuilder<AddonsController, AddonsState>(
-      bloc: controller,
-      builder: (context, _) {
-        final enabled = registry.isExtensionEnabled(manifest.id);
-        final providers = [
-          for (final provider in manifest.providers)
-            if (provider.roles.contains(ProviderRole.stream)) provider,
-        ];
-        return ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            _Panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (manifest.description != null) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.md,
-                        AppSpacing.md,
-                        AppSpacing.md,
-                        AppSpacing.sm,
-                      ),
-                      child: Text(
-                        manifest.description!,
-                        style: AppTypography.bodyMd.copyWith(
-                          color: AppColors.onDarkSoft,
+    body: BlocBuilder<InstallerController, InstallerState>(
+      bloc: installerController,
+      builder: (context, _) => BlocBuilder<AddonsController, AddonsState>(
+        bloc: controller,
+        builder: (context, _) {
+          final currentManifest = registry.installed.firstWhere(
+            (value) => value.id == manifest.id,
+            orElse: () => manifest,
+          );
+          final enabled = registry.isExtensionEnabled(currentManifest.id);
+          final listing = installerController.listingFor(currentManifest.id);
+          final providers = [
+            for (final provider in currentManifest.providers)
+              if (provider.roles.contains(ProviderRole.stream)) provider,
+          ];
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              _Panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (currentManifest.description != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.md,
+                          AppSpacing.md,
+                          AppSpacing.md,
+                          AppSpacing.sm,
+                        ),
+                        child: Text(
+                          currentManifest.description!,
+                          style: AppTypography.bodyMd.copyWith(
+                            color: AppColors.onDarkSoft,
+                          ),
                         ),
                       ),
-                    ),
-                    const Divider(height: 1, color: AppColors.hairlineDark),
-                  ],
-                  SwitchListTile(
-                    title: Text(manifest.name),
-                    subtitle: const Text('Extension enabled'),
-                    value: enabled,
-                    onChanged: (value) =>
-                        controller.setExtensionEnabled(manifest.id, value),
-                  ),
-                  for (final provider in providers)
+                      const Divider(height: 1, color: AppColors.hairlineDark),
+                    ],
                     SwitchListTile(
-                      secondary: const Icon(Icons.play_circle_outline),
-                      title: Text(provider.name ?? _providerLabel(provider.id)),
-                      value: enabled && registry.isProviderEnabled(provider.id),
-                      onChanged: enabled
-                          ? (value) => controller.setProviderEnabled(
-                              provider.id,
-                              value,
-                            )
-                          : null,
+                      title: Text(currentManifest.name),
+                      subtitle: const Text('Extension enabled'),
+                      value: enabled,
+                      onChanged: (value) => controller.setExtensionEnabled(
+                        currentManifest.id,
+                        value,
+                      ),
                     ),
-                ],
+                    for (final provider in providers)
+                      SwitchListTile(
+                        secondary: const Icon(Icons.play_circle_outline),
+                        title: Text(
+                          provider.name ?? _providerLabel(provider.id),
+                        ),
+                        value:
+                            enabled && registry.isProviderEnabled(provider.id),
+                        onChanged: enabled
+                            ? (value) => controller.setProviderEnabled(
+                                provider.id,
+                                value,
+                              )
+                            : null,
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            OutlinedButton.icon(
-              onPressed: installerController.busy
-                  ? null
-                  : () => _remove(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
+              const SizedBox(height: AppSpacing.md),
+              _Panel(
+                child: _ReleaseDetails(
+                  manifest: currentManifest,
+                  listing: listing,
+                  checking:
+                      installerController.busy &&
+                      installerController.repoUrl != null,
+                  onUpdate: listing?.isUpdate == true
+                      ? () => installerController.install(listing!.entry)
+                      : null,
+                ),
               ),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Remove extension'),
-            ),
-          ],
-        );
-      },
+              const SizedBox(height: AppSpacing.lg),
+              OutlinedButton.icon(
+                onPressed: installerController.busy
+                    ? null
+                    : () => _remove(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Remove extension'),
+              ),
+            ],
+          );
+        },
+      ),
     ),
   );
 
@@ -543,6 +532,108 @@ class _ExtensionDetailsPage extends StatelessWidget {
     if (confirmed != true) return;
     await installerController.uninstall(manifest.id);
     if (navigator.mounted) navigator.pop();
+  }
+}
+
+class _ReleaseDetails extends StatelessWidget {
+  const _ReleaseDetails({
+    required this.manifest,
+    required this.listing,
+    required this.checking,
+    required this.onUpdate,
+  });
+
+  final Manifest manifest;
+  final RepoListing? listing;
+  final bool checking;
+  final VoidCallback? onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = listing?.entry;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Release',
+            style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            entry == null
+                ? 'Installed v${manifest.version}'
+                : 'Installed v${manifest.version} · latest v${entry.version}',
+            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+          ),
+          if (entry?.author != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Published by ${entry!.author}',
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            ),
+          ],
+          if (entry?.description != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              entry!.description!,
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (onUpdate != null)
+            OutlinedButton.icon(
+              onPressed: onUpdate,
+              icon: const Icon(Icons.download_outlined, size: 17),
+              label: Text('Update to v${entry!.version}'),
+            )
+          else if (listing?.isUpToDate ?? false)
+            const _StatusPill(label: 'Up to date', positive: true)
+          else if (checking)
+            Text(
+              'Checking for updates…',
+              style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            )
+          else
+            const _StatusPill(label: 'Update status unavailable'),
+          if (entry?.releaseNotes.isNotEmpty ?? false) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'What’s new',
+              style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            for (final note in entry!.releaseNotes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 7),
+                      child: Icon(
+                        Icons.circle,
+                        size: 5,
+                        color: AppColors.onDarkSoft,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        note,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
