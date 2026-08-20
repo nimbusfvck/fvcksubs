@@ -25,7 +25,10 @@ strict: fields belonging to a different variant are rejected.
 interface MediaBase {
   ref: MediaRef;
   title: string;
+  /** Extension-authored descriptive text, not composed metadata. */
   subtitle?: string;
+  releaseYear?: number;
+  rating?: number;
   artwork?: Artwork;
 }
 
@@ -62,6 +65,11 @@ interface EventItem extends MediaBase {
 
 `video` describes a standalone playable work without assuming a film. `event`
 describes scheduled content without assuming a particular competition.
+
+`subtitle` is extension-authored descriptive text. `releaseYear` and `rating`
+are optional structured values; the shell composes their card and detail
+presentation with the subtitle. Ratings are non-negative numbers and do not
+imply a particular scale.
 
 ## 9.3 Shared capabilities
 

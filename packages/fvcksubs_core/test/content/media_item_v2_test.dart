@@ -8,10 +8,13 @@ void main() {
     id: 'item-1',
   );
 
-  test('video round-trips with orientation-aware artwork', () {
+  test('video round-trips structured display metadata and artwork', () {
     const item = VideoItemV2(
       ref: ref,
       title: 'Standalone video',
+      subtitle: 'Drama',
+      releaseYear: 2026,
+      rating: 8.7,
       artwork: Artwork(
         portrait: ImageRef('https://cdn.example/poster.jpg'),
         landscape: ImageRef('https://cdn.example/backdrop.jpg'),
@@ -19,6 +22,27 @@ void main() {
     );
 
     expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('common display metadata rejects invalid values', () {
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid year',
+        'releaseYear': 0,
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid rating',
+        'rating': -1,
+      }),
+      throwsFormatException,
+    );
   });
 
   test('event requires a UTC schedule and accepts participants', () {

@@ -70,8 +70,12 @@ interface MediaBase {
   kind: MediaKind;
   /** Primary text on cards, details, library entries, and the player. */
   title: string;
-  /** Secondary card text, such as a year, competition, or episode name. */
+  /** Descriptive secondary text, such as a competition or episode name. */
   subtitle?: string;
+  /** Calendar year in which this item was first released. */
+  releaseYear?: number;
+  /** Audience or editorial rating. The SDK does not impose a rating scale. */
+  rating?: number;
   /** Shape-specific images used by cards and detail layouts. */
   artwork?: Artwork;
 }

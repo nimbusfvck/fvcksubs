@@ -245,7 +245,13 @@ globalThis.__extension = {
 globalThis.__extension = {
   async meta(args) {
     return {
-      item: { ref: args.ref, kind: "video", title: "V2 detail" },
+      item: {
+        ref: args.ref,
+        kind: "video",
+        title: "V2 detail",
+        releaseYear: 2026,
+        rating: 8.7
+      },
       facts: [{ label: "Year", value: "2026" }]
     };
   },
@@ -264,6 +270,8 @@ globalThis.__extension = {
 
     final detail = await extension.metaV2(itemV2.ref);
     expect(detail.item, isA<VideoItemV2>());
+    expect(detail.item.releaseYear, 2026);
+    expect(detail.item.rating, 8.7);
     expect(detail.facts.single.value, '2026');
     expect((await extension.sourcesV2(itemV2)).single.label, 'event');
     expect(

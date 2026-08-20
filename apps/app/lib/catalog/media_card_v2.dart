@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
+import '../utils/media_item_metadata.dart';
 import 'generated_banner.dart';
 import 'media_card.dart' show LiveBadge, UpcomingBadge;
 import 'start_time_label.dart';
@@ -106,6 +107,7 @@ class _Summary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final event = item is EventItemV2 ? item as EventItemV2 : null;
+    final detail = showSubtitle ? mediaItemSecondaryText(item) : null;
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
@@ -119,9 +121,9 @@ class _Summary extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
           ),
-          if (showSubtitle && item.subtitle != null)
+          if (detail != null)
             Text(
-              item.subtitle!,
+              detail,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
@@ -140,7 +142,7 @@ class _Text extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detail = secondary ?? item.subtitle;
+    final detail = secondary ?? mediaItemSecondaryText(item);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
@@ -196,9 +198,7 @@ class _ScheduleStatus extends StatelessWidget {
 
 String? _eventMeta(EventItemV2 item, {required bool showSubtitle}) {
   final clock = item.schedule.label ?? startTimeLabel(item.schedule.startsAt);
-  final values = [
-    if (showSubtitle && item.subtitle != null) item.subtitle!,
-    ?clock,
-  ];
+  final detail = showSubtitle ? mediaItemSecondaryText(item) : null;
+  final values = [?detail, ?clock];
   return values.isEmpty ? null : values.join(' · ');
 }

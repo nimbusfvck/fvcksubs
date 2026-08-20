@@ -198,6 +198,8 @@ sealed class MediaItemV2 extends Equatable {
     required this.ref,
     required this.title,
     this.subtitle,
+    this.releaseYear,
+    this.rating,
     this.artwork,
   });
 
@@ -259,6 +261,12 @@ sealed class MediaItemV2 extends Equatable {
   /// Optional secondary display text.
   final String? subtitle;
 
+  /// Calendar year in which this item was first released.
+  final int? releaseYear;
+
+  /// Extension-supplied audience or editorial rating.
+  final double? rating;
+
   /// Optional artwork grouped by orientation.
   final Artwork? artwork;
 
@@ -270,6 +278,8 @@ sealed class MediaItemV2 extends Equatable {
     'kind': kind.name,
     'title': title,
     if (subtitle != null) 'subtitle': subtitle,
+    if (releaseYear != null) 'releaseYear': releaseYear,
+    if (rating != null) 'rating': rating,
     if (artwork != null) 'artwork': artwork!.toJson(),
   };
 
@@ -277,7 +287,15 @@ sealed class MediaItemV2 extends Equatable {
   Map<String, Object?> toJson();
 
   @override
-  List<Object?> get props => [ref, kind, title, subtitle, artwork];
+  List<Object?> get props => [
+    ref,
+    kind,
+    title,
+    subtitle,
+    releaseYear,
+    rating,
+    artwork,
+  ];
 }
 
 /// Standalone playable video.
@@ -287,6 +305,8 @@ final class VideoItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.releaseYear,
+    super.rating,
     super.artwork,
   });
 
@@ -295,6 +315,8 @@ final class VideoItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        releaseYear: value.releaseYear,
+        rating: value.rating,
         artwork: value.artwork,
       );
 
@@ -313,6 +335,8 @@ final class SeriesItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.releaseYear,
+    super.rating,
     super.artwork,
   });
 
@@ -321,6 +345,8 @@ final class SeriesItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        releaseYear: value.releaseYear,
+        rating: value.rating,
         artwork: value.artwork,
       );
 
@@ -340,6 +366,8 @@ final class EpisodeItemV2 extends MediaItemV2 {
     required super.title,
     required this.episode,
     super.subtitle,
+    super.releaseYear,
+    super.rating,
     super.artwork,
   });
 
@@ -348,6 +376,8 @@ final class EpisodeItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        releaseYear: value.releaseYear,
+        rating: value.rating,
         artwork: value.artwork,
       );
 
@@ -375,6 +405,8 @@ final class ChannelItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.releaseYear,
+    super.rating,
     super.artwork,
   });
 
@@ -383,6 +415,8 @@ final class ChannelItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        releaseYear: value.releaseYear,
+        rating: value.rating,
         artwork: value.artwork,
       );
 
@@ -402,6 +436,8 @@ final class EventItemV2 extends MediaItemV2 {
     required super.title,
     required this.schedule,
     super.subtitle,
+    super.releaseYear,
+    super.rating,
     super.artwork,
     this.participants = const [],
   });
@@ -414,6 +450,8 @@ final class EventItemV2 extends MediaItemV2 {
          ref: value.ref,
          title: value.title,
          subtitle: value.subtitle,
+         releaseYear: value.releaseYear,
+         rating: value.rating,
          artwork: value.artwork,
        );
 
@@ -439,13 +477,23 @@ final class EventItemV2 extends MediaItemV2 {
   List<Object?> get props => [...super.props, schedule, participants];
 }
 
-const _baseKeys = {'ref', 'kind', 'title', 'subtitle', 'artwork'};
+const _baseKeys = {
+  'ref',
+  'kind',
+  'title',
+  'subtitle',
+  'releaseYear',
+  'rating',
+  'artwork',
+};
 
 final class _CommonItemFields {
   const _CommonItemFields({
     required this.ref,
     required this.title,
     this.subtitle,
+    this.releaseYear,
+    this.rating,
     this.artwork,
   });
 
@@ -453,6 +501,8 @@ final class _CommonItemFields {
     final ref = json['ref'];
     final title = json['title'];
     final subtitle = json['subtitle'];
+    final releaseYear = json['releaseYear'];
+    final rating = json['rating'];
     final artwork = json['artwork'];
     if (ref is! Map) throw const FormatException('item.ref must be an object');
     if (title is! String || title.isEmpty) {
@@ -461,6 +511,14 @@ final class _CommonItemFields {
     if (subtitle != null && subtitle is! String) {
       throw const FormatException('item.subtitle must be a string');
     }
+    if (releaseYear != null && (releaseYear is! int || releaseYear <= 0)) {
+      throw const FormatException(
+        'item.releaseYear must be a positive integer',
+      );
+    }
+    if (rating != null && (rating is! num || !rating.isFinite || rating < 0)) {
+      throw const FormatException('item.rating must be a non-negative number');
+    }
     if (artwork != null && artwork is! Map) {
       throw const FormatException('item.artwork must be an object');
     }
@@ -468,6 +526,8 @@ final class _CommonItemFields {
       ref: MediaRef.fromJson(ref.cast<String, Object?>()),
       title: title,
       subtitle: subtitle as String?,
+      releaseYear: releaseYear as int?,
+      rating: (rating as num?)?.toDouble(),
       artwork: artwork == null
           ? null
           : Artwork.fromJson((artwork as Map).cast<String, Object?>()),
@@ -477,6 +537,8 @@ final class _CommonItemFields {
   final MediaRef ref;
   final String title;
   final String? subtitle;
+  final int? releaseYear;
+  final double? rating;
   final Artwork? artwork;
 }
 

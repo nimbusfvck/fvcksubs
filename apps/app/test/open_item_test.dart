@@ -131,7 +131,7 @@ void main() {
       providerId: 'fake.p',
       id: 'episode-7',
     );
-    final detail = MediaDetailV2(
+    const detail = MediaDetailV2(
       item: item,
       credits: [
         MediaCredit(
@@ -255,7 +255,7 @@ void main() {
     expect(playButton.onPressed, isNull);
   });
 
-  testWidgets('protocol v2 detail defaults to the latest available episode', (
+  testWidgets('protocol v2 detail defaults to the latest season and episode', (
     tester,
   ) async {
     const item = SeriesItemV2(
@@ -266,7 +266,7 @@ void main() {
       ),
       title: 'Reacher',
     );
-    final detail = MediaDetailV2(
+    const detail = MediaDetailV2(
       item: item,
       episodeGuide: EpisodeGuide(
         groups: [
@@ -306,7 +306,6 @@ void main() {
                 ),
                 title: 'Fourth latest',
                 position: 2,
-                availableAt: DateTime.utc(2099),
               ),
             ],
           ),
@@ -322,7 +321,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Play S4E1'), findsOneWidget);
+    expect(find.text('Play S4E2'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Fourth latest'),
       250,
@@ -373,7 +372,7 @@ void main() {
     expect(find.text('50 minutes'), findsOneWidget);
   });
 
-  testWidgets('protocol v2 header renders the supplied subtitle unchanged', (
+  testWidgets('protocol v2 header composes structured item metadata', (
     tester,
   ) async {
     const item = SeriesItemV2(
@@ -383,7 +382,9 @@ void main() {
         id: 'series-subtitle-meta',
       ),
       title: 'Reacher',
-      subtitle: '2025 • TV-MA • 8.7',
+      subtitle: 'Drama',
+      releaseYear: 2025,
+      rating: 8.7,
     );
     const detail = MediaDetailV2(item: item);
 
@@ -395,7 +396,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2025 • TV-MA • 8.7'), findsOneWidget);
+    expect(find.text('Drama • 2025 • ★ 8.7'), findsOneWidget);
   });
 
   testWidgets('protocol v2 season selector fits a narrow screen', (

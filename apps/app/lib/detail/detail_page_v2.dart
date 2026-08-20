@@ -8,6 +8,7 @@ import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
+import '../utils/media_item_metadata.dart';
 
 class DetailPageV2 extends StatefulWidget {
   const DetailPageV2({super.key, required this.item});
@@ -292,11 +293,11 @@ class _Header extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (item.subtitle case final subtitle?)
+                if (mediaItemSecondaryText(item) case final detail?)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Text(
-                      subtitle,
+                      detail,
                       style: AppTypography.bodyMd.copyWith(
                         color: AppColors.onDarkSoft,
                       ),
