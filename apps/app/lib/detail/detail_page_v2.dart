@@ -325,7 +325,7 @@ class _Header extends StatelessWidget {
                                   const Icon(
                                     Icons.star_rounded,
                                     size: 18,
-                                    color: AppColors.onDark,
+                                    color: Colors.amber,
                                   ),
                                   const SizedBox(width: AppSpacing.xxs),
                                   Text(
