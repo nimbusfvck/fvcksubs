@@ -114,10 +114,13 @@ class _CatalogShelfState extends State<CatalogShelf> {
       final page = snapshot.data;
       final items = page?.items ?? const <VersionedMediaItem>[];
       if (items.isEmpty) {
+        final title = widget.category.toLowerCase() == 'all'
+            ? _allSectionTitle(widget.binding)
+            : widget.binding.catalog.name;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Header(title: widget.binding.catalog.name),
+            _Header(title: title),
             const EmptyState(
               title: 'Nothing here right now.',
               icon: Icons.movie_filter_outlined,
@@ -153,6 +156,16 @@ class _CatalogShelfState extends State<CatalogShelf> {
       );
     },
   );
+
+  String _allSectionTitle(CatalogBinding binding) {
+    final category = binding.catalog.categories.firstWhere(
+      (value) => value.toLowerCase() != 'all',
+      orElse: () => binding.catalog.name,
+    );
+    return category.isEmpty
+        ? binding.catalog.name
+        : '${category[0].toUpperCase()}${category.substring(1)}';
+  }
 }
 
 class _Section extends StatelessWidget {
