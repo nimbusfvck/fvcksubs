@@ -54,6 +54,54 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('Continue Watching names the series for a saved episode', (
+    tester,
+  ) async {
+    const seriesRef = MediaRef(
+      extensionId: 'watch',
+      providerId: 'watch.p',
+      id: 'series',
+    );
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'watch',
+        providerId: 'watch.p',
+        id: 'episode-4',
+      ),
+      title: 'An episode title',
+      subtitle: 'The series title',
+      episode: EpisodeIdentity(
+        parentRef: seriesRef,
+        groupId: 'opaque-group',
+        position: 4,
+      ),
+    );
+    const record = UserMediaState(
+      item: episode,
+      progress: Duration(minutes: 8),
+    );
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'watch', categories: ['all'], items: const []),
+    ]);
+    final library = LibraryController(
+      store: _HomeLibraryStore(),
+      initial: {record.key: record},
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: registry,
+        libraryController: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('The series title'), findsOneWidget);
+    expect(find.text('Episode 4'), findsOneWidget);
+    expect(find.text('An episode title'), findsNothing);
+  });
+
   testWidgets('chips come from installed extensions, first one selected', (
     tester,
   ) async {

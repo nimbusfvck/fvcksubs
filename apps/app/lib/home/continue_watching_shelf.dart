@@ -79,11 +79,22 @@ class _ContinueCard extends StatelessWidget {
     return progress.inMilliseconds / duration.inMilliseconds;
   }
 
+  String get _title => switch (record.item) {
+    EpisodeItemV2(:final subtitle?) => subtitle,
+    _ => record.item.title,
+  };
+
+  String? get _context => switch (record.item) {
+    EpisodeItemV2(:final episode) => 'Episode ${episode.position}',
+    _ => null,
+  };
+
   @override
   Widget build(BuildContext context) {
     final item = record.item;
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
     final progress = _progress;
+    final contextLabel = _context;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -117,11 +128,20 @@ class _ContinueCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
+                    _title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.titleSm.copyWith(color: Colors.white),
                   ),
+                  if (contextLabel != null)
+                    Text(
+                      contextLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
+                    ),
                   if (progress != null) ...[
                     const SizedBox(height: AppSpacing.xs),
                     ClipRRect(
