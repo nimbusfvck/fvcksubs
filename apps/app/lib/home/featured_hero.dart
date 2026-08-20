@@ -129,12 +129,12 @@ class _FeaturedSlide extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xC9000000),
-                Color(0x18000000),
-                Color(0xB8101010),
+                Color(0xD9000000),
+                Color(0x40000000),
+                Color(0xF0101010),
                 Color(0xFF101010),
               ],
-              stops: [0, 0.34, 0.72, 1],
+              stops: [0, 0.24, 0.58, 1],
             ),
           ),
         ),
@@ -175,7 +175,10 @@ class _FeaturedDetails extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: AppTypography.displaySm.copyWith(color: AppColors.onDark),
+          style: AppTypography.displaySm.copyWith(
+            color: AppColors.onDark,
+            shadows: _featuredTextShadows,
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         _FeaturedMeta(item: media),
@@ -186,7 +189,10 @@ class _FeaturedDetails extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              shadows: _featuredTextShadows,
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.sm),
@@ -262,25 +268,37 @@ class _FeaturedMeta extends StatelessWidget {
     final values = <Widget>[
       Text(
         _kindLabel(item),
-        style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+        style: AppTypography.bodySm.copyWith(
+          color: AppColors.onDarkSoft,
+          shadows: _featuredTextShadows,
+        ),
       ),
       if (item.releaseYear != null)
         Text(
           item.releaseYear.toString(),
-          style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDarkSoft,
+            shadows: _featuredTextShadows,
+          ),
         ),
       if (item.rating != null) ...[
         const Icon(Icons.star, size: 15, color: Colors.amber),
         Text(
           item.rating!.toStringAsFixed(1),
-          style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDark,
+            shadows: _featuredTextShadows,
+          ),
         ),
       ],
       if (item is EventItemV2 &&
           (item as EventItemV2).schedule.state == ScheduleState.live)
         Text(
           'LIVE',
-          style: AppTypography.caption.copyWith(color: AppColors.liveAccent),
+          style: AppTypography.caption.copyWith(
+            color: AppColors.liveAccent,
+            shadows: _featuredTextShadows,
+          ),
         ),
     ];
     return Wrap(
@@ -300,3 +318,7 @@ String _kindLabel(MediaItemV2 item) => switch (item.kind) {
   MediaKindV2.channel => 'Live',
   MediaKindV2.event => 'Live event',
 };
+
+const _featuredTextShadows = [
+  Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+];
