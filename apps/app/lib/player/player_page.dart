@@ -381,12 +381,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller != null && controller.isFullScreen) {
       controller.exitFullScreen();
     }
-    final navigator = Navigator.of(context);
-    if (widget.returnToDetail) {
-      navigator.popUntil((route) => route.settings.name == 'detail');
-      return;
-    }
-    navigator.pop();
+    Navigator.of(context).pop();
   }
 
   Future<void> _changeSource() async {
