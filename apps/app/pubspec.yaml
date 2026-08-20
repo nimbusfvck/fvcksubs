@@ -28,6 +28,8 @@ dev_dependencies:
   # Test-only: installer_controller_test builds a repo.json whose declared
   # bundle hash has to match what ExtensionInstaller computes.
   crypto: ^3.0.7
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
   flutter_test:
     sdk: flutter
   lints: ^6.0.0

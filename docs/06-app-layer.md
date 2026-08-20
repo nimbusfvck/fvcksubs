@@ -235,6 +235,11 @@ flowchart TB
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame
   out against a narrower fallback, and text that sizes tightly to its content stays clipped
   once the real font arrives.
+- **Branding is generated from one source image.** The launcher and native splash assets use
+  `apps/app/assets/logo/logo.png`; their configurations live in
+  `apps/app/flutter_launcher_icons.yaml` and `apps/app/flutter_native_splash.yaml`. From
+  `apps/app`, regenerate them with `dart run flutter_launcher_icons -f flutter_launcher_icons.yaml`
+  and `dart run flutter_native_splash:create --path=flutter_native_splash.yaml`.
 
 ## 6.8 Test seams
 

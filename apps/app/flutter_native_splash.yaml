@@ -1,0 +1,15 @@
+# Native launch screen for the dark app shell.
+flutter_native_splash:
+  color: '#101010'
+  color_dark: '#101010'
+  image: assets/logo/logo.png
+  image_dark: assets/logo/logo.png
+  android: true
+  ios: true
+  web: false
+  android_gravity: center
+  ios_content_mode: center
+  android_12:
+    color: '#101010'
+    image: assets/logo/logo.png
+    icon_background_color: '#101010'
