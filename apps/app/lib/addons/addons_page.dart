@@ -5,6 +5,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
 import '../theme/tokens.dart';
+import '../widgets/empty_state.dart';
 import 'addons_controller.dart';
 import 'installer_controller.dart';
 
@@ -55,40 +56,19 @@ class AddonsPage extends StatelessWidget {
                     color: AppColors.onDarkSoft,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                _SectionHeader(
-                  title: 'Installed',
-                  trailing: installed.isEmpty
-                      ? null
-                      : '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
-                ),
-                const SizedBox(height: AppSpacing.sm),
                 if (installed.isEmpty)
-                  _Panel(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.lg,
-                      ),
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.extension_off_outlined,
-                            color: AppColors.onDarkSoft,
-                            size: 32,
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'No extensions installed.',
-                            textAlign: TextAlign.center,
-                            style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const EmptyState(
+                    title: 'No extensions installed.',
+                    icon: Icons.extension_off_outlined,
                   )
-                else
+                else ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _SectionHeader(
+                    title: 'Installed',
+                    trailing:
+                        '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
                   for (final manifest in installed) ...[
                     _ExtensionTile(
                       manifest: manifest,
@@ -98,6 +78,7 @@ class AddonsPage extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
+                ],
               ],
             ),
           );

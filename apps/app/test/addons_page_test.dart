@@ -194,6 +194,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No extensions installed.'), findsOneWidget);
+    expect(find.text('Installed'), findsNothing);
   });
 
   group('the add-extension dialog', () {
