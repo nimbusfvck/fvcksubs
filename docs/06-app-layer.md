@@ -112,7 +112,7 @@ poster-led. Play resolves the selected item immediately, Favorite writes to the 
 library, and Info follows the normal detail-or-play navigation rule.
 
 The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips live in a pinned app bar below the hero, keeping the current category available
+chips live in a pinned app bar above the hero, keeping the current category available
 while the hero scrolls away normally.
 
 Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
@@ -125,7 +125,7 @@ indicator; unavailable extensions are omitted.
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
 so the user can distinguish a temporary problem from an empty section.
 
-Home uses a floating, pinned app bar below the featured hero. Its category chips stay available
+Home uses a floating, pinned app bar above the featured hero. Its category chips stay available
 while the hero scrolls as ordinary content and does not snap with the toolbar.
 
 ### Full catalog

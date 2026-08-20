@@ -163,16 +163,6 @@ class _HomePageState extends State<HomePage> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              if (featured.items.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: math.min(
-                      560,
-                      math.max(420, MediaQuery.sizeOf(context).height * 0.62),
-                    ),
-                    child: FeaturedHero(items: featured.items),
-                  ),
-                ),
               SliverAppBar(
                 pinned: true,
                 floating: true,
@@ -217,6 +207,16 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+              if (featured.items.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: math.min(
+                      560,
+                      math.max(420, MediaQuery.sizeOf(context).height * 0.62),
+                    ),
+                    child: FeaturedHero(items: featured.items),
+                  ),
+                ),
               if (selected.toLowerCase() == 'all')
                 SliverToBoxAdapter(
                   child: ContinueWatchingShelf(
