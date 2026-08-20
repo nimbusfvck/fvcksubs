@@ -39,7 +39,11 @@ interface Artwork {
   portrait?: ImageRef;
   /** Landscape image used by wide cards and detail headers. */
   landscape?: ImageRef;
-  /** Optional title or brand mark. */
+  /**
+   * Transparent title or brand mark. Featured video and series heroes show
+   * this instead of the text title. Live fallback artwork uses it as the
+   * centered identity when no participant logo is available.
+   */
   logo?: ImageRef;
 }
 

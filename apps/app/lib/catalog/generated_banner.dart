@@ -218,7 +218,7 @@ class GeneratedLiveArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (primary, secondary) = fillsFor(seed, participants: participants);
-    final pattern = BannerPattern.forKey(seed);
+    final motif = _LiveArtworkMotif.forKey(seed);
 
     return ExcludeSemantics(
       child: LayoutBuilder(
@@ -233,24 +233,12 @@ class GeneratedLiveArtwork extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               CustomPaint(
-                painter: _BannerArtwork(
-                  home: primary,
-                  away: secondary,
-                  pattern: pattern,
+                painter: _LiveBackdropArtwork(
+                  primary: primary,
+                  secondary: secondary,
+                  motif: motif,
                 ),
               ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    radius: 0.8,
-                    colors: [
-                      AppColors.onDark.withValues(alpha: 0.15),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-              const CustomPaint(painter: _LiveAtmosphereArtwork()),
               Center(
                 child: _LiveIdentity(
                   participants: participants,
@@ -265,6 +253,16 @@ class GeneratedLiveArtwork extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _LiveArtworkMotif {
+  orbit,
+  ribbons,
+  tiles;
+
+  static _LiveArtworkMotif forKey(String key) =>
+      _LiveArtworkMotif.values[_stableHash(key) %
+          _LiveArtworkMotif.values.length];
 }
 
 class _LiveIdentity extends StatelessWidget {
@@ -284,116 +282,242 @@ class _LiveIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final visible = participants.take(3).toList(growable: false);
     if (visible.isEmpty) {
-      final size = math.min(scale * 0.28, 124.0);
-      if (logo != null) {
-        return _Crest(
-          imageUrl: logo!.url,
-          size: size,
-          showFallbackWhileLoading: true,
-        );
-      }
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceDark.withValues(alpha: 0.28),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: AppColors.onDark.withValues(alpha: 0.32),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.surfaceDark.withValues(alpha: 0.3),
-              blurRadius: 28,
-              spreadRadius: 8,
-            ),
-          ],
-        ),
-        child: Icon(
-          Icons.live_tv_outlined,
-          size: size * 0.48,
-          color: AppColors.onDark.withValues(alpha: 0.9),
-        ),
+      final size = math.min(scale * 0.3, 128.0);
+      return _LiveIdentityTile(
+        imageUrl: logo?.url,
+        fallbackIcon: Icons.live_tv_outlined,
+        size: size,
+        angle: -0.04,
       );
     }
 
     final count = visible.length;
-    final widthPerCrest = availableWidth / (count * 1.55 + 1);
-    final crestSize = math.min(math.min(scale * 0.27, widthPerCrest), 136.0);
+    final widthPerTile = availableWidth / (count * 1.25 + 0.6);
+    final tileSize = math.min(math.min(scale * 0.3, widthPerTile), 128.0);
+    const angles = [-0.07, 0.05, -0.035];
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var index = 0; index < visible.length; index++) ...[
-          if (index > 0)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: crestSize * 0.22),
-              child: Transform.rotate(
-                angle: math.pi / 4,
-                child: Container(
-                  width: crestSize * 0.08,
-                  height: crestSize * 0.08,
-                  decoration: BoxDecoration(
-                    color: AppColors.onDark.withValues(alpha: 0.72),
-                    borderRadius: AppRadius.sm,
-                  ),
-                ),
-              ),
+        for (var index = 0; index < visible.length; index++)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: tileSize * 0.045),
+            child: _LiveIdentityTile(
+              imageUrl:
+                  visible[index].logo?.url ?? (index == 0 ? logo?.url : null),
+              fallbackIcon: Icons.shield_outlined,
+              size: tileSize,
+              angle: angles[index],
             ),
-          _Crest(
-            imageUrl:
-                visible[index].logo?.url ?? (index == 0 ? logo?.url : null),
-            size: crestSize,
-            showFallbackWhileLoading: true,
           ),
-        ],
       ],
     );
   }
 }
 
-class _LiveAtmosphereArtwork extends CustomPainter {
-  const _LiveAtmosphereArtwork();
+class _LiveIdentityTile extends StatelessWidget {
+  const _LiveIdentityTile({
+    required this.imageUrl,
+    required this.fallbackIcon,
+    required this.size,
+    required this.angle,
+  });
+
+  final String? imageUrl;
+  final IconData fallbackIcon;
+  final double size;
+  final double angle;
+
+  @override
+  Widget build(BuildContext context) => Transform.rotate(
+    angle: angle,
+    child: Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(size * 0.26),
+        border: Border.all(color: AppColors.onDark.withValues(alpha: 0.16)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.surfaceDark.withValues(alpha: 0.24),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: _Crest(
+        imageUrl: imageUrl,
+        size: size * 0.72,
+        fallbackIcon: fallbackIcon,
+        showFallbackWhileLoading: true,
+      ),
+    ),
+  );
+}
+
+class _LiveBackdropArtwork extends CustomPainter {
+  const _LiveBackdropArtwork({
+    required this.primary,
+    required this.secondary,
+    required this.motif,
+  });
+
+  final Color primary;
+  final Color secondary;
+  final _LiveArtworkMotif motif;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = math.min(size.width, size.height) * 0.2;
-    final ringPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.09)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.25;
+    final rect = Offset.zero & size;
+    final start = Color.lerp(AppColors.surfaceDark, primary, 0.82)!;
+    final end = Color.lerp(AppColors.surfaceDark, secondary, 0.68)!;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [start, end, AppColors.surfaceDark],
+          stops: const [0, 0.58, 1],
+        ).createShader(rect),
+    );
 
-    for (var index = 1; index <= 4; index++) {
-      canvas.drawCircle(center, baseRadius * index, ringPaint);
-    }
-
-    final linePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.055)
-      ..strokeWidth = 1;
-    final gap = math.max(28.0, size.width / 12);
-    for (var offset = -size.height; offset < size.width; offset += gap) {
-      canvas.drawLine(
-        Offset(offset, size.height),
-        Offset(offset + size.height, 0),
-        linePaint,
-      );
+    switch (motif) {
+      case _LiveArtworkMotif.orbit:
+        _paintOrbit(canvas, size);
+      case _LiveArtworkMotif.ribbons:
+        _paintRibbons(canvas, size);
+      case _LiveArtworkMotif.tiles:
+        _paintTiles(canvas, size);
     }
   }
 
+  void _paintOrbit(Canvas canvas, Size size) {
+    final shortest = math.min(size.width, size.height);
+    final center = Offset(size.width * 0.74, size.height * 0.34);
+    canvas.drawCircle(
+      center,
+      shortest * 0.42,
+      Paint()..color = secondary.withValues(alpha: 0.22),
+    );
+    canvas.drawCircle(
+      center,
+      shortest * 0.29,
+      Paint()
+        ..color = AppColors.onDark.withValues(alpha: 0.1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = shortest * 0.025,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.22),
+      shortest * 0.055,
+      Paint()..color = AppColors.onDark.withValues(alpha: 0.32),
+    );
+  }
+
+  void _paintRibbons(Canvas canvas, Size size) {
+    final first = Path()
+      ..moveTo(-size.width * 0.12, size.height * 0.24)
+      ..cubicTo(
+        size.width * 0.2,
+        size.height * 0.02,
+        size.width * 0.62,
+        size.height * 0.46,
+        size.width * 1.12,
+        size.height * 0.16,
+      )
+      ..lineTo(size.width * 1.12, size.height * 0.34)
+      ..cubicTo(
+        size.width * 0.62,
+        size.height * 0.64,
+        size.width * 0.2,
+        size.height * 0.2,
+        -size.width * 0.12,
+        size.height * 0.42,
+      )
+      ..close();
+    canvas.drawPath(
+      first,
+      Paint()..color = AppColors.onDark.withValues(alpha: 0.09),
+    );
+
+    final second = Path()
+      ..moveTo(-size.width * 0.15, size.height * 0.68)
+      ..quadraticBezierTo(
+        size.width * 0.45,
+        size.height * 0.42,
+        size.width * 1.12,
+        size.height * 0.78,
+      )
+      ..lineTo(size.width * 1.12, size.height)
+      ..quadraticBezierTo(
+        size.width * 0.45,
+        size.height * 0.64,
+        -size.width * 0.15,
+        size.height * 0.9,
+      )
+      ..close();
+    canvas.drawPath(second, Paint()..color = primary.withValues(alpha: 0.2));
+  }
+
+  void _paintTiles(Canvas canvas, Size size) {
+    final shortest = math.min(size.width, size.height);
+    final paint = Paint()..color = AppColors.onDark.withValues(alpha: 0.08);
+
+    void tile(Offset center, double width, double height, double angle) {
+      canvas
+        ..save()
+        ..translate(center.dx, center.dy)
+        ..rotate(angle)
+        ..drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: Offset.zero, width: width, height: height),
+            Radius.circular(height * 0.34),
+          ),
+          paint,
+        )
+        ..restore();
+    }
+
+    tile(
+      Offset(size.width * 0.14, size.height * 0.2),
+      shortest * 0.5,
+      shortest * 0.16,
+      -0.42,
+    );
+    tile(
+      Offset(size.width * 0.84, size.height * 0.34),
+      shortest * 0.68,
+      shortest * 0.22,
+      0.32,
+    );
+    tile(
+      Offset(size.width * 0.28, size.height * 0.78),
+      shortest * 0.38,
+      shortest * 0.12,
+      0.22,
+    );
+  }
+
   @override
-  bool shouldRepaint(covariant _LiveAtmosphereArtwork oldDelegate) => false;
+  bool shouldRepaint(covariant _LiveBackdropArtwork oldDelegate) =>
+      oldDelegate.primary != primary ||
+      oldDelegate.secondary != secondary ||
+      oldDelegate.motif != motif;
 }
 
 class _Crest extends StatelessWidget {
   const _Crest({
     required this.imageUrl,
     required this.size,
+    this.fallbackIcon = Icons.shield_outlined,
     this.showFallbackWhileLoading = false,
   });
 
   final String? imageUrl;
   final double size;
+  final IconData fallbackIcon;
   final bool showFallbackWhileLoading;
 
   @override
@@ -401,28 +525,30 @@ class _Crest extends StatelessWidget {
     width: size,
     height: size,
     child: imageUrl == null
-        ? _CrestFallback(size: size)
+        ? _CrestFallback(size: size, icon: fallbackIcon)
         : CachedNetworkImage(
             imageUrl: imageUrl!,
             fit: BoxFit.contain,
             fadeInDuration: Duration.zero,
             placeholder: (context, url) => showFallbackWhileLoading
-                ? _CrestFallback(size: size)
+                ? _CrestFallback(size: size, icon: fallbackIcon)
                 : const SizedBox.shrink(),
-            errorWidget: (context, url, error) => _CrestFallback(size: size),
+            errorWidget: (context, url, error) =>
+                _CrestFallback(size: size, icon: fallbackIcon),
           ),
   );
 }
 
 class _CrestFallback extends StatelessWidget {
-  const _CrestFallback({required this.size});
+  const _CrestFallback({required this.size, required this.icon});
 
   final double size;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Icon(
-      Icons.shield_outlined,
+      icon,
       size: size * 0.8,
       color: AppColors.onDark.withValues(alpha: 0.55),
     ),

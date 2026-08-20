@@ -187,16 +187,7 @@ class _FeaturedDetails extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          media.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: AppTypography.displaySm.copyWith(
-            color: AppColors.onDark,
-            shadows: _featuredTextShadows,
-          ),
-        ),
+        _FeaturedTitle(item: media),
         const SizedBox(height: AppSpacing.xs),
         _FeaturedMeta(item: media),
         if (media.subtitle != null) ...[
@@ -213,9 +204,10 @@ class _FeaturedDetails extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
           children: [
             FilledButton.icon(
               key: const Key('featured-play'),
@@ -223,7 +215,6 @@ class _FeaturedDetails extends StatelessWidget {
               icon: const Icon(Icons.play_arrow),
               label: const Text('Play'),
             ),
-            const SizedBox(width: AppSpacing.xs),
             BlocBuilder<LibraryController, LibraryState>(
               bloc: AppScope.of(context).libraryController,
               builder: (context, state) {
@@ -247,7 +238,6 @@ class _FeaturedDetails extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(width: AppSpacing.xs),
             IconButton(
               key: const Key('featured-info'),
               tooltip: 'Open details',
@@ -273,6 +263,62 @@ class _FeaturedDetails extends StatelessWidget {
         ? playItemV2(context, item.item)
         : playItem(context, legacy);
   }
+}
+
+class _FeaturedTitle extends StatelessWidget {
+  const _FeaturedTitle({required this.item});
+
+  final MediaItemV2 item;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = switch (item) {
+      VideoItemV2() || SeriesItemV2() => item.artwork?.logo,
+      _ => null,
+    };
+    final fallback = _FeaturedTitleText(title: item.title);
+    if (logo == null) return fallback;
+
+    return Semantics(
+      label: item.title,
+      image: true,
+      child: ExcludeSemantics(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: SizedBox(
+            height: 56,
+            child: CachedNetworkImage(
+              key: const Key('featured-title-logo'),
+              imageUrl: logo.url,
+              fit: BoxFit.contain,
+              fadeInDuration: Duration.zero,
+              placeholder: (_, _) => Center(child: fallback),
+              errorWidget: (_, _, _) => Center(child: fallback),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeaturedTitleText extends StatelessWidget {
+  const _FeaturedTitleText({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    title,
+    key: const Key('featured-title-text'),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    textAlign: TextAlign.center,
+    style: AppTypography.titleLg.copyWith(
+      color: AppColors.onDark,
+      shadows: _featuredTextShadows,
+    ),
+  );
 }
 
 class _FeaturedMeta extends StatelessWidget {

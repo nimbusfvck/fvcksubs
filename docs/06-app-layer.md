@@ -118,6 +118,9 @@ daily tie-break so their order does not change during a session.
 
 Play resolves the selected item immediately, Favorite writes to the app library, and
 Info follows the normal detail-or-play navigation rule.
+Video and series items use `artwork.logo` as the featured title mark when supplied;
+otherwise the text title is limited to one line. A failed logo request falls back to the
+text title.
 
 The featured artwork and gradient extend behind the status bar on handhelds. Category
 chips are a separate pinned sliver below the app bar. This keeps the current category

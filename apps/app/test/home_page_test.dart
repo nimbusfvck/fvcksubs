@@ -194,6 +194,11 @@ void main() {
     expect(_catalogText('Featured movie'), findsOneWidget);
     expect(find.text('Live item'), findsOneWidget);
     expect(find.byType(GeneratedLiveArtwork), findsOneWidget);
+    final featuredTitle = tester.widget<Text>(
+      find.byKey(const Key('featured-title-text')),
+    );
+    expect(featuredTitle.maxLines, 1);
+    expect(featuredTitle.style?.fontSize, 18);
     expect(find.byKey(const Key('featured-play')), findsOneWidget);
     expect(find.byKey(const Key('featured-favorite')), findsOneWidget);
     expect(find.byKey(const Key('featured-info')), findsOneWidget);

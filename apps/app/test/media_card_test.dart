@@ -543,7 +543,6 @@ void main() {
       );
 
       expect(find.byType(CachedNetworkImage), findsOneWidget);
-      expect(find.byIcon(Icons.live_tv_outlined), findsNothing);
     });
 
     testWidgets('uses an item logo when the event has no participants', (
@@ -563,7 +562,6 @@ void main() {
       );
 
       expect(find.byType(CachedNetworkImage), findsOneWidget);
-      expect(find.byIcon(Icons.live_tv_outlined), findsNothing);
     });
 
     testWidgets('three participants fit a narrow hero without overflow', (
