@@ -262,7 +262,8 @@ void main() {
         await t.controller.setRepoUrl('$baseUrl/does-not-exist.json');
         await t.controller.refresh();
 
-        expect(t.controller.error, contains('Could not read the repo'));
+        expect(t.controller.error, contains('Check the URL'));
+        expect(t.controller.error, isNot(contains('DioException')));
         expect(t.controller.listings, isEmpty);
         expect(t.controller.busy, isFalse, reason: 'must not stay stuck busy');
       },

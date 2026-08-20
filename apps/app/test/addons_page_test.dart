@@ -304,7 +304,7 @@ void main() {
 
       // Honest failure, not a silent no-op: the user needs to know the repo
       // did not answer.
-      expect(find.textContaining('Could not read the repo'), findsOneWidget);
+      expect(find.textContaining('Check the URL'), findsOneWidget);
     });
 
     testWidgets('installed extensions stay on the Addons page', (tester) async {
