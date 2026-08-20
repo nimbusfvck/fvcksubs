@@ -326,7 +326,7 @@ void main() {
     });
   });
 
-  testWidgets('an extension tile shows its description and author', (
+  testWidgets('an extension tile keeps details out of the compact card', (
     tester,
   ) async {
     final registry = ExtensionRegistry([
@@ -343,8 +343,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Football fixtures and streams.'), findsOneWidget);
+    expect(find.text('Football fixtures and streams.'), findsNothing);
     expect(find.textContaining('by Someone'), findsOneWidget);
+
+    await tester.tap(find.text('fake'));
+    await tester.pumpAndSettle();
+    expect(find.text('Football fixtures and streams.'), findsOneWidget);
   });
 
   testWidgets('an extension without a description still lists cleanly', (
@@ -363,40 +367,39 @@ void main() {
     expect(find.text('live'), findsOneWidget);
   });
 
-  testWidgets(
-    'a long description is truncated on the card and full in detail',
-    (tester) async {
-      tester.view.physicalSize = const Size(320, 700);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('a long description is hidden on the card and full in detail', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final description = List.filled(
-        18,
-        'A detailed explanation of the extension capabilities.',
-      ).join(' ');
-      final registry = ExtensionRegistry([
-        FakeExtension(
-          id: 'verbose',
-          categories: ['live'],
-          description: description,
-        ),
-      ]);
+    final description = List.filled(
+      18,
+      'A detailed explanation of the extension capabilities.',
+    ).join(' ');
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'verbose',
+        categories: ['live'],
+        description: description,
+      ),
+    ]);
 
-      await tester.pumpWidget(
-        wrapApp(child: const AddonsPage(), registry: registry),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      wrapApp(child: const AddonsPage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Show more'), findsNothing);
-      expect(tester.widget<Text>(find.text(description)).maxLines, 2);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Show more'), findsNothing);
+    expect(find.text(description), findsNothing);
 
-      await tester.tap(find.text('verbose'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('verbose'));
+    await tester.pumpAndSettle();
 
-      expect(tester.widget<Text>(find.text(description)).maxLines, isNull);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(tester.widget<Text>(find.text(description)).maxLines, isNull);
+    expect(tester.takeException(), isNull);
+  });
 }

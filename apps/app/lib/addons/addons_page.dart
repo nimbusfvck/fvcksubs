@@ -396,15 +396,6 @@ class _ExtensionTile extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (manifest.description != null)
-              Text(
-                manifest.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.onDarkSoft,
-                ),
-              ),
             if (manifest.categories.isNotEmpty)
               Text(
                 manifest.categories.join(', '),
@@ -425,42 +416,27 @@ class _ExtensionTile extends StatelessWidget {
             if (listing?.isUpdate ?? false)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColors.brandAccent.withValues(alpha: 0.12),
-                    borderRadius: AppRadius.sm,
-                    border: Border.all(
-                      color: AppColors.brandAccent.withValues(alpha: 0.55),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.system_update_alt_outlined,
+                      size: 14,
+                      color: AppColors.brandAccent,
                     ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                      vertical: AppSpacing.xxs,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.system_update_alt_outlined,
-                          size: 14,
+                    const SizedBox(width: AppSpacing.xxs),
+                    Flexible(
+                      child: Text(
+                        'Version ${listing!.entry.version} available',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption.copyWith(
                           color: AppColors.brandAccent,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(width: AppSpacing.xxs),
-                        Flexible(
-                          child: Text(
-                            'Version ${listing!.entry.version} available · Update now',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.onDark,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
           ],
