@@ -36,16 +36,29 @@ List<BetterPlayerSubtitlesSource>? _subtitles(
   final sorted = subtitlesForPicker(tracks);
   if (sorted.isEmpty) return null;
 
-  final defaultIndex = preferredLanguage == null
-      ? -1
-      : sorted.indexWhere(
-          (t) => _primary(t.language) == _primary(preferredLanguage),
-        );
+  final preferred = preferredSubtitleSource(tracks, preferredLanguage);
 
   return [
     for (var i = 0; i < sorted.length; i++)
-      subtitleSourceFor(sorted[i], selectedByDefault: i == defaultIndex),
+      subtitleSourceFor(
+        sorted[i],
+        selectedByDefault: preferred?.urls?.first == sorted[i].url,
+      ),
   ];
+}
+
+/// Returns the matching stream-provided subtitle track, if the user has one.
+BetterPlayerSubtitlesSource? preferredSubtitleSource(
+  List<SubtitleTrack> tracks,
+  String? preferredLanguage,
+) {
+  if (preferredLanguage == null) return null;
+  for (final track in subtitlesForPicker(tracks)) {
+    if (_primary(track.language) == _primary(preferredLanguage)) {
+      return subtitleSourceFor(track, selectedByDefault: true);
+    }
+  }
+  return null;
 }
 
 BetterPlayerSubtitlesSource subtitleSourceFor(

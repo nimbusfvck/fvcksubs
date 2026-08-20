@@ -154,6 +154,16 @@ void main() {
     },
   );
 
+  test('the preferred subtitle is the matching track from the stream', () {
+    final subtitle = preferredSubtitleSource(const [
+      SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
+      SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
+    ], 'id');
+
+    expect(subtitle?.urls, ['https://subs/id.srt']);
+    expect(subtitle?.selectedByDefault, isTrue);
+  });
+
   test('a region variant matches by primary language subtag', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(

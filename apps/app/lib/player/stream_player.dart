@@ -77,15 +77,24 @@ class BetterPlayerView extends StatefulWidget {
 class _BetterPlayerViewState extends State<BetterPlayerView> {
   late final BetterPlayerController _controller;
   final GlobalKey _betterPlayerKey = GlobalKey();
+  late final BetterPlayerSubtitlesSource? _preferredSubtitle;
+  bool _waitingForPreferredSubtitle = false;
 
   @override
   void initState() {
     super.initState();
+    _preferredSubtitle = widget.isLive
+        ? null
+        : preferredSubtitleSource(
+            widget.stream.subtitles,
+            widget.preferredSubtitleLanguage,
+          );
+    _waitingForPreferredSubtitle = _preferredSubtitle != null;
     _controller = BetterPlayerController(
       BetterPlayerConfiguration(
         allowedScreenSleep: false,
         aspectRatio: 16 / 9,
-        autoPlay: true,
+        autoPlay: !_waitingForPreferredSubtitle,
         fit: BoxFit.contain,
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [
@@ -116,18 +125,31 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
     // error synchronously, and its listener rebuilds the widget tree.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(
-        _controller
-            .setupDataSource(
-              betterPlayerDataSource(
-                widget.stream,
-                isLive: widget.isLive,
-                preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
-              ),
-            )
-            .catchError((_) {}),
-      );
+      unawaited(_setupPlayback());
     });
+  }
+
+  Future<void> _setupPlayback() async {
+    try {
+      await _controller.setupDataSource(
+        betterPlayerDataSource(
+          widget.stream,
+          isLive: widget.isLive,
+          preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
+        ),
+      );
+      final preferredSubtitle = _preferredSubtitle;
+      if (preferredSubtitle != null) {
+        await _controller.setupSubtitleSource(preferredSubtitle);
+      }
+    } catch (_) {
+      // A broken subtitle must not prevent playback of an otherwise valid VOD.
+    } finally {
+      if (mounted && _waitingForPreferredSubtitle) {
+        setState(() => _waitingForPreferredSubtitle = false);
+        unawaited(_controller.play());
+      }
+    }
   }
 
   @override
@@ -137,6 +159,15 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      BetterPlayer(key: _betterPlayerKey, controller: _controller);
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      BetterPlayer(key: _betterPlayerKey, controller: _controller),
+      if (_waitingForPreferredSubtitle)
+        const ColoredBox(
+          color: Colors.black54,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+    ],
+  );
 }
