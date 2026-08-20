@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../player/subtitle_preference_controller.dart';
 import '../player/source_priority_controller.dart';
 import '../theme/tokens.dart';
+import '../widgets/app_page_bar.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -14,33 +15,28 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context).subtitlePreferenceController;
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.lg,
-          AppSpacing.md,
-          AppSpacing.xxl,
-        ),
-        children: [
-          Semantics(
-            header: true,
-            child: Text(
-              'Settings',
-              style: AppTypography.displaySm.copyWith(color: AppColors.onDark),
+    return Scaffold(
+      appBar: const AppPageBar(title: 'Settings'),
+      body: ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.xxl,
+          ),
+          children: [
+            Text(
+              'Playback and application preferences.',
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            'Playback and application preferences.',
-            style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          const _SourcePriorityEntry(),
-          const SizedBox(height: AppSpacing.md),
-          _SubtitlePreference(controller: controller),
-        ],
+            const SizedBox(height: AppSpacing.lg),
+            const _SourcePriorityEntry(),
+            const SizedBox(height: AppSpacing.md),
+            _SubtitlePreference(controller: controller),
+          ],
+        ),
       ),
     );
   }

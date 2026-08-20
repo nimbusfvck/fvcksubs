@@ -7,6 +7,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
 import '../theme/tokens.dart';
+import '../widgets/app_page_bar.dart';
 import '../widgets/empty_state.dart';
 import 'addons_controller.dart';
 import 'installer_controller.dart';
@@ -24,6 +25,7 @@ class AddonsPage extends StatelessWidget {
         builder: (context, _) {
           final installed = scope.registry.installed;
           return Scaffold(
+            appBar: const AppPageBar(title: 'Addons'),
             floatingActionButton: FloatingActionButton.extended(
               onPressed: () => showDialog<void>(
                 context: context,
@@ -37,15 +39,6 @@ class AddonsPage extends StatelessWidget {
             body: installed.isEmpty
                 ? const Column(
                     children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.md,
-                          AppSpacing.lg,
-                          AppSpacing.md,
-                          0,
-                        ),
-                        child: _AddonsHeader(),
-                      ),
                       Expanded(
                         child: Center(
                           child: EmptyState(
@@ -61,13 +54,11 @@ class AddonsPage extends StatelessWidget {
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.md,
-                      AppSpacing.lg,
+                      AppSpacing.md,
                       AppSpacing.md,
                       AppSpacing.xxl,
                     ),
                     children: [
-                      const _AddonsHeader(),
-                      const SizedBox(height: AppSpacing.lg),
                       _SectionHeader(
                         title: 'Installed',
                         trailing:
@@ -90,29 +81,6 @@ class AddonsPage extends StatelessWidget {
       ),
     );
   }
-}
-
-class _AddonsHeader extends StatelessWidget {
-  const _AddonsHeader();
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Semantics(
-        header: true,
-        child: Text(
-          'Addons',
-          style: AppTypography.displaySm.copyWith(color: AppColors.onDark),
-        ),
-      ),
-      const SizedBox(height: AppSpacing.xxs),
-      Text(
-        'Manage extensions, sources',
-        style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
-      ),
-    ],
-  );
 }
 
 class _AddExtensionDialog extends StatefulWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/home_shell.dart';
+import 'package:fvcksubs_app/widgets/app_page_bar.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
@@ -42,12 +43,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.widgetWithText(AppPageBar, 'fvcksubs'), findsOneWidget);
+
     await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();
 
     // A real LibraryPage now — empty because nothing's been favorited or
     // watched in this fresh session, not because it isn't built.
     expect(find.text('No favorites yet'), findsOneWidget);
+    expect(find.widgetWithText(AppPageBar, 'Library'), findsOneWidget);
+
+    await tester.tap(find.text('Addons'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppPageBar, 'Addons'), findsOneWidget);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppPageBar, 'Settings'), findsOneWidget);
   });
 
   testWidgets('settings is a real destination', (tester) async {

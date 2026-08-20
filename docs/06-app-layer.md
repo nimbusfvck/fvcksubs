@@ -64,6 +64,9 @@ Whichever destination is showing is rebuilt when settings or the library change,
 toggling an extension or favouriting an item takes effect immediately without either screen
 knowing about the other.
 
+Primary destinations use the shared app bar component. It owns the title spacing, dark surface,
+and action placement so Home, Library, Addons, and Settings keep the same top-level treatment.
+
 ## 6.3 Controllers
 
 Four concerns, one pattern: a notifier over a plain store, persisted on every change,

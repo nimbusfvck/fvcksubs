@@ -10,6 +10,7 @@ import '../catalog/media_card_v2.dart';
 import '../detail/open_item.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/app_page_bar.dart';
 import 'library_controller.dart';
 import 'legacy_library_controller.dart';
 
@@ -19,14 +20,17 @@ class LibraryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    return BlocBuilder<LibraryController, LibraryState>(
-      bloc: scope.libraryController,
-      builder: (context, v2) => ListenableBuilder(
-        listenable: scope.legacyLibraryController,
-        builder: (context, _) => _LibraryContent(
-          legacy: scope.legacyLibraryController,
-          v2: v2,
-          registry: scope.registry,
+    return Scaffold(
+      appBar: const AppPageBar(title: 'Library'),
+      body: BlocBuilder<LibraryController, LibraryState>(
+        bloc: scope.libraryController,
+        builder: (context, v2) => ListenableBuilder(
+          listenable: scope.legacyLibraryController,
+          builder: (context, _) => _LibraryContent(
+            legacy: scope.legacyLibraryController,
+            v2: v2,
+            registry: scope.registry,
+          ),
         ),
       ),
     );

@@ -10,6 +10,7 @@ import '../addons/installer_controller.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
 import '../theme/tokens.dart';
+import '../widgets/app_page_bar.dart';
 import 'catalog_grid_section.dart';
 import 'catalog_shelf.dart';
 import 'category_chips.dart';
@@ -89,7 +90,12 @@ class _HomePageState extends State<HomePage> {
     final registry = scope.registry;
     final categories = registry.categories;
 
-    if (categories.isEmpty) return const _NoExtensions();
+    if (categories.isEmpty) {
+      return const Scaffold(
+        appBar: AppPageBar(title: 'fvcksubs'),
+        body: _NoExtensions(),
+      );
+    }
 
     final selected = categories.contains(_selectedCategory)
         ? _selectedCategory!
@@ -104,99 +110,95 @@ class _HomePageState extends State<HomePage> {
         if (binding.extensionId == pluginId) binding,
     ];
 
-    return RefreshIndicator(
-      onRefresh: () => _refresh(bindings, selected),
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.xs,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'fvcksubs',
-                        style: AppTypography.displaySm.copyWith(
-                          color: AppColors.onDark,
+    return Scaffold(
+      appBar: AppPageBar(
+        title: 'fvcksubs',
+        actions: plugins.length > 1 && pluginId != null
+            ? [
+                PluginSelector(
+                  plugins: plugins,
+                  selectedId: pluginId,
+                  onSelected: scope.pluginController.select,
+                ),
+              ]
+            : null,
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _refresh(bindings, selected),
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.xs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SearchField(
+                      enabled: false,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SearchPage(),
                         ),
-                      ),
-                      if (plugins.length > 1 && pluginId != null)
-                        PluginSelector(
-                          plugins: plugins,
-                          selectedId: pluginId,
-                          onSelected: scope.pluginController.select,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  SearchField(
-                    enabled: false,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SearchPage(),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: CategoryChips(
-              categories: categories,
-              selected: selected,
-              onSelected: _selectCategory,
-            ),
-          ),
-          if (selected.toLowerCase() == 'all')
             SliverToBoxAdapter(
-              child: ContinueWatchingShelf(
-                controller: scope.libraryController,
-                registry: registry,
+              child: CategoryChips(
+                categories: categories,
+                selected: selected,
+                onSelected: _selectCategory,
               ),
             ),
-          if (bindings.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _EmptyCategory(category: selected),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, i) {
-                  final key = ValueKey(
-                    '$_generation/$selected/${bindings[i].extensionId}/'
-                    '${bindings[i].extension.manifest.version}/'
-                    '${bindings[i].catalog.id}',
-                  );
-                  if (bindings[i].catalog.expanded) {
-                    return CatalogGridSection(
+            if (selected.toLowerCase() == 'all')
+              SliverToBoxAdapter(
+                child: ContinueWatchingShelf(
+                  controller: scope.libraryController,
+                  registry: registry,
+                ),
+              ),
+            if (bindings.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyCategory(category: selected),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final key = ValueKey(
+                      '$_generation/$selected/${bindings[i].extensionId}/'
+                      '${bindings[i].extension.manifest.version}/'
+                      '${bindings[i].catalog.id}',
+                    );
+                    if (bindings[i].catalog.expanded) {
+                      return CatalogGridSection(
+                        key: key,
+                        binding: bindings[i],
+                        category: selected,
+                        scrollController: _scrollController,
+                      );
+                    }
+                    return CatalogShelf(
                       key: key,
                       binding: bindings[i],
                       category: selected,
-                      scrollController: _scrollController,
                     );
-                  }
-                  return CatalogShelf(
-                    key: key,
-                    binding: bindings[i],
-                    category: selected,
-                  );
-                }, childCount: bindings.length),
+                  }, childCount: bindings.length),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
