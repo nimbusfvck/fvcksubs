@@ -8,6 +8,7 @@ import '../catalog/media_card_v2.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/empty_state.dart';
 
 class CatalogShelf extends StatefulWidget {
   const CatalogShelf({
@@ -113,16 +114,16 @@ class _CatalogShelfState extends State<CatalogShelf> {
       final page = snapshot.data;
       final items = page?.items ?? const <VersionedMediaItem>[];
       if (items.isEmpty) {
-        return widget.category.toLowerCase() == 'all'
-            ? const SizedBox.shrink()
-            : _ShelfMessage(
-                child: Text(
-                  'Nothing here right now.',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-              );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Header(title: widget.binding.catalog.name),
+            const EmptyState(
+              title: 'Nothing here right now.',
+              icon: Icons.movie_filter_outlined,
+            ),
+          ],
+        );
       }
 
       final idsByName = {

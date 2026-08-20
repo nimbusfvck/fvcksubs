@@ -7,6 +7,7 @@ import '../catalog/catalog_cache.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/empty_state.dart';
 
 class CatalogGridSection extends StatefulWidget {
   const CatalogGridSection({
@@ -147,19 +148,27 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
     final page = _page;
     if (page == null || page.items.isEmpty) {
-      return widget.category.toLowerCase() == 'all'
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-              child: Center(
-                child: Text(
-                  'Nothing here right now.',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-              ),
-            );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.xs,
+            ),
+            child: Text(
+              widget.binding.catalog.name,
+              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+            ),
+          ),
+          const EmptyState(
+            title: 'Nothing here right now.',
+            icon: Icons.movie_filter_outlined,
+          ),
+        ],
+      );
     }
     return Column(
       children: [

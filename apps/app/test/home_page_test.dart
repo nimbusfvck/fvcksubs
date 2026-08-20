@@ -183,7 +183,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nothing here right now.'), findsOneWidget);
-    expect(find.text('Live source'), findsNothing);
+    expect(find.text('Live source'), findsOneWidget);
   });
 
   testWidgets('a row catalog carousels, a grid one lays out in columns', (
