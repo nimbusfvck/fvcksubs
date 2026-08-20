@@ -370,13 +370,7 @@ void main() {
     final playButton = tester.widget<ElevatedButton>(
       find.byType(ElevatedButton),
     );
-    expect(
-      find.descendant(
-        of: find.byType(ElevatedButton),
-        matching: find.text('Coming soon'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Coming soon'), findsNWidgets(2));
     expect(playButton.onPressed, isNull);
   });
 

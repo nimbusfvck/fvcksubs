@@ -124,7 +124,7 @@ what metadata returned and pays for nothing more until the viewer commits.
 
 The Play button's label is computed rather than fixed, so it states what will actually
 happen: start, continue, or continue at a named episode. When saved progress and duration are
-available, a progress outline around the primary action shows the current completion fraction.
+available, a progress ring around the circular play action shows the current completion fraction.
 
 ### Library
 

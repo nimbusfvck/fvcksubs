@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -326,37 +328,54 @@ class _PrimaryPlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.play_arrow_rounded, size: 28),
-      label: Text(label),
+    final button = SizedBox.square(
+      dimension: 48,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
+        ),
+        child: const Icon(Icons.play_arrow_rounded, size: 28),
+      ),
     );
     final fraction = progress;
-    if (fraction == null) return button;
-    return CustomPaint(
-      key: const Key('primary-play-progress'),
-      foregroundPainter: _StadiumProgressPainter(progress: fraction),
-      child: button,
+    final action = fraction == null
+        ? button
+        : CustomPaint(
+            key: const Key('primary-play-progress'),
+            foregroundPainter: _PlayProgressPainter(progress: fraction),
+            child: button,
+          );
+    return Semantics(
+      button: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            action,
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _StadiumProgressPainter extends CustomPainter {
-  const _StadiumProgressPainter({required this.progress});
+class _PlayProgressPainter extends CustomPainter {
+  const _PlayProgressPainter({required this.progress});
 
   final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
     const strokeWidth = 2.5;
-    final rect = Offset.zero & size;
-    final outline = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          rect.deflate(strokeWidth / 2),
-          Radius.circular((size.height - strokeWidth) / 2),
-        ),
-      );
     final track = Paint()
       ..color = AppColors.outlineDark
       ..style = PaintingStyle.stroke
@@ -366,17 +385,20 @@ class _StadiumProgressPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
-    canvas.drawPath(outline, track);
-    for (final metric in outline.computeMetrics()) {
-      canvas.drawPath(
-        metric.extractPath(0, metric.length * progress),
-        indicator,
-      );
-    }
+    final center = size.center(Offset.zero);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    canvas.drawCircle(center, radius, track);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 2 * progress,
+      false,
+      indicator,
+    );
   }
 
   @override
-  bool shouldRepaint(_StadiumProgressPainter oldDelegate) =>
+  bool shouldRepaint(_PlayProgressPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }
 
