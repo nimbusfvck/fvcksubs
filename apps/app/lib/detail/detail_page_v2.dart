@@ -193,26 +193,27 @@ class _DetailPageV2State extends State<DetailPageV2> {
               if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
               if (detail.tags.isNotEmpty) const SizedBox(height: AppSpacing.md),
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    height: 48,
-                    child: BlocBuilder<LibraryController, LibraryState>(
-                      bloc: libraryController,
-                      builder: (context, state) {
-                        final target = _primaryEpisode(detail, state);
-                        final primaryTarget = _primaryTarget(detail, target);
-                        return _PrimaryPlayButton(
-                          onPressed: primaryTarget == null
-                              ? null
-                              : () => playItemV2(context, primaryTarget),
-                          label: _playLabel(
-                            detail,
-                            target,
-                            state.recordFor(item.ref)?.progress,
-                          ),
-                        );
-                      },
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: BlocBuilder<LibraryController, LibraryState>(
+                        bloc: libraryController,
+                        builder: (context, state) {
+                          final target = _primaryEpisode(detail, state);
+                          final primaryTarget = _primaryTarget(detail, target);
+                          return _PrimaryPlayButton(
+                            onPressed: primaryTarget == null
+                                ? null
+                                : () => playItemV2(context, primaryTarget),
+                            label: _playLabel(
+                              detail,
+                              target,
+                              state.recordFor(item.ref)?.progress,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -465,7 +466,7 @@ class _FavoriteAction extends StatelessWidget {
       builder: (context, state) {
         final active = state.isFavorite(item.ref);
         return SizedBox.square(
-          dimension: 48,
+          dimension: 44,
           child: IconButton(
             tooltip: active ? 'In favorites' : 'Add to favorites',
             onPressed: () => controller.toggleFavorite(item),
