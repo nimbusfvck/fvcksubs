@@ -1,7 +1,12 @@
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
+import 'catalog_page_store.dart';
+
 class CatalogCache {
+  CatalogCache({this.store});
+
+  final CatalogPageStore? store;
   final Map<String, Future<CatalogPage>> _entries = {};
   final Map<String, CatalogPage> _completed = {};
   final Map<String, Future<VersionedCatalogPage>> _versionedEntries = {};
@@ -60,8 +65,7 @@ class CatalogCache {
     final existing = _versionedEntries[key];
     if (existing != null) return existing;
 
-    final future = registry
-        .loadCatalogVersioned(binding, category: category)
+    final future = _loadVersioned(registry, binding, category: category)
         .then((page) {
           _versionedCompleted[key] = page;
           return page;
@@ -74,13 +78,38 @@ class CatalogCache {
     return future;
   }
 
+  Future<VersionedCatalogPage> _loadVersioned(
+    ExtensionRegistry registry,
+    CatalogBinding binding, {
+    required String category,
+  }) async {
+    final key = _keyOf(binding, category);
+    final cached = await store?.read(key);
+    if (cached != null) return cached;
+    final page = await registry.loadCatalogVersioned(
+      binding,
+      category: category,
+    );
+    await store?.write(key, page);
+    return page;
+  }
+
   Future<VersionedCatalogPage> reloadVersioned(
     ExtensionRegistry registry,
     CatalogBinding binding, {
     required String category,
   }) {
-    _versionedEntries.remove(_keyOf(binding, category));
-    return loadVersioned(registry, binding, category: category);
+    final key = _keyOf(binding, category);
+    _versionedEntries.remove(key);
+    final future = registry
+        .loadCatalogVersioned(binding, category: category)
+        .then((page) async {
+          _versionedCompleted[key] = page;
+          await store?.write(key, page);
+          return page;
+        });
+    _versionedEntries[key] = future;
+    return future;
   }
 
   /// Uses the session cache unless an explicit refresh is requested.

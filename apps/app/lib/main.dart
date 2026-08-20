@@ -10,6 +10,7 @@ import 'addons/installer_controller.dart';
 import 'addons/permission_dialog.dart';
 import 'app.dart';
 import 'catalog/catalog_cache.dart';
+import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'library/legacy_library_controller.dart';
@@ -97,7 +98,7 @@ Future<void> main() async {
       legacyLibraryController: legacyLibraryController,
       libraryController: libraryController,
       pluginController: pluginController,
-      catalogCache: CatalogCache(),
+      catalogCache: CatalogCache(store: await SembastCatalogPageStore.open()),
       subtitlePreferenceController: subtitlePreferenceController,
       sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
