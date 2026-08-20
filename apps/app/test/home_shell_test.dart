@@ -43,7 +43,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(AppPageBar, 'fvcksubs'), findsOneWidget);
+    expect(find.widgetWithText(SliverAppBar, 'fvcksubs'), findsOneWidget);
 
     await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();

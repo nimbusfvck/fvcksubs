@@ -138,6 +138,26 @@ void main() {
     expect(first.selected, isTrue);
   });
 
+  testWidgets('home uses a floating app bar with search and categories', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'a', categories: ['live', 'sport']),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const HomePage(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    final appBar = tester.widget<SliverAppBar>(find.byType(SliverAppBar));
+    expect(appBar.floating, isTrue);
+    expect(appBar.snap, isTrue);
+    expect(find.byIcon(Icons.search), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Live'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
+  });
+
   testWidgets('tapping a chip switches which category is loaded', (
     tester,
   ) async {

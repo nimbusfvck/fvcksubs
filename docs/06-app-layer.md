@@ -93,7 +93,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    BP["Browse screen"] --> SF["Search field"]
+    BP["Browse screen"] --> SF["Search action"]
     BP --> PS["Extension selector — when several serve this category"]
     BP --> CH["Category chips — exactly what extensions declare"]
     BP --> SH{"one shelf per catalog,<br/>shaped by its display hint"}
@@ -111,6 +111,9 @@ indicator; unavailable extensions are omitted.
 
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
 so the user can distinguish a temporary problem from an empty section.
+
+Home uses a floating, snapping app bar. Its category chips live in the app bar's bottom area, so
+they hide with the bar while scrolling down and snap back into view when scrolling up.
 
 ### Full catalog
 

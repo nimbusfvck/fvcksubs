@@ -111,52 +111,50 @@ class _HomePageState extends State<HomePage> {
     ];
 
     return Scaffold(
-      appBar: AppPageBar(
-        title: 'fvcksubs',
-        actions: plugins.length > 1 && pluginId != null
-            ? [
-                PluginSelector(
-                  plugins: plugins,
-                  selectedId: pluginId,
-                  onSelected: scope.pluginController.select,
-                ),
-              ]
-            : null,
-      ),
       body: RefreshIndicator(
         onRefresh: () => _refresh(bindings, selected),
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  AppSpacing.md,
-                  AppSpacing.md,
-                  AppSpacing.xs,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SearchField(
-                      enabled: false,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const SearchPage(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              backgroundColor: AppColors.surfaceDark,
+              foregroundColor: AppColors.onDark,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              titleSpacing: AppSpacing.md,
+              title: Text(
+                'fvcksubs',
+                style: AppTypography.titleLg.copyWith(color: AppColors.onDark),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: CategoryChips(
-                categories: categories,
-                selected: selected,
-                onSelected: _selectCategory,
+              actions: [
+                IconButton(
+                  tooltip: 'Search',
+                  icon: const Icon(Icons.search),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+                  ),
+                ),
+                if (plugins.length > 1 && pluginId != null)
+                  PluginSelector(
+                    plugins: plugins,
+                    selectedId: pluginId,
+                    onSelected: scope.pluginController.select,
+                  ),
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: SizedBox(
+                  height: 48,
+                  child: CategoryChips(
+                    categories: categories,
+                    selected: selected,
+                    onSelected: _selectCategory,
+                  ),
+                ),
               ),
             ),
             if (selected.toLowerCase() == 'all')
