@@ -371,11 +371,13 @@ class _PrimaryPlayButton extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => ElevatedButton.icon(
+  Widget build(BuildContext context) => FilledButton.icon(
     onPressed: onPressed,
     icon: const Icon(Icons.play_arrow_rounded, size: 28),
     label: Text(label),
-    style: ElevatedButton.styleFrom(shape: const StadiumBorder()),
+    style: FilledButton.styleFrom(
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
+    ),
   );
 }
 
@@ -390,11 +392,8 @@ class _Header extends StatelessWidget {
     final item = detail.item;
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
     final preview = _autoplayTrailer(detail);
-    final headerHeight = preview == null
-        ? 360.0
-        : MediaQuery.sizeOf(context).width * 9 / 16;
     return SizedBox(
-      height: headerHeight,
+      height: 360,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -403,9 +402,7 @@ class _Header extends StatelessWidget {
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
           if (preview != null)
-            Positioned.fill(
-              child: TrailerPreview(trailer: preview, fit: BoxFit.contain),
-            ),
+            Positioned.fill(child: TrailerPreview(trailer: preview)),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -634,17 +631,14 @@ class _FavoriteAction extends StatelessWidget {
       bloc: controller,
       builder: (context, state) {
         final active = state.isFavorite(item.ref);
-        return SizedBox.square(
-          dimension: 44,
-          child: IconButton(
-            tooltip: active ? 'In favorites' : 'Add to favorites',
-            onPressed: () => controller.toggleFavorite(item),
-            icon: Icon(active ? Icons.check : Icons.add),
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.onDark,
-              side: const BorderSide(color: AppColors.outlineDark),
-              shape: const StadiumBorder(),
-            ),
+        return IconButton(
+          tooltip: active ? 'In favorites' : 'Add to favorites',
+          onPressed: () => controller.toggleFavorite(item),
+          icon: Icon(active ? Icons.check : Icons.add),
+          style: IconButton.styleFrom(
+            foregroundColor: AppColors.onDark,
+            side: const BorderSide(color: AppColors.outlineDark),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
           ),
         );
       },
