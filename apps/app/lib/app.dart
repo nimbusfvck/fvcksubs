@@ -9,6 +9,7 @@ import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'library/legacy_library_controller.dart';
+import 'navigation/app_route_observer.dart';
 import 'platform/device_class.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
@@ -81,6 +82,7 @@ class FvcksubsApp extends StatelessWidget {
     sourceCache: sourceCache,
     child: MaterialApp(
       navigatorKey: navigatorKey,
+      navigatorObservers: [appRouteObserver],
       title: 'fvcksubs',
       debugShowCheckedModeBanner: false,
       theme: buildDarkTheme(),

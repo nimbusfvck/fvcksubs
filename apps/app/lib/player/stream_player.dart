@@ -161,6 +161,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
         ),
       );
+      if (!mounted) return;
       if (widget.muted) await _controller.setVolume(0);
       widget.onPlaybackReady?.call(_controller);
       final preferredSubtitle = _preferredSubtitle;

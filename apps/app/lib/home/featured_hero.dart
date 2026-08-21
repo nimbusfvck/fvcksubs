@@ -140,7 +140,7 @@ class _FeaturedHeroState extends State<FeaturedHero> {
           itemCount: widget.items.length,
           onPageChanged: (value) => setState(() => _page = value),
           itemBuilder: (context, index) =>
-              _FeaturedSlide(item: widget.items[index]),
+              _FeaturedSlide(item: widget.items[index], active: index == _page),
         ),
         if (widget.items.length > 1)
           Positioned(
@@ -206,9 +206,10 @@ class _FeaturedPageIndicator extends StatelessWidget {
 }
 
 class _FeaturedSlide extends StatefulWidget {
-  const _FeaturedSlide({required this.item});
+  const _FeaturedSlide({required this.item, required this.active});
 
   final VersionedMediaItem item;
+  final bool active;
 
   @override
   State<_FeaturedSlide> createState() => _FeaturedSlideState();
@@ -249,7 +250,9 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
   Widget build(BuildContext context) => FutureBuilder<MediaDetailV2>(
     future: _detail,
     builder: (context, snapshot) => _buildSlide(
-      snapshot.data == null ? null : _autoplayTrailer(snapshot.data!),
+      !widget.active || snapshot.data == null
+          ? null
+          : _autoplayTrailer(snapshot.data!),
     ),
   );
 
