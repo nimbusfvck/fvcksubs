@@ -74,6 +74,7 @@ class MediaTrailer extends Equatable {
     required this.url,
     this.site,
     this.thumbnail,
+    this.mimeType,
   });
 
   /// Decodes and validates a trailer reference.
@@ -83,6 +84,7 @@ class MediaTrailer extends Equatable {
       'url',
       'site',
       'thumbnail',
+      'mimeType',
     }, 'trailer');
     final url = _requiredHttpUrl(json['url'], 'trailer.url');
     return MediaTrailer(
@@ -90,6 +92,7 @@ class MediaTrailer extends Equatable {
       url: url,
       site: _optionalString(json['site'], 'trailer.site'),
       thumbnail: _optionalImage(json['thumbnail'], 'trailer.thumbnail'),
+      mimeType: _optionalString(json['mimeType'], 'trailer.mimeType'),
     );
   }
 
@@ -105,16 +108,23 @@ class MediaTrailer extends Equatable {
   /// Optional preview image for a trailer card or button.
   final ImageRef? thumbnail;
 
+  /// Optional MIME type for a directly playable preview stream.
+  ///
+  /// When this starts with `video/`, the app may autoplay [url] as a detail
+  /// header preview. Omit it for a normal external trailer URL.
+  final String? mimeType;
+
   /// Encodes this trailer reference.
   Map<String, Object?> toJson() => {
     'title': title,
     'url': url,
     if (site != null) 'site': site,
     if (thumbnail != null) 'thumbnail': thumbnail!.toJson(),
+    if (mimeType != null) 'mimeType': mimeType,
   };
 
   @override
-  List<Object?> get props => [title, url, site, thumbnail];
+  List<Object?> get props => [title, url, site, thumbnail, mimeType];
 }
 
 /// One playable entry in an episode guide.

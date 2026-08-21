@@ -144,6 +144,8 @@ interface Trailer {
   site?: string;
   /** Optional preview image. */
   thumbnail?: ImageRef;
+  /** Optional MIME type; `video/*` identifies a directly playable preview. */
+  mimeType?: string;
 }
 
 interface EpisodeGuide {

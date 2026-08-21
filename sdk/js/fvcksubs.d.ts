@@ -177,6 +177,8 @@ interface Trailer {
   site?: string;
   /** Optional preview image shown beside the trailer action. */
   thumbnail?: ImageRef;
+  /** Optional MIME type; `video/*` allows the app to autoplay `url` in the detail header. */
+  mimeType?: string;
 }
 
 interface EpisodeSummary {

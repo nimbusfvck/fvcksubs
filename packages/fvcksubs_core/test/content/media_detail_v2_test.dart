@@ -34,6 +34,7 @@ void main() {
           thumbnail: ImageRef(
             'https://img.youtube.com/vi/example/hqdefault.jpg',
           ),
+          mimeType: 'video/mp4',
         ),
       ],
       episodeGuide: EpisodeGuide(

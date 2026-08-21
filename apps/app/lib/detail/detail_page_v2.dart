@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_scope.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
+import '../player/stream_player.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 
@@ -181,7 +182,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: _Header(item: item)),
+        SliverToBoxAdapter(child: _Header(detail: detail)),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -329,19 +330,15 @@ class _DetailPageV2State extends State<DetailPageV2> {
     );
   }
 
-  Future<void> _openTrailer(
-    BuildContext context,
-    MediaTrailer trailer,
-  ) async {
+  Future<void> _openTrailer(BuildContext context, MediaTrailer trailer) async {
     final uri = Uri.tryParse(trailer.url);
-    final opened = uri != null && await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final opened =
+        uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open trailer.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open trailer.')));
     }
   }
 
@@ -373,19 +370,32 @@ class _PrimaryPlayButton extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.item});
+  const _Header({required this.detail});
 
-  final MediaItemV2 item;
+  final MediaDetailV2 detail;
 
   @override
   Widget build(BuildContext context) {
+    final item = detail.item;
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
+    final preview = _autoplayTrailer(detail);
     return SizedBox(
       height: 340,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (image != null)
+          if (preview != null)
+            IgnorePointer(
+              child: BetterPlayerView(
+                stream: PlayableStream(
+                  url: preview.url,
+                  // Keep the cache key unique per signed preview URL.
+                  label: preview.url,
+                ),
+                isLive: false,
+              ),
+            )
+          else if (image != null)
             CachedNetworkImage(
               imageUrl: image.url,
               fit: BoxFit.cover,
@@ -495,6 +505,15 @@ class _Header extends StatelessWidget {
       ),
     );
   }
+}
+
+MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
+  for (final trailer in detail.trailers) {
+    if (trailer.mimeType?.toLowerCase().startsWith('video/') ?? false) {
+      return trailer;
+    }
+  }
+  return null;
 }
 
 class _FavoriteAction extends StatelessWidget {
