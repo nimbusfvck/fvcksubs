@@ -335,7 +335,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
               ],
               if (detail.recommendations.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle('Similar'),
+                const _SectionTitle('You Might Also Like'),
                 const SizedBox(height: AppSpacing.sm),
                 SizedBox(
                   height: 248,

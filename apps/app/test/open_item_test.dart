@@ -600,7 +600,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Similar'), findsOneWidget);
+    expect(find.text('You Might Also Like'), findsOneWidget);
     expect(find.text('Related movie'), findsOneWidget);
     expect(find.byType(MediaCardV2), findsOneWidget);
   });
