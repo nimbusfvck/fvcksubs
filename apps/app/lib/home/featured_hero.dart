@@ -367,6 +367,9 @@ class _FeaturedDetails extends StatelessWidget {
               onPressed: () => unawaited(_play(context)),
               icon: const Icon(Icons.play_arrow),
               label: const Text('Play'),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
+              ),
             ),
             BlocBuilder<LibraryController, LibraryState>(
               bloc: AppScope.of(context).libraryController,
@@ -378,7 +381,7 @@ class _FeaturedDetails extends StatelessWidget {
                   style: IconButton.styleFrom(
                     foregroundColor: AppColors.onDark,
                     side: const BorderSide(color: AppColors.outlineDark),
-                    shape: const StadiumBorder(),
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
                   ),
                   icon: Icon(favorite ? Icons.check : Icons.add),
                   onPressed: () => AppScope.of(
@@ -396,6 +399,7 @@ class _FeaturedDetails extends StatelessWidget {
                   alpha: 0.86,
                 ),
                 side: const BorderSide(color: AppColors.outlineDark),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
               ),
               icon: const Icon(Icons.info_outline),
               onPressed: () => openVersionedItem(context, item),
