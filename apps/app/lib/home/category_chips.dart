@@ -30,15 +30,26 @@ class CategoryChips extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.xs),
             child: ChoiceChip(
-              label: Text(_label(category)),
+              label: SizedBox(
+                height: 28,
+                child: Center(
+                  child: Text(
+                    _label(category),
+                    style: AppTypography.titleSm.copyWith(
+                      color: category == selected
+                          ? AppColors.surfaceDark
+                          : AppColors.onDark,
+                    ),
+                  ),
+                ),
+              ),
               selected: category == selected,
               onSelected: (_) => onSelected(category),
               showCheckmark: false,
-              labelStyle: AppTypography.titleSm.copyWith(
-                color: category == selected
-                    ? AppColors.surfaceDark
-                    : AppColors.onDark,
-              ),
+              labelPadding: EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
               backgroundColor: AppColors.surfaceDarkElevated,
               selectedColor: AppColors.onDark,
               side: BorderSide.none,

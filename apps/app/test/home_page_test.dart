@@ -130,6 +130,13 @@ void main() {
     expect(find.widgetWithText(ChoiceChip, 'Sport'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Movie'), findsOneWidget);
 
+    final liveChip = find.widgetWithText(ChoiceChip, 'Live');
+    expect(
+      (tester.getCenter(liveChip).dy - tester.getCenter(find.text('Live')).dy)
+          .abs(),
+      lessThan(1),
+    );
+
     // No app-invented "All" chip — chips are exactly what extensions declare.
     expect(find.widgetWithText(ChoiceChip, 'All'), findsNothing);
 

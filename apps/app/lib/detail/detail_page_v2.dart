@@ -391,7 +391,7 @@ class _Header extends StatelessWidget {
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
     final preview = _autoplayTrailer(detail);
     return SizedBox(
-      height: 340,
+      height: 360,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -400,7 +400,17 @@ class _Header extends StatelessWidget {
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
           if (preview != null)
-            Positioned.fill(child: TrailerPreview(trailer: preview)),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AspectRatio(
+                // Keep the preview aligned with normal trailer video. The
+                // rest of the header stays artwork-backed for the metadata.
+                aspectRatio: 16 / 9,
+                child: TrailerPreview(trailer: preview),
+              ),
+            ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
