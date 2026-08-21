@@ -6,10 +6,16 @@ import 'stream_player.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.
 class TrailerPreview extends StatefulWidget {
-  const TrailerPreview({super.key, required this.trailer, this.playing = true});
+  const TrailerPreview({
+    super.key,
+    required this.trailer,
+    this.playing = true,
+    this.fit = BoxFit.cover,
+  });
 
   final MediaTrailer trailer;
   final bool playing;
+  final BoxFit fit;
 
   @override
   State<TrailerPreview> createState() => _TrailerPreviewState();
@@ -84,7 +90,7 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
               aspectRatio: aspectRatio,
               looping: true,
               muted: true,
-              fit: BoxFit.cover,
+              fit: widget.fit,
               playing: widget.playing,
               preview: true,
               isLive: false,
