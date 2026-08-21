@@ -504,7 +504,7 @@ void main() {
   });
 
   group('generated live artwork', () {
-    testWidgets('uses a broadcast mark when no identity logo is available', (
+    testWidgets('hides identity artwork when no logo is available', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -517,7 +517,7 @@ void main() {
         ),
       );
 
-      expect(find.byIcon(Icons.live_tv_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.live_tv_outlined), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -584,7 +584,7 @@ void main() {
         ),
       );
 
-      expect(find.byIcon(Icons.shield_outlined), findsNWidgets(3));
+      expect(find.byIcon(Icons.shield_outlined), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

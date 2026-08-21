@@ -12,6 +12,7 @@ import '../player/play_item.dart';
 import '../player/trailer_preview.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
+import '../widgets/shimmer_placeholder.dart';
 
 class DetailPageV2 extends StatefulWidget {
   const DetailPageV2({super.key, required this.item, this.heroTag});
@@ -539,10 +540,67 @@ class _LoadingDetail extends StatelessWidget {
           heroTag: heroTag,
         ),
       ),
-      const SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(child: CircularProgressIndicator()),
+      const SliverPadding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.xs,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        sliver: SliverToBoxAdapter(child: _DetailLoadingBody()),
       ),
+    ],
+  );
+}
+
+class _DetailLoadingBody extends StatelessWidget {
+  const _DetailLoadingBody();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: ShimmerPlaceholder(height: 48, borderRadius: AppRadius.pill),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          ShimmerPlaceholder(
+            width: 44,
+            height: 44,
+            borderRadius: AppRadius.pill,
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        children: [
+          Expanded(
+            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
+      const SizedBox(height: AppSpacing.sm),
+      ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
+      const SizedBox(height: AppSpacing.sm),
+      FractionallySizedBox(
+        widthFactor: 0.72,
+        alignment: Alignment.centerLeft,
+        child: ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      ShimmerPlaceholder(height: 160, borderRadius: AppRadius.md),
     ],
   );
 }

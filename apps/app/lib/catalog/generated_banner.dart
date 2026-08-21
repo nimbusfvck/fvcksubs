@@ -181,8 +181,8 @@ class GeneratedBanner extends StatelessWidget {
 /// Full-bleed fallback artwork for a live channel or scheduled event.
 ///
 /// The background is deterministic for the same item. Participant colors and
-/// logos are used when present; otherwise the title-derived palette and a
-/// broadcast mark keep the artwork useful without provider-specific assets.
+/// logos are used when present; otherwise the title-derived palette keeps the
+/// artwork useful without provider-specific assets.
 class GeneratedLiveArtwork extends StatelessWidget {
   const GeneratedLiveArtwork({
     super.key,
@@ -261,7 +261,7 @@ class GeneratedLiveArtwork extends StatelessWidget {
 
 enum _LiveArtworkMotif {
   orbit,
-  ribbons,
+  bubbles,
   tiles;
 
   static _LiveArtworkMotif forKey(String key) =>
@@ -285,29 +285,35 @@ class _LiveIdentity extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visible = participants.take(3).toList(growable: false);
-    if (visible.isEmpty) {
-      final size = math.min(scale * 0.3, 128.0);
-      return _LiveIdentityTile(
-        imageUrl: logo?.url,
-        fallbackIcon: Icons.live_tv_outlined,
-        size: size,
-        angle: -0.04,
-      );
+    final imageUrls = <String>[];
+    for (var index = 0; index < visible.length; index++) {
+      final participantUrl = visible[index].logo?.url.trim();
+      final fallbackUrl = index == 0 ? logo?.url.trim() : null;
+      final imageUrl = (participantUrl?.isNotEmpty ?? false)
+          ? participantUrl
+          : (fallbackUrl?.isNotEmpty ?? false)
+          ? fallbackUrl
+          : null;
+      if (imageUrl != null) imageUrls.add(imageUrl);
     }
+    if (visible.isEmpty) {
+      final imageUrl = logo?.url.trim();
+      if (imageUrl?.isNotEmpty ?? false) imageUrls.add(imageUrl!);
+    }
+    if (imageUrls.isEmpty) return const SizedBox.shrink();
 
-    final count = visible.length;
+    final count = imageUrls.length;
     final widthPerTile = availableWidth / (count * 1.25 + 0.6);
     final tileSize = math.min(math.min(scale * 0.3, widthPerTile), 128.0);
     const angles = [-0.07, 0.05, -0.035];
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var index = 0; index < visible.length; index++)
+        for (var index = 0; index < imageUrls.length; index++)
           Padding(
             padding: EdgeInsets.symmetric(horizontal: tileSize * 0.045),
             child: _LiveIdentityTile(
-              imageUrl:
-                  visible[index].logo?.url ?? (index == 0 ? logo?.url : null),
+              imageUrl: imageUrls[index],
               fallbackIcon: Icons.shield_outlined,
               size: tileSize,
               angle: angles[index],
@@ -376,22 +382,22 @@ class _LiveBackdropArtwork extends CustomPainter {
     final rect = Offset.zero & size;
     final start = Color.lerp(AppColors.surfaceDark, primary, 0.82)!;
     final end = Color.lerp(AppColors.surfaceDark, secondary, 0.68)!;
+    final middle = Color.lerp(start, end, 0.5)!;
     canvas.drawRect(
       rect,
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [start, end, AppColors.surfaceDark],
-          stops: const [0, 0.58, 1],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [start, middle, end],
         ).createShader(rect),
     );
 
     switch (motif) {
       case _LiveArtworkMotif.orbit:
         _paintOrbit(canvas, size);
-      case _LiveArtworkMotif.ribbons:
-        _paintRibbons(canvas, size);
+      case _LiveArtworkMotif.bubbles:
+        _paintBubbles(canvas, size);
       case _LiveArtworkMotif.tiles:
         _paintTiles(canvas, size);
     }
@@ -420,49 +426,26 @@ class _LiveBackdropArtwork extends CustomPainter {
     );
   }
 
-  void _paintRibbons(Canvas canvas, Size size) {
-    final first = Path()
-      ..moveTo(-size.width * 0.12, size.height * 0.24)
-      ..cubicTo(
-        size.width * 0.2,
-        size.height * 0.02,
-        size.width * 0.62,
-        size.height * 0.46,
-        size.width * 1.12,
-        size.height * 0.16,
-      )
-      ..lineTo(size.width * 1.12, size.height * 0.34)
-      ..cubicTo(
-        size.width * 0.62,
-        size.height * 0.64,
-        size.width * 0.2,
-        size.height * 0.2,
-        -size.width * 0.12,
-        size.height * 0.42,
-      )
-      ..close();
-    canvas.drawPath(
-      first,
-      Paint()..color = AppColors.onDark.withValues(alpha: 0.09),
-    );
-
-    final second = Path()
-      ..moveTo(-size.width * 0.15, size.height * 0.68)
-      ..quadraticBezierTo(
-        size.width * 0.45,
-        size.height * 0.42,
-        size.width * 1.12,
-        size.height * 0.78,
-      )
-      ..lineTo(size.width * 1.12, size.height)
-      ..quadraticBezierTo(
-        size.width * 0.45,
-        size.height * 0.64,
-        -size.width * 0.15,
-        size.height * 0.9,
-      )
-      ..close();
-    canvas.drawPath(second, Paint()..color = primary.withValues(alpha: 0.2));
+  void _paintBubbles(Canvas canvas, Size size) {
+    final shortest = math.min(size.width, size.height);
+    final paint = Paint()..color = AppColors.onDark.withValues(alpha: 0.1);
+    final bubbles = [
+      (Offset(size.width * 0.16, size.height * 0.18), shortest * 0.11),
+      (Offset(size.width * 0.82, size.height * 0.22), shortest * 0.17),
+      (Offset(size.width * 0.75, size.height * 0.78), shortest * 0.08),
+      (Offset(size.width * 0.18, size.height * 0.76), shortest * 0.05),
+    ];
+    for (final (center, radius) in bubbles) {
+      canvas.drawCircle(center, radius, paint);
+      canvas.drawCircle(
+        center,
+        radius * 0.62,
+        Paint()
+          ..color = primary.withValues(alpha: 0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = radius * 0.12,
+      );
+    }
   }
 
   void _paintTiles(Canvas canvas, Size size) {
