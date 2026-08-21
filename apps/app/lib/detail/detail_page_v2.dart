@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_scope.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
-import '../player/stream_player.dart';
+import '../player/trailer_preview.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 
@@ -396,26 +396,7 @@ class _Header extends StatelessWidget {
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
           if (preview != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => BetterPlayerView(
-                    stream: PlayableStream(
-                      url: preview.url,
-                      // Keep the cache key unique per signed preview URL.
-                      label: preview.url,
-                    ),
-                    // Match the hero container so the embedded player uses
-                    // the same full area as the poster background.
-                    aspectRatio: constraints.maxWidth / constraints.maxHeight,
-                    looping: true,
-                    muted: true,
-                    fit: BoxFit.cover,
-                    isLive: false,
-                  ),
-                ),
-              ),
-            ),
+            Positioned.fill(child: TrailerPreview(trailer: preview)),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(

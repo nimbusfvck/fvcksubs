@@ -11,6 +11,7 @@ import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
+import '../player/trailer_preview.dart';
 import '../theme/tokens.dart';
 import '../widgets/shimmer_placeholder.dart';
 
@@ -204,14 +205,56 @@ class _FeaturedPageIndicator extends StatelessWidget {
   );
 }
 
-class _FeaturedSlide extends StatelessWidget {
+class _FeaturedSlide extends StatefulWidget {
   const _FeaturedSlide({required this.item});
 
   final VersionedMediaItem item;
 
   @override
-  Widget build(BuildContext context) {
-    final media = item.item;
+  State<_FeaturedSlide> createState() => _FeaturedSlideState();
+}
+
+class _FeaturedSlideState extends State<_FeaturedSlide> {
+  Future<MediaDetailV2>? _detail;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _detail ??= _loadDetail();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeaturedSlide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.item.ref != widget.item.item.ref) {
+      _detail = _loadDetail();
+    }
+  }
+
+  Future<MediaDetailV2>? _loadDetail() {
+    final item = widget.item;
+    if (item.legacyItem != null ||
+        (item.item is! VideoItemV2 && item.item is! SeriesItemV2)) {
+      return null;
+    }
+    final registry = AppScope.of(context).registry;
+    final manifest = registry.installed.where(
+      (entry) => entry.id == item.item.ref.extensionId,
+    );
+    if (manifest.isEmpty || manifest.first.apiVersion < 2) return null;
+    return registry.metaV2(item.item.ref);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<MediaDetailV2>(
+    future: _detail,
+    builder: (context, snapshot) => _buildSlide(
+      snapshot.data == null ? null : _autoplayTrailer(snapshot.data!),
+    ),
+  );
+
+  Widget _buildSlide(MediaTrailer? preview) {
+    final media = widget.item.item;
     final artwork = media.artwork;
     final image = artwork?.portrait ?? artwork?.landscape;
     final fallbackArtwork = _fallbackArtwork(media);
@@ -230,6 +273,8 @@ class _FeaturedSlide extends StatelessWidget {
           )
         else
           fallbackArtwork,
+        if (preview != null)
+          Positioned.fill(child: TrailerPreview(trailer: preview)),
         const DecoratedBox(
           decoration: BoxDecoration(gradient: _featuredGradient),
         ),
@@ -243,7 +288,7 @@ class _FeaturedSlide extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 680),
               child: SizedBox(
                 width: double.infinity,
-                child: _FeaturedDetails(item: item),
+                child: _FeaturedDetails(item: widget.item),
               ),
             ),
           ),
@@ -251,6 +296,15 @@ class _FeaturedSlide extends StatelessWidget {
       ],
     );
   }
+}
+
+MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
+  for (final trailer in detail.trailers) {
+    if (trailer.mimeType?.toLowerCase().startsWith('video/') ?? false) {
+      return trailer;
+    }
+  }
+  return null;
 }
 
 Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
