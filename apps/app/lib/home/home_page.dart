@@ -161,8 +161,8 @@ class _HomePageState extends State<HomePage> {
             ? null
             : math
                   .min(
-                    560,
-                    math.max(420, MediaQuery.sizeOf(context).height * 0.62),
+                    480,
+                    math.max(420, MediaQuery.sizeOf(context).height * 0.52),
                   )
                   .toDouble();
         return Scaffold(
