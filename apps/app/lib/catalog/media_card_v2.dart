@@ -30,14 +30,22 @@ class MediaCardV2 extends StatelessWidget {
     final value = item;
     final portrait = value.artwork?.portrait;
     if (portrait != null) return _Poster(item: value, image: portrait);
-    if (value case EventItemV2(
-      :final participants,
-    ) when participants.length == 2) {
-      return _Match(item: value, showSubtitle: showSubtitle);
+    if (value is EventItemV2) {
+      if (value.participants.length == 2) {
+        return _Match(item: value, showSubtitle: showSubtitle);
+      }
+      if (_hasEventArtwork(value)) {
+        return _SingleEvent(item: value, showSubtitle: showSubtitle);
+      }
     }
     return _Summary(item: value, showSubtitle: showSubtitle);
   }
 }
+
+bool _hasEventArtwork(EventItemV2 item) =>
+    item.artwork?.landscape != null ||
+    item.artwork?.logo != null ||
+    item.participants.any((participant) => participant.logo != null);
 
 class _Poster extends StatelessWidget {
   const _Poster({required this.item, required this.image});
@@ -96,6 +104,93 @@ class _Match extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _SingleEvent extends StatelessWidget {
+  const _SingleEvent({required this.item, required this.showSubtitle});
+
+  final EventItemV2 item;
+  final bool showSubtitle;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(child: _SingleEventArtwork(item: item)),
+      _Text(
+        item: item,
+        secondary: _eventMeta(item, showSubtitle: showSubtitle),
+      ),
+    ],
+  );
+}
+
+class _SingleEventArtwork extends StatelessWidget {
+  const _SingleEventArtwork({required this.item});
+
+  final EventItemV2 item;
+
+  @override
+  Widget build(BuildContext context) {
+    final landscape = item.artwork?.landscape;
+    final artwork = landscape == null
+        ? GeneratedLiveArtwork(
+            seed: _eventArtworkSeed(item),
+            participants: item.participants,
+            logo: item.artwork?.logo,
+          )
+        : CachedNetworkImage(
+            imageUrl: landscape.url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            fadeInDuration: Duration.zero,
+            placeholder: (_, _) => const _EventArtworkFallback(),
+            errorWidget: (_, _, _) => const _EventArtworkFallback(),
+          );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        artwork,
+        if (landscape != null)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  AppColors.surfaceDark.withValues(alpha: 0.6),
+                ],
+              ),
+            ),
+          ),
+        Positioned(
+          left: AppSpacing.xs,
+          right: AppSpacing.xs,
+          top: AppSpacing.xs,
+          child: _ScheduleStatus(schedule: item.schedule),
+        ),
+      ],
+    );
+  }
+}
+
+class _EventArtworkFallback extends StatelessWidget {
+  const _EventArtworkFallback();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+    color: AppColors.surfaceDarkElevated,
+    child: Center(
+      child: Icon(Icons.live_tv_outlined, color: AppColors.onDarkSoft),
+    ),
+  );
+}
+
+String _eventArtworkSeed(EventItemV2 item) {
+  final ref = item.ref;
+  return '${ref.extensionId}|${ref.providerId}|${ref.id}|${item.title}';
 }
 
 class _Summary extends StatelessWidget {

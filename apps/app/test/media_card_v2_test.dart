@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
+import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
@@ -98,6 +100,67 @@ void main() {
     expect(find.text('Main event'), findsOneWidget);
     expect(find.text('In progress'), findsOneWidget);
     expect(find.text('LIVE'), findsOneWidget);
+  });
+
+  testWidgets('single-sided event renders its landscape artwork', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Single-sided broadcast',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                artwork: const Artwork(
+                  landscape: ImageRef('https://cdn.example/event.jpg'),
+                ),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
+    expect(find.text('Single-sided broadcast'), findsOneWidget);
+  });
+
+  testWidgets('single participant logo uses generated event artwork', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Single team event',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                participants: const [
+                  Participant(
+                    name: 'Single team',
+                    logo: ImageRef('https://cdn.example/team.png'),
+                  ),
+                ],
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(GeneratedLiveArtwork), findsOneWidget);
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
   });
 }
 
