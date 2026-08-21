@@ -74,7 +74,11 @@ enum BannerPattern {
 
   halftone,
 
-  arcs;
+  arcs,
+
+  confetti,
+
+  bubbles;
 
   static BannerPattern forKey(String? key) => key == null
       ? BannerPattern.sunburst
@@ -651,6 +655,10 @@ class _BannerArtwork extends CustomPainter {
         _halftone(canvas, size, center);
       case BannerPattern.arcs:
         _arcs(canvas, size, center);
+      case BannerPattern.confetti:
+        _confetti(canvas, size, direction);
+      case BannerPattern.bubbles:
+        _bubbles(canvas, size, direction);
     }
     canvas.restore();
   }
@@ -742,6 +750,71 @@ class _BannerArtwork extends CustomPainter {
 
     for (var radius = step; radius < limit; radius += step) {
       canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  void _confetti(Canvas canvas, Size size, int direction) {
+    final paint = Paint()
+      ..color = AppColors.onDark.withValues(alpha: 0.13)
+      ..style = PaintingStyle.fill;
+    final length = size.height * 0.16;
+    final width = size.height * 0.045;
+    const pieces = [
+      (0.13, 0.18, -0.42),
+      (0.34, 0.34, 0.28),
+      (0.17, 0.58, 0.72),
+      (0.45, 0.76, -0.2),
+      (0.72, 0.2, 0.58),
+      (0.88, 0.46, -0.62),
+      (0.67, 0.86, 0.36),
+    ];
+    for (final (xFactor, yFactor, angle) in pieces) {
+      final x = size.width * xFactor + direction * size.width * 0.08;
+      final y = size.height * yFactor;
+      canvas
+        ..save()
+        ..translate(x, y)
+        ..rotate(angle)
+        ..drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: Offset.zero, width: length, height: width),
+            Radius.circular(width),
+          ),
+          paint,
+        )
+        ..restore();
+    }
+  }
+
+  void _bubbles(Canvas canvas, Size size, int direction) {
+    final outline = Paint()
+      ..color = AppColors.onDark.withValues(alpha: 0.14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.height * 0.025;
+    final dot = Paint()
+      ..color = AppColors.onDark.withValues(alpha: 0.11)
+      ..style = PaintingStyle.fill;
+    const bubbles = [
+      (0.16, 0.22, 0.11),
+      (0.4, 0.44, 0.18),
+      (0.2, 0.78, 0.08),
+      (0.7, 0.2, 0.16),
+      (0.86, 0.56, 0.1),
+      (0.6, 0.82, 0.2),
+    ];
+    for (final (xFactor, yFactor, radiusFactor) in bubbles) {
+      final center = Offset(
+        size.width * xFactor + direction * size.width * 0.06,
+        size.height * yFactor,
+      );
+      final radius = size.height * radiusFactor;
+      canvas
+        ..drawCircle(center, radius, outline)
+        ..drawCircle(
+          center + Offset(radius * 0.35, -radius * 0.35),
+          radius * 0.16,
+          dot,
+        );
     }
   }
 
