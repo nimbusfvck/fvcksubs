@@ -5,6 +5,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../theme/tokens.dart';
 import '../utils/media_item_metadata.dart';
 import 'generated_banner.dart';
+import 'media_hero.dart';
 import 'media_card.dart' show LiveBadge, UpcomingBadge;
 import 'start_time_label.dart';
 
@@ -58,16 +59,22 @@ class _Poster extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        child: CachedNetworkImage(
-          imageUrl: image.url,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          fadeInDuration: Duration.zero,
-          placeholder: (_, _) =>
-              const ColoredBox(color: AppColors.surfaceDarkElevated),
-          errorWidget: (_, _, _) => const ColoredBox(
-            color: AppColors.surfaceDarkElevated,
-            child: Icon(Icons.play_circle_outline, color: AppColors.onDarkSoft),
+        child: Hero(
+          tag: mediaArtworkHeroTag(item.ref),
+          child: CachedNetworkImage(
+            imageUrl: image.url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            fadeInDuration: Duration.zero,
+            placeholder: (_, _) =>
+                const ColoredBox(color: AppColors.surfaceDarkElevated),
+            errorWidget: (_, _, _) => const ColoredBox(
+              color: AppColors.surfaceDarkElevated,
+              child: Icon(
+                Icons.play_circle_outline,
+                color: AppColors.onDarkSoft,
+              ),
+            ),
           ),
         ),
       ),

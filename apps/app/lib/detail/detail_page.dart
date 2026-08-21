@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
+import '../catalog/media_hero.dart';
 import '../player/play_item.dart';
 import 'episode_target.dart';
 import 'latest_available_episode.dart';
@@ -340,18 +341,21 @@ class _BackdropHeader extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (posterUrl != null)
-            CachedNetworkImage(
-              imageUrl: posterUrl,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              placeholder: (context, url) =>
-                  const ColoredBox(color: AppColors.surfaceDarkElevated),
-              errorWidget: (context, url, error) => const ColoredBox(
-                color: AppColors.surfaceDarkElevated,
-                child: Icon(
-                  Icons.movie_outlined,
-                  color: AppColors.onDarkSoft,
-                  size: 64,
+            Hero(
+              tag: mediaArtworkHeroTag(item.ref),
+              child: CachedNetworkImage(
+                imageUrl: posterUrl,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                placeholder: (context, url) =>
+                    const ColoredBox(color: AppColors.surfaceDarkElevated),
+                errorWidget: (context, url, error) => const ColoredBox(
+                  color: AppColors.surfaceDarkElevated,
+                  child: Icon(
+                    Icons.movie_outlined,
+                    color: AppColors.onDarkSoft,
+                    size: 64,
+                  ),
                 ),
               ),
             )

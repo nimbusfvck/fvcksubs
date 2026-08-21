@@ -5,6 +5,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../theme/tokens.dart';
 import 'start_time_label.dart';
 import 'generated_banner.dart';
+import 'media_hero.dart';
 import 'participant_avatar.dart';
 
 class MediaCard extends StatelessWidget {
@@ -47,16 +48,19 @@ class _PosterLayout extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: [
       Expanded(
-        child: CachedNetworkImage(
-          imageUrl: item.poster!.url,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          fadeInDuration: Duration.zero,
-          placeholder: (context, url) =>
-              const ColoredBox(color: AppColors.surfaceDarkElevated),
-          errorWidget: (context, url, error) => const ColoredBox(
-            color: AppColors.surfaceDarkElevated,
-            child: Icon(Icons.movie_outlined, color: AppColors.onDarkSoft),
+        child: Hero(
+          tag: mediaArtworkHeroTag(item.ref),
+          child: CachedNetworkImage(
+            imageUrl: item.poster!.url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            fadeInDuration: Duration.zero,
+            placeholder: (context, url) =>
+                const ColoredBox(color: AppColors.surfaceDarkElevated),
+            errorWidget: (context, url, error) => const ColoredBox(
+              color: AppColors.surfaceDarkElevated,
+              child: Icon(Icons.movie_outlined, color: AppColors.onDarkSoft),
+            ),
           ),
         ),
       ),

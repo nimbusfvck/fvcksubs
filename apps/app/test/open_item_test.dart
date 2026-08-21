@@ -505,6 +505,9 @@ void main() {
         subtitle: 'Drama',
         releaseYear: 2025,
         rating: 8.76,
+        artwork: Artwork(
+          portrait: ImageRef('https://cdn.example/reacher-poster.jpg'),
+        ),
       );
       const detail = MediaDetailV2(item: item);
 
@@ -521,6 +524,7 @@ void main() {
       expect(find.byIcon(Icons.star_rounded), findsOneWidget);
       expect(find.text('8.8'), findsOneWidget);
       expect(find.text('Drama'), findsOneWidget);
+      expect(find.byType(Hero), findsOneWidget);
     },
   );
 

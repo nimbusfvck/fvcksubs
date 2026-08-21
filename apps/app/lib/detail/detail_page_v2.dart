@@ -6,6 +6,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_scope.dart';
+import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
 import '../player/trailer_preview.dart';
@@ -389,12 +390,7 @@ class _Header extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (image != null)
-            CachedNetworkImage(
-              imageUrl: image.url,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) =>
-                  const ColoredBox(color: AppColors.surfaceDarkElevated),
-            )
+            _HeaderArtwork(item: item, image: image)
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
           if (preview != null)
@@ -499,6 +495,27 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _HeaderArtwork extends StatelessWidget {
+  const _HeaderArtwork({required this.item, required this.image});
+
+  final MediaItemV2 item;
+  final ImageRef image;
+
+  @override
+  Widget build(BuildContext context) {
+    final artwork = CachedNetworkImage(
+      imageUrl: image.url,
+      fit: BoxFit.cover,
+      errorWidget: (_, _, _) =>
+          const ColoredBox(color: AppColors.surfaceDarkElevated),
+    );
+    final portrait = item.artwork?.portrait;
+    return portrait == null
+        ? artwork
+        : Hero(tag: mediaArtworkHeroTag(item.ref), child: artwork);
   }
 }
 

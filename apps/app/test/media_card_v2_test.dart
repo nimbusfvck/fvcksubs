@@ -21,7 +21,13 @@ void main() {
             width: 300,
             height: 172,
             child: MediaCardV2(
-              item: VideoItemV2(ref: ref, title: 'Standalone video'),
+              item: VideoItemV2(
+                ref: ref,
+                title: 'Standalone video',
+                artwork: Artwork(
+                  portrait: ImageRef('https://cdn.example/video.jpg'),
+                ),
+              ),
               onTap: _noop,
             ),
           ),
@@ -31,6 +37,7 @@ void main() {
 
     expect(find.text('Standalone video'), findsOneWidget);
     expect(find.text('LIVE'), findsNothing);
+    expect(find.byType(Hero), findsOneWidget);
   });
 
   testWidgets('rounds a rating in the card metadata', (tester) async {
