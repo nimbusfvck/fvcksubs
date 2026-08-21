@@ -540,6 +540,9 @@ void main() {
           title: 'Official Trailer',
           url: 'https://www.youtube.com/watch?v=example',
           site: 'YouTube',
+          thumbnail: ImageRef(
+            'https://img.youtube.com/vi/example/mqdefault.jpg',
+          ),
         ),
       ],
     );
@@ -552,8 +555,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(OutlinedButton, 'Official Trailer · YouTube'),
-        findsOneWidget);
+    expect(find.text('Official Trailer'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is CachedNetworkImage &&
+            widget.imageUrl ==
+                'https://img.youtube.com/vi/example/mqdefault.jpg',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('protocol v2 season selector fits a narrow screen', (

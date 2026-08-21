@@ -251,23 +251,22 @@ class _DetailPageV2State extends State<DetailPageV2> {
                 const SizedBox(height: AppSpacing.xl),
                 const _SectionTitle('Trailers'),
                 const SizedBox(height: AppSpacing.sm),
-                for (final trailer in detail.trailers)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _openTrailer(context, trailer),
-                        icon: const Icon(Icons.play_circle_outline, size: 18),
-                        label: Text(
-                          trailer.site == null
-                              ? trailer.title
-                              : '${trailer.title} · ${trailer.site}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
+                SizedBox(
+                  height: 192,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: detail.trailers.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      final trailer = detail.trailers[index];
+                      return _TrailerCard(
+                        trailer: trailer,
+                        onTap: () => _openTrailer(context, trailer),
+                      );
+                    },
                   ),
+                ),
               ],
               if (detail.facts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
@@ -537,6 +536,82 @@ class _FavoriteAction extends StatelessWidget {
       },
     );
   }
+}
+
+class _TrailerCard extends StatelessWidget {
+  const _TrailerCard({required this.trailer, required this.onTap});
+
+  final MediaTrailer trailer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 220,
+    child: Card(
+      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.zero,
+      color: AppColors.surfaceDarkElevated,
+      child: Semantics(
+        button: true,
+        label: 'Play ${trailer.title}',
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: trailer.thumbnail == null
+                    ? const _TrailerImageFallback()
+                    : CachedNetworkImage(
+                        imageUrl: trailer.thumbnail!.url,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) => const _TrailerImageFallback(),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trailer.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyMd.copyWith(
+                        color: AppColors.onDark,
+                      ),
+                    ),
+                    if (trailer.site case final site?)
+                      Text(
+                        site,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _TrailerImageFallback extends StatelessWidget {
+  const _TrailerImageFallback();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+    color: AppColors.surfaceDark,
+    child: Center(
+      child: Icon(Icons.play_circle_outline, color: AppColors.onDarkSoft),
+    ),
+  );
 }
 
 class _Tags extends StatelessWidget {
