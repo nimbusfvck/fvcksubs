@@ -59,6 +59,7 @@ class BetterPlayerView extends StatefulWidget {
     this.preferredSubtitleLanguage,
     this.aspectRatio,
     this.looping = false,
+    this.muted = false,
   });
 
   final PlayableStream stream;
@@ -83,6 +84,9 @@ class BetterPlayerView extends StatefulWidget {
 
   /// Repeats a short embedded preview instead of stopping at its end.
   final bool looping;
+
+  /// Starts playback without audio, useful for autoplay previews.
+  final bool muted;
 
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
@@ -153,6 +157,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
         ),
       );
+      if (widget.muted) await _controller.setVolume(0);
       widget.onPlaybackReady?.call(_controller);
       final preferredSubtitle = _preferredSubtitle;
       if (preferredSubtitle != null) {

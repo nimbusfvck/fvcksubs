@@ -409,6 +409,7 @@ class _Header extends StatelessWidget {
                     // the same full area as the poster background.
                     aspectRatio: constraints.maxWidth / constraints.maxHeight,
                     looping: true,
+                    muted: true,
                     isLive: false,
                   ),
                 ),
