@@ -386,18 +386,7 @@ class _Header extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (preview != null)
-            IgnorePointer(
-              child: BetterPlayerView(
-                stream: PlayableStream(
-                  url: preview.url,
-                  // Keep the cache key unique per signed preview URL.
-                  label: preview.url,
-                ),
-                isLive: false,
-              ),
-            )
-          else if (image != null)
+          if (image != null)
             CachedNetworkImage(
               imageUrl: image.url,
               fit: BoxFit.cover,
@@ -406,6 +395,25 @@ class _Header extends StatelessWidget {
             )
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
+          if (preview != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 220,
+              child: ClipRect(
+                child: IgnorePointer(
+                  child: BetterPlayerView(
+                    stream: PlayableStream(
+                      url: preview.url,
+                      // Keep the cache key unique per signed preview URL.
+                      label: preview.url,
+                    ),
+                    isLive: false,
+                  ),
+                ),
+              ),
+            ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
