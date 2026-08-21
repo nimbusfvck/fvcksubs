@@ -524,6 +524,38 @@ void main() {
     },
   );
 
+  testWidgets('protocol v2 detail renders trailer actions', (tester) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'video-trailer',
+      ),
+      title: 'Example movie',
+    );
+    const detail = MediaDetailV2(
+      item: item,
+      trailers: [
+        MediaTrailer(
+          title: 'Official Trailer',
+          url: 'https://www.youtube.com/watch?v=example',
+          site: 'YouTube',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([_DetailV2Extension(detail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Official Trailer · YouTube'),
+        findsOneWidget);
+  });
+
   testWidgets('protocol v2 season selector fits a narrow screen', (
     tester,
   ) async {

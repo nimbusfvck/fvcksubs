@@ -156,7 +156,8 @@ an extension can declare a filter ahead of the shell supporting it without break
 ### Detail
 
 Hero artwork, metadata, a full-width Play button, a reactive action row, a collapsible
-synopsis, cast, and episodes. Source discovery is **gated behind Play** — the screen shows
+synopsis, optional trailer actions, cast, and episodes. Trailer actions open the supplied
+external URL in the platform handler; they do not enter the playback pipeline. Source discovery is **gated behind Play** — the screen shows
 what metadata returned and pays for nothing more until the viewer commits.
 
 The Play button's label is computed rather than fixed, so it states what will actually

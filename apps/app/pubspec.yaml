@@ -23,6 +23,7 @@ dependencies:
   flutter_bloc: ^9.1.1
   path_provider: ^2.1.5
   sembast: ^3.8.5+1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   # Test-only: installer_controller_test builds a repo.json whose declared

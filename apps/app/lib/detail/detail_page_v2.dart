@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_scope.dart';
 import '../library/library_controller.dart';
@@ -245,6 +246,28 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   child: Text(_descriptionExpanded ? 'Show less' : 'Show more'),
                 ),
               ],
+              if (detail.trailers.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const _SectionTitle('Trailers'),
+                const SizedBox(height: AppSpacing.sm),
+                for (final trailer in detail.trailers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openTrailer(context, trailer),
+                        icon: const Icon(Icons.play_circle_outline, size: 18),
+                        label: Text(
+                          trailer.site == null
+                              ? trailer.title
+                              : '${trailer.title} · ${trailer.site}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
               if (detail.facts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
                 _Facts(values: detail.facts),
@@ -304,6 +327,22 @@ class _DetailPageV2State extends State<DetailPageV2> {
         ),
       ],
     );
+  }
+
+  Future<void> _openTrailer(
+    BuildContext context,
+    MediaTrailer trailer,
+  ) async {
+    final uri = Uri.tryParse(trailer.url);
+    final opened = uri != null && await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open trailer.')),
+      );
+    }
   }
 
   double? _progressFraction(UserMediaState? record) {
