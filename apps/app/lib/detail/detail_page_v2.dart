@@ -398,13 +398,19 @@ class _Header extends StatelessWidget {
           if (preview != null)
             Positioned.fill(
               child: IgnorePointer(
-                child: BetterPlayerView(
-                  stream: PlayableStream(
-                    url: preview.url,
-                    // Keep the cache key unique per signed preview URL.
-                    label: preview.url,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => BetterPlayerView(
+                    stream: PlayableStream(
+                      url: preview.url,
+                      // Keep the cache key unique per signed preview URL.
+                      label: preview.url,
+                    ),
+                    // Match the hero container so the embedded player uses
+                    // the same full area as the poster background.
+                    aspectRatio: constraints.maxWidth / constraints.maxHeight,
+                    looping: true,
+                    isLive: false,
                   ),
-                  isLive: false,
                 ),
               ),
             ),

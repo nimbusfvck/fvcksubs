@@ -57,6 +57,8 @@ class BetterPlayerView extends StatefulWidget {
     this.onPlaybackReady,
     this.customControlsBuilder,
     this.preferredSubtitleLanguage,
+    this.aspectRatio,
+    this.looping = false,
   });
 
   final PlayableStream stream;
@@ -75,6 +77,12 @@ class BetterPlayerView extends StatefulWidget {
   customControlsBuilder;
 
   final String? preferredSubtitleLanguage;
+
+  /// Optional container ratio used by embedded previews.
+  final double? aspectRatio;
+
+  /// Repeats a short embedded preview instead of stopping at its end.
+  final bool looping;
 
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
@@ -99,8 +107,9 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
     _controller = BetterPlayerController(
       BetterPlayerConfiguration(
         allowedScreenSleep: false,
-        aspectRatio: 16 / 9,
+        aspectRatio: widget.aspectRatio ?? 16 / 9,
         autoPlay: !_waitingForPreferredSubtitle,
+        looping: widget.looping,
         fit: BoxFit.contain,
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [
