@@ -556,65 +556,27 @@ class _BannerArtwork extends CustomPainter {
   static final Paint _ink = Paint()
     ..color = Colors.white.withValues(alpha: 0.075);
 
-  static const double _skewFactor = 0.5;
-
-  static const double _jagFactor = 0.055;
-
-  static const List<double> _jags = [0, 1, -0.65, 0.45, 0];
-
-  List<Offset> _split(Size size) {
-    final skew = size.height * _skewFactor;
-    final topX = size.width / 2 + skew / 2;
-    final jag = size.width * _jagFactor;
-    return [
-      for (var i = 0; i < _jags.length; i++)
-        () {
-          final t = i / (_jags.length - 1);
-          return Offset(topX - skew * t + jag * _jags[i], size.height * t);
-        }(),
-    ];
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
-    final split = _split(size);
     final center = Offset(size.width / 2, size.height / 2);
 
-    final left = Path()..moveTo(0, 0);
-    for (final point in split) {
-      left.lineTo(point.dx, point.dy);
-    }
-    left
-      ..lineTo(0, size.height)
-      ..close();
-
-    final right = Path()..moveTo(split.first.dx, split.first.dy);
-    right
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height);
-    for (final point in split.reversed) {
-      right.lineTo(point.dx, point.dy);
-    }
-    right.close();
-
-    canvas.drawPath(left, Paint()..color = home);
-    canvas.drawPath(right, Paint()..color = away);
+    final splitX = size.width / 2;
+    final left = Path()..addRect(Rect.fromLTRB(0, 0, splitX, size.height));
+    final right = Path()
+      ..addRect(Rect.fromLTRB(splitX, 0, size.width, size.height));
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [home, away],
+        ).createShader(rect),
+    );
 
     _paintPattern(canvas, size, left, center, -1);
     _paintPattern(canvas, size, right, center, 1);
-
-    final edge = Path()..moveTo(split.first.dx, split.first.dy);
-    for (final point in split.skip(1)) {
-      edge.lineTo(point.dx, point.dy);
-    }
-    canvas.drawPath(
-      edge,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.32)
-        ..strokeWidth = 1.5
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke,
-    );
   }
 
   void _paintPattern(
@@ -692,8 +654,6 @@ class _BannerArtwork extends CustomPainter {
   }
 
   void _stripes(Canvas canvas, Size size, int direction) {
-    final skew = size.height * _skewFactor;
-    final topX = size.width / 2 + skew / 2;
     final paint = Paint()
       ..color = _ink.color
       ..strokeWidth = size.height * 0.07
@@ -703,8 +663,8 @@ class _BannerArtwork extends CustomPainter {
     for (var i = 1; i <= 7; i++) {
       final offset = direction * i * gap;
       canvas.drawLine(
-        Offset(topX + offset, 0),
-        Offset(topX - skew + offset, size.height),
+        Offset(size.width / 2 + offset, 0),
+        Offset(size.width / 2 + offset, size.height),
         paint,
       );
     }
