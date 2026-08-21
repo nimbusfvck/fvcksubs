@@ -170,6 +170,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
   Widget _buildDetail(MediaDetailV2 detail) {
     final item = detail.item;
+    final trailers = detail.trailers
+        .where((trailer) => !_isAutoplayTrailer(trailer))
+        .toList(growable: false);
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
@@ -247,7 +250,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   child: Text(_descriptionExpanded ? 'Show less' : 'Show more'),
                 ),
               ],
-              if (detail.trailers.isNotEmpty) ...[
+              if (trailers.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
                 const _SectionTitle('Trailers'),
                 const SizedBox(height: AppSpacing.sm),
@@ -255,11 +258,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   height: 192,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: detail.trailers.length,
+                    itemCount: trailers.length,
                     separatorBuilder: (_, _) =>
                         const SizedBox(width: AppSpacing.sm),
                     itemBuilder: (context, index) {
-                      final trailer = detail.trailers[index];
+                      final trailer = trailers[index];
                       return _TrailerCard(
                         trailer: trailer,
                         onTap: () => _openTrailer(context, trailer),
@@ -501,12 +504,15 @@ class _Header extends StatelessWidget {
 
 MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
   for (final trailer in detail.trailers) {
-    if (trailer.mimeType?.toLowerCase().startsWith('video/') ?? false) {
+    if (_isAutoplayTrailer(trailer)) {
       return trailer;
     }
   }
   return null;
 }
+
+bool _isAutoplayTrailer(MediaTrailer trailer) =>
+    trailer.mimeType?.toLowerCase().startsWith('video/') ?? false;
 
 class _FavoriteAction extends StatelessWidget {
   const _FavoriteAction({required this.item});
