@@ -329,6 +329,7 @@ class MediaDetailV2 extends Equatable {
     this.facts = const [],
     this.credits = const [],
     this.trailers = const [],
+    this.recommendations = const [],
     this.episodeGuide,
   });
 
@@ -341,6 +342,7 @@ class MediaDetailV2 extends Equatable {
       'facts',
       'credits',
       'trailers',
+      'recommendations',
       'episodeGuide',
     }, 'media detail');
     final tags = json['tags'];
@@ -358,6 +360,10 @@ class MediaDetailV2 extends Equatable {
     final trailers = json['trailers'];
     if (trailers != null && trailers is! List) {
       throw const FormatException('detail.trailers must be a list');
+    }
+    final recommendations = json['recommendations'];
+    if (recommendations != null && recommendations is! List) {
+      throw const FormatException('detail.recommendations must be a list');
     }
     return MediaDetailV2(
       item: MediaItemV2.fromJson(_object(json['item'], 'detail.item')),
@@ -377,6 +383,12 @@ class MediaDetailV2 extends Equatable {
       trailers: [
         for (final trailer in (trailers as List?) ?? const [])
           MediaTrailer.fromJson(_object(trailer, 'detail.trailers[]')),
+      ],
+      recommendations: [
+        for (final recommendation in (recommendations as List?) ?? const [])
+          MediaItemV2.fromJson(
+            _object(recommendation, 'detail.recommendations[]'),
+          ),
       ],
       episodeGuide: json['episodeGuide'] == null
           ? null
@@ -404,6 +416,9 @@ class MediaDetailV2 extends Equatable {
   /// Optional preview videos in extension-defined display order.
   final List<MediaTrailer> trailers;
 
+  /// Optional related items shown in a recommendation shelf at the bottom.
+  final List<MediaItemV2> recommendations;
+
   /// Optional navigation data for episodic content.
   final EpisodeGuide? episodeGuide;
 
@@ -417,6 +432,10 @@ class MediaDetailV2 extends Equatable {
       'credits': credits.map((credit) => credit.toJson()).toList(),
     if (trailers.isNotEmpty)
       'trailers': trailers.map((trailer) => trailer.toJson()).toList(),
+    if (recommendations.isNotEmpty)
+      'recommendations': recommendations
+          .map((recommendation) => recommendation.toJson())
+          .toList(),
     if (episodeGuide != null) 'episodeGuide': episodeGuide!.toJson(),
   };
 
@@ -428,6 +447,7 @@ class MediaDetailV2 extends Equatable {
     facts,
     credits,
     trailers,
+    recommendations,
     episodeGuide,
   ];
 }

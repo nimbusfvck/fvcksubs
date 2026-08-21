@@ -12,6 +12,11 @@ void main() {
     providerId: 'example.catalog',
     id: 'episode-1',
   );
+  const recommendationRef = MediaRef(
+    extensionId: 'example',
+    providerId: 'example.catalog',
+    id: 'video-2',
+  );
 
   test('detail and episode guide round-trip', () {
     const detail = MediaDetailV2(
@@ -36,6 +41,9 @@ void main() {
           ),
           mimeType: 'video/mp4',
         ),
+      ],
+      recommendations: [
+        VideoItemV2(ref: recommendationRef, title: 'Related video'),
       ],
       episodeGuide: EpisodeGuide(
         groups: [
@@ -93,6 +101,13 @@ void main() {
       () => MediaDetailV2.fromJson({
         'item': const VideoItemV2(ref: seriesRef, title: 'Video').toJson(),
         'genres': ['Legacy'],
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => MediaDetailV2.fromJson({
+        'item': const VideoItemV2(ref: seriesRef, title: 'Video').toJson(),
+        'recommendations': 'not-a-list',
       }),
       throwsFormatException,
     );

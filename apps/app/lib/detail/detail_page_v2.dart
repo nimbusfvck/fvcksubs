@@ -6,6 +6,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_scope.dart';
+import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
 import '../player/play_item.dart';
@@ -13,6 +14,7 @@ import '../player/trailer_preview.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 import '../widgets/shimmer_placeholder.dart';
+import 'open_versioned_item.dart';
 
 class DetailPageV2 extends StatefulWidget {
   const DetailPageV2({super.key, required this.item, this.heroTag});
@@ -330,6 +332,36 @@ class _DetailPageV2State extends State<DetailPageV2> {
                       ),
                     ),
                   ),
+              ],
+              if (detail.recommendations.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const _SectionTitle('Similar'),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  height: 248,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: detail.recommendations.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      final recommendation = detail.recommendations[index];
+                      final heroTag = Object();
+                      return SizedBox(
+                        width: 152,
+                        child: MediaCardV2(
+                          item: recommendation,
+                          heroTag: heroTag,
+                          onTap: () => openVersionedItem(
+                            context,
+                            VersionedMediaItem(item: recommendation),
+                            heroTag: heroTag,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ],
             ],
           ),

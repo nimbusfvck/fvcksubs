@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/detail/detail_page.dart';
 import 'package:fvcksubs_app/detail/open_item.dart';
 import 'package:fvcksubs_app/detail/detail_page_v2.dart';
@@ -567,6 +568,41 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('protocol v2 detail renders recommendations at the bottom', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'video-recommendations',
+      ),
+      title: 'Example movie',
+    );
+    const recommendation = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'related-video',
+      ),
+      title: 'Related movie',
+      artwork: Artwork(portrait: ImageRef('https://cdn.example/related.jpg')),
+    );
+    const detail = MediaDetailV2(item: item, recommendations: [recommendation]);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([_DetailV2Extension(detail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Similar'), findsOneWidget);
+    expect(find.text('Related movie'), findsOneWidget);
+    expect(find.byType(MediaCardV2), findsOneWidget);
   });
 
   testWidgets('protocol v2 season selector fits a narrow screen', (

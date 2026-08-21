@@ -75,6 +75,7 @@ secondary selector.
 | `facts` | no | Display-only `label` and `value` pairs. Use these for metadata the app does not need to interpret. |
 | `credits` | no | Credited people or entities with `name`, optional `role`, and optional `image`. |
 | `trailers` | no | Preview videos with a display `title`, absolute `url`, optional `site`, `thumbnail`, and `mimeType`. A `video/*` MIME identifies a directly playable preview; otherwise the app opens the URL externally. |
+| `recommendations` | no | Related `MediaItem` entries shown in a recommendation shelf at the bottom of detail. Keep references stable so selecting an entry can open its detail or playback route. |
 | `episodeGuide` | no | Typed episode navigation grouped by extension-defined IDs and titles. |
 
 Each episode summary has its own stable `ref`, a `title`, and a positive

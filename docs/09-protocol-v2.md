@@ -121,6 +121,7 @@ interface MediaDetail {
   facts?: Fact[];
   credits?: Credit[];
   trailers?: Trailer[];
+  recommendations?: MediaItem[];
   episodeGuide?: EpisodeGuide;
 }
 

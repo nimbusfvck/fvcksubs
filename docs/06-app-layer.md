@@ -156,7 +156,8 @@ an extension can declare a filter ahead of the shell supporting it without break
 ### Detail
 
 Hero artwork, metadata, a full-width Play button, a reactive action row, a collapsible
-synopsis, optional trailer actions, cast, and episodes. A trailer with a `video/*`
+synopsis, optional trailer actions, cast, episodes, and an optional related-items shelf.
+A trailer with a `video/*`
 MIME may autoplay as the header preview; other trailer URLs open in the platform
 browser view (Chrome Custom Tab on Android), with an external-app fallback. Trailer
 previews do not enter the normal source-resolution pipeline. Source discovery is

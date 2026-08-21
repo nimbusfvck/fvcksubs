@@ -227,6 +227,8 @@ interface MediaDetail {
   credits?: Credit[];
   /** Preview videos shown in the detail page's trailer section. */
   trailers?: Trailer[];
+  /** Related items shown in a recommendation shelf at the bottom of detail. */
+  recommendations?: MediaItem[];
   /** Optional typed navigation data for episodic content. */
   episodeGuide?: EpisodeGuide;
 }
