@@ -134,7 +134,7 @@ class _HomePageState extends State<HomePage> {
 
     if (categories.isEmpty) {
       return const Scaffold(
-        appBar: AppPageBar(title: 'fvcksubs'),
+        appBar: AppPageBar(titleWidget: _HomeLogoTitle()),
         body: _NoExtensions(),
       );
     }
@@ -209,12 +209,7 @@ class _HomePageState extends State<HomePage> {
                   scrolledUnderElevation: 0,
                   centerTitle: false,
                   titleSpacing: AppSpacing.md,
-                  title: Text(
-                    'fvcksubs',
-                    style: AppTypography.titleLg.copyWith(
-                      color: AppColors.onDark,
-                    ),
-                  ),
+                  title: const _HomeLogoTitle(),
                   actions: [
                     IconButton(
                       tooltip: 'Search',
@@ -288,6 +283,24 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
+}
+
+class _HomeLogoTitle extends StatelessWidget {
+  const _HomeLogoTitle();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'fvcksubs',
+    image: true,
+    child: Image.asset(
+      key: const Key('home-logo-title'),
+      'assets/logo/logo_text.png',
+      width: 96,
+      height: 32,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+    ),
+  );
 }
 
 class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {

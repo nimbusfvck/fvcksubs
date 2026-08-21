@@ -38,6 +38,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    - assets/logo/logo_text.png
+
   # Inter is bundled rather than fetched at runtime by google_fonts. With the
   # runtime fetch, the first frame laid out against a narrower fallback font
   # and text that sizes tightly to its content — the category chips — stayed

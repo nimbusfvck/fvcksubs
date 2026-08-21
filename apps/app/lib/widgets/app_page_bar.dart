@@ -6,12 +6,14 @@ import '../theme/tokens.dart';
 class AppPageBar extends StatelessWidget implements PreferredSizeWidget {
   const AppPageBar({
     super.key,
-    required this.title,
+    this.title,
+    this.titleWidget,
     this.actions,
     this.leading,
-  });
+  }) : assert(title != null || titleWidget != null);
 
-  final String title;
+  final String? title;
+  final Widget? titleWidget;
   final List<Widget>? actions;
   final Widget? leading;
 
@@ -28,10 +30,12 @@ class AppPageBar extends StatelessWidget implements PreferredSizeWidget {
     centerTitle: false,
     titleSpacing: AppSpacing.md,
     leading: leading,
-    title: Text(
-      title,
-      style: AppTypography.titleLg.copyWith(color: AppColors.onDark),
-    ),
+    title:
+        titleWidget ??
+        Text(
+          title!,
+          style: AppTypography.titleLg.copyWith(color: AppColors.onDark),
+        ),
     actions: actions,
   );
 }

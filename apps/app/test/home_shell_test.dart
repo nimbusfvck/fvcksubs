@@ -43,7 +43,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(SliverAppBar, 'fvcksubs'), findsOneWidget);
+    expect(find.byKey(const Key('home-logo-title')), findsOneWidget);
 
     await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();
