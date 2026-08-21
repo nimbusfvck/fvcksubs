@@ -410,6 +410,7 @@ class _Header extends StatelessWidget {
                     aspectRatio: constraints.maxWidth / constraints.maxHeight,
                     looping: true,
                     muted: true,
+                    fit: BoxFit.cover,
                     isLive: false,
                   ),
                 ),

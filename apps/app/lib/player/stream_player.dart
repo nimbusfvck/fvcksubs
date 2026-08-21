@@ -60,6 +60,7 @@ class BetterPlayerView extends StatefulWidget {
     this.aspectRatio,
     this.looping = false,
     this.muted = false,
+    this.fit = BoxFit.contain,
   });
 
   final PlayableStream stream;
@@ -88,6 +89,9 @@ class BetterPlayerView extends StatefulWidget {
   /// Starts playback without audio, useful for autoplay previews.
   final bool muted;
 
+  /// How the video fills its layout bounds.
+  final BoxFit fit;
+
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
 }
@@ -114,7 +118,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
         aspectRatio: widget.aspectRatio ?? 16 / 9,
         autoPlay: !_waitingForPreferredSubtitle,
         looping: widget.looping,
-        fit: BoxFit.contain,
+        fit: widget.fit,
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [
           DeviceOrientation.portraitUp,
