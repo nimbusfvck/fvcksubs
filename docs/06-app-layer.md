@@ -158,8 +158,9 @@ an extension can declare a filter ahead of the shell supporting it without break
 Hero artwork, metadata, a full-width Play button, a reactive action row, a collapsible
 synopsis, optional trailer actions, cast, and episodes. A trailer with a `video/*`
 MIME may autoplay as the header preview; other trailer URLs open in the platform
-handler. Trailer previews do not enter the normal source-resolution pipeline. Source
-discovery is **gated behind Play** — the screen shows
+browser view (Chrome Custom Tab on Android), with an external-app fallback. Trailer
+previews do not enter the normal source-resolution pipeline. Source discovery is
+**gated behind Play** — the screen shows
 what metadata returned and pays for nothing more until the viewer commits.
 
 The Play button's label is computed rather than fixed, so it states what will actually

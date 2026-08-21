@@ -332,9 +332,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
   Future<void> _openTrailer(BuildContext context, MediaTrailer trailer) async {
     final uri = Uri.tryParse(trailer.url);
-    final opened =
-        uri != null &&
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var opened =
+        uri != null && await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened && uri != null) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(
         context,
