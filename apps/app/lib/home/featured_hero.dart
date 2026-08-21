@@ -221,15 +221,21 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _detail ??= _loadDetail();
+    _ensureDetailLoaded();
   }
 
   @override
   void didUpdateWidget(covariant _FeaturedSlide oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.item.ref != widget.item.item.ref) {
-      _detail = _loadDetail();
+      _detail = null;
     }
+    _ensureDetailLoaded();
+  }
+
+  void _ensureDetailLoaded() {
+    if (!widget.active || _detail != null) return;
+    _detail = _loadDetail();
   }
 
   Future<MediaDetailV2>? _loadDetail() {
@@ -261,6 +267,10 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
     final artwork = media.artwork;
     final image = artwork?.portrait ?? artwork?.landscape;
     final fallbackArtwork = _fallbackArtwork(media);
+    final cacheWidth =
+        (MediaQuery.sizeOf(context).width *
+                MediaQuery.devicePixelRatioOf(context))
+            .round();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -270,6 +280,7 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
             fadeInDuration: Duration.zero,
+            memCacheWidth: cacheWidth,
             placeholder: (_, _) =>
                 const ColoredBox(color: AppColors.surfaceDarkElevated),
             errorWidget: (_, _, _) => fallbackArtwork,
