@@ -60,6 +60,20 @@ void main() {
     expect(ds.liveStream, isFalse);
   });
 
+  test('embedded previews use a small buffer and skip disk caching', () {
+    final ds = betterPlayerDataSource(
+      const PlayableStream(url: 'https://edge/preview.mp4'),
+      isLive: false,
+      preview: true,
+    );
+
+    expect(ds.cacheConfiguration?.useCache, isFalse);
+    expect(ds.bufferingConfiguration.minBufferMs, 1500);
+    expect(ds.bufferingConfiguration.maxBufferMs, 5000);
+    expect(ds.bufferingConfiguration.bufferForPlaybackMs, 350);
+    expect(ds.bufferingConfiguration.bufferForPlaybackAfterRebufferMs, 750);
+  });
+
   test('maps DASH container', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(

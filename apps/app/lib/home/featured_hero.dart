@@ -108,6 +108,7 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   late final PageController _pageController;
   int _page = 0;
   bool _isScrolling = false;
+  bool _pointerDown = false;
 
   @override
   void initState() {
@@ -136,16 +137,21 @@ class _FeaturedHeroState extends State<FeaturedHero> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        NotificationListener<ScrollNotification>(
-          onNotification: _onScrollNotification,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: widget.items.length,
-            onPageChanged: (value) => setState(() => _page = value),
-            itemBuilder: (context, index) => _FeaturedSlide(
-              item: widget.items[index],
-              active: index == _page,
-              playing: index == _page && !_isScrolling,
+        Listener(
+          onPointerDown: (_) => _setPointerDown(true),
+          onPointerUp: (_) => _setPointerDown(false),
+          onPointerCancel: (_) => _setPointerDown(false),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScrollNotification,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.items.length,
+              onPageChanged: (value) => setState(() => _page = value),
+              itemBuilder: (context, index) => _FeaturedSlide(
+                item: widget.items[index],
+                active: index == _page,
+                playing: index == _page && !_isScrolling && !_pointerDown,
+              ),
             ),
           ),
         ),
@@ -178,6 +184,11 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   void _setScrolling(bool scrolling) {
     if (!mounted || _isScrolling == scrolling) return;
     setState(() => _isScrolling = scrolling);
+  }
+
+  void _setPointerDown(bool pointerDown) {
+    if (!mounted || _pointerDown == pointerDown) return;
+    setState(() => _pointerDown = pointerDown);
   }
 }
 
@@ -297,45 +308,47 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
         (MediaQuery.sizeOf(context).width *
                 MediaQuery.devicePixelRatioOf(context))
             .round();
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (image != null)
-          CachedNetworkImage(
-            imageUrl: image.url,
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            fadeInDuration: Duration.zero,
-            memCacheWidth: cacheWidth,
-            placeholder: (_, _) =>
-                const ColoredBox(color: AppColors.surfaceDarkElevated),
-            errorWidget: (_, _, _) => fallbackArtwork,
-          )
-        else
-          fallbackArtwork,
-        if (preview != null)
-          Positioned.fill(
-            child: TrailerPreview(trailer: preview, playing: widget.playing),
+    return RepaintBoundary(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (image != null)
+            CachedNetworkImage(
+              imageUrl: image.url,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              fadeInDuration: Duration.zero,
+              memCacheWidth: cacheWidth,
+              placeholder: (_, _) =>
+                  const ColoredBox(color: AppColors.surfaceDarkElevated),
+              errorWidget: (_, _, _) => fallbackArtwork,
+            )
+          else
+            fallbackArtwork,
+          if (preview != null)
+            Positioned.fill(
+              child: TrailerPreview(trailer: preview, playing: widget.playing),
+            ),
+          const DecoratedBox(
+            decoration: BoxDecoration(gradient: _featuredGradient),
           ),
-        const DecoratedBox(
-          decoration: BoxDecoration(gradient: _featuredGradient),
-        ),
-        Positioned(
-          left: AppSpacing.md,
-          right: AppSpacing.md,
-          bottom: 64,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: SizedBox(
-                width: double.infinity,
-                child: _FeaturedDetails(item: widget.item),
+          Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: 64,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: _FeaturedDetails(item: widget.item),
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

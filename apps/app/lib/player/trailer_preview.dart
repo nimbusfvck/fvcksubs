@@ -68,28 +68,32 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
   Widget build(BuildContext context) {
     if (!_routeVisible) return const SizedBox.shrink();
     return IgnorePointer(
-      child: AnimatedOpacity(
-        opacity: _ready ? 1 : 0,
-        duration: const Duration(milliseconds: 180),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final aspectRatio = constraints.maxHeight <= 0
-                ? 16 / 9
-                : constraints.maxWidth / constraints.maxHeight;
-            return BetterPlayerView(
-              stream: PlayableStream(
-                url: widget.trailer.url,
-                label: widget.trailer.url,
-              ),
-              aspectRatio: aspectRatio,
-              looping: true,
-              muted: true,
-              fit: BoxFit.cover,
-              playing: widget.playing,
-              isLive: false,
-              onPlaybackReady: _onPlaybackReady,
-            );
-          },
+      child: Offstage(
+        offstage: !widget.playing,
+        child: AnimatedOpacity(
+          opacity: _ready ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final aspectRatio = constraints.maxHeight <= 0
+                  ? 16 / 9
+                  : constraints.maxWidth / constraints.maxHeight;
+              return BetterPlayerView(
+                stream: PlayableStream(
+                  url: widget.trailer.url,
+                  label: widget.trailer.url,
+                ),
+                aspectRatio: aspectRatio,
+                looping: true,
+                muted: true,
+                fit: BoxFit.cover,
+                playing: widget.playing,
+                preview: true,
+                isLive: false,
+                onPlaybackReady: _onPlaybackReady,
+              );
+            },
+          ),
         ),
       ),
     );

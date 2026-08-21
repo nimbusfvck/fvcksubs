@@ -62,6 +62,7 @@ class BetterPlayerView extends StatefulWidget {
     this.muted = false,
     this.fit = BoxFit.contain,
     this.playing = true,
+    this.preview = false,
   });
 
   final PlayableStream stream;
@@ -95,6 +96,9 @@ class BetterPlayerView extends StatefulWidget {
 
   /// Controls playback without destroying the native player view.
   final bool playing;
+
+  /// Uses a small buffer and skips disk caching for short embedded previews.
+  final bool preview;
 
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
@@ -183,11 +187,13 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
           widget.stream,
           isLive: widget.isLive,
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
+          preview: widget.preview,
         ),
       );
       if (!mounted) return;
       _dataSourceReady = true;
       if (widget.muted) await _controller.setVolume(0);
+      if (!widget.playing) await _controller.pause();
       widget.onPlaybackReady?.call(_controller);
       final preferredSubtitle = _preferredSubtitle;
       if (preferredSubtitle != null) {

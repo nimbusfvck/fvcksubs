@@ -7,6 +7,7 @@ BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {
   required bool isLive,
   String? preferredSubtitleLanguage,
+  bool preview = false,
 }) => BetterPlayerDataSource(
   BetterPlayerDataSourceType.network,
   stream.url,
@@ -17,12 +18,22 @@ BetterPlayerDataSource betterPlayerDataSource(
   subtitles: isLive
       ? null
       : _subtitles(stream.subtitles, preferredSubtitleLanguage),
-  cacheConfiguration: BetterPlayerCacheConfiguration(
-    useCache: !isLive,
-    maxCacheSize: 100 * 1024 * 1024, // 100 MB
-    maxCacheFileSize: 10 * 1024 * 1024,
-    key: stream.label,
-  ),
+  cacheConfiguration: preview
+      ? const BetterPlayerCacheConfiguration(useCache: false)
+      : BetterPlayerCacheConfiguration(
+          useCache: !isLive,
+          maxCacheSize: 100 * 1024 * 1024, // 100 MB
+          maxCacheFileSize: 10 * 1024 * 1024,
+          key: stream.label,
+        ),
+  bufferingConfiguration: preview
+      ? const BetterPlayerBufferingConfiguration(
+          minBufferMs: 1500,
+          maxBufferMs: 5000,
+          bufferForPlaybackMs: 350,
+          bufferForPlaybackAfterRebufferMs: 750,
+        )
+      : const BetterPlayerBufferingConfiguration(),
 );
 
 BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
