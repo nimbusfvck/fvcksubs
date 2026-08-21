@@ -25,6 +25,7 @@ class AppPageBar extends StatelessWidget implements PreferredSizeWidget {
     surfaceTintColor: Colors.transparent,
     elevation: 0,
     scrolledUnderElevation: 0,
+    centerTitle: false,
     titleSpacing: AppSpacing.md,
     leading: leading,
     title: Text(

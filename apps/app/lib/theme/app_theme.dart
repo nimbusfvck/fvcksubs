@@ -19,6 +19,7 @@ ThemeData buildDarkTheme() {
   );
 
   return base.copyWith(
+    appBarTheme: const AppBarTheme(centerTitle: false),
     textTheme: base.textTheme.copyWith(
       headlineMedium: AppTypography.displayMd,
       titleLarge: AppTypography.titleLg,

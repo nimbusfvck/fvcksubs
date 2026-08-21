@@ -207,6 +207,7 @@ class _HomePageState extends State<HomePage> {
                   surfaceTintColor: Colors.transparent,
                   elevation: 0,
                   scrolledUnderElevation: 0,
+                  centerTitle: false,
                   titleSpacing: AppSpacing.md,
                   title: Text(
                     'fvcksubs',
