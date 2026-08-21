@@ -169,7 +169,10 @@ class _SingleEventArtwork extends StatelessWidget {
           left: AppSpacing.xs,
           right: AppSpacing.xs,
           top: AppSpacing.xs,
-          child: _ScheduleStatus(schedule: item.schedule),
+          child: _ScheduleStatus(
+            schedule: item.schedule,
+            showLabel: item.schedule.state != ScheduleState.live,
+          ),
         ),
       ],
     );
@@ -282,9 +285,10 @@ class _Text extends StatelessWidget {
 }
 
 class _ScheduleStatus extends StatelessWidget {
-  const _ScheduleStatus({required this.schedule});
+  const _ScheduleStatus({required this.schedule, this.showLabel = true});
 
   final Schedule schedule;
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -293,7 +297,7 @@ class _ScheduleStatus extends StatelessWidget {
         const LiveBadge()
       else if (schedule.state == ScheduleState.scheduled)
         const UpcomingBadge(),
-      if (_label != null) ...[
+      if (showLabel && _label != null) ...[
         const SizedBox(width: AppSpacing.xs),
         Flexible(
           child: Text(
