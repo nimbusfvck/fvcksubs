@@ -61,6 +61,7 @@ class BetterPlayerView extends StatefulWidget {
     this.looping = false,
     this.muted = false,
     this.fit = BoxFit.contain,
+    this.playing = true,
   });
 
   final PlayableStream stream;
@@ -92,6 +93,9 @@ class BetterPlayerView extends StatefulWidget {
   /// How the video fills its layout bounds.
   final BoxFit fit;
 
+  /// Controls playback without destroying the native player view.
+  final bool playing;
+
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
 }
@@ -101,6 +105,26 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   final GlobalKey _betterPlayerKey = GlobalKey();
   late final BetterPlayerSubtitlesSource? _preferredSubtitle;
   bool _waitingForPreferredSubtitle = false;
+  bool _dataSourceReady = false;
+
+  @override
+  void didUpdateWidget(covariant BetterPlayerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playing == widget.playing ||
+        !_dataSourceReady ||
+        _waitingForPreferredSubtitle) {
+      return;
+    }
+    final playing = widget.playing;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_dataSourceReady || widget.playing != playing) return;
+      if (playing) {
+        unawaited(_controller.play());
+      } else {
+        unawaited(_controller.pause());
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -116,7 +140,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
       BetterPlayerConfiguration(
         allowedScreenSleep: false,
         aspectRatio: widget.aspectRatio ?? 16 / 9,
-        autoPlay: !_waitingForPreferredSubtitle,
+        autoPlay: widget.playing && !_waitingForPreferredSubtitle,
         looping: widget.looping,
         fit: widget.fit,
         autoDetectFullscreenDeviceOrientation: true,
@@ -162,6 +186,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
         ),
       );
       if (!mounted) return;
+      _dataSourceReady = true;
       if (widget.muted) await _controller.setVolume(0);
       widget.onPlaybackReady?.call(_controller);
       final preferredSubtitle = _preferredSubtitle;
@@ -173,7 +198,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
     } finally {
       if (mounted && _waitingForPreferredSubtitle) {
         setState(() => _waitingForPreferredSubtitle = false);
-        unawaited(_controller.play());
+        if (widget.playing) unawaited(_controller.play());
       }
     }
   }

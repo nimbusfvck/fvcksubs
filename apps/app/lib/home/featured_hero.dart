@@ -107,6 +107,7 @@ class FeaturedHeroPlaceholder extends StatelessWidget {
 class _FeaturedHeroState extends State<FeaturedHero> {
   late final PageController _pageController;
   int _page = 0;
+  bool _isScrolling = false;
 
   @override
   void initState() {
@@ -135,12 +136,18 @@ class _FeaturedHeroState extends State<FeaturedHero> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        PageView.builder(
-          controller: _pageController,
-          itemCount: widget.items.length,
-          onPageChanged: (value) => setState(() => _page = value),
-          itemBuilder: (context, index) =>
-              _FeaturedSlide(item: widget.items[index], active: index == _page),
+        NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: (value) => setState(() => _page = value),
+            itemBuilder: (context, index) => _FeaturedSlide(
+              item: widget.items[index],
+              active: index == _page,
+              playing: index == _page && !_isScrolling,
+            ),
+          ),
         ),
         if (widget.items.length > 1)
           Positioned(
@@ -157,6 +164,20 @@ class _FeaturedHeroState extends State<FeaturedHero> {
           ),
       ],
     );
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _setScrolling(true);
+    } else if (notification is ScrollEndNotification) {
+      _setScrolling(false);
+    }
+    return false;
+  }
+
+  void _setScrolling(bool scrolling) {
+    if (!mounted || _isScrolling == scrolling) return;
+    setState(() => _isScrolling = scrolling);
   }
 }
 
@@ -206,10 +227,15 @@ class _FeaturedPageIndicator extends StatelessWidget {
 }
 
 class _FeaturedSlide extends StatefulWidget {
-  const _FeaturedSlide({required this.item, required this.active});
+  const _FeaturedSlide({
+    required this.item,
+    required this.active,
+    required this.playing,
+  });
 
   final VersionedMediaItem item;
   final bool active;
+  final bool playing;
 
   @override
   State<_FeaturedSlide> createState() => _FeaturedSlideState();
@@ -288,7 +314,9 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
         else
           fallbackArtwork,
         if (preview != null)
-          Positioned.fill(child: TrailerPreview(trailer: preview)),
+          Positioned.fill(
+            child: TrailerPreview(trailer: preview, playing: widget.playing),
+          ),
         const DecoratedBox(
           decoration: BoxDecoration(gradient: _featuredGradient),
         ),
