@@ -15,11 +15,15 @@ class MediaCardV2 extends StatelessWidget {
     required this.item,
     required this.onTap,
     this.showSubtitle = true,
+    this.heroTag,
   });
 
   final MediaItemV2 item;
   final VoidCallback onTap;
   final bool showSubtitle;
+
+  /// Optional route-specific tag used when the same item appears more than once.
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -30,7 +34,13 @@ class MediaCardV2 extends StatelessWidget {
   Widget _content() {
     final value = item;
     final portrait = value.artwork?.portrait;
-    if (portrait != null) return _Poster(item: value, image: portrait);
+    if (portrait != null) {
+      return _Poster(
+        item: value,
+        image: portrait,
+        heroTag: heroTag ?? mediaArtworkHeroTag(value.ref),
+      );
+    }
     if (value is EventItemV2) {
       if (value.participants.length == 2) {
         return _Match(item: value, showSubtitle: showSubtitle);
@@ -49,10 +59,15 @@ bool _hasEventArtwork(EventItemV2 item) =>
     item.participants.any((participant) => participant.logo != null);
 
 class _Poster extends StatelessWidget {
-  const _Poster({required this.item, required this.image});
+  const _Poster({
+    required this.item,
+    required this.image,
+    required this.heroTag,
+  });
 
   final MediaItemV2 item;
   final ImageRef image;
+  final Object heroTag;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -60,7 +75,7 @@ class _Poster extends StatelessWidget {
     children: [
       Expanded(
         child: Hero(
-          tag: mediaArtworkHeroTag(item.ref),
+          tag: heroTag,
           child: CachedNetworkImage(
             imageUrl: image.url,
             fit: BoxFit.cover,

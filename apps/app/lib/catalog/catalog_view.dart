@@ -155,6 +155,9 @@ class _CatalogViewState extends State<CatalogView> {
 
   void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
+  void _openWithHero(VersionedMediaItem item, Object heroTag) =>
+      openVersionedItem(context, item, heroTag: heroTag);
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,6 +211,7 @@ class _CatalogViewState extends State<CatalogView> {
             child: MediaGridV2(
               sections: page.sections,
               onTap: _open,
+              onTapWithHero: _openWithHero,
               controller: _scrollController,
               showSectionHeaders: true,
               columns: widget.binding.catalog.display == CatalogDisplay.list

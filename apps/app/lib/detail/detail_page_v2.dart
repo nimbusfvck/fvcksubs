@@ -14,9 +14,10 @@ import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 
 class DetailPageV2 extends StatefulWidget {
-  const DetailPageV2({super.key, required this.item});
+  const DetailPageV2({super.key, required this.item, this.heroTag});
 
   final MediaItemV2 item;
+  final Object? heroTag;
 
   @override
   State<DetailPageV2> createState() => _DetailPageV2State();
@@ -158,8 +159,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
     body: FutureBuilder<MediaDetailV2>(
       future: _detail,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState != ConnectionState.done &&
+            !snapshot.hasData) {
+          return _LoadingDetail(item: widget.item, heroTag: widget.heroTag);
         }
         if (snapshot.hasError || snapshot.data == null) {
           return _ErrorView(onBack: () => Navigator.of(context).pop());
@@ -186,7 +188,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: _Header(detail: detail)),
+        SliverToBoxAdapter(
+          child: _Header(detail: detail, heroTag: widget.heroTag),
+        ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -375,9 +379,10 @@ class _PrimaryPlayButton extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.detail});
+  const _Header({required this.detail, this.heroTag});
 
   final MediaDetailV2 detail;
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +395,7 @@ class _Header extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (image != null)
-            _HeaderArtwork(item: item, image: image)
+            _HeaderArtwork(item: item, image: image, heroTag: heroTag)
           else
             const ColoredBox(color: AppColors.surfaceDarkElevated),
           if (preview != null)
@@ -499,10 +504,11 @@ class _Header extends StatelessWidget {
 }
 
 class _HeaderArtwork extends StatelessWidget {
-  const _HeaderArtwork({required this.item, required this.image});
+  const _HeaderArtwork({required this.item, required this.image, this.heroTag});
 
   final MediaItemV2 item;
   final ImageRef image;
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -513,10 +519,32 @@ class _HeaderArtwork extends StatelessWidget {
           const ColoredBox(color: AppColors.surfaceDarkElevated),
     );
     final portrait = item.artwork?.portrait;
-    return portrait == null
-        ? artwork
-        : Hero(tag: mediaArtworkHeroTag(item.ref), child: artwork);
+    final tag = heroTag ?? mediaArtworkHeroTag(item.ref);
+    return portrait == null ? artwork : Hero(tag: tag, child: artwork);
   }
+}
+
+class _LoadingDetail extends StatelessWidget {
+  const _LoadingDetail({required this.item, this.heroTag});
+
+  final MediaItemV2 item;
+  final Object? heroTag;
+
+  @override
+  Widget build(BuildContext context) => CustomScrollView(
+    slivers: [
+      SliverToBoxAdapter(
+        child: _Header(
+          detail: MediaDetailV2(item: item),
+          heroTag: heroTag,
+        ),
+      ),
+      const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    ],
+  );
 }
 
 MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {

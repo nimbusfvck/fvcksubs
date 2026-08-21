@@ -75,6 +75,8 @@ class _SearchPageState extends State<SearchPage> {
         : _Results(
             future: _results,
             onTap: (item) => openVersionedItem(context, item),
+            onTapWithHero: (item, heroTag) =>
+                openVersionedItem(context, item, heroTag: heroTag),
           ),
   );
 }
@@ -163,10 +165,15 @@ class _Prompt extends StatelessWidget {
 }
 
 class _Results extends StatelessWidget {
-  const _Results({required this.future, required this.onTap});
+  const _Results({
+    required this.future,
+    required this.onTap,
+    required this.onTapWithHero,
+  });
 
   final Future<List<VersionedMediaItem>>? future;
   final ValueChanged<VersionedMediaItem> onTap;
+  final void Function(VersionedMediaItem, Object) onTapWithHero;
 
   @override
   Widget build(BuildContext context) => FutureBuilder<List<VersionedMediaItem>>(
@@ -197,6 +204,7 @@ class _Results extends StatelessWidget {
         child: MediaGridV2(
           sections: [CatalogSectionV2(id: 'search', items: items)],
           onTap: onTap,
+          onTapWithHero: onTapWithHero,
         ),
       );
     },

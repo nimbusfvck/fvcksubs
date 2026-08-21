@@ -5,7 +5,11 @@ import 'open_item.dart';
 import '../player/play_item.dart';
 import 'detail_page_v2.dart';
 
-void openVersionedItem(BuildContext context, VersionedMediaItem item) {
+void openVersionedItem(
+  BuildContext context,
+  VersionedMediaItem item, {
+  Object? heroTag,
+}) {
   final legacy = item.legacyItem;
   if (legacy != null) {
     openItem(context, legacy);
@@ -16,7 +20,7 @@ void openVersionedItem(BuildContext context, VersionedMediaItem item) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: 'detail'),
-        builder: (_) => DetailPageV2(item: current),
+        builder: (_) => DetailPageV2(item: current, heroTag: heroTag),
       ),
     );
     return;

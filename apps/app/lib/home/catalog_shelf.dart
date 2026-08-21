@@ -76,6 +76,9 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
   void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
+  void _openWithHero(VersionedMediaItem item, Object heroTag) =>
+      openVersionedItem(context, item, heroTag: heroTag);
+
   void _openCatalog({String? subCategory, String? title}) =>
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -152,6 +155,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
                     ? null
                     : idsByName[section.title],
                 onTap: _open,
+                onTapWithHero: _openWithHero,
                 onSeeMore: (subCategory) => _openCatalog(
                   subCategory: subCategory,
                   title: section.title,
@@ -180,6 +184,7 @@ class _Section extends StatelessWidget {
     required this.fallbackTitle,
     required this.subCategoryId,
     required this.onTap,
+    required this.onTapWithHero,
     required this.onSeeMore,
   });
 
@@ -190,6 +195,7 @@ class _Section extends StatelessWidget {
 
   final String? subCategoryId;
   final ValueChanged<VersionedMediaItem> onTap;
+  final void Function(VersionedMediaItem, Object) onTapWithHero;
   final ValueChanged<String?> onSeeMore;
 
   @override
@@ -208,15 +214,21 @@ class _Section extends StatelessWidget {
           onSeeMore: hasMore ? () => onSeeMore(subCategoryId) : null,
         ),
         switch (display) {
-          CatalogDisplay.row => _Carousel(items: preview, onTap: onTap),
+          CatalogDisplay.row => _Carousel(
+            items: preview,
+            onTap: onTap,
+            onTapWithHero: onTapWithHero,
+          ),
           CatalogDisplay.grid => MediaGridV2(
             sections: [CatalogSectionV2(id: section.id, items: preview)],
             onTap: onTap,
+            onTapWithHero: onTapWithHero,
             scrollable: false,
           ),
           CatalogDisplay.list => MediaGridV2(
             sections: [CatalogSectionV2(id: section.id, items: preview)],
             onTap: onTap,
+            onTapWithHero: onTapWithHero,
             scrollable: false,
             columns: 1,
           ),
@@ -265,10 +277,15 @@ class _Header extends StatelessWidget {
 }
 
 class _Carousel extends StatelessWidget {
-  const _Carousel({required this.items, required this.onTap});
+  const _Carousel({
+    required this.items,
+    required this.onTap,
+    required this.onTapWithHero,
+  });
 
   final List<VersionedMediaItem> items;
   final ValueChanged<VersionedMediaItem> onTap;
+  final void Function(VersionedMediaItem, Object) onTapWithHero;
 
   @override
   Widget build(BuildContext context) {
@@ -285,10 +302,18 @@ class _Carousel extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
-        itemBuilder: (context, i) => SizedBox(
-          width: itemWidth,
-          child: MediaCardV2(item: items[i].item, onTap: () => onTap(items[i])),
-        ),
+        itemBuilder: (context, i) {
+          final item = items[i];
+          final heroTag = Object();
+          return SizedBox(
+            width: itemWidth,
+            child: MediaCardV2(
+              item: item.item,
+              heroTag: heroTag,
+              onTap: () => onTapWithHero(item, heroTag),
+            ),
+          );
+        },
       ),
     );
   }

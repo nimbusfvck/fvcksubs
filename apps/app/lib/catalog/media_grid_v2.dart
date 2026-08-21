@@ -10,6 +10,7 @@ class MediaGridV2 extends StatelessWidget {
     super.key,
     required this.sections,
     required this.onTap,
+    this.onTapWithHero,
     this.scrollable = true,
     this.controller,
     this.showSectionHeaders = false,
@@ -18,6 +19,7 @@ class MediaGridV2 extends StatelessWidget {
 
   final List<CatalogSectionV2> sections;
   final ValueChanged<VersionedMediaItem> onTap;
+  final void Function(VersionedMediaItem item, Object heroTag)? onTapWithHero;
   final bool scrollable;
   final ScrollController? controller;
   final bool showSectionHeaders;
@@ -59,10 +61,17 @@ class MediaGridV2 extends StatelessWidget {
           physics: scrollable ? null : const NeverScrollableScrollPhysics(),
           gridDelegate: _delegate(constraints.maxWidth),
           itemCount: items.length,
-          itemBuilder: (_, index) => MediaCardV2(
-            item: items[index].item,
-            onTap: () => onTap(items[index]),
-          ),
+          itemBuilder: (_, index) {
+            final envelope = items[index];
+            final heroTag = Object();
+            return MediaCardV2(
+              item: envelope.item,
+              heroTag: onTapWithHero == null ? null : heroTag,
+              onTap: () => onTapWithHero == null
+                  ? onTap(envelope)
+                  : onTapWithHero!(envelope, heroTag),
+            );
+          },
         );
       }
 
@@ -78,14 +87,18 @@ class MediaGridV2 extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               sliver: SliverGrid(
                 gridDelegate: _delegate(constraints.maxWidth),
-                delegate: SliverChildBuilderDelegate(
-                  (_, index) => MediaCardV2(
-                    item: section.items[index].item,
-                    onTap: () => onTap(section.items[index]),
+                delegate: SliverChildBuilderDelegate((_, index) {
+                  final envelope = section.items[index];
+                  final heroTag = Object();
+                  return MediaCardV2(
+                    item: envelope.item,
+                    heroTag: onTapWithHero == null ? null : heroTag,
+                    onTap: () => onTapWithHero == null
+                        ? onTap(envelope)
+                        : onTapWithHero!(envelope, heroTag),
                     showSubtitle: section.title == null,
-                  ),
-                  childCount: section.items.length,
-                ),
+                  );
+                }, childCount: section.items.length),
               ),
             ),
           ],

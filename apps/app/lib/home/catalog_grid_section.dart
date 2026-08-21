@@ -122,6 +122,9 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
 
   void _open(VersionedMediaItem item) => openVersionedItem(context, item);
 
+  void _openWithHero(VersionedMediaItem item, Object heroTag) =>
+      openVersionedItem(context, item, heroTag: heroTag);
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -179,7 +182,12 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
     return Column(
       children: [
-        MediaGridV2(sections: page.sections, onTap: _open, scrollable: false),
+        MediaGridV2(
+          sections: page.sections,
+          onTap: _open,
+          onTapWithHero: _openWithHero,
+          scrollable: false,
+        ),
         if (_loadingMore)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
