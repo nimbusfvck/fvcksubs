@@ -137,4 +137,56 @@ void main() {
     expect(find.byType(AnimatedContainer), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('horizontal drag moves to the next featured item', (
+    tester,
+  ) async {
+    final items = [
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.catalog',
+            id: 'first-drag',
+          ),
+          title: 'First event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.catalog',
+            id: 'second-drag',
+          ),
+          title: 'Second event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+
+    await tester.drag(find.byType(PageView), const Offset(-300, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Second event'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -106,9 +107,8 @@ class FeaturedHeroPlaceholder extends StatelessWidget {
 
 class _FeaturedHeroState extends State<FeaturedHero> {
   late final PageController _pageController;
+  final ValueNotifier<bool> _scrolling = ValueNotifier(false);
   int _page = 0;
-  bool _isScrolling = false;
-  bool _pointerDown = false;
 
   @override
   void initState() {
@@ -128,6 +128,7 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   @override
   void dispose() {
     _pageController.dispose();
+    _scrolling.dispose();
     super.dispose();
   }
 
@@ -137,21 +138,16 @@ class _FeaturedHeroState extends State<FeaturedHero> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Listener(
-          onPointerDown: (_) => _setPointerDown(true),
-          onPointerUp: (_) => _setPointerDown(false),
-          onPointerCancel: (_) => _setPointerDown(false),
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _onScrollNotification,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.items.length,
-              onPageChanged: (value) => setState(() => _page = value),
-              itemBuilder: (context, index) => _FeaturedSlide(
-                item: widget.items[index],
-                active: index == _page,
-                playing: index == _page && !_isScrolling && !_pointerDown,
-              ),
+        NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: (value) => setState(() => _page = value),
+            itemBuilder: (context, index) => _FeaturedSlide(
+              item: widget.items[index],
+              active: index == _page,
+              scrolling: _scrolling,
             ),
           ),
         ),
@@ -182,13 +178,10 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   }
 
   void _setScrolling(bool scrolling) {
-    if (!mounted || _isScrolling == scrolling) return;
-    setState(() => _isScrolling = scrolling);
-  }
-
-  void _setPointerDown(bool pointerDown) {
-    if (!mounted || _pointerDown == pointerDown) return;
-    setState(() => _pointerDown = pointerDown);
+    if (!mounted || _scrolling.value == scrolling) return;
+    // Only the preview reacts; rebuilding PageView during a drag can stall the
+    // gesture when its active page contains a native video texture.
+    _scrolling.value = scrolling;
   }
 }
 
@@ -241,12 +234,12 @@ class _FeaturedSlide extends StatefulWidget {
   const _FeaturedSlide({
     required this.item,
     required this.active,
-    required this.playing,
+    required this.scrolling,
   });
 
   final VersionedMediaItem item;
   final bool active;
-  final bool playing;
+  final ValueListenable<bool> scrolling;
 
   @override
   State<_FeaturedSlide> createState() => _FeaturedSlideState();
@@ -327,7 +320,13 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
             fallbackArtwork,
           if (preview != null)
             Positioned.fill(
-              child: TrailerPreview(trailer: preview, playing: widget.playing),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: widget.scrolling,
+                builder: (context, scrolling, child) => TrailerPreview(
+                  trailer: preview,
+                  playing: widget.active && !scrolling,
+                ),
+              ),
             ),
           const DecoratedBox(
             decoration: BoxDecoration(gradient: _featuredGradient),
