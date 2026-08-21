@@ -374,17 +374,13 @@ class _FeaturedDetails extends StatelessWidget {
                 final favorite = state.isFavorite(media.ref);
                 return IconButton(
                   key: const Key('featured-favorite'),
-                  tooltip: favorite
-                      ? 'Remove from favorites'
-                      : 'Add to favorites',
+                  tooltip: favorite ? 'In favorites' : 'Add to favorites',
                   style: IconButton.styleFrom(
                     foregroundColor: AppColors.onDark,
-                    backgroundColor: AppColors.surfaceDarkElevated.withValues(
-                      alpha: 0.86,
-                    ),
                     side: const BorderSide(color: AppColors.outlineDark),
+                    shape: const StadiumBorder(),
                   ),
-                  icon: Icon(favorite ? Icons.favorite : Icons.favorite_border),
+                  icon: Icon(favorite ? Icons.check : Icons.add),
                   onPressed: () => AppScope.of(
                     context,
                   ).libraryController.toggleFavorite(media),
