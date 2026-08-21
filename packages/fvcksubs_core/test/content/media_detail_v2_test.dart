@@ -26,6 +26,16 @@ void main() {
           image: ImageRef('https://cdn.example/person.jpg'),
         ),
       ],
+      trailers: [
+        MediaTrailer(
+          title: 'Official Trailer',
+          url: 'https://www.youtube.com/watch?v=example',
+          site: 'YouTube',
+          thumbnail: ImageRef(
+            'https://img.youtube.com/vi/example/hqdefault.jpg',
+          ),
+        ),
+      ],
       episodeGuide: EpisodeGuide(
         groups: [
           EpisodeGroup(
@@ -110,6 +120,13 @@ void main() {
         'title': 'Episode 1',
         'position': 1,
         'durationSeconds': 0,
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => MediaTrailer.fromJson(const {
+        'title': 'Trailer',
+        'url': '/watch?v=example',
       }),
       throwsFormatException,
     );

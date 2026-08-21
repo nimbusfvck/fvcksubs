@@ -111,7 +111,7 @@ This removes the adjacency rule and makes an unlabelled section explicit.
 ## 9.4 Detail and episode guide
 
 Behavioral data remains typed. Metadata that is only rendered is expressed as
-tags, facts, and credits.
+tags, facts, credits, and trailers.
 
 ```ts
 interface MediaDetail {
@@ -120,6 +120,7 @@ interface MediaDetail {
   tags?: string[];
   facts?: Fact[];
   credits?: Credit[];
+  trailers?: Trailer[];
   episodeGuide?: EpisodeGuide;
 }
 
@@ -132,6 +133,17 @@ interface Credit {
   name: string;
   role?: string;
   image?: ImageRef;
+}
+
+interface Trailer {
+  /** User-facing preview title. */
+  title: string;
+  /** Absolute URL opened by the app's trailer action. */
+  url: string;
+  /** Optional platform label, such as YouTube. */
+  site?: string;
+  /** Optional preview image. */
+  thumbnail?: ImageRef;
 }
 
 interface EpisodeGuide {

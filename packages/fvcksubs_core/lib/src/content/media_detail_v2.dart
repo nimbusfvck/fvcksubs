@@ -66,6 +66,57 @@ class MediaCredit extends Equatable {
   List<Object?> get props => [name, role, image];
 }
 
+/// A displayable preview video attached to a media detail response.
+class MediaTrailer extends Equatable {
+  /// Creates a trailer reference.
+  const MediaTrailer({
+    required this.title,
+    required this.url,
+    this.site,
+    this.thumbnail,
+  });
+
+  /// Decodes and validates a trailer reference.
+  factory MediaTrailer.fromJson(Map<String, Object?> json) {
+    _rejectUnknown(json, const {
+      'title',
+      'url',
+      'site',
+      'thumbnail',
+    }, 'trailer');
+    final url = _requiredHttpUrl(json['url'], 'trailer.url');
+    return MediaTrailer(
+      title: _requiredString(json['title'], 'trailer.title'),
+      url: url,
+      site: _optionalString(json['site'], 'trailer.site'),
+      thumbnail: _optionalImage(json['thumbnail'], 'trailer.thumbnail'),
+    );
+  }
+
+  /// User-facing trailer title, such as `Official Trailer`.
+  final String title;
+
+  /// Absolute URL opened when the viewer selects the trailer.
+  final String url;
+
+  /// Optional platform label, such as `YouTube`.
+  final String? site;
+
+  /// Optional preview image for a trailer card or button.
+  final ImageRef? thumbnail;
+
+  /// Encodes this trailer reference.
+  Map<String, Object?> toJson() => {
+    'title': title,
+    'url': url,
+    if (site != null) 'site': site,
+    if (thumbnail != null) 'thumbnail': thumbnail!.toJson(),
+  };
+
+  @override
+  List<Object?> get props => [title, url, site, thumbnail];
+}
+
 /// One playable entry in an episode guide.
 class EpisodeSummary extends Equatable {
   /// Creates an episode summary.
@@ -267,6 +318,7 @@ class MediaDetailV2 extends Equatable {
     this.tags = const [],
     this.facts = const [],
     this.credits = const [],
+    this.trailers = const [],
     this.episodeGuide,
   });
 
@@ -278,6 +330,7 @@ class MediaDetailV2 extends Equatable {
       'tags',
       'facts',
       'credits',
+      'trailers',
       'episodeGuide',
     }, 'media detail');
     final tags = json['tags'];
@@ -291,6 +344,10 @@ class MediaDetailV2 extends Equatable {
     final credits = json['credits'];
     if (credits != null && credits is! List) {
       throw const FormatException('detail.credits must be a list');
+    }
+    final trailers = json['trailers'];
+    if (trailers != null && trailers is! List) {
+      throw const FormatException('detail.trailers must be a list');
     }
     return MediaDetailV2(
       item: MediaItemV2.fromJson(_object(json['item'], 'detail.item')),
@@ -306,6 +363,10 @@ class MediaDetailV2 extends Equatable {
       credits: [
         for (final credit in (credits as List?) ?? const [])
           MediaCredit.fromJson(_object(credit, 'detail.credits[]')),
+      ],
+      trailers: [
+        for (final trailer in (trailers as List?) ?? const [])
+          MediaTrailer.fromJson(_object(trailer, 'detail.trailers[]')),
       ],
       episodeGuide: json['episodeGuide'] == null
           ? null
@@ -330,6 +391,9 @@ class MediaDetailV2 extends Equatable {
   /// Credited people or entities in extension-defined order.
   final List<MediaCredit> credits;
 
+  /// Optional preview videos in extension-defined display order.
+  final List<MediaTrailer> trailers;
+
   /// Optional navigation data for episodic content.
   final EpisodeGuide? episodeGuide;
 
@@ -341,6 +405,8 @@ class MediaDetailV2 extends Equatable {
     if (facts.isNotEmpty) 'facts': facts.map((fact) => fact.toJson()).toList(),
     if (credits.isNotEmpty)
       'credits': credits.map((credit) => credit.toJson()).toList(),
+    if (trailers.isNotEmpty)
+      'trailers': trailers.map((trailer) => trailer.toJson()).toList(),
     if (episodeGuide != null) 'episodeGuide': episodeGuide!.toJson(),
   };
 
@@ -351,6 +417,7 @@ class MediaDetailV2 extends Equatable {
     tags,
     facts,
     credits,
+    trailers,
     episodeGuide,
   ];
 }
@@ -370,6 +437,17 @@ String _requiredString(Object? value, String path) {
 String? _optionalString(Object? value, String path) {
   if (value == null) return null;
   return _requiredString(value, path);
+}
+
+String _requiredHttpUrl(Object? value, String path) {
+  final url = _requiredString(value, path);
+  final uri = Uri.tryParse(url);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      !{'http', 'https'}.contains(uri.scheme)) {
+    throw FormatException('$path must be an absolute http(s) URL');
+  }
+  return url;
 }
 
 MediaRef _requiredRef(Object? value, String path) =>

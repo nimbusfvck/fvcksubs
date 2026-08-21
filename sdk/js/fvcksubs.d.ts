@@ -168,6 +168,17 @@ interface Credit {
   image?: ImageRef;
 }
 
+interface Trailer {
+  /** User-facing preview title, such as `Official Trailer`. */
+  title: string;
+  /** Absolute URL opened when the user selects the trailer. */
+  url: string;
+  /** Optional platform label, such as `YouTube`. */
+  site?: string;
+  /** Optional preview image shown beside the trailer action. */
+  thumbnail?: ImageRef;
+}
+
 interface EpisodeSummary {
   /** Stable episode identity used by metadata, source, subtitle, and history calls. */
   ref: MediaRef;
@@ -212,6 +223,8 @@ interface MediaDetail {
   facts?: Fact[];
   /** Credited people or entities in display order. */
   credits?: Credit[];
+  /** Preview videos shown in the detail page's trailer section. */
+  trailers?: Trailer[];
   /** Optional typed navigation data for episodic content. */
   episodeGuide?: EpisodeGuide;
 }

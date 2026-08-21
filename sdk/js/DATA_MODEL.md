@@ -74,6 +74,7 @@ secondary selector.
 | `tags` | no | Short classification labels displayed in extension order. |
 | `facts` | no | Display-only `label` and `value` pairs. Use these for metadata the app does not need to interpret. |
 | `credits` | no | Credited people or entities with `name`, optional `role`, and optional `image`. |
+| `trailers` | no | Preview videos with a display `title`, absolute `url`, optional `site`, and optional `thumbnail`. The app opens the URL externally. |
 | `episodeGuide` | no | Typed episode navigation grouped by extension-defined IDs and titles. |
 
 Each episode summary has its own stable `ref`, a `title`, and a positive
