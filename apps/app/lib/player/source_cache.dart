@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
-import 'player_page.dart';
+import 'resolved_source.dart';
 
 class SourceCache {
   SourceCache({
