@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import '../player/play_item.dart';
+import '../player/workflow/play_item.dart';
 import 'detail_page_v2.dart';
 
 void openVersionedItem(

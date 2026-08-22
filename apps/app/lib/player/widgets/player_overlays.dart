@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
+import '../../theme/tokens.dart';
 
 class PlayerPlaybackErrorOverlay extends StatelessWidget {
   const PlayerPlaybackErrorOverlay({

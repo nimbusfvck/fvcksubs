@@ -1,7 +1,7 @@
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import 'subtitle_preference_controller.dart';
+import '../state/subtitle_preference_controller.dart';
 
 BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {

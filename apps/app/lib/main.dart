@@ -14,9 +14,9 @@ import 'catalog/catalog_cache.dart';
 import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
-import 'player/source_cache.dart';
-import 'player/source_priority_controller.dart';
-import 'player/subtitle_preference_controller.dart';
+import 'player/state/source_cache.dart';
+import 'player/state/source_priority_controller.dart';
+import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
 
 Future<void> main() async {

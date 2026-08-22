@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
-import 'package:fvcksubs_app/player/source_cache.dart';
+import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 

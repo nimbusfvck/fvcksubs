@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import '../navigation/app_route_observer.dart';
+import '../../navigation/app_route_observer.dart';
 import 'stream_player.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.

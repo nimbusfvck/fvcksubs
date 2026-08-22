@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import '../app_scope.dart';
-import '../platform/playback_capability.dart';
-import '../theme/tokens.dart';
-import 'player_page.dart';
-import 'playback_media.dart';
-import 'source_priority_controller.dart';
-import 'subtitle_preference_controller.dart';
+import '../../app_scope.dart';
+import '../../platform/playback_capability.dart';
+import '../../theme/tokens.dart';
+import '../models/playback_media.dart';
+import '../player_page.dart';
+import '../state/source_priority_controller.dart';
+import '../state/subtitle_preference_controller.dart';
 
 Future<void> playItemV2(
   BuildContext context,

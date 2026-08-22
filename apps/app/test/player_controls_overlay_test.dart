@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/player_controls_overlay.dart';
+import 'package:fvcksubs_app/player/controls/player_controls_overlay.dart';
 
 void main() {
   testWidgets(

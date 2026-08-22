@@ -1,8 +1,8 @@
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
-import 'resolved_source.dart';
+import '../../theme/tokens.dart';
+import '../models/resolved_source.dart';
 
 List<BetterPlayerAsmsTrack> dedupedQualityTracks(
   List<BetterPlayerAsmsTrack> tracks,

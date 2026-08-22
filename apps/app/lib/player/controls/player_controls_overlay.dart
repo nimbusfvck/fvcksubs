@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
+import '../../theme/tokens.dart';
 
 class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({

@@ -2,7 +2,7 @@ import 'package:better_player_plus/better_player_plus.dart';
 import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart'
     show DurationRange;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/live_timeline.dart';
+import 'package:fvcksubs_app/player/controls/live_timeline.dart';
 
 void main() {
   test('uses the furthest known live point for the timeline extent', () {

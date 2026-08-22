@@ -8,10 +8,10 @@ import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'platform/device_class.dart';
-import 'player/source_cache.dart';
-import 'player/source_priority_controller.dart';
-import 'player/stream_player.dart';
-import 'player/subtitle_preference_controller.dart';
+import 'player/state/source_cache.dart';
+import 'player/state/source_priority_controller.dart';
+import 'player/state/subtitle_preference_controller.dart';
+import 'player/widgets/stream_player.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({

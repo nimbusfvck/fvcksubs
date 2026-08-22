@@ -7,8 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import 'stream_player_mapping.dart';
-import 'player_diagnostics.dart';
+import '../diagnostics/player_diagnostics.dart';
+import '../mappers/stream_player_mapping.dart';
 
 typedef PlayerBuilder =
     Widget Function(

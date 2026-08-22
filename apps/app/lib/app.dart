@@ -10,11 +10,12 @@ import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'navigation/app_route_observer.dart';
 import 'platform/device_class.dart';
-import 'player/source_cache.dart';
-import 'player/source_priority_controller.dart';
-import 'player/stream_player.dart';
-import 'player/subtitle_preference_controller.dart';
+import 'player/state/source_cache.dart';
+import 'player/state/source_priority_controller.dart';
+import 'player/state/subtitle_preference_controller.dart';
+import 'player/widgets/stream_player.dart';
 import 'shell/home_shell.dart';
+import 'shell/system_ui_visibility.dart';
 import 'theme/app_theme.dart';
 
 class FvcksubsApp extends StatelessWidget {
@@ -81,6 +82,8 @@ class FvcksubsApp extends StatelessWidget {
       title: 'fvcksubs',
       debugShowCheckedModeBanner: false,
       theme: buildDarkTheme(),
+      builder: (context, child) =>
+          SystemUiVisibility(child: child ?? const SizedBox.shrink()),
       home: const HomeShell(),
     ),
   );

@@ -2,11 +2,11 @@ import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import '../app_scope.dart';
-import '../theme/tokens.dart';
-import 'playback_media.dart';
-import 'stream_player_mapping.dart'
+import '../../app_scope.dart';
+import '../../theme/tokens.dart';
+import '../mappers/stream_player_mapping.dart'
     show subtitleLanguageLabel, subtitleSourceFor, subtitlesForPicker;
+import '../models/playback_media.dart';
 
 class PlayerSubtitlePickerSheet extends StatefulWidget {
   const PlayerSubtitlePickerSheet({

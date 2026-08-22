@@ -10,14 +10,14 @@ import '../detail/episode_target_v2.dart';
 import '../library/library_controller.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
-import 'play_item.dart';
-import 'playback_media.dart';
-import 'player_overlays.dart';
-import 'player_playback_controls.dart';
-import 'player_selection_sheets.dart';
-import 'resolved_source.dart';
+import 'controls/player_playback_controls.dart';
+import 'models/playback_media.dart';
+import 'models/resolved_source.dart';
+import 'sheets/player_selection_sheets.dart';
+import 'widgets/player_overlays.dart';
+import 'workflow/play_item.dart';
 
-export 'resolved_source.dart' show ResolvedSource, mergeResolvedSources;
+export 'models/resolved_source.dart' show ResolvedSource, mergeResolvedSources;
 
 const Duration _minResumeProgress = Duration(seconds: 5);
 const Duration _resumeEndGuard = Duration(seconds: 30);

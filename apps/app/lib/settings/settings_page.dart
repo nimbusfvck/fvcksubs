@@ -4,8 +4,8 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
-import '../player/subtitle_preference_controller.dart';
-import '../player/source_priority_controller.dart';
+import '../player/state/source_priority_controller.dart';
+import '../player/state/subtitle_preference_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 

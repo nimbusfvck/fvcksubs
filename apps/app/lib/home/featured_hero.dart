@@ -11,8 +11,8 @@ import '../catalog/generated_banner.dart';
 import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
-import '../player/play_item.dart';
-import '../player/trailer_preview.dart';
+import '../player/widgets/trailer_preview.dart';
+import '../player/workflow/play_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/shimmer_placeholder.dart';
 

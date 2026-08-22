@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/player_diagnostics.dart';
+import 'package:fvcksubs_app/player/diagnostics/player_diagnostics.dart';
 
 void main() {
   test('safe playback url removes query tokens and fragments', () {

@@ -1,6 +1,6 @@
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/stream_player_mapping.dart';
+import 'package:fvcksubs_app/player/mappers/stream_player_mapping.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 void main() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
+import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/settings_page.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
