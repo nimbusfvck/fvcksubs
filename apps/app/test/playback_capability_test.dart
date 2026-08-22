@@ -15,9 +15,9 @@ void main() {
       expect(PlaybackTarget.detect(), PlaybackTarget.ios);
     });
 
-    test('anything else (desktop, web) is unsupported', () {
+    test('maps macOS to its native MediaKit target', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      expect(PlaybackTarget.detect(), PlaybackTarget.unsupported);
+      expect(PlaybackTarget.detect(), PlaybackTarget.macos);
     });
   });
 
@@ -84,14 +84,17 @@ void main() {
       );
     });
 
-    test('DASH is refused even with no DRM — this integration sets none on iOS', () {
-      expect(
-        target.canPlay(
-          const PlayableStream(url: 'x', format: StreamFormat.dash),
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'DASH is refused even with no DRM — this integration sets none on iOS',
+      () {
+        expect(
+          target.canPlay(
+            const PlayableStream(url: 'x', format: StreamFormat.dash),
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('any DRM at all is refused, regardless of scheme or container', () {
       for (final scheme in [
@@ -126,6 +129,35 @@ void main() {
       expect(
         target.canPlay(
           const PlayableStream(url: 'x', format: StreamFormat.dash),
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('PlaybackTarget.canPlay — macOS (MediaKit)', () {
+    const target = PlaybackTarget.macos;
+
+    test('clear HLS and DASH play, while DRM is refused', () {
+      expect(
+        target.canPlay(
+          const PlayableStream(url: 'x', format: StreamFormat.hls),
+        ),
+        isTrue,
+      );
+      expect(
+        target.canPlay(
+          const PlayableStream(url: 'x', format: StreamFormat.dash),
+        ),
+        isTrue,
+      );
+      expect(
+        target.canPlay(
+          const PlayableStream(
+            url: 'x',
+            format: StreamFormat.dash,
+            drm: DrmConfig(scheme: DrmScheme.widevine),
+          ),
         ),
         isFalse,
       );

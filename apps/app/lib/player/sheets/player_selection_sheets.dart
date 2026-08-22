@@ -1,23 +1,20 @@
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/tokens.dart';
 import '../models/resolved_source.dart';
+import '../models/app_player_controller.dart';
 
-List<BetterPlayerAsmsTrack> dedupedQualityTracks(
-  List<BetterPlayerAsmsTrack> tracks,
-) {
-  final byHeight = <int, BetterPlayerAsmsTrack>{};
+List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
+  final byHeight = <int, AppQualityTrack>{};
   for (final track in tracks) {
-    final height = track.height ?? 0;
+    final height = track.height;
     if (height <= 0) continue;
     final existing = byHeight[height];
     if (existing == null || (track.bitrate ?? 0) > (existing.bitrate ?? 0)) {
       byHeight[height] = track;
     }
   }
-  return byHeight.values.toList()
-    ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
+  return byHeight.values.toList()..sort((a, b) => b.height.compareTo(a.height));
 }
 
 class PlayerSourcePickerSheet extends StatelessWidget {
@@ -93,10 +90,10 @@ class PlayerQualityPickerSheet extends StatelessWidget {
     required this.current,
   });
 
-  final List<BetterPlayerAsmsTrack> tracks;
-  final BetterPlayerAsmsTrack? current;
+  final List<AppQualityTrack> tracks;
+  final AppQualityTrack? current;
 
-  bool get _autoSelected => (current?.height ?? 0) <= 0;
+  bool get _autoSelected => current == null;
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +135,7 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                         : null,
                     onTap: () => Navigator.of(
                       context,
-                    ).pop(BetterPlayerAsmsTrack.defaultTrack()),
+                    ).pop(const AppQualityTrack(id: 'auto', height: 0)),
                   ),
                   for (final track in tracks)
                     ListTile(
@@ -148,7 +145,7 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                           color: AppColors.onDark,
                         ),
                       ),
-                      trailing: !_autoSelected && current == track
+                      trailing: !_autoSelected && current?.id == track.id
                           ? const Icon(
                               Icons.check,
                               color: AppColors.brandAccent,

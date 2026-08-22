@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +11,7 @@ import 'live_timeline.dart';
 import '../models/playback_media.dart';
 import 'player_controls_overlay.dart';
 import '../mappers/stream_player_mapping.dart' show subtitleIndicatorLabel;
+import '../models/app_player_controller.dart';
 import '../models/resolved_source.dart';
 import '../sheets/player_selection_sheets.dart';
 import '../sheets/subtitle_picker_sheet.dart';
@@ -41,7 +41,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.onCancelUpNext,
   });
 
-  final BetterPlayerController? controller;
+  final AppPlayerController? controller;
   final void Function(bool visibility) onVisibilityChanged;
   final PlaybackMedia media;
   final List<ResolvedSource> resolvedSources;
@@ -61,7 +61,7 @@ class PlayerPlaybackControls extends StatefulWidget {
 }
 
 class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
-  ValueListenable<VideoPlayerValue>? _videoValue;
+  ValueListenable<AppPlayerValue>? _videoValue;
   bool _controlsVisible = true;
   bool _wasPlaying = false;
   bool _wasBuffering = true; // Video starts in a loading state.
@@ -81,7 +81,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   bool _valueUpdateScheduled = false;
   Duration _liveEdge = Duration.zero;
 
-  bool _isReady(VideoPlayerValue? value) =>
+  bool _isReady(AppPlayerValue? value) =>
       value?.initialized == true ||
       (widget.isLive &&
           value != null &&
@@ -115,8 +115,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   void _syncVideoValue() {
-    final ValueListenable<VideoPlayerValue>? next =
-        widget.controller?.videoPlayerController;
+    final ValueListenable<AppPlayerValue>? next = widget.controller?.value;
     if (identical(next, _videoValue)) return;
     _videoValue?.removeListener(_onValueChanged);
     _stopPausedLiveEdgeTracking();
@@ -188,10 +187,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   void _syncActiveSubtitleLabel() {
-    final subtitle = widget.controller?.betterPlayerSubtitlesSource;
-    final label = subtitle?.type == BetterPlayerSubtitlesSourceType.none
-        ? null
-        : subtitle?.name;
+    final label = widget.controller?.activeSubtitle?.label;
     _activeSubtitleLabel = label == null ? null : subtitleIndicatorLabel(label);
   }
 
@@ -318,11 +314,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Future<void> _openSubtitlePicker() async {
     if (widget.isLive) return;
     _hideTimer?.cancel();
-    final currentSub = widget.controller?.betterPlayerSubtitlesSource;
+    final currentSub = widget.controller?.activeSubtitle;
     final tracks = AppScope.of(
       context,
     ).subtitlePreferenceController.tracksForPicker(_current.stream.subtitles);
-    final picked = await showModalBottomSheet<BetterPlayerSubtitlesSource>(
+    final picked = await showModalBottomSheet<PlayerSubtitleSelection>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
@@ -340,12 +336,12 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     );
     if (!mounted) return;
     if (picked != null) {
-      unawaited(widget.controller?.setupSubtitleSource(picked));
-      final isOff = picked.type == BetterPlayerSubtitlesSourceType.none;
+      unawaited(widget.controller?.setSubtitle(picked.track));
+      final isOff = picked.track == null;
       setState(() {
         _activeSubtitleLabel = isOff
             ? null
-            : subtitleIndicatorLabel(picked.name);
+            : subtitleIndicatorLabel(picked.track!.label);
       });
     }
     _revealControls();
@@ -353,11 +349,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   Future<void> _openQualityPicker() async {
     _hideTimer?.cancel();
-    final tracks = dedupedQualityTracks(
-      widget.controller?.betterPlayerAsmsTracks ?? const [],
-    );
-    final current = widget.controller?.betterPlayerAsmsTrack;
-    final picked = await showModalBottomSheet<BetterPlayerAsmsTrack>(
+    final tracks = widget.controller?.qualityTracks ?? const [];
+    final current = widget.controller?.activeQuality;
+    final picked = await showModalBottomSheet<AppQualityTrack>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
@@ -369,8 +363,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     );
     if (!mounted) return;
     if (picked != null) {
-      unawaited(widget.controller?.setTrack(picked));
-      final height = picked.height ?? 0;
+      unawaited(widget.controller?.setQuality(picked));
+      final height = picked.height;
       setState(() => _activeQualityLabel = height > 0 ? '${height}p' : null);
     }
     _revealControls();
@@ -417,7 +411,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       position: position,
       duration: duration,
       timelineExtent: timelineExtent,
-      bufferedExtent: bufferedSeekEdge(value),
+      bufferedExtent: value?.bufferedPosition ?? Duration.zero,
       atLiveEdge: isAtLiveEdge(position, timelineExtent),
       dragValueMs: _dragValueMs,
       onBackgroundTap: _handleBackgroundTap,

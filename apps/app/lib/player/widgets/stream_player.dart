@@ -9,6 +9,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../diagnostics/player_diagnostics.dart';
 import '../mappers/stream_player_mapping.dart';
+import 'better_player_controller_adapter.dart';
+import 'platform_player_builder.dart';
 
 typedef PlayerBuilder =
     Widget Function(
@@ -28,6 +30,31 @@ typedef PlayerBuilder =
     });
 
 Widget defaultPlayerBuilder(
+  BuildContext context,
+  PlayableStream stream, {
+  required bool isLive,
+  void Function(Object? controller)? onControllerCreated,
+  void Function(Object? controller)? onPlaybackReady,
+  Widget Function(
+    BuildContext context,
+    Object? controller,
+    void Function(bool visibility) onVisibilityChanged,
+  )?
+  customControlsBuilder,
+  String? preferredSubtitleLanguage,
+  Key? key,
+}) => platformPlayerBuilder(
+  context,
+  stream,
+  isLive: isLive,
+  onControllerCreated: onControllerCreated,
+  onPlaybackReady: onPlaybackReady,
+  customControlsBuilder: customControlsBuilder,
+  preferredSubtitleLanguage: preferredSubtitleLanguage,
+  key: key,
+);
+
+Widget mobilePlayerBuilder(
   BuildContext context,
   PlayableStream stream, {
   required bool isLive,
@@ -111,6 +138,7 @@ class BetterPlayerView extends StatefulWidget {
 
 class _BetterPlayerViewState extends State<BetterPlayerView> {
   late final BetterPlayerController _controller;
+  late final BetterPlayerControllerAdapter _adapter;
   final GlobalKey _betterPlayerKey = GlobalKey();
   final Stopwatch _diagnosticClock = Stopwatch();
   late final BetterPlayerSubtitlesSource? _preferredSubtitle;
@@ -184,19 +212,20 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
               ? (controller, onVisibilityChanged, config) =>
                     widget.customControlsBuilder!(
                       context,
-                      controller,
+                      _adapter,
                       onVisibilityChanged,
                     )
               : null,
         ),
       ),
     );
+    _adapter = BetterPlayerControllerAdapter(_controller);
     if (kDebugMode) {
       _diagnosticClock.start();
       _controller.addEventsListener(_onDiagnosticEvent);
       _logPlayback('controller_created');
     }
-    widget.onControllerCreated?.call(_controller);
+    widget.onControllerCreated?.call(_adapter);
     _controller.setBetterPlayerGlobalKey(_betterPlayerKey);
 
     // Defer setup until mounting completes. BetterPlayer may emit a native
@@ -224,7 +253,8 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
       _startLiveHeartbeat();
       if (widget.muted) await _controller.setVolume(0);
       if (!widget.playing) await _controller.pause();
-      widget.onPlaybackReady?.call(_controller);
+      _adapter.syncValue();
+      widget.onPlaybackReady?.call(_adapter);
       final preferredSubtitle = _preferredSubtitle;
       if (preferredSubtitle != null) {
         await _controller.setupSubtitleSource(preferredSubtitle);
@@ -252,6 +282,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
       unawaited(WakelockPlus.disable());
     }
     _controller.dispose();
+    _adapter.dispose();
     super.dispose();
   }
 

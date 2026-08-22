@@ -18,6 +18,12 @@ dependencies:
   fvcksubs_storage:
     path: ../../packages/fvcksubs_storage
   better_player_plus: ^1.3.5
+  # These packages are referenced only from the macOS conditional player
+  # implementation. The native libmpv payload comes from the macOS-only
+  # package, so Android and iOS do not embed it.
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_macos_video: ^1.1.4
   wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   device_info_plus: ^13.2.0

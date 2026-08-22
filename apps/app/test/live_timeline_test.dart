@@ -1,17 +1,13 @@
-import 'package:better_player_plus/better_player_plus.dart';
-import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart'
-    show DurationRange;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/controls/live_timeline.dart';
+import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 
 void main() {
   test('uses the furthest known live point for the timeline extent', () {
-    final value = VideoPlayerValue(
-      duration: const Duration(seconds: 20),
-      position: const Duration(seconds: 25),
-      buffered: const [
-        DurationRange(Duration(seconds: 4), Duration(seconds: 32)),
-      ],
+    const value = AppPlayerValue(
+      duration: Duration(seconds: 20),
+      position: Duration(seconds: 25),
+      bufferedPosition: Duration(seconds: 32),
     );
 
     expect(liveSeekEdge(value), const Duration(seconds: 32));

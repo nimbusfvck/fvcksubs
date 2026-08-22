@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -12,6 +11,7 @@ import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'controls/player_playback_controls.dart';
 import 'models/playback_media.dart';
+import 'models/app_player_controller.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'widgets/player_overlays.dart';
@@ -67,7 +67,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _advancing = false;
   LibraryController? _library;
   Timer? _progressTimer;
-  ValueListenable<VideoPlayerValue>? _videoValue;
+  ValueListenable<AppPlayerValue>? _videoValue;
   bool _hasResumed = false;
   Duration? _lastPosition;
   Duration? _lastDuration;
@@ -76,9 +76,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _retrying = false;
   int _sourceRevision = 0;
   int _playbackAttempt = 0;
-  BetterPlayerController? _controller;
-  BetterPlayerController? _errorController;
-  void Function(BetterPlayerEvent)? _errorListener;
+  AppPlayerController? _controller;
+  StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
 
   bool get _isLive => widget.media.isLive;
@@ -129,19 +128,16 @@ class _PlayerPageState extends State<PlayerPage> {
   void dispose() {
     _progressTimer?.cancel();
     _videoValue?.removeListener(_onVideoValueChanged);
-    final listener = _errorListener;
-    if (listener != null) {
-      _errorController?.removeEventsListener(listener);
-    }
+    unawaited(_eventSubscription?.cancel());
     _reportProgress();
     super.dispose();
   }
 
-  void _trackPosition(BetterPlayerController controller) {
-    final next = controller.videoPlayerController;
+  void _trackPosition(AppPlayerController controller) {
+    final next = controller.value;
     if (identical(next, _videoValue)) return;
     _videoValue?.removeListener(_onVideoValueChanged);
-    _videoValue = next?..addListener(_onVideoValueChanged);
+    _videoValue = next..addListener(_onVideoValueChanged);
     _onVideoValueChanged();
   }
 
@@ -169,43 +165,40 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  void _attachErrorListener(BetterPlayerController controller) {
-    if (identical(controller, _errorController)) return;
-    final oldListener = _errorListener;
-    if (oldListener != null) {
-      _errorController?.removeEventsListener(oldListener);
+  void _attachEventListener(AppPlayerController controller) {
+    if (identical(controller, _controller) && _eventSubscription != null) {
+      return;
     }
-    _errorController = controller;
+    unawaited(_eventSubscription?.cancel());
     final attempt = _playbackAttempt;
-    void listener(BetterPlayerEvent event) =>
-        _handlePlayerEvent(controller, attempt, event);
-    _errorListener = listener;
-    controller.addEventsListener(listener);
+    _eventSubscription = controller.events.listen(
+      (event) => _handlePlayerEvent(controller, attempt, event),
+    );
     _playbackError = null;
   }
 
   void _handlePlayerEvent(
-    BetterPlayerController controller,
+    AppPlayerController controller,
     int attempt,
-    BetterPlayerEvent event,
+    AppPlayerEvent event,
   ) {
     if (attempt != _playbackAttempt) return;
-    if (event.betterPlayerEventType == BetterPlayerEventType.finished) {
+    if (event.type == AppPlayerEventType.completed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             attempt == _playbackAttempt &&
-            identical(controller, _errorController)) {
+            identical(controller, _controller)) {
           _showNextEpisode();
         }
       });
       return;
     }
-    if (event.betterPlayerEventType != BetterPlayerEventType.exception) return;
-    final message = event.parameters?['exception']?.toString();
+    if (event.type != AppPlayerEventType.error) return;
+    final message = event.error?.toString();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           attempt != _playbackAttempt ||
-          !identical(controller, _errorController)) {
+          !identical(controller, _controller)) {
         return;
       }
       setState(() {
@@ -294,8 +287,10 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  void _dismiss(BetterPlayerController? controller) {
-    if (controller?.isFullScreen == true) controller!.exitFullScreen();
+  void _dismiss(AppPlayerController? controller) {
+    if (controller?.isFullScreen == true) {
+      unawaited(controller!.exitFullScreen());
+    }
     Navigator.of(context).pop();
   }
 
@@ -330,7 +325,7 @@ class _PlayerPageState extends State<PlayerPage> {
     ).sourceCache.promote(widget.media.ref, picked.source.id);
   }
 
-  Widget _controlsFor(BetterPlayerController? controller) =>
+  Widget _controlsFor(AppPlayerController? controller) =>
       PlayerPlaybackControls(
         controller: controller,
         onVisibilityChanged: _onVisibilityChanged ?? (_) {},
@@ -370,18 +365,18 @@ class _PlayerPageState extends State<PlayerPage> {
                   context,
                 ).subtitlePreferenceController.languageCode,
                 onControllerCreated: (value) {
-                  _controller = value as BetterPlayerController?;
-                  if (_controller != null) _attachErrorListener(_controller!);
+                  _controller = value as AppPlayerController?;
+                  if (_controller != null) _attachEventListener(_controller!);
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) setState(() {});
                   });
                 },
                 onPlaybackReady: (value) {
-                  final controller = value as BetterPlayerController?;
+                  final controller = value as AppPlayerController?;
                   if (controller != null) _trackPosition(controller);
                 },
                 customControlsBuilder: (context, value, onVisibilityChanged) {
-                  final controller = value as BetterPlayerController?;
+                  final controller = value as AppPlayerController?;
                   _controller ??= controller;
                   _onVisibilityChanged = onVisibilityChanged;
                   return controller?.isFullScreen == true

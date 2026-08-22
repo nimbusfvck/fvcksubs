@@ -1,27 +1,23 @@
-import 'package:better_player_plus/better_player_plus.dart';
+import '../models/app_player_controller.dart';
 
 const Duration liveEdgeSnapThreshold = Duration(seconds: 2);
 const Duration liveEdgeSeekBackoff = Duration(seconds: 2);
 const Duration liveEdgeSyncTolerance = Duration(seconds: 5);
 
-Duration liveSeekEdge(VideoPlayerValue? value) {
+Duration liveSeekEdge(AppPlayerValue? value) {
   if (value == null) return Duration.zero;
-  var edge = value.duration ?? Duration.zero;
+  var edge = value.duration;
   if (value.position > edge) edge = value.position;
-  for (final range in value.buffered) {
-    if (range.end > edge) edge = range.end;
-  }
+  if (value.bufferedPosition > edge) edge = value.bufferedPosition;
   return edge;
 }
 
 /// The furthest buffered point used for the seekbar's secondary track.
-Duration bufferedSeekEdge(VideoPlayerValue? value) {
+Duration bufferedSeekEdge(AppPlayerValue? value) {
   if (value == null) return Duration.zero;
-  var edge = value.position;
-  for (final range in value.buffered) {
-    if (range.end > edge) edge = range.end;
-  }
-  return edge;
+  return value.bufferedPosition > value.position
+      ? value.bufferedPosition
+      : value.position;
 }
 
 /// Converts a rightmost live scrub into a safe seek near the live edge.

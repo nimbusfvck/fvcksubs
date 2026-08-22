@@ -241,7 +241,9 @@ flowchart TB
 - **Capability gating** is a positive list per platform: a stream is playable only if this
   platform is known to handle its container and its protection scheme. A newly-encountered
   combination is dropped rather than optimistically attempted, and the user is told when
-  nothing survives.
+  nothing survives. Android and iOS use BetterPlayer. macOS uses MediaKit/libmpv for clear
+  HLS and DASH, forwarding extension-provided HTTP headers and external subtitles; all DRM is
+  intentionally rejected on macOS until a tested platform-specific license flow exists.
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame
   out against a narrower fallback, and text that sizes tightly to its content stays clipped
   once the real font arrives.

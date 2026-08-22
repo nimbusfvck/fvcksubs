@@ -1,11 +1,11 @@
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../app_scope.dart';
 import '../../theme/tokens.dart';
 import '../mappers/stream_player_mapping.dart'
-    show subtitleLanguageLabel, subtitleSourceFor, subtitlesForPicker;
+    show subtitleLanguageLabel, subtitlesForPicker;
+import '../models/app_player_controller.dart';
 import '../models/playback_media.dart';
 
 class PlayerSubtitlePickerSheet extends StatefulWidget {
@@ -19,7 +19,7 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
 
   final PlaybackMedia media;
   final List<SubtitleTrack> tracks;
-  final BetterPlayerSubtitlesSource? current;
+  final SubtitleTrack? current;
   final List<SubtitleTrack> Function(List<SubtitleTrack> tracks) filterTracks;
 
   @override
@@ -60,30 +60,16 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     });
   }
 
-  String? _urlOf(BetterPlayerSubtitlesSource source) =>
-      (source.urls != null && source.urls!.isNotEmpty)
-      ? source.urls!.first
-      : null;
+  PlayerSubtitleSelection _sourceFor(SubtitleTrack track) =>
+      PlayerSubtitleSelection.track(track);
 
-  BetterPlayerSubtitlesSource _sourceFor(SubtitleTrack track) =>
-      subtitleSourceFor(track);
+  PlayerSubtitleSelection _offSource() => const PlayerSubtitleSelection.off();
 
-  BetterPlayerSubtitlesSource _offSource() => BetterPlayerSubtitlesSource(
-    type: BetterPlayerSubtitlesSourceType.none,
-    name: 'Off',
-  );
-
-  bool get _offSelected =>
-      widget.current == null ||
-      widget.current!.type == BetterPlayerSubtitlesSourceType.none;
+  bool get _offSelected => widget.current == null;
 
   bool _isSelected(SubtitleTrack track) {
     final current = widget.current;
-    if (current == null ||
-        current.type == BetterPlayerSubtitlesSourceType.none) {
-      return false;
-    }
-    return _urlOf(current) == track.url;
+    return current?.url == track.url;
   }
 
   String _variantName(SubtitleTrack track, int index) =>
