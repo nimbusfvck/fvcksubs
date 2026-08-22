@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
+const int maxContinueWatchingItems = 10;
+
 class LibraryState {
   LibraryState({Map<String, UserMediaState> records = const {}})
     : records = Map.unmodifiable(records);
@@ -19,11 +21,42 @@ class LibraryState {
       records.values.where((record) => record.favorite).toList()
         ..sort((a, b) => a.item.title.compareTo(b.item.title));
 
-  List<UserMediaState> get continueWatching =>
-      records.values
-          .where((record) => (record.progress ?? Duration.zero) > Duration.zero)
-          .toList()
-        ..sort(_mostRecentFirst);
+  List<UserMediaState> get continueWatching {
+    final candidates =
+        records.values
+            .where(
+              (record) => (record.progress ?? Duration.zero) > Duration.zero,
+            )
+            .toList()
+          ..sort(_mostRecentFirst);
+
+    final latestByContent = <String, UserMediaState>{};
+    for (final record in candidates) {
+      latestByContent.putIfAbsent(_continueWatchingKey(record), () => record);
+    }
+
+    return latestByContent.values
+        .where((record) => !_isFinished(record))
+        .take(maxContinueWatchingItems)
+        .toList();
+  }
+
+  static String _continueWatchingKey(UserMediaState record) =>
+      switch (record.item) {
+        EpisodeItemV2(:final episode) => UserMediaState.keyFor(
+          episode.parentRef,
+        ),
+        _ => record.key,
+      };
+
+  static bool _isFinished(UserMediaState record) {
+    final progress = record.progress;
+    final duration = record.duration;
+    return progress != null &&
+        duration != null &&
+        duration > Duration.zero &&
+        progress >= duration;
+  }
 
   List<UserMediaState> get history =>
       records.values.where((record) => record.lastWatched != null).toList()
@@ -79,6 +112,11 @@ class LibraryController extends Cubit<LibraryState> {
       next = next.copyWith(duration: duration);
     }
     _upsert(next);
+  }
+
+  /// Removes an item from Continue Watching while keeping its watch record.
+  void markAsWatched(MediaItemV2 item) {
+    recordWatched(item, progress: null);
   }
 
   static const Object _unspecified = Object();

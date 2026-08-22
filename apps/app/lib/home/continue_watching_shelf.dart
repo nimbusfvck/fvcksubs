@@ -56,7 +56,11 @@ class ContinueWatchingShelf extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
               itemBuilder: (context, index) => SizedBox(
                 width: 280,
-                child: _ContinueCard(record: records[index]),
+                child: _ContinueCard(
+                  record: records[index],
+                  onMarkAsWatched: () =>
+                      controller.markAsWatched(records[index].item),
+                ),
               ),
             ),
           ),
@@ -67,9 +71,10 @@ class ContinueWatchingShelf extends StatelessWidget {
 }
 
 class _ContinueCard extends StatelessWidget {
-  const _ContinueCard({required this.record});
+  const _ContinueCard({required this.record, required this.onMarkAsWatched});
 
   final UserMediaState record;
+  final VoidCallback onMarkAsWatched;
 
   double? get _progress {
     final duration = record.duration;
@@ -133,6 +138,26 @@ class _ContinueCard extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [Colors.transparent, Colors.black87],
+                ),
+              ),
+            ),
+            Positioned(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'Mark as watched',
+                  onPressed: onMarkAsWatched,
+                  icon: const Icon(Icons.check_rounded),
+                  color: Colors.white,
+                  iconSize: 20,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 44,
+                    height: 44,
+                  ),
+                  padding: EdgeInsets.zero,
                 ),
               ),
             ),

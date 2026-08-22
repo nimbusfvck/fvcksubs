@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart'
     show DurationRange;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
+import 'package:fvcksubs_app/player/playback_media.dart';
 import 'package:fvcksubs_app/player/source_cache.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -23,6 +26,38 @@ import 'support/harness.dart';
 /// player was left translated downward with no code path back to zero —
 /// visually stuck.
 void main() {
+  test('playback media identifies legacy and protocol-v2 episodes', () {
+    const legacyEpisode = MediaItem(
+      ref: MediaRef(
+        extensionId: 'extension',
+        providerId: 'provider',
+        id: 'episode',
+      ),
+      kind: MediaKind.episode,
+      title: 'Episode',
+    );
+    const v2Episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'extension',
+        providerId: 'provider',
+        id: 'episode-v2',
+      ),
+      title: 'Episode v2',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'extension',
+          providerId: 'provider',
+          id: 'series',
+        ),
+        groupId: 'season-1',
+        position: 1,
+      ),
+    );
+
+    expect(const PlaybackMedia.legacy(legacyEpisode).isEpisode, isTrue);
+    expect(const PlaybackMedia.v2(v2Episode).isEpisode, isTrue);
+  });
+
   // Away from every button the controls overlay draws — back/favorite up
   // top, play/rewind/forward dead centre, source/CC pill at the bottom — so
   // the touch is unambiguously a drag on empty background, not a tap on some
@@ -44,13 +79,69 @@ void main() {
     expect(liveSeekEdge(value), const Duration(seconds: 30));
   });
 
-  test('a live scrub close to the end snaps to the freshest edge', () {
+  test('seekbar buffer edge uses the furthest buffered range', () {
+    final value = VideoPlayerValue(
+      duration: const Duration(minutes: 10),
+      position: const Duration(seconds: 20),
+      buffered: const [DurationRange(Duration.zero, Duration(seconds: 45))],
+    );
+
+    expect(bufferedSeekEdge(value), const Duration(seconds: 45));
+  });
+
+  test(
+    'background source refresh keeps the playing source and appends new ones',
+    () {
+      const playing = ResolvedSource(
+        source: StreamSource(id: 'playing', label: 'Primary'),
+        stream: PlayableStream(
+          url: 'https://edge/playing.m3u8',
+          format: StreamFormat.hls,
+        ),
+      );
+      const added = ResolvedSource(
+        source: StreamSource(id: 'added', label: 'Backup'),
+        stream: PlayableStream(
+          url: 'https://edge/added.m3u8',
+          format: StreamFormat.hls,
+        ),
+      );
+
+      final merged = mergeResolvedSources([playing], [playing, added]);
+
+      expect(merged.map((source) => source.source.id), ['playing', 'added']);
+    },
+  );
+
+  test('a live scrub close to the end stays safely behind the edge', () {
     const edge = Duration(seconds: 30);
 
-    expect(liveSeekTarget(const Duration(seconds: 29), edge), edge);
     expect(
-      liveSeekTarget(const Duration(seconds: 27), edge),
+      liveSeekTarget(
+        const Duration(seconds: 29),
+        edge,
+        currentPosition: const Duration(seconds: 20),
+      ),
+      const Duration(seconds: 28),
+    );
+    expect(
+      liveSeekTarget(
+        const Duration(seconds: 27),
+        edge,
+        currentPosition: const Duration(seconds: 20),
+      ),
       const Duration(seconds: 27),
+    );
+  });
+
+  test('a rightmost scrub is a no-op when playback is already live', () {
+    expect(
+      liveSeekTarget(
+        const Duration(seconds: 30),
+        const Duration(seconds: 30),
+        currentPosition: const Duration(seconds: 29),
+      ),
+      isNull,
     );
   });
 
@@ -59,6 +150,19 @@ void main() {
 
     expect(isAtLiveEdge(const Duration(seconds: 26), edge), isTrue);
     expect(isAtLiveEdge(const Duration(seconds: 24), edge), isFalse);
+  });
+
+  test('a paused live timeline keeps advancing while position stays fixed', () {
+    const edgeAtPause = Duration(seconds: 30);
+    const position = Duration(seconds: 30);
+
+    final edgeAfterPause = liveEdgeAfterPause(
+      edgeAtPause,
+      const Duration(seconds: 6),
+    );
+
+    expect(edgeAfterPause, const Duration(seconds: 36));
+    expect(isAtLiveEdge(position, edgeAfterPause), isFalse);
   });
 
   Future<void> pumpPlayer(
@@ -363,6 +467,79 @@ void main() {
   });
 
   group('switching sources', () {
+    testWidgets(
+      'a background-resolved fallback appears without waiting for all sources',
+      (tester) async {
+        final item = fakeItem(title: 'Some Movie');
+        final pending = StreamController<ResolvedSource>();
+        const current = ResolvedSource(
+          source: StreamSource(id: 'primary', label: 'Primary'),
+          stream: PlayableStream(
+            url: 'https://edge/primary.m3u8',
+            format: StreamFormat.hls,
+          ),
+        );
+        const fallback = ResolvedSource(
+          source: StreamSource(id: 'fallback', label: 'Fallback'),
+          stream: PlayableStream(
+            url: 'https://edge/fallback.m3u8',
+            format: StreamFormat.hls,
+          ),
+        );
+
+        await tester.pumpWidget(
+          wrapApp(
+            child: PlayerPage(
+              item: item,
+              resolvedSources: const [current],
+              pendingSources: pending.stream,
+            ),
+            registry: ExtensionRegistry(const []),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        pending.add(fallback);
+        await tester.pump();
+
+        await tester.tap(find.byIcon(Icons.playlist_play_rounded));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Fallback'), findsOneWidget);
+        await pending.close();
+      },
+    );
+
+    testWidgets(
+      'source button shows the playing source before refresh completes',
+      (tester) async {
+        final item = fakeItem(title: 'Some Movie');
+        const resolved = [
+          ResolvedSource(
+            source: StreamSource(id: 'playing', label: 'Primary'),
+            stream: PlayableStream(
+              url: 'https://edge/playing.m3u8',
+              format: StreamFormat.hls,
+            ),
+          ),
+        ];
+
+        await tester.pumpWidget(
+          wrapApp(
+            child: PlayerPage(item: item, resolvedSources: resolved),
+            registry: ExtensionRegistry(const []),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.playlist_play_rounded));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Primary'), findsNWidgets(2));
+        expect(find.byIcon(Icons.check), findsOneWidget);
+      },
+    );
+
     testWidgets('a manual switch is remembered for next time, in both caches', (
       tester,
     ) async {

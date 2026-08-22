@@ -18,9 +18,7 @@ BetterPlayerDataSource betterPlayerDataSource(
   subtitles: isLive
       ? null
       : _subtitles(stream.subtitles, preferredSubtitleLanguage),
-  cacheConfiguration: preview
-      ? const BetterPlayerCacheConfiguration(useCache: false)
-      : BetterPlayerCacheConfiguration(
+  cacheConfiguration:  BetterPlayerCacheConfiguration(
           useCache: !isLive,
           maxCacheSize: 100 * 1024 * 1024, // 100 MB
           maxCacheFileSize: 10 * 1024 * 1024,

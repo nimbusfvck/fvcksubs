@@ -84,7 +84,7 @@ flowchart LR
 | Settings (addons) | **the registry itself** | The registry stays framework-free with no notification mechanism of its own; this is the persisting front end over it. |
 | Library | its own record map | Recording a watch must never wipe a saved resume position. |
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
-| Subtitle preference | its own language code | Ranks resolved sources with a matching track ahead of provider order. For on-demand playback, autoplay waits for that stream-provided track to apply; a subtitle failure releases playback rather than blocking it. External subtitles are fetched only after an explicit viewer action. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. |
+| Subtitle preference | its own language code | On an uncached play, a source with a matching stream-provided track gets a 300 ms head start before the first playable source is used; this keeps startup responsive without needlessly discarding the preference. For on-demand playback, autoplay waits for the selected source's track to apply; a subtitle failure releases playback rather than blocking it. External subtitles are fetched only after an explicit viewer action. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
 
 ## 6.4 Screens
@@ -129,12 +129,15 @@ While the featured feed is loading, the hero keeps the same expanded height and 
 shimmer placeholder. An empty or failed feed removes the hero instead of leaving a blank
 surface.
 
-Pull-to-refresh refetches what is on screen while keeping it visible. It is the only thing
-that refetches a category the app already holds.
+At app startup, a persisted catalog renders first and Home silently refreshes it in the
+background; a failed refresh leaves that usable snapshot visible. Pull-to-refresh still
+explicitly refetches what is on screen while keeping it visible.
 
 When an extension declares an `all` category, Home places the app-owned Continue Watching
-shelf above its catalogs. It uses the saved landscape artwork and a compact persisted playback
-indicator; unavailable extensions are omitted.
+shelf above its catalogs. It shows at most ten latest unfinished items, uses the saved landscape
+artwork and a compact persisted playback indicator, keeps only the latest played episode per
+series, and lets the viewer mark an item as watched to remove it from the shelf while retaining
+its history. Unavailable extensions are omitted.
 
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
 so the user can distinguish a temporary problem from an empty section.
@@ -224,11 +227,11 @@ flowchart TB
 
 | Concern | Decision |
 |---|---|
-| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer, dims its LIVE indicator when playback trails the edge, and snaps a scrub near its right edge to the latest available position after resuming; on-demand gets duration-based seeking. |
+| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
-| Source cache | Persists source descriptors but never resolved streams. The selected source stays first when discovery refreshes, so a restart resolves the same source before the remaining sources are refreshed in the background. |
+| Source cache | Persists source descriptors but never resolved streams. The selected source stays first when discovery refreshes, so playback can start from the cached or first playable source while remaining sources are added to the picker individually as each resolves; a slow or stalled provider must not hide a ready fallback. |
 | Errors | **Never auto-advance.** Live streams report spurious errors, and auto-advancing skips good sources. |
 
 ## 6.7 Platform handling

@@ -18,6 +18,7 @@ dependencies:
   fvcksubs_storage:
     path: ../../packages/fvcksubs_storage
   better_player_plus: ^1.3.5
+  wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   device_info_plus: ^13.2.0
   flutter_bloc: ^9.1.1

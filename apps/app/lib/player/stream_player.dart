@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:better_player_plus/better_player_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'stream_player_mapping.dart';
+import 'player_diagnostics.dart';
 
 typedef PlayerBuilder =
     Widget Function(
@@ -60,7 +63,9 @@ class BetterPlayerView extends StatefulWidget {
     this.aspectRatio,
     this.looping = false,
     this.muted = false,
-    this.fit = BoxFit.contain,
+    // Fill the player bounds in landscape/fullscreen. The source aspect ratio
+    // is preserved; only the excess edges are cropped.
+    this.fit = BoxFit.cover,
     this.playing = true,
     this.preview = false,
   });
@@ -107,13 +112,24 @@ class BetterPlayerView extends StatefulWidget {
 class _BetterPlayerViewState extends State<BetterPlayerView> {
   late final BetterPlayerController _controller;
   final GlobalKey _betterPlayerKey = GlobalKey();
+  final Stopwatch _diagnosticClock = Stopwatch();
   late final BetterPlayerSubtitlesSource? _preferredSubtitle;
+  Timer? _liveHeartbeatTimer;
+  Timer? _bufferingDiagnosticTimer;
   bool _waitingForPreferredSubtitle = false;
   bool _dataSourceReady = false;
 
   @override
   void didUpdateWidget(covariant BetterPlayerView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.aspectRatio != widget.aspectRatio &&
+        widget.aspectRatio != null) {
+      _controller.setOverriddenAspectRatio(widget.aspectRatio!);
+      // setOverriddenAspectRatio updates the controller value without
+      // emitting a rebuild event. Fit emits one and lets BetterPlayer repaint
+      // its layout while preserving the native playback controller.
+      _controller.setOverriddenFit(widget.fit);
+    }
     if (oldWidget.playing == widget.playing ||
         !_dataSourceReady ||
         _waitingForPreferredSubtitle) {
@@ -133,6 +149,12 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   @override
   void initState() {
     super.initState();
+    if (!widget.preview) {
+      // Better Player only applies allowedScreenSleep while its own
+      // fullscreen route is active. The main player also runs embedded, so
+      // keep the device awake for that route explicitly.
+      unawaited(WakelockPlus.enable());
+    }
     _preferredSubtitle = widget.isLive
         ? null
         : preferredSubtitleSource(
@@ -169,6 +191,11 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
         ),
       ),
     );
+    if (kDebugMode) {
+      _diagnosticClock.start();
+      _controller.addEventsListener(_onDiagnosticEvent);
+      _logPlayback('controller_created');
+    }
     widget.onControllerCreated?.call(_controller);
     _controller.setBetterPlayerGlobalKey(_betterPlayerKey);
 
@@ -181,6 +208,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   }
 
   Future<void> _setupPlayback() async {
+    _logPlayback('setup_start');
     try {
       await _controller.setupDataSource(
         betterPlayerDataSource(
@@ -192,6 +220,8 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
       );
       if (!mounted) return;
       _dataSourceReady = true;
+      _logPlayback('setup_ready');
+      _startLiveHeartbeat();
       if (widget.muted) await _controller.setVolume(0);
       if (!widget.playing) await _controller.pause();
       widget.onPlaybackReady?.call(_controller);
@@ -199,7 +229,8 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
       if (preferredSubtitle != null) {
         await _controller.setupSubtitleSource(preferredSubtitle);
       }
-    } catch (_) {
+    } catch (error) {
+      _logPlayback('setup_error error=${redactPlaybackLogText(error)}');
       // A broken subtitle must not prevent playback of an otherwise valid VOD.
     } finally {
       if (mounted && _waitingForPreferredSubtitle) {
@@ -211,6 +242,15 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
 
   @override
   void dispose() {
+    _liveHeartbeatTimer?.cancel();
+    _bufferingDiagnosticTimer?.cancel();
+    if (kDebugMode) {
+      _controller.removeEventsListener(_onDiagnosticEvent);
+      _logPlayback('dispose');
+    }
+    if (!widget.preview) {
+      unawaited(WakelockPlus.disable());
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -218,4 +258,89 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   @override
   Widget build(BuildContext context) =>
       BetterPlayer(key: _betterPlayerKey, controller: _controller);
+
+  void _onDiagnosticEvent(BetterPlayerEvent event) {
+    switch (event.betterPlayerEventType) {
+      case BetterPlayerEventType.bufferingStart:
+        _logPlayback('buffering_start ${_playbackSnapshot()}');
+        _bufferingDiagnosticTimer?.cancel();
+        _bufferingDiagnosticTimer = Timer.periodic(
+          const Duration(seconds: 5),
+          (_) => _logPlayback('buffering_wait ${_playbackSnapshot()}'),
+        );
+      case BetterPlayerEventType.bufferingEnd:
+        _bufferingDiagnosticTimer?.cancel();
+        _bufferingDiagnosticTimer = null;
+        _logPlayback('buffering_end ${_playbackSnapshot()}');
+      case BetterPlayerEventType.exception:
+        _bufferingDiagnosticTimer?.cancel();
+        _bufferingDiagnosticTimer = null;
+        final error = event.parameters?['exception'];
+        _logPlayback(
+          'exception error=${redactPlaybackLogText(error)} '
+          '${_playbackSnapshot()}',
+        );
+      case BetterPlayerEventType.initialized:
+      case BetterPlayerEventType.play:
+      case BetterPlayerEventType.pause:
+      case BetterPlayerEventType.seekTo:
+      case BetterPlayerEventType.finished:
+        _logPlayback(
+          '${event.betterPlayerEventType.name} ${_playbackSnapshot()}',
+        );
+      case BetterPlayerEventType.openFullscreen:
+      case BetterPlayerEventType.hideFullscreen:
+      case BetterPlayerEventType.setVolume:
+      case BetterPlayerEventType.progress:
+      case BetterPlayerEventType.controlsVisible:
+      case BetterPlayerEventType.controlsHiddenStart:
+      case BetterPlayerEventType.controlsHiddenEnd:
+      case BetterPlayerEventType.setSpeed:
+      case BetterPlayerEventType.changedSubtitles:
+      case BetterPlayerEventType.changedTrack:
+      case BetterPlayerEventType.changedPlayerVisibility:
+      case BetterPlayerEventType.changedResolution:
+      case BetterPlayerEventType.pipStart:
+      case BetterPlayerEventType.pipStop:
+      case BetterPlayerEventType.setupDataSource:
+      case BetterPlayerEventType.bufferingUpdate:
+      case BetterPlayerEventType.changedPlaylistItem:
+        break;
+    }
+  }
+
+  void _startLiveHeartbeat() {
+    if (!kDebugMode || !widget.isLive) return;
+    _liveHeartbeatTimer?.cancel();
+    _liveHeartbeatTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _logPlayback('heartbeat ${_playbackSnapshot()}'),
+    );
+  }
+
+  String _playbackSnapshot() {
+    final value = _controller.videoPlayerController?.value;
+    if (value == null) return 'state=unavailable';
+    var bufferedEdge = Duration.zero;
+    for (final range in value.buffered) {
+      if (range.end > bufferedEdge) bufferedEdge = range.end;
+    }
+    final bufferedAhead = bufferedEdge > value.position
+        ? bufferedEdge - value.position
+        : Duration.zero;
+    return 'position=${value.position.inMilliseconds}ms '
+        'bufferedAhead=${bufferedAhead.inMilliseconds}ms '
+        'playing=${value.isPlaying} buffering=${value.isBuffering} '
+        'initialized=${value.initialized}';
+  }
+
+  void _logPlayback(String message) {
+    if (!kDebugMode) return;
+    final elapsed = _diagnosticClock.elapsedMilliseconds;
+    final source = safePlaybackUrlForLog(widget.stream.url);
+    debugPrint(
+      '[LivePlayback] elapsed=${elapsed}ms live=${widget.isLive} '
+      'format=${widget.stream.format.name} source=$source $message',
+    );
+  }
 }

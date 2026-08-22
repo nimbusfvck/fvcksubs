@@ -96,7 +96,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('every source is resolved before the player opens', (
+  testWidgets('the player opens as soon as one source is resolved', (
     tester,
   ) async {
     final item = fakeItem();
@@ -120,9 +120,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final player = tester.widget<PlayerPage>(find.byType(PlayerPage));
-    expect(player.resolvedSources, hasLength(2));
-    // The first is what's playing — the player starts on it without being
-    // asked, so pressing Play is a single action end to end.
+    expect(player.resolvedSources, hasLength(1));
+    // The first source is enough to start playback. Remaining sources resolve
+    // in the background so a slow provider cannot hold the player hostage.
     expect(player.resolvedSources.first.source.id, 'a');
     // The app bar names what is being watched, not which server serves it.
     expect(find.text(item.title), findsOneWidget);

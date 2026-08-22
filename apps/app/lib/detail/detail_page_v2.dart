@@ -221,6 +221,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                                 : () => playItemV2(
                                     context,
                                     primaryTarget,
+                                    episodeGuide: guide,
                                     returnToDetail: true,
                                   ),
                             label: _playLabel(
@@ -328,6 +329,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                       onTap: () => playItemV2(
                         context,
                         _episodeItem(item, selectedGroup, entry.$1),
+                        episodeGuide: guide,
                         returnToDetail: true,
                       ),
                     ),

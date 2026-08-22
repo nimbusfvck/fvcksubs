@@ -392,4 +392,94 @@ void main() {
       expect(nextEpisodeOf(episodeItem(1, 2), seasons), isNull);
     });
   });
+
+  group('nextEpisodeOfV2', () {
+    const parentRef = MediaRef(
+      extensionId: 'example_extension',
+      providerId: 'example_extension.media',
+      id: 'anime:1',
+    );
+
+    EpisodeSummary episode(String id, int position, {DateTime? availableAt}) =>
+        EpisodeSummary(
+          ref: MediaRef(
+            extensionId: parentRef.extensionId,
+            providerId: parentRef.providerId,
+            id: id,
+          ),
+          title: 'Episode $position',
+          position: position,
+          availableAt: availableAt,
+        );
+
+    EpisodeItemV2 current(String groupId, int position) => EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: parentRef.extensionId,
+        providerId: parentRef.providerId,
+        id: 'current',
+      ),
+      title: 'Current episode',
+      subtitle: 'Anime title',
+      episode: EpisodeIdentity(
+        parentRef: parentRef,
+        groupId: groupId,
+        position: position,
+      ),
+    );
+
+    test('moves to the first episode of the next group', () {
+      final guide = EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season-1',
+            title: 'Season 1',
+            episodes: [
+              episode('before', 1),
+              episode('current', 2),
+            ],
+          ),
+          EpisodeGroup(
+            id: 'season-2',
+            title: 'Season 2',
+            episodes: [episode('later', 1)],
+          ),
+        ],
+      );
+
+      final next = nextEpisodeOfV2(current('season-1', 2), guide);
+
+      expect(next!.item.ref.id, 'later');
+      expect(next.groupTitle, 'Season 2');
+      expect(next.episode, 1);
+    });
+
+    test('skips an episode that is not available yet', () {
+      final guide = EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season-1',
+            title: 'Season 1',
+            episodes: [
+              episode('current', 1),
+              episode(
+                'unreleased',
+                2,
+                availableAt: DateTime.utc(2026, 8, 22),
+              ),
+              episode('later', 3),
+            ],
+          ),
+        ],
+      );
+
+      final next = nextEpisodeOfV2(
+        current('season-1', 1),
+        guide,
+        now: DateTime.utc(2026, 8, 21),
+      );
+
+      expect(next!.item.ref.id, 'later');
+      expect(next.episode, 3);
+    });
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -54,11 +56,42 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
   Future<VersionedCatalogPage> _load() {
     final scope = AppScope.of(context);
+    final cached = _cached;
+    if (cached != null) return Future<VersionedCatalogPage>.value(cached);
+    return _loadPersistedOrFresh(scope);
+  }
+
+  Future<VersionedCatalogPage> _loadPersistedOrFresh(AppScope scope) async {
+    final persisted = await scope.catalogCache.readPersistedVersioned(
+      widget.binding,
+      widget.category,
+    );
+    if (persisted != null) {
+      unawaited(_refreshPersisted(scope));
+      return persisted;
+    }
     return scope.catalogCache.fetchCatalog(
       scope.registry,
       widget.binding,
       category: widget.category,
     );
+  }
+
+  Future<void> _refreshPersisted(AppScope scope) async {
+    try {
+      final fresh = await scope.catalogCache.reloadVersioned(
+        scope.registry,
+        widget.binding,
+        category: widget.category,
+      );
+      if (!mounted) return;
+      setState(() {
+        _cached = fresh;
+        _future = Future<VersionedCatalogPage>.value(fresh);
+      });
+    } catch (_) {
+      // Keep the persisted catalog visible when a background refresh fails.
+    }
   }
 
   void _reload() {

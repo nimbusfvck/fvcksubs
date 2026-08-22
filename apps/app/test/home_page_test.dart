@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/catalog/catalog_screen.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
+import 'package:fvcksubs_app/catalog/catalog_page_store.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/catalog/media_grid.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
@@ -54,6 +55,45 @@ void main() {
     expect(find.text('Continue Watching'), findsOneWidget);
     expect(find.text('Resume video'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('Continue Watching can mark an item as watched', (tester) async {
+    const item = VideoItemV2(
+      ref: MediaRef(extensionId: 'watch', providerId: 'watch.p', id: 'video'),
+      title: 'Resume video',
+      artwork: Artwork(
+        landscape: ImageRef('https://cdn.example/thumbnail.jpg'),
+      ),
+    );
+    const record = UserMediaState(
+      item: item,
+      progress: Duration(minutes: 20),
+      duration: Duration(minutes: 40),
+    );
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'watch', categories: ['all'], items: const []),
+    ]);
+    final library = LibraryController(
+      store: _HomeLibraryStore(),
+      initial: {record.key: record},
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: registry,
+        libraryController: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final markAsWatched = find.byIcon(Icons.check_rounded);
+    await tester.ensureVisible(markAsWatched);
+    await tester.tap(markAsWatched);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue Watching'), findsNothing);
+    expect(library.history, hasLength(1));
   });
 
   testWidgets('Continue Watching names the series for a saved episode', (
@@ -833,6 +873,47 @@ void main() {
       expect(extension.catalogCalls, 2);
     });
 
+    testWidgets('a prior session catalog paints first then refreshes itself', (
+      tester,
+    ) async {
+      final store = _HomeCatalogStore();
+      final oldExtension = FakeExtension(
+        id: 'a',
+        categories: const ['live'],
+        items: [fakeItem(id: 'old', title: 'Old catalog')],
+      );
+      final oldRegistry = ExtensionRegistry([oldExtension]);
+      final oldBinding = oldRegistry.catalogsFor('live').single;
+      await CatalogCache(
+        store: store,
+      ).fetchCatalog(oldRegistry, oldBinding, category: 'live');
+
+      final freshExtension = FakeExtension(
+        id: 'a',
+        categories: const ['live'],
+        catalogDelay: const Duration(milliseconds: 200),
+        items: [fakeItem(id: 'fresh', title: 'Fresh catalog')],
+      );
+      await tester.pumpWidget(
+        wrapApp(
+          child: const HomePage(),
+          registry: ExtensionRegistry([freshExtension]),
+          catalogCache: CatalogCache(store: store),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(_catalogText('Old catalog'), findsOneWidget);
+      expect(_catalogText('Fresh catalog'), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump();
+
+      expect(_catalogText('Old catalog'), findsNothing);
+      expect(_catalogText('Fresh catalog'), findsOneWidget);
+      expect(freshExtension.catalogCalls, 1);
+    });
+
     testWidgets('a revisited category paints without a spinner first', (
       tester,
     ) async {
@@ -989,4 +1070,19 @@ class _HomeLibraryStore implements LibraryStore {
 
   @override
   Future<void> save(Map<String, UserMediaState> records) async {}
+}
+
+class _HomeCatalogStore implements CatalogPageStore {
+  final values = <String, VersionedCatalogPage>{};
+
+  @override
+  Future<void> removeByPrefix(String prefix) async {}
+
+  @override
+  Future<VersionedCatalogPage?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, VersionedCatalogPage page) async {
+    values[key] = page;
+  }
 }

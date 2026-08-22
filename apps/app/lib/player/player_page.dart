@@ -32,7 +32,10 @@ const Duration _kResumeEndGuard = Duration(seconds: 30);
 
 const Duration _kProgressReportInterval = Duration(seconds: 10);
 const Duration _kLiveEdgeSnapThreshold = Duration(seconds: 2);
+const Duration _kLiveEdgeSeekBackoff = Duration(seconds: 2);
 const Duration _kLiveEdgeSyncTolerance = Duration(seconds: 5);
+const Duration _kBufferingIndicatorDelay = Duration(milliseconds: 700);
+const Duration _kBufferingProgressTolerance = Duration(milliseconds: 250);
 
 bool _isSameEpisode(MediaItem a, MediaItem b) =>
     a.extra['season'] == b.extra['season'] &&
@@ -64,11 +67,54 @@ Duration liveSeekEdge(VideoPlayerValue? value) {
   return edge;
 }
 
-/// Keeps an almost-rightmost live scrub request at the freshest known edge.
-Duration liveSeekTarget(Duration target, Duration edge) {
+/// The furthest buffered point used for the seekbar's secondary track.
+Duration bufferedSeekEdge(VideoPlayerValue? value) {
+  if (value == null) return Duration.zero;
+  var edge = value.position;
+  for (final range in value.buffered) {
+    if (range.end > edge) edge = range.end;
+  }
+  return edge;
+}
+
+/// Refreshes resolved sources without dropping the source already playing.
+///
+/// A background refresh can fail to resolve one of the sources that opened the
+/// player. Keep that entry until the current session ends, while replacing
+/// refreshed entries and appending newly discovered ones.
+List<ResolvedSource> mergeResolvedSources(
+  List<ResolvedSource> current,
+  List<ResolvedSource> refreshed,
+) {
+  final refreshedById = {
+    for (final source in refreshed) source.source.id: source,
+  };
+  final merged = <ResolvedSource>[
+    for (final source in current)
+      refreshedById.remove(source.source.id) ?? source,
+    ...refreshedById.values,
+  ];
+  return merged;
+}
+
+/// Converts a rightmost live scrub into a safe seek near the live edge.
+///
+/// Seeking to the exact end of a dynamic DASH window can flush the decoder at
+/// a position whose segment is not available yet. If playback is already live,
+/// avoid that redundant flush entirely. Otherwise stay one small segment
+/// behind the edge while remaining inside the LIVE indicator tolerance.
+Duration? liveSeekTarget(
+  Duration target,
+  Duration edge, {
+  required Duration currentPosition,
+}) {
   if (edge <= Duration.zero) return target;
   final snapStart = edge - _kLiveEdgeSnapThreshold;
-  return target >= snapStart ? edge : target;
+  if (target < snapStart) return target;
+  if (isAtLiveEdge(currentPosition, edge)) return null;
+
+  final safeEdge = edge - _kLiveEdgeSeekBackoff;
+  return safeEdge > Duration.zero ? safeEdge : Duration.zero;
 }
 
 /// Whether playback is close enough to the current live edge to be in sync.
@@ -76,6 +122,10 @@ bool isAtLiveEdge(Duration position, Duration edge) {
   if (edge <= Duration.zero) return true;
   return position >= edge - _kLiveEdgeSyncTolerance;
 }
+
+/// Advances a live timeline while playback is intentionally paused.
+Duration liveEdgeAfterPause(Duration edge, Duration pausedFor) =>
+    pausedFor > Duration.zero ? edge + pausedFor : edge;
 
 class ResolvedSource {
   const ResolvedSource({required this.source, required this.stream});
@@ -90,6 +140,7 @@ class PlayerPage extends StatefulWidget {
     required MediaItem item,
     required this.resolvedSources,
     this.seasons = const [],
+    this.episodeGuide,
     this.pendingSources,
     this.returnToDetail = false,
   }) : media = PlaybackMedia.legacy(item),
@@ -102,6 +153,7 @@ class PlayerPage extends StatefulWidget {
     super.key,
     required MediaItemV2 item,
     required this.resolvedSources,
+    this.episodeGuide,
     this.pendingSources,
     this.returnToDetail = false,
   }) : media = PlaybackMedia.v2(item),
@@ -117,7 +169,9 @@ class PlayerPage extends StatefulWidget {
 
   final List<SeriesSeason> seasons;
 
-  final Future<List<ResolvedSource>?>? pendingSources;
+  final EpisodeGuide? episodeGuide;
+
+  final Stream<ResolvedSource>? pendingSources;
 
   final bool returnToDetail;
 
@@ -129,6 +183,7 @@ class _PlayerPageState extends State<PlayerPage> {
   late int _currentIndex;
   late List<ResolvedSource> _resolvedSources;
   late final NextEpisode? _nextEpisode;
+  late final NextEpisodeV2? _nextEpisodeV2;
   bool _showUpNext = false;
   bool _upNextPaused = false;
   bool _advancing = false;
@@ -164,6 +219,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _nextEpisode = legacyItem == null
         ? null
         : nextEpisodeOf(legacyItem, widget.seasons);
+    final v2Episode = widget.media.v2Item;
+    _nextEpisodeV2 = v2Episode is EpisodeItemV2 && widget.episodeGuide != null
+        ? nextEpisodeOfV2(v2Episode, widget.episodeGuide!)
+        : null;
     final pending = widget.pendingSources;
     if (pending != null) {
       unawaited(_awaitPendingSources(pending));
@@ -182,21 +241,19 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Future<void> _awaitPendingSources(
-    Future<List<ResolvedSource>?> pending,
-  ) async {
-    final sources = await pending;
-    if (!mounted ||
-        sources == null ||
-        sources.length <= _resolvedSources.length) {
-      return;
+  Future<void> _awaitPendingSources(Stream<ResolvedSource> pending) async {
+    await for (final source in pending) {
+      if (!mounted) return;
+      final playingId = _current.source.id;
+      final merged = mergeResolvedSources(_resolvedSources, [source]);
+      AppScope.of(context).sourceCache.store(widget.media.ref, merged);
+      AppScope.of(context).sourceCache.promote(widget.media.ref, playingId);
+      setState(() {
+        _resolvedSources = merged;
+        final index = merged.indexWhere((s) => s.source.id == playingId);
+        _currentIndex = index == -1 ? 0 : index;
+      });
     }
-    final playingId = _current.source.id;
-    setState(() {
-      _resolvedSources = sources;
-      final index = sources.indexWhere((s) => s.source.id == playingId);
-      _currentIndex = index == -1 ? 0 : index;
-    });
   }
 
   @override
@@ -249,6 +306,15 @@ class _PlayerPageState extends State<PlayerPage> {
     BetterPlayerController controller,
     BetterPlayerEvent event,
   ) {
+    if (event.betterPlayerEventType == BetterPlayerEventType.finished) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !identical(controller, _errorListenerController)) {
+          return;
+        }
+        _handleNearEnd();
+      });
+      return;
+    }
     if (event.betterPlayerEventType != BetterPlayerEventType.exception) return;
     final message = event.parameters?['exception']?.toString();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -341,7 +407,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _handleNearEnd() {
-    if (_nextEpisode == null || _showUpNext) return;
+    if ((_nextEpisode == null && _nextEpisodeV2 == null) || _showUpNext) {
+      return;
+    }
     setState(() {
       _showUpNext = true;
       _upNextPaused = false;
@@ -363,16 +431,28 @@ class _PlayerPageState extends State<PlayerPage> {
   void _playNextEpisode() {
     if (_advancing) return;
     final next = _nextEpisode;
-    if (next == null) return;
+    final nextV2 = _nextEpisodeV2;
+    if (next == null && nextV2 == null) return;
     _advancing = true;
-    unawaited(
-      playItem(
-        context,
-        next.item,
-        seasons: widget.seasons,
-        replaceCurrent: true,
-      ),
-    );
+    if (nextV2 != null) {
+      unawaited(
+        playItemV2(
+          context,
+          nextV2.item,
+          episodeGuide: widget.episodeGuide,
+          replaceCurrent: true,
+        ),
+      );
+    } else {
+      unawaited(
+        playItem(
+          context,
+          next!.item,
+          seasons: widget.seasons,
+          replaceCurrent: true,
+        ),
+      );
+    }
   }
 
   ResolvedSource get _current => _resolvedSources[_currentIndex];
@@ -425,6 +505,7 @@ class _PlayerPageState extends State<PlayerPage> {
         onBack: () => _handleBack(controller),
         isLive: _isLive,
         upNext: _showUpNext ? _nextEpisode : null,
+        upNextV2: _showUpNext ? _nextEpisodeV2 : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _handleNearEnd,
         onPlayNext: _playNextEpisode,
@@ -698,6 +779,7 @@ class _NetflixControlsOverlay extends StatefulWidget {
     required this.onBack,
     required this.isLive,
     this.upNext,
+    this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
     required this.onPlayNext,
@@ -716,6 +798,7 @@ class _NetflixControlsOverlay extends StatefulWidget {
   final bool isLive;
 
   final NextEpisode? upNext;
+  final NextEpisodeV2? upNextV2;
 
   final bool upNextPaused;
 
@@ -740,9 +823,13 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   String? _activeSubtitleLabel; // null = no subtitle chosen yet
   String? _activeQualityLabel; // null = Auto
 
-  Timer? _suppressBufferingTimer;
+  Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
-  bool _suppressBufferingIndicator = false;
+  Timer? _pausedLiveEdgeTimer;
+  DateTime? _livePausedAt;
+  Duration _livePauseStartEdge = Duration.zero;
+  bool _showBufferingIndicator = false;
+  Duration? _bufferingWatchPosition;
   bool _valueUpdateScheduled = false;
   Duration _liveEdge = Duration.zero;
 
@@ -753,7 +840,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
           (value.isPlaying || liveSeekEdge(value) > Duration.zero));
 
   bool get _isBuffering =>
-      !_suppressBufferingIndicator && (_videoValue?.value.isBuffering ?? true);
+      !_isReady(_videoValue?.value) || _showBufferingIndicator;
 
   ResolvedSource get _current => widget.resolvedSources[widget.currentIndex];
 
@@ -772,8 +859,9 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   @override
   void dispose() {
     _hideTimer?.cancel();
-    _suppressBufferingTimer?.cancel();
+    _bufferingIndicatorTimer?.cancel();
     _liveEdgeRefreshTimer?.cancel();
+    _pausedLiveEdgeTimer?.cancel();
     _videoValue?.removeListener(_onValueChanged);
     super.dispose();
   }
@@ -783,6 +871,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
         widget.controller?.videoPlayerController;
     if (identical(next, _videoValue)) return;
     _videoValue?.removeListener(_onValueChanged);
+    _stopPausedLiveEdgeTracking();
     _liveEdge = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
   }
@@ -802,6 +891,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     final bool isPlaying = value?.isPlaying ?? false;
     final bool isBuffering = value?.isBuffering ?? true;
     final bool isInitialized = _isReady(value);
+
+    if (!isBuffering) {
+      _bufferingIndicatorTimer?.cancel();
+      _bufferingIndicatorTimer = null;
+      _bufferingWatchPosition = null;
+      _showBufferingIndicator = false;
+    } else if (!_showBufferingIndicator && _bufferingIndicatorTimer == null) {
+      _scheduleBufferingIndicator(value?.position ?? Duration.zero);
+    }
 
     if (widget.isLive) {
       final edge = liveSeekEdge(value);
@@ -851,6 +949,26 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     _hideTimer = Timer(const Duration(seconds: 3), () => _setVisible(false));
   }
 
+  void _scheduleBufferingIndicator(Duration startPosition) {
+    _bufferingWatchPosition = startPosition;
+    _bufferingIndicatorTimer = Timer(_kBufferingIndicatorDelay, () {
+      _bufferingIndicatorTimer = null;
+      final value = _videoValue?.value;
+      if (!mounted || value == null || !value.isBuffering) return;
+
+      final watchedPosition = _bufferingWatchPosition ?? value.position;
+      final playbackProgressed =
+          value.isPlaying &&
+          value.position - watchedPosition > _kBufferingProgressTolerance;
+      if (playbackProgressed) {
+        _scheduleBufferingIndicator(value.position);
+        return;
+      }
+
+      setState(() => _showBufferingIndicator = true);
+    });
+  }
+
   void _setVisible(bool visible) {
     if (_controlsVisible == visible) return;
     setState(() => _controlsVisible = visible);
@@ -883,12 +1001,52 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 
   void _togglePlayPause() {
     if (_videoValue?.value.isPlaying ?? false) {
+      _startPausedLiveEdgeTracking();
       unawaited(widget.controller?.pause());
     } else {
+      _stopPausedLiveEdgeTracking();
       unawaited(widget.controller?.play());
       _refreshLiveEdgeAfterResume();
     }
     _revealControls();
+  }
+
+  void _startPausedLiveEdgeTracking() {
+    if (!widget.isLive || _livePausedAt != null) return;
+    final nativeEdge = liveSeekEdge(_videoValue?.value);
+    if (nativeEdge > _liveEdge) _liveEdge = nativeEdge;
+    _livePauseStartEdge = _liveEdge;
+    _livePausedAt = DateTime.now();
+    _pausedLiveEdgeTimer?.cancel();
+    _pausedLiveEdgeTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updatePausedLiveEdge(),
+    );
+  }
+
+  void _updatePausedLiveEdge() {
+    final pausedAt = _livePausedAt;
+    if (!mounted || pausedAt == null) return;
+    final estimated = liveEdgeAfterPause(
+      _livePauseStartEdge,
+      DateTime.now().difference(pausedAt),
+    );
+    if (estimated <= _liveEdge) return;
+    setState(() => _liveEdge = estimated);
+  }
+
+  void _stopPausedLiveEdgeTracking() {
+    _pausedLiveEdgeTimer?.cancel();
+    _pausedLiveEdgeTimer = null;
+    final pausedAt = _livePausedAt;
+    if (pausedAt != null) {
+      final estimated = liveEdgeAfterPause(
+        _livePauseStartEdge,
+        DateTime.now().difference(pausedAt),
+      );
+      if (estimated > _liveEdge) _liveEdge = estimated;
+    }
+    _livePausedAt = null;
   }
 
   void _refreshLiveEdgeAfterResume() {
@@ -907,16 +1065,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 
   void _seekTo(Duration target) {
     unawaited(widget.controller?.seekTo(target));
-    _suppressBufferingTimer?.cancel();
-    setState(() => _suppressBufferingIndicator = true);
-    _suppressBufferingTimer = Timer(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _suppressBufferingIndicator = false);
-    });
-  }
-
-  void _toggleFullScreen() {
-    widget.controller?.toggleFullScreen();
-    _revealControls();
   }
 
   Future<void> _openSubtitlePicker() async {
@@ -1004,11 +1152,11 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     final timelineExtent = widget.isLive
         ? (_liveEdge > liveSeekEdge(value) ? _liveEdge : liveSeekEdge(value))
         : duration;
+    final bufferedExtent = bufferedSeekEdge(value);
     final atLiveEdge = isAtLiveEdge(position, timelineExtent);
     final isBuffering =
         widget.controller != null &&
-        !_suppressBufferingIndicator &&
-        ((value?.isBuffering ?? false) || !_isReady(value));
+        (_showBufferingIndicator || !_isReady(value));
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1167,7 +1315,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (widget.resolvedSources.length > 1)
+                                  if (widget.resolvedSources.isNotEmpty)
                                     InkWell(
                                       onTap: () {
                                         _hideTimer?.cancel();
@@ -1210,6 +1358,22 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                         ),
                                       ),
                                     ),
+                                  if (widget.upNext != null ||
+                                      widget.upNextV2 != null)
+                                    TextButton.icon(
+                                      onPressed: widget.onPlayNext,
+                                      icon: const Icon(
+                                        Icons.skip_next_rounded,
+                                        size: 22,
+                                      ),
+                                      label: const Text('Next Episode'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.xs,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
 
@@ -1238,20 +1402,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                                   : Colors.white,
                                               size: 26,
                                             ),
-                                            if (_activeSubtitleLabel !=
-                                                null) ...[
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                _activeSubtitleLabel!,
-                                                style: AppTypography.caption
-                                                    .copyWith(
-                                                      color:
-                                                          AppColors.brandAccent,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                            ],
                                           ],
                                         ),
                                       ),
@@ -1266,13 +1416,14 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(
-                                            Icons.high_quality_rounded,
-                                            color: _activeQualityLabel != null
-                                                ? AppColors.brandAccent
-                                                : Colors.white,
-                                            size: 26,
-                                          ),
+                                          if (_activeQualityLabel == null)
+                                            Icon(
+                                              Icons.high_quality_rounded,
+                                              color: _activeQualityLabel != null
+                                                  ? AppColors.brandAccent
+                                                  : Colors.white,
+                                              size: 26,
+                                            ),
                                           if (_activeQualityLabel != null) ...[
                                             const SizedBox(width: 4),
                                             Text(
@@ -1288,17 +1439,6 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                         ],
                                       ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      widget.controller?.isFullScreen ?? false
-                                          ? Icons.fullscreen_exit_rounded
-                                          : Icons.fullscreen_rounded,
-                                    ),
-                                    color: Colors.white,
-                                    iconSize: 26,
-                                    tooltip: 'Fullscreen',
-                                    onPressed: _toggleFullScreen,
                                   ),
                                 ],
                               ),
@@ -1325,6 +1465,7 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                         enabledThumbRadius: 6,
                                       ),
                                       activeTrackColor: AppColors.brandAccent,
+                                      secondaryActiveTrackColor: Colors.white54,
                                       inactiveTrackColor: Colors.white24,
                                       thumbColor: AppColors.brandAccent,
                                     ),
@@ -1343,6 +1484,15 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                           ? timelineExtent.inMilliseconds
                                                 .toDouble()
                                           : 1.0,
+                                      secondaryTrackValue:
+                                          timelineExtent > Duration.zero
+                                          ? bufferedExtent.inMilliseconds
+                                                .clamp(
+                                                  0,
+                                                  timelineExtent.inMilliseconds,
+                                                )
+                                                .toDouble()
+                                          : null,
                                       onChangeStart:
                                           timelineExtent > Duration.zero
                                           ? (val) {
@@ -1365,14 +1515,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
                                               final target = Duration(
                                                 milliseconds: val.round(),
                                               );
-                                              _seekTo(
-                                                widget.isLive
-                                                    ? liveSeekTarget(
-                                                        target,
-                                                        timelineExtent,
-                                                      )
-                                                    : target,
-                                              );
+                                              final seekTarget = widget.isLive
+                                                  ? liveSeekTarget(
+                                                      target,
+                                                      timelineExtent,
+                                                      currentPosition: position,
+                                                    )
+                                                  : target;
+                                              if (seekTarget != null) {
+                                                _seekTo(seekTarget);
+                                              }
                                               setState(
                                                 () => _dragValueMs = null,
                                               );
@@ -1401,17 +1553,21 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
             ),
           ),
 
-          if (widget.upNext != null)
+          if (widget.upNext != null || widget.upNextV2 != null)
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
               bottom: AppSpacing.xl * 2,
               child: SafeArea(
                 child: _UpNextCard(
-                  seriesTitle: widget.upNext!.seriesTitle,
-                  subtitle:
-                      'S${widget.upNext!.season} E${widget.upNext!.episode} '
-                      '${widget.upNext!.episodeTitle}',
+                  seriesTitle:
+                      widget.upNext?.seriesTitle ??
+                      widget.upNextV2!.seriesTitle,
+                  subtitle: widget.upNext == null
+                      ? '${widget.upNextV2!.groupTitle} '
+                            'E${widget.upNextV2!.episode}'
+                      : 'S${widget.upNext!.season} E${widget.upNext!.episode} '
+                            '${widget.upNext!.episodeTitle}',
                   countdown: _upNextCountdown,
                   paused: widget.upNextPaused,
                   onPlayNext: widget.onPlayNext,
@@ -1442,17 +1598,12 @@ class _PlayerLiveIndicator extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: isAtLiveEdge
-            ? AppColors.liveAccent
-            : AppColors.surfaceDarkHighest,
-        border: isAtLiveEdge ? null : Border.all(color: AppColors.outlineDark),
+        color: AppColors.liveAccent,
         borderRadius: AppRadius.sm,
       ),
       child: Text(
         'LIVE',
-        style: AppTypography.liveBadge.copyWith(
-          color: isAtLiveEdge ? AppColors.primary : AppColors.onDarkSoft,
-        ),
+        style: AppTypography.liveBadge.copyWith(color: AppColors.primary),
       ),
     ),
   );

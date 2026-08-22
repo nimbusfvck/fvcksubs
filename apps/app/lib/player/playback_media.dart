@@ -13,6 +13,10 @@ class PlaybackMedia {
 
   String get title => legacyItem?.title ?? v2Item!.title;
 
+  /// Whether the current playback item is an episode of an episodic title.
+  bool get isEpisode =>
+      legacyItem?.kind == MediaKind.episode || v2Item is EpisodeItemV2;
+
   bool get isLive {
     final legacy = legacyItem;
     if (legacy != null) {

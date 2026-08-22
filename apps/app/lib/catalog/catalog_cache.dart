@@ -11,6 +11,7 @@ class CatalogCache {
   final Map<String, CatalogPage> _completed = {};
   final Map<String, Future<VersionedCatalogPage>> _versionedEntries = {};
   final Map<String, VersionedCatalogPage> _versionedCompleted = {};
+  final Map<String, Future<VersionedCatalogPage>> _versionedRefreshes = {};
 
   static String _keyOf(CatalogBinding binding, String category) =>
       '${binding.extensionId}@${binding.extension.manifest.version}/'
@@ -23,6 +24,14 @@ class CatalogCache {
     CatalogBinding binding,
     String category,
   ) => _versionedCompleted[_keyOf(binding, category)];
+
+  /// Reads a prior app session's catalog without treating it as fresh session
+  /// data. Home renders this snapshot, then refreshes it in the background.
+  Future<VersionedCatalogPage?> readPersistedVersioned(
+    CatalogBinding binding,
+    String category,
+  ) => store?.read(_keyOf(binding, category)) ??
+      Future<VersionedCatalogPage?>.value(null);
 
   Future<CatalogPage> load(
     ExtensionRegistry registry,
@@ -100,15 +109,26 @@ class CatalogCache {
     required String category,
   }) {
     final key = _keyOf(binding, category);
-    _versionedEntries.remove(key);
+    final refreshing = _versionedRefreshes[key];
+    if (refreshing != null) return refreshing;
+
     final future = registry
         .loadCatalogVersioned(binding, category: category)
         .then((page) async {
           _versionedCompleted[key] = page;
           await store?.write(key, page);
           return page;
-        });
+        })
+        .onError<Object>((error, stack) {
+          _versionedEntries.remove(key);
+          throw error;
+    });
     _versionedEntries[key] = future;
+    _versionedRefreshes[key] = future;
+    future.then<void>(
+      (_) => _versionedRefreshes.remove(key),
+      onError: (Object _, StackTrace _) => _versionedRefreshes.remove(key),
+    );
     return future;
   }
 
@@ -127,6 +147,7 @@ class CatalogCache {
     _completed.clear();
     _versionedEntries.clear();
     _versionedCompleted.clear();
+    _versionedRefreshes.clear();
   }
 }
 

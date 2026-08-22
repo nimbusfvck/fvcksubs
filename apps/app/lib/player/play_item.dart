@@ -28,11 +28,13 @@ Future<void> playItem(
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
+  EpisodeGuide? episodeGuide,
   bool replaceCurrent = false,
   bool returnToDetail = false,
 }) => _playMedia(
   context,
   PlaybackMedia.v2(item),
+  episodeGuide: episodeGuide,
   replaceCurrent: replaceCurrent,
   returnToDetail: returnToDetail,
 );
@@ -41,6 +43,7 @@ Future<void> _playMedia(
   BuildContext context,
   PlaybackMedia item, {
   List<SeriesSeason> seasons = const [],
+  EpisodeGuide? episodeGuide,
   bool replaceCurrent = false,
   bool returnToDetail = false,
 }) async {
@@ -57,6 +60,7 @@ Future<void> _playMedia(
       cached,
       seasons,
       replaceCurrent,
+      episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
     );
     if (scope.sourceCache.isStale(item.ref)) {
@@ -76,7 +80,7 @@ Future<void> _playMedia(
     if (fast == null) return; // abandoned mid-resolve
     if (fast.isNotEmpty) {
       scope.sourceCache.store(item.ref, fast);
-      final pendingSources = _revalidate(scope, item);
+      final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
       _openPlayer(
         navigator,
         scope,
@@ -84,6 +88,7 @@ Future<void> _playMedia(
         fast,
         seasons,
         replaceCurrent,
+        episodeGuide: episodeGuide,
         pendingSources: pendingSources,
         returnToDetail: returnToDetail,
       );
@@ -91,36 +96,39 @@ Future<void> _playMedia(
     }
   }
 
-  final sources = await _resolveWithOverlay(
+  final result = await _resolveWithOverlay(
     context,
     navigator,
-    (progress) => _playableSourcesWithRetry(scope, item, progress),
+    (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
   );
-  if (sources == null) return;
+  if (result == null) return;
 
-  if (sources.isEmpty) {
+  if (result.first == null) {
     messenger.showSnackBar(
       const SnackBar(content: Text('No playable sources found.')),
     );
     return;
   }
 
-  scope.sourceCache.store(item.ref, sources);
+  final first = result.first!;
+  scope.sourceCache.store(item.ref, [first]);
   _openPlayer(
     navigator,
     scope,
     item,
-    sources,
+    [first],
     seasons,
     replaceCurrent,
+    episodeGuide: episodeGuide,
+    pendingSources: result.second,
     returnToDetail: returnToDetail,
   );
 }
 
-Future<List<ResolvedSource>?> _resolveWithOverlay(
+Future<T?> _resolveWithOverlay<T>(
   BuildContext context,
   NavigatorState navigator,
-  Future<List<ResolvedSource>> Function(_ResolveProgress progress) resolve,
+  Future<T> Function(_ResolveProgress progress) resolve,
 ) async {
   final progress = _ResolveProgress();
   final overlay = DialogRoute<void>(
@@ -155,6 +163,7 @@ Future<List<ResolvedSource>?> _revalidate(
 }
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
+const _subtitleSourceGrace = Duration(milliseconds: 300);
 
 /// A live event can be visible before a provider's event feed or stream
 /// endpoint has settled. Give that transient window one automatic retry so a
@@ -178,7 +187,8 @@ void _openPlayer(
   List<ResolvedSource> sources,
   List<SeriesSeason> seasons,
   bool replaceCurrent, {
-  Future<List<ResolvedSource>?>? pendingSources,
+  EpisodeGuide? episodeGuide,
+  Stream<ResolvedSource>? pendingSources,
   bool returnToDetail = false,
 }) {
   final resolved = _preferredFirst(
@@ -199,6 +209,7 @@ void _openPlayer(
             item: item.v2Item!,
             resolvedSources: resolved,
             pendingSources: pendingSources,
+            episodeGuide: episodeGuide,
             returnToDetail: returnToDetail,
           )
         : PlayerPage(
@@ -257,6 +268,132 @@ Future<List<ResolvedSource>> _playableSources(
 
   scope.sourceCache.recordSourceList(item.ref, sources);
   return _resolveKnownSources(scope, item, sources, progress);
+}
+
+Future<({ResolvedSource? first, Stream<ResolvedSource> second})>
+_resolveFirstPlayableWithRetry(
+  AppScope scope,
+  PlaybackMedia item,
+  _ResolveProgress progress,
+) async {
+  final firstAttempt = await _resolveFirstPlayable(scope, item, progress);
+  if (firstAttempt.first != null || !item.isLive) return firstAttempt;
+  await Future<void>.delayed(_sourceRetryDelay);
+  return _resolveFirstPlayable(scope, item, progress);
+}
+
+Future<({ResolvedSource? first, Stream<ResolvedSource> second})>
+_resolveFirstPlayable(
+  AppScope scope,
+  PlaybackMedia item,
+  _ResolveProgress progress,
+) async {
+  List<StreamSource> sources;
+  try {
+    final legacyItem = item.legacyItem;
+    sources = legacyItem == null
+        ? await scope.registry.sourcesV2(item.v2Item!)
+        : await scope.registry.sources(legacyItem);
+  } catch (_) {
+    return (first: null, second: const Stream<ResolvedSource>.empty());
+  }
+  if (sources.isEmpty) {
+    return (first: null, second: const Stream<ResolvedSource>.empty());
+  }
+
+  scope.sourceCache.recordSourceList(item.ref, sources);
+  final ordered = scope.sourcePriorityController.order(sources);
+  progress.begin([for (final source in ordered) source.label]);
+  final target = PlaybackTarget.detect();
+  final futures = [
+    for (final source in ordered) _resolveOne(scope, item, source, target),
+  ];
+  final all = _resolvedAsTheySettle(futures);
+  final first = await _firstNonNull(futures);
+  final preferred = scope.subtitlePreferenceController;
+  if (first == null ||
+      preferred.languageCode == null ||
+      preferred.isSatisfiedBy(first.stream.subtitles)) {
+    return (first: first, second: all);
+  }
+  final subtitleMatch = await Future.any<ResolvedSource?>([
+    _firstMatching(
+      futures,
+      (source) => preferred.isSatisfiedBy(source.stream.subtitles),
+    ),
+    Future<ResolvedSource?>.delayed(_subtitleSourceGrace, () => null),
+  ]);
+  return (first: subtitleMatch ?? first, second: all);
+}
+
+Future<ResolvedSource?> _firstNonNull(List<Future<ResolvedSource?>> futures) =>
+    _firstMatching(futures, (_) => true);
+
+Future<ResolvedSource?> _firstMatching(
+  List<Future<ResolvedSource?>> futures,
+  bool Function(ResolvedSource source) matches,
+) async {
+  final completer = Completer<ResolvedSource?>();
+  var remaining = futures.length;
+  for (final future in futures) {
+    unawaited(
+      future.then((value) {
+        if (value != null && matches(value) && !completer.isCompleted) {
+          completer.complete(value);
+        }
+        remaining--;
+        if (remaining == 0 && !completer.isCompleted) {
+          completer.complete(null);
+        }
+      }),
+    );
+  }
+  return completer.future;
+}
+
+/// Delivers each successful source immediately rather than making a usable
+/// fallback wait for every provider in the fan-out to settle.
+Stream<ResolvedSource> _resolvedAsTheySettle(
+  List<Future<ResolvedSource?>> futures,
+) {
+  final controller = StreamController<ResolvedSource>();
+  var remaining = futures.length;
+  for (final future in futures) {
+    unawaited(
+      future
+          .then((source) {
+            if (source != null) controller.add(source);
+          })
+          .whenComplete(() {
+            remaining--;
+            if (remaining == 0) unawaited(controller.close());
+          }),
+    );
+  }
+  return controller.stream;
+}
+
+Stream<ResolvedSource> _sourcesFromFuture(
+  Future<List<ResolvedSource>?> future,
+) async* {
+  final sources = await future;
+  if (sources == null) return;
+  yield* Stream<ResolvedSource>.fromIterable(sources);
+}
+
+Future<ResolvedSource?> _resolveOne(
+  AppScope scope,
+  PlaybackMedia item,
+  StreamSource source,
+  PlaybackTarget target,
+) async {
+  try {
+    final stream = await scope.registry.resolveSource(item.ref, source.id);
+    if (!target.canPlay(stream)) return null;
+    return ResolvedSource(source: source, stream: stream);
+  } catch (_) {
+    return null;
+  }
 }
 
 Future<List<ResolvedSource>> _resolveKnownSources(

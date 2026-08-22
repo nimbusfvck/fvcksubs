@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -54,8 +56,9 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
       _page = cached;
       _nextPage = cached.nextPage;
       _loading = false;
+      return;
     }
-    _load();
+    unawaited(_loadPersistedOrFresh());
   }
 
   @override
@@ -85,6 +88,44 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
         _error = e;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _loadPersistedOrFresh() async {
+    final scope = AppScope.of(context);
+    final persisted = await scope.catalogCache.readPersistedVersioned(
+      widget.binding,
+      widget.category,
+    );
+    if (persisted == null) {
+      await _load();
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _page = persisted;
+      _nextPage = persisted.nextPage;
+      _loading = false;
+      _error = null;
+    });
+    unawaited(_refreshPersisted(scope));
+  }
+
+  Future<void> _refreshPersisted(AppScope scope) async {
+    try {
+      final fresh = await scope.catalogCache.reloadVersioned(
+        scope.registry,
+        widget.binding,
+        category: widget.category,
+      );
+      if (!mounted) return;
+      setState(() {
+        _page = fresh;
+        _nextPage = fresh.nextPage;
+        _error = null;
+      });
+    } catch (_) {
+      // Keep the persisted grid visible when a background refresh fails.
     }
   }
 

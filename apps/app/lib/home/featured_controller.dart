@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -75,6 +76,16 @@ class FeaturedController extends Cubit<FeaturedState> {
         if (result.error != null) result.error!,
     ];
     if (results.isNotEmpty && failures.length == results.length) {
+      if (state.items.isNotEmpty) {
+        emit(
+          FeaturedState(
+            status: FeaturedStatus.success,
+            items: state.items,
+            error: failures.first,
+          ),
+        );
+        return;
+      }
       emit(
         FeaturedState(
           status: FeaturedStatus.failure,
@@ -86,6 +97,11 @@ class FeaturedController extends Cubit<FeaturedState> {
     }
     final items = FeaturedAlgorithm.selectPages(pages);
     emit(FeaturedState(status: FeaturedStatus.success, items: items));
+    if (!refresh && results.any((result) => result.fromPersistentCache)) {
+      // Keep the first paint instant, but do not leave a prior session's hero
+      // feed stale until the viewer explicitly pulls to refresh.
+      unawaited(load(refresh: true));
+    }
   }
 
   Future<_FeaturedLoadResult> _loadPage(
@@ -94,6 +110,15 @@ class FeaturedController extends Cubit<FeaturedState> {
     required bool refresh,
   }) async {
     try {
+      if (!refresh && catalogCache.peekVersioned(binding, category) == null) {
+        final persisted = await catalogCache.readPersistedVersioned(
+          binding,
+          category,
+        );
+        if (persisted != null) {
+          return _FeaturedLoadResult.page(persisted, fromPersistentCache: true);
+        }
+      }
       return _FeaturedLoadResult.page(
         await catalogCache.fetchCatalog(
           registry,
@@ -109,12 +134,16 @@ class FeaturedController extends Cubit<FeaturedState> {
 }
 
 class _FeaturedLoadResult {
-  const _FeaturedLoadResult.page(this.page) : error = null;
+  const _FeaturedLoadResult.page(this.page, {this.fromPersistentCache = false})
+    : error = null;
 
-  const _FeaturedLoadResult.error(this.error) : page = null;
+  const _FeaturedLoadResult.error(this.error)
+    : page = null,
+      fromPersistentCache = false;
 
   final VersionedCatalogPage? page;
   final Object? error;
+  final bool fromPersistentCache;
 }
 
 /// Selects a varied hero feed using only provider-agnostic protocol fields.
