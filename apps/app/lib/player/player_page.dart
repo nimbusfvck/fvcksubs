@@ -759,6 +759,11 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
   bool _controlsVisible = true;
   bool _wasPlaying = false;
   bool _wasBuffering = true; // start as true: video is loading on first open
+  // The native controller can report `isPlaying == false` while it is
+  // rebuffering. Keep the user's playback intent separate so that a transient
+  // decoder pause does not become a permanent pause.
+  bool _playbackIntent = true;
+  bool _resumeAfterBuffering = false;
   Timer? _hideTimer;
   double? _dragValueMs;
   String? _activeSubtitleLabel; // null = no subtitle chosen yet
@@ -838,8 +843,16 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
       _bufferingIndicatorTimer = null;
       _bufferingWatchPosition = null;
       _showBufferingIndicator = false;
+      if (_resumeAfterBuffering) {
+        _resumeAfterBuffering = false;
+        if (_playbackIntent && isInitialized && !isPlaying) {
+          final controller = widget.controller;
+          if (controller != null) unawaited(controller.play());
+        }
+      }
     } else if (!_showBufferingIndicator && _bufferingIndicatorTimer == null) {
       _scheduleBufferingIndicator(value?.position ?? Duration.zero);
+      if (_wasPlaying && _playbackIntent) _resumeAfterBuffering = true;
     }
 
     if (widget.isLive) {
@@ -942,9 +955,12 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
 
   void _togglePlayPause() {
     if (_videoValue?.value.isPlaying ?? false) {
+      _playbackIntent = false;
+      _resumeAfterBuffering = false;
       _startPausedLiveEdgeTracking();
       unawaited(widget.controller?.pause());
     } else {
+      _playbackIntent = true;
       _stopPausedLiveEdgeTracking();
       unawaited(widget.controller?.play());
       _refreshLiveEdgeAfterResume();
