@@ -133,10 +133,12 @@ class PlayerDragToClose extends StatefulWidget {
 
 const double _kDismissThreshold = 200;
 const double _kDismissVelocity = 800;
+const double _kSystemGestureGuard = 64;
 
 class _PlayerDragToCloseState extends State<PlayerDragToClose>
     with SingleTickerProviderStateMixin {
   double _dy = 0;
+  bool _dragAccepted = false;
   late final AnimationController _snapCtrl;
   late Animation<double> _snapAnim;
 
@@ -155,12 +157,21 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
     super.dispose();
   }
 
+  void _onDragStart(DragStartDetails details) {
+    final topGuard =
+        MediaQuery.viewPaddingOf(context).top + _kSystemGestureGuard;
+    _dragAccepted = details.globalPosition.dy >= topGuard;
+  }
+
   void _onDragUpdate(DragUpdateDetails details) {
+    if (!_dragAccepted) return;
     if (_snapCtrl.isAnimating) _snapCtrl.stop();
     setState(() => _dy = (_dy + details.delta.dy).clamp(0, double.infinity));
   }
 
   void _onDragEnd(DragEndDetails details) {
+    if (!_dragAccepted) return;
+    _dragAccepted = false;
     final velocity = details.primaryVelocity ?? 0;
     if (_dy > _kDismissThreshold || velocity > _kDismissVelocity) {
       widget.onDismiss();
@@ -170,6 +181,7 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
   }
 
   void _snapBack() {
+    if (!_dragAccepted && _dy == 0) return;
     final start = _dy;
     _snapAnim = Tween<double>(
       begin: start,
@@ -185,6 +197,8 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
   Widget build(BuildContext context) {
     final progress = (_dy / _kDismissThreshold).clamp(0.0, 1.0);
     return GestureDetector(
+      // Leave the system edge gesture area outside player dismissal.
+      onVerticalDragStart: _onDragStart,
       onVerticalDragUpdate: _onDragUpdate,
       onVerticalDragEnd: _onDragEnd,
       onVerticalDragCancel: _snapBack,
