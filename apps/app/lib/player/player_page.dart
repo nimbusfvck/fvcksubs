@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
@@ -294,6 +295,30 @@ class _PlayerPageState extends State<PlayerPage> {
     Navigator.of(context).pop();
   }
 
+  void _togglePlayback() {
+    final controller = _controller;
+    if (controller == null) return;
+    if (controller.value.value.isPlaying) {
+      unawaited(controller.pause());
+    } else {
+      unawaited(controller.play());
+    }
+  }
+
+  void _seekBy(Duration offset) {
+    final controller = _controller;
+    if (controller == null || _isLive) return;
+    final target = controller.value.value.position + offset;
+    unawaited(
+      controller.seekTo(target < Duration.zero ? Duration.zero : target),
+    );
+  }
+
+  void _toggleFullScreen() {
+    final controller = _controller;
+    if (controller != null) unawaited(controller.toggleFullScreen());
+  }
+
   Future<void> _changeSource() async {
     final picked = await showModalBottomSheet<ResolvedSource>(
       context: context,
@@ -334,6 +359,7 @@ class _PlayerPageState extends State<PlayerPage> {
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
         onBack: () => _dismiss(controller),
+        onToggleFullScreen: _toggleFullScreen,
         isLive: _isLive,
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
@@ -347,59 +373,81 @@ class _PlayerPageState extends State<PlayerPage> {
       );
 
   @override
-  Widget build(BuildContext context) => PlayerDragToClose(
-    onDismiss: () => _dismiss(_controller),
-    child: Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: AppScope.of(context).playerBuilder(
-                context,
-                _current.stream,
-                isLive: _isLive,
-                key: ValueKey('${_current.source.id}:$_sourceRevision'),
-                preferredSubtitleLanguage: AppScope.of(
-                  context,
-                ).subtitlePreferenceController.languageCode,
-                onControllerCreated: (value) {
-                  _controller = value as AppPlayerController?;
-                  if (_controller != null) _attachEventListener(_controller!);
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) setState(() {});
-                  });
-                },
-                onPlaybackReady: (value) {
-                  final controller = value as AppPlayerController?;
-                  if (controller != null) _trackPosition(controller);
-                },
-                customControlsBuilder: (context, value, onVisibilityChanged) {
-                  final controller = value as AppPlayerController?;
-                  _controller ??= controller;
-                  _onVisibilityChanged = onVisibilityChanged;
-                  return controller?.isFullScreen == true
-                      ? _controlsFor(controller)
-                      : const SizedBox.shrink();
-                },
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.space): _togglePlayback,
+      const SingleActivator(LogicalKeyboardKey.keyJ): () =>
+          _seekBy(const Duration(seconds: -10)),
+      const SingleActivator(LogicalKeyboardKey.keyL): () =>
+          _seekBy(const Duration(seconds: 10)),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+          _seekBy(const Duration(seconds: -5)),
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+          _seekBy(const Duration(seconds: 5)),
+      const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
+      const SingleActivator(LogicalKeyboardKey.escape): () =>
+          unawaited(_controller?.exitFullScreen()),
+    },
+    child: Focus(
+      autofocus: true,
+      child: PlayerDragToClose(
+        onDismiss: () => _dismiss(_controller),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            children: [
+              Center(
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: AppScope.of(context).playerBuilder(
+                    context,
+                    _current.stream,
+                    isLive: _isLive,
+                    key: ValueKey('${_current.source.id}:$_sourceRevision'),
+                    preferredSubtitleLanguage: AppScope.of(
+                      context,
+                    ).subtitlePreferenceController.languageCode,
+                    onControllerCreated: (value) {
+                      _controller = value as AppPlayerController?;
+                      if (_controller != null) {
+                        _attachEventListener(_controller!);
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() {});
+                      });
+                    },
+                    onPlaybackReady: (value) {
+                      final controller = value as AppPlayerController?;
+                      if (controller != null) _trackPosition(controller);
+                    },
+                    customControlsBuilder:
+                        (context, value, onVisibilityChanged) {
+                          final controller = value as AppPlayerController?;
+                          _controller ??= controller;
+                          _onVisibilityChanged = onVisibilityChanged;
+                          return controller?.isFullScreen == true
+                              ? _controlsFor(controller)
+                              : const SizedBox.shrink();
+                        },
+                  ),
+                ),
               ),
-            ),
+              Positioned.fill(child: _controlsFor(_controller)),
+              if (_playbackError != null)
+                Positioned.fill(
+                  child: PlayerPlaybackErrorOverlay(
+                    message: _playbackError!,
+                    retrying: _retrying,
+                    onRetry: _retryPlayback,
+                    onChangeSource: _resolvedSources.length > 1
+                        ? _changeSource
+                        : null,
+                    onBack: () => _dismiss(_controller),
+                  ),
+                ),
+            ],
           ),
-          Positioned.fill(child: _controlsFor(_controller)),
-          if (_playbackError != null)
-            Positioned.fill(
-              child: PlayerPlaybackErrorOverlay(
-                message: _playbackError!,
-                retrying: _retrying,
-                onRetry: _retryPlayback,
-                onChangeSource: _resolvedSources.length > 1
-                    ? _changeSource
-                    : null,
-                onBack: () => _dismiss(_controller),
-              ),
-            ),
-        ],
+        ),
       ),
     ),
   );

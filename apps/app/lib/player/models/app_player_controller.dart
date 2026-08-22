@@ -59,6 +59,20 @@ class AppQualityTrack {
   final Object? platformTrack;
 }
 
+class AppAudioTrack {
+  const AppAudioTrack({
+    required this.id,
+    required this.label,
+    this.language,
+    this.platformTrack,
+  });
+
+  final String id;
+  final String label;
+  final String? language;
+  final Object? platformTrack;
+}
+
 class PlayerSubtitleSelection {
   const PlayerSubtitleSelection.off() : track = null;
 
@@ -72,6 +86,8 @@ abstract interface class AppPlayerController {
   Stream<AppPlayerEvent> get events;
   List<AppQualityTrack> get qualityTracks;
   AppQualityTrack? get activeQuality;
+  List<AppAudioTrack> get audioTracks;
+  AppAudioTrack? get activeAudio;
   SubtitleTrack? get activeSubtitle;
   bool get isFullScreen;
 
@@ -80,5 +96,7 @@ abstract interface class AppPlayerController {
   Future<void> seekTo(Duration position);
   Future<void> setSubtitle(SubtitleTrack? track);
   Future<void> setQuality(AppQualityTrack? track);
+  Future<void> setAudioTrack(AppAudioTrack track);
+  Future<void> toggleFullScreen();
   Future<void> exitFullScreen();
 }

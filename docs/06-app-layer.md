@@ -244,6 +244,13 @@ flowchart TB
   nothing survives. Android and iOS use BetterPlayer. macOS uses MediaKit/libmpv for clear
   HLS and DASH, forwarding extension-provided HTTP headers and external subtitles; all DRM is
   intentionally rejected on macOS until a tested platform-specific license flow exists.
+- **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
+  arrow keys seek five seconds, F or the fullscreen button toggles fullscreen, and Escape exits it. This
+  keeps source, subtitle, quality, retry, and Up Next controls available across player backends. MediaKit's
+  fullscreen route uses its desktop controls, which own pointer input and keyboard focus while fullscreen.
+- **Audio tracks** are exposed through the shared player contract whenever MediaKit (macOS) or
+  BetterPlayer's HLS/DASH parser (Android and iOS) reports more than one track. The same picker
+  and selection UI is used on every backend.
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame
   out against a narrower fallback, and text that sizes tightly to its content stays clipped
   once the real font arrives.

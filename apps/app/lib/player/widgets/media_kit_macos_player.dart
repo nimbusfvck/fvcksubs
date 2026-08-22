@@ -35,6 +35,7 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
   late final mk.Player _player;
   late final VideoController _video;
   late final _MediaKitControllerAdapter _adapter;
+  final GlobalKey<VideoState> _videoKey = GlobalKey();
 
   @override
   void initState() {
@@ -42,7 +43,12 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
     mk.MediaKit.ensureInitialized();
     _player = mk.Player();
     _video = VideoController(_player);
-    _adapter = _MediaKitControllerAdapter(_player);
+    _adapter = _MediaKitControllerAdapter(
+      _player,
+      isFullScreen: () => _videoKey.currentState?.isFullscreen() ?? false,
+      toggleFullScreen: () async => _videoKey.currentState?.toggleFullscreen(),
+      exitFullScreen: () async => _videoKey.currentState?.exitFullscreen(),
+    );
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
   }
@@ -60,6 +66,10 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
         );
         if (track != null) await _adapter.setSubtitle(track);
       }
+      final audioUrl = widget.stream.audioUrl;
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
+      }
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
       _adapter.reportError(error);
@@ -75,15 +85,28 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
 
   @override
   Widget build(BuildContext context) => Video(
+    key: _videoKey,
     controller: _video,
     fit: BoxFit.contain,
-    controls: (state) => const SizedBox.shrink(),
+    // MediaKit moves only the Video widget into its fullscreen route. Use its
+    // desktop controls there so pointer input and keyboard focus stay inside
+    // that route; the app-owned overlay remains responsible while embedded.
+    controls: (state) => state.isFullscreen()
+        ? MaterialDesktopVideoControls(state)
+        : const SizedBox.shrink(),
     wakelock: false,
   );
 }
 
 class _MediaKitControllerAdapter implements AppPlayerController {
-  _MediaKitControllerAdapter(this._player) {
+  _MediaKitControllerAdapter(
+    this._player, {
+    required bool Function() isFullScreen,
+    required Future<void> Function() toggleFullScreen,
+    required Future<void> Function() exitFullScreen,
+  }) : _isFullScreen = isFullScreen,
+       _toggleFullScreen = toggleFullScreen,
+       _exitFullScreen = exitFullScreen {
     _subscriptions = [
       _player.stream.position.listen((value) => _update(position: value)),
       _player.stream.duration.listen((value) => _update(duration: value)),
@@ -101,6 +124,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   }
 
   final mk.Player _player;
+  final bool Function() _isFullScreen;
+  final Future<void> Function() _toggleFullScreen;
+  final Future<void> Function() _exitFullScreen;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
   );
@@ -139,13 +165,28 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   }
 
   @override
+  List<AppAudioTrack> get audioTracks => [
+    for (final track in _player.state.tracks.audio)
+      if (track.id != 'no' && track.id != 'auto') _audioTrack(track),
+  ];
+
+  @override
+  AppAudioTrack? get activeAudio {
+    final track = _player.state.track.audio;
+    return track.id == 'no' || track.id == 'auto' ? null : _audioTrack(track);
+  }
+
+  @override
   SubtitleTrack? get activeSubtitle => _activeSubtitle;
 
   @override
-  bool get isFullScreen => false;
+  bool get isFullScreen => _isFullScreen();
 
   @override
-  Future<void> exitFullScreen() async {}
+  Future<void> exitFullScreen() => _exitFullScreen();
+
+  @override
+  Future<void> toggleFullScreen() => _toggleFullScreen();
 
   @override
   Future<void> pause() => _player.pause();
@@ -164,6 +205,10 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   );
 
   @override
+  Future<void> setAudioTrack(AppAudioTrack track) =>
+      _player.setAudioTrack(track.platformTrack! as mk.AudioTrack);
+
+  @override
   Future<void> setSubtitle(SubtitleTrack? track) async {
     _activeSubtitle = track;
     await _player.setSubtitleTrack(
@@ -176,6 +221,13 @@ class _MediaKitControllerAdapter implements AppPlayerController {
             ),
     );
   }
+
+  AppAudioTrack _audioTrack(mk.AudioTrack track) => AppAudioTrack(
+    id: track.id,
+    label: track.title ?? track.language ?? 'Audio',
+    language: track.language,
+    platformTrack: track,
+  );
 
   void _update({
     Duration? position,

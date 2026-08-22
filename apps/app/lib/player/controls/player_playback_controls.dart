@@ -32,6 +32,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.currentIndex,
     required this.onChangeSource,
     required this.onBack,
+    this.onToggleFullScreen,
     required this.isLive,
     this.upNextV2,
     this.upNextPaused = false,
@@ -48,6 +49,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final int currentIndex;
   final VoidCallback onChangeSource;
   final VoidCallback onBack;
+  final VoidCallback? onToggleFullScreen;
   final bool isLive;
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
@@ -70,6 +72,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Timer? _hideTimer;
   double? _dragValueMs;
   String? _activeSubtitleLabel;
+  String? _activeAudioLabel;
   String? _activeQualityLabel;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
@@ -370,6 +373,29 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _revealControls();
   }
 
+  Future<void> _openAudioPicker() async {
+    _hideTimer?.cancel();
+    final tracks = widget.controller?.audioTracks ?? const [];
+    final picked = await showModalBottomSheet<AppAudioTrack>(
+      context: context,
+      backgroundColor: AppColors.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => PlayerAudioPickerSheet(
+        tracks: tracks,
+        current: widget.controller?.activeAudio,
+      ),
+    );
+    if (!mounted) return;
+    if (picked != null) {
+      await widget.controller?.setAudioTrack(picked);
+      if (!mounted) return;
+      setState(() => _activeAudioLabel = picked.label);
+    }
+    _revealControls();
+  }
+
   @override
   Widget build(BuildContext context) {
     final value = _videoValue?.value;
@@ -396,6 +422,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
               ),
             ),
           );
+    final audioTracks = widget.controller?.audioTracks ?? const [];
     return PlayerControlsOverlayView(
       title: widget.media.title,
       favoriteAction: PlayerFavoriteButton(media: widget.media),
@@ -407,6 +434,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
           ? null
           : _current.source.label,
       activeSubtitleLabel: _activeSubtitleLabel,
+      activeAudioLabel:
+          _activeAudioLabel ?? widget.controller?.activeAudio?.label,
       activeQualityLabel: _activeQualityLabel,
       position: position,
       duration: duration,
@@ -416,6 +445,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       dragValueMs: _dragValueMs,
       onBackgroundTap: _handleBackgroundTap,
       onBack: widget.onBack,
+      onToggleFullScreen: widget.onToggleFullScreen,
       onSkip: _skip,
       onTogglePlayPause: _togglePlayPause,
       onChangeSource: () {
@@ -424,6 +454,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       },
       onPlayNext: widget.upNextV2 == null ? null : widget.onPlayNext,
       onOpenSubtitlePicker: _openSubtitlePicker,
+      onOpenAudioPicker: audioTracks.length > 1 ? _openAudioPicker : null,
       onOpenQualityPicker: _openQualityPicker,
       onTimelineChangeStart: (value) {
         _hideTimer?.cancel();

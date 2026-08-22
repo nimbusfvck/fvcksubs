@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/controls/player_controls_overlay.dart';
+import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/sheets/player_selection_sheets.dart';
 
 void main() {
   testWidgets(
@@ -147,5 +149,29 @@ void main() {
       tester.getSize(find.byKey(const Key('player-position-label'))).width,
       initialLabelWidth,
     );
+  });
+
+  testWidgets('audio picker labels unnamed tracks and marks the active track', (
+    tester,
+  ) async {
+    final tracks = [
+      const AppAudioTrack(id: '1', label: 'English', language: 'en'),
+      const AppAudioTrack(id: '2', label: 'Audio', language: 'id'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerAudioPickerSheet(tracks: tracks, current: tracks.first),
+        ),
+      ),
+    );
+
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Audio 2'), findsOneWidget);
+    expect(find.text('id'), findsOneWidget);
+
+    await tester.tap(find.text('Audio 2'));
+    expect(find.byIcon(Icons.check), findsOneWidget);
   });
 }

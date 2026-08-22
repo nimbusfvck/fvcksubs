@@ -13,6 +13,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.isBuffering,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
+    this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -22,11 +23,13 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.dragValueMs,
     required this.onBackgroundTap,
     required this.onBack,
+    this.onToggleFullScreen,
     required this.onSkip,
     required this.onTogglePlayPause,
     required this.onChangeSource,
     required this.onPlayNext,
     required this.onOpenSubtitlePicker,
+    this.onOpenAudioPicker,
     required this.onOpenQualityPicker,
     required this.onTimelineChangeStart,
     required this.onTimelineChanged,
@@ -42,6 +45,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
   final bool isBuffering;
   final String? sourceLabel;
   final String? activeSubtitleLabel;
+  final String? activeAudioLabel;
   final String? activeQualityLabel;
   final Duration position;
   final Duration duration;
@@ -51,11 +55,13 @@ class PlayerControlsOverlayView extends StatelessWidget {
   final double? dragValueMs;
   final VoidCallback onBackgroundTap;
   final VoidCallback onBack;
+  final VoidCallback? onToggleFullScreen;
   final ValueChanged<int> onSkip;
   final VoidCallback onTogglePlayPause;
   final VoidCallback onChangeSource;
   final VoidCallback? onPlayNext;
   final VoidCallback onOpenSubtitlePicker;
+  final VoidCallback? onOpenAudioPicker;
   final VoidCallback onOpenQualityPicker;
   final ValueChanged<double> onTimelineChangeStart;
   final ValueChanged<double> onTimelineChanged;
@@ -74,6 +80,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           favoriteAction: favoriteAction,
           visible: controlsVisible,
           onBack: onBack,
+          onToggleFullScreen: onToggleFullScreen,
         ),
         _PlayerTransportControls(
           visible: controlsVisible,
@@ -88,6 +95,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           isLive: isLive,
           sourceLabel: sourceLabel,
           activeSubtitleLabel: activeSubtitleLabel,
+          activeAudioLabel: activeAudioLabel,
           activeQualityLabel: activeQualityLabel,
           position: position,
           duration: duration,
@@ -98,6 +106,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           onChangeSource: onChangeSource,
           onPlayNext: onPlayNext,
           onOpenSubtitlePicker: onOpenSubtitlePicker,
+          onOpenAudioPicker: onOpenAudioPicker,
           onOpenQualityPicker: onOpenQualityPicker,
           onTimelineChangeStart: onTimelineChangeStart,
           onTimelineChanged: onTimelineChanged,
@@ -115,12 +124,14 @@ class _PlayerTopControls extends StatelessWidget {
     required this.favoriteAction,
     required this.visible,
     required this.onBack,
+    required this.onToggleFullScreen,
   });
 
   final String title;
   final Widget favoriteAction;
   final bool visible;
   final VoidCallback onBack;
+  final VoidCallback? onToggleFullScreen;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -172,6 +183,14 @@ class _PlayerTopControls extends StatelessWidget {
                     ),
                   ),
                   favoriteAction,
+                  if (onToggleFullScreen != null)
+                    IconButton(
+                      icon: const Icon(Icons.fullscreen_rounded),
+                      color: Colors.white,
+                      iconSize: 24,
+                      tooltip: 'Toggle fullscreen',
+                      onPressed: onToggleFullScreen,
+                    ),
                 ],
               ),
             ),
@@ -263,6 +282,7 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.isLive,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
+    required this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -273,6 +293,7 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.onChangeSource,
     required this.onPlayNext,
     required this.onOpenSubtitlePicker,
+    required this.onOpenAudioPicker,
     required this.onOpenQualityPicker,
     required this.onTimelineChangeStart,
     required this.onTimelineChanged,
@@ -283,6 +304,7 @@ class _PlayerBottomControls extends StatelessWidget {
   final bool isLive;
   final String? sourceLabel;
   final String? activeSubtitleLabel;
+  final String? activeAudioLabel;
   final String? activeQualityLabel;
   final Duration position;
   final Duration duration;
@@ -293,6 +315,7 @@ class _PlayerBottomControls extends StatelessWidget {
   final VoidCallback onChangeSource;
   final VoidCallback? onPlayNext;
   final VoidCallback onOpenSubtitlePicker;
+  final VoidCallback? onOpenAudioPicker;
   final VoidCallback onOpenQualityPicker;
   final ValueChanged<double> onTimelineChangeStart;
   final ValueChanged<double> onTimelineChanged;
@@ -406,6 +429,36 @@ class _PlayerBottomControls extends StatelessWidget {
                                       ? AppColors.brandAccent
                                       : Colors.white,
                                   size: 26,
+                                ),
+                              ),
+                            ),
+                          if (onOpenAudioPicker != null)
+                            GestureDetector(
+                              onTap: onOpenAudioPicker,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.xs,
+                                  vertical: AppSpacing.xxs,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.audiotrack_rounded,
+                                      color: Colors.white,
+                                      size: 26,
+                                    ),
+                                    if (activeAudioLabel != null) ...[
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        activeAudioLabel!,
+                                        style: AppTypography.caption.copyWith(
+                                          color: AppColors.brandAccent,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),

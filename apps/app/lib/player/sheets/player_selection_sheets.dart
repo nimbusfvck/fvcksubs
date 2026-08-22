@@ -164,6 +164,82 @@ class PlayerQualityPickerSheet extends StatelessWidget {
   }
 }
 
+class PlayerAudioPickerSheet extends StatelessWidget {
+  const PlayerAudioPickerSheet({
+    super.key,
+    required this.tracks,
+    required this.current,
+  });
+
+  final List<AppAudioTrack> tracks;
+  final AppAudioTrack? current;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.hairlineDark,
+                borderRadius: AppRadius.pill,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Audio',
+              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final (index, track) in tracks.indexed)
+                    ListTile(
+                      title: Text(
+                        track.label == 'Audio'
+                            ? 'Audio ${index + 1}'
+                            : track.label,
+                        style: AppTypography.bodyMd.copyWith(
+                          color: AppColors.onDark,
+                        ),
+                      ),
+                      subtitle:
+                          track.language == null || track.language!.isEmpty
+                          ? null
+                          : Text(
+                              track.language!,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.onDarkSoft,
+                              ),
+                            ),
+                      trailing: current?.id == track.id
+                          ? const Icon(
+                              Icons.check,
+                              color: AppColors.brandAccent,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(context).pop(track),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Widget? _subtitleSummary(ResolvedSource source) {
   final languages = <String>{
     for (final track in source.stream.subtitles)

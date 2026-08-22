@@ -48,6 +48,18 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   }
 
   @override
+  List<AppAudioTrack> get audioTracks => [
+    for (final track in _controller.betterPlayerAsmsAudioTracks ?? const [])
+      _audioTrack(track),
+  ];
+
+  @override
+  AppAudioTrack? get activeAudio {
+    final track = _controller.betterPlayerAsmsAudioTrack;
+    return track == null ? null : _audioTrack(track);
+  }
+
+  @override
   SubtitleTrack? get activeSubtitle {
     final source = _controller.betterPlayerSubtitlesSource;
     final urls = source?.urls;
@@ -79,6 +91,9 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
         BetterPlayerAsmsTrack.defaultTrack(),
   );
   @override
+  Future<void> setAudioTrack(AppAudioTrack track) async => _controller
+      .setAudioTrack(track.platformTrack! as BetterPlayerAsmsAudioTrack);
+  @override
   Future<void> setSubtitle(SubtitleTrack? track) =>
       _controller.setupSubtitleSource(
         track == null
@@ -88,6 +103,17 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
               )
             : subtitleSourceFor(track),
       );
+
+  @override
+  Future<void> toggleFullScreen() async => _controller.toggleFullScreen();
+
+  AppAudioTrack _audioTrack(BetterPlayerAsmsAudioTrack track) => AppAudioTrack(
+    id: '${track.id ?? track.label ?? track.language ?? 'audio'}',
+    label: track.label ?? track.language ?? 'Audio',
+    language: track.language,
+    platformTrack: track,
+  );
+
   void syncValue() {
     final next = _controller.videoPlayerController?.value;
     if (next == null) return;
