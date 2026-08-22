@@ -39,7 +39,7 @@ class _SearchPageState extends State<SearchPage> {
     _debounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       setState(() {
-        _results = AppScope.of(context).registry.searchVersioned(trimmed);
+        _results = AppScope.of(context).registry.search(trimmed);
       });
     });
   }

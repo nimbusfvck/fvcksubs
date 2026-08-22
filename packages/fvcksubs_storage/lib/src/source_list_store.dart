@@ -22,14 +22,15 @@ class CachedSourceList extends Equatable {
   });
 
   /// Builds a [CachedSourceList] from decoded JSON.
-  factory CachedSourceList.fromJson(Map<String, Object?> json) => CachedSourceList(
-    ref: MediaRef.fromJson(json['ref']! as Map<String, Object?>),
-    sources: [
-      for (final entry in json['sources']! as List<Object?>)
-        StreamSource.fromJson(entry! as Map<String, Object?>),
-    ],
-    fetchedAt: DateTime.parse(json['fetchedAt']! as String),
-  );
+  factory CachedSourceList.fromJson(Map<String, Object?> json) =>
+      CachedSourceList(
+        ref: MediaRef.fromJson(json['ref']! as Map<String, Object?>),
+        sources: [
+          for (final entry in json['sources']! as List<Object?>)
+            StreamSource.fromJson(entry! as Map<String, Object?>),
+        ],
+        fetchedAt: DateTime.parse(json['fetchedAt']! as String),
+      );
 
   /// The item these sources were discovered for.
   final MediaRef ref;
@@ -47,7 +48,8 @@ class CachedSourceList extends Equatable {
   /// Same key convention `UserMediaState.keyFor` uses — extension and
   /// provider included, since [MediaRef.id] alone isn't unique across
   /// extensions.
-  static String keyFor(MediaRef ref) => '${ref.extensionId}/${ref.providerId}/${ref.id}';
+  static String keyFor(MediaRef ref) =>
+      '${ref.extensionId}/${ref.providerId}/${ref.id}';
 
   /// This record's own key — see [keyFor].
   String get key => keyFor(ref);
@@ -96,7 +98,9 @@ class SharedPreferencesSourceListStore implements SourceListStore {
   @override
   Future<void> save(Map<String, CachedSourceList> records) async {
     final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode([for (final cached in records.values) cached.toJson()]);
+    final encoded = jsonEncode([
+      for (final cached in records.values) cached.toJson(),
+    ]);
     await prefs.setString(_key, encoded);
   }
 }

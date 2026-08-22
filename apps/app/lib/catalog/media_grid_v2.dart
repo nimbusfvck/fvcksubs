@@ -3,7 +3,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
 import 'media_card_v2.dart';
-import 'media_grid.dart' show GroupHeader;
+import 'catalog_section_header.dart';
 
 class MediaGridV2 extends StatelessWidget {
   const MediaGridV2({
@@ -82,7 +82,9 @@ class MediaGridV2 extends StatelessWidget {
         slivers: [
           for (final section in sections) ...[
             if (section.title != null)
-              SliverToBoxAdapter(child: GroupHeader(label: section.title!)),
+              SliverToBoxAdapter(
+                child: CatalogSectionHeader(label: section.title!),
+              ),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               sliver: SliverGrid(

@@ -14,7 +14,6 @@ import 'catalog/catalog_cache.dart';
 import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
-import 'library/legacy_library_controller.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
 import 'player/subtitle_preference_controller.dart';
@@ -54,11 +53,6 @@ Future<void> main() async {
     },
   );
 
-  final legacyLibraryStore = SharedPreferencesLegacyLibraryStore();
-  final legacyLibraryController = LegacyLibraryController(
-    store: legacyLibraryStore,
-    initial: await legacyLibraryStore.load(),
-  );
   final libraryStore = SharedPreferencesLibraryStore();
   final libraryController = LibraryController(
     store: libraryStore,
@@ -96,7 +90,6 @@ Future<void> main() async {
       deviceClass: deviceClass,
       addonsController: addonsController,
       installerController: installerController,
-      legacyLibraryController: legacyLibraryController,
       libraryController: libraryController,
       pluginController: pluginController,
       catalogCache: CatalogCache(store: await SembastCatalogPageStore.open()),

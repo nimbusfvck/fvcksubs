@@ -6,7 +6,7 @@ import '../theme/tokens.dart';
 import '../utils/media_item_metadata.dart';
 import 'generated_banner.dart';
 import 'media_hero.dart';
-import 'media_card.dart' show LiveBadge, UpcomingBadge;
+import 'catalog_status_badges.dart';
 import 'start_time_label.dart';
 
 class MediaCardV2 extends StatelessWidget {
@@ -111,12 +111,7 @@ class _Match extends StatelessWidget {
       Expanded(
         child: GeneratedBanner(
           participants: item.participants,
-          status: switch (item.schedule.state) {
-            ScheduleState.scheduled => LiveStatus.scheduled,
-            ScheduleState.live => LiveStatus.live,
-            ScheduleState.ended => LiveStatus.ended,
-            ScheduleState.unknown => LiveStatus.unknown,
-          },
+          status: item.schedule.state,
           patternKey: item.subtitle,
         ),
       ),

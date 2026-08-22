@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../content/media_item_version_adapter.dart';
-import 'catalog.dart';
+import 'catalog.dart' show SubCategory;
 
 /// An explicit catalog section in protocol version 2.
 class CatalogSectionV2 extends Equatable {
@@ -70,34 +70,10 @@ class VersionedCatalogPage extends Equatable {
     Map<String, Object?> json, {
     required int apiVersion,
   }) {
-    return switch (apiVersion) {
-      1 => VersionedCatalogPage.fromV1(CatalogPage.fromJson(json)),
-      2 => VersionedCatalogPage._fromV2Json(json),
-      _ => throw FormatException('Unsupported catalog apiVersion: $apiVersion'),
-    };
-  }
-
-  /// Converts a version-1 page while preserving contiguous group order.
-  factory VersionedCatalogPage.fromV1(CatalogPage page) {
-    final sections = <CatalogSectionV2>[];
-    for (final legacy in page.items) {
-      final title = legacy.group;
-      if (sections.isEmpty || sections.last.title != title) {
-        sections.add(
-          CatalogSectionV2(
-            id: _legacySectionId(sections.length, title),
-            title: title,
-            items: [],
-          ),
-        );
-      }
-      sections.last.items.add(VersionedMediaItem.fromV1(legacy));
+    if (apiVersion != 2) {
+      throw FormatException('Unsupported catalog apiVersion: $apiVersion');
     }
-    return VersionedCatalogPage(
-      sections: sections,
-      nextPage: page.nextPage,
-      subCategories: page.subCategories,
-    );
+    return VersionedCatalogPage._fromV2Json(json);
   }
 
   factory VersionedCatalogPage._fromV2Json(Map<String, Object?> json) {
@@ -154,13 +130,6 @@ class VersionedCatalogPage extends Equatable {
 
   @override
   List<Object?> get props => [sections, nextPage, subCategories];
-}
-
-String _legacySectionId(int index, String? title) {
-  final suffix = title == null || title.isEmpty
-      ? 'unlabelled'
-      : Uri.encodeComponent(title);
-  return 'v1-section:$index:$suffix';
 }
 
 void _expectKeys(Map<String, Object?> json, Set<String> allowed, String path) {

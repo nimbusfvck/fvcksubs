@@ -16,7 +16,7 @@ void main() {
   final requestedUris = <Uri>[];
 
   const manifestJson = {
-    'apiVersion': 1,
+    'apiVersion': 2,
     'id': 'test_ext',
     'name': 'Test Extension',
     'version': '0.2.0',
@@ -32,7 +32,7 @@ void main() {
             'id': 'main',
             'name': 'Main',
             'category': 'live',
-            'kind': 'liveEvent',
+            'kind': 'event',
             'display': 'row',
           },
         ],
@@ -42,10 +42,10 @@ void main() {
   };
   const bundleJs =
       'globalThis.__extension = { '
-      'catalog: async () => ({ items: [{ '
+      'catalog: async () => ({ sections: [{ id: "main", items: [{ '
       'ref: { extensionId: "test_ext", providerId: "test_ext.items", id: "1" }, '
-      'kind: "liveEvent", title: "Hello from the installed bundle" '
-      '}] }) };';
+      'kind: "event", schedule: {startsAt: "2026-01-01T00:00:00Z"}, title: "Hello from the installed bundle" '
+      '}] }] }) };';
 
   late String bundleHash;
 

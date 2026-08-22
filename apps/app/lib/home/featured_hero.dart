@@ -270,8 +270,7 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
 
   Future<MediaDetailV2>? _loadDetail() {
     final item = widget.item;
-    if (item.legacyItem != null ||
-        (item.item is! VideoItemV2 && item.item is! SeriesItemV2)) {
+    if (item.item is! VideoItemV2 && item.item is! SeriesItemV2) {
       return null;
     }
     final registry = AppScope.of(context).registry;
@@ -279,7 +278,7 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
       (entry) => entry.id == item.item.ref.extensionId,
     );
     if (manifest.isEmpty || manifest.first.apiVersion < 2) return null;
-    return registry.metaV2(item.item.ref);
+    return registry.meta(item.item.ref);
   }
 
   @override
@@ -465,10 +464,7 @@ class _FeaturedDetails extends StatelessWidget {
   }
 
   Future<void> _play(BuildContext context) {
-    final legacy = item.legacyItem;
-    return legacy == null
-        ? playItemV2(context, item.item)
-        : playItem(context, legacy);
+    return playItemV2(context, item.item);
   }
 }
 

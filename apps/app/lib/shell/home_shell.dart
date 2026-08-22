@@ -35,10 +35,7 @@ class _HomeShellState extends State<HomeShell> {
     final scope = AppScope.of(context);
     final body = BlocBuilder<AddonsController, AddonsState>(
       bloc: scope.addonsController,
-      builder: (context, _) => ListenableBuilder(
-        listenable: scope.legacyLibraryController,
-        builder: (context, _) => _body,
-      ),
+      builder: (context, _) => _body,
     );
 
     if (scope.deviceClass.isTv) {

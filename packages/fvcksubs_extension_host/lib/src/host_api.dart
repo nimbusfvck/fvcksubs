@@ -75,9 +75,10 @@ abstract final class HostApi {
         crypto.sha256.convert(_base64(arg('value'))).bytes,
       ),
       'crypto.hmacSha256' => base64.encode(
-        crypto.Hmac(crypto.sha256, _base64(arg('key')))
-            .convert(_base64(arg('value')))
-            .bytes,
+        crypto.Hmac(
+          crypto.sha256,
+          _base64(arg('key')),
+        ).convert(_base64(arg('value'))).bytes,
       ),
       'crypto.xor' => base64.encode(_xor(_base64(arg('a')), _base64(arg('b')))),
       'crypto.aesCbcDecrypt' => _aesCbcDecrypt(
@@ -209,7 +210,10 @@ abstract final class HostApi {
     if (data.length < 16) return null;
     try {
       final cipher = GCMBlockCipher(AESEngine())
-        ..init(false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
+        ..init(
+          false,
+          AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)),
+        );
       return base64.encode(cipher.process(data));
     } catch (_) {
       return null;
@@ -221,9 +225,7 @@ abstract final class HostApi {
   static Uint8List _base64(String value) {
     final stripped = value.replaceAll(RegExp(r'[\r\n\t ]'), '');
     final remainder = stripped.length % 4;
-    final padded = remainder == 0
-        ? stripped
-        : stripped + '=' * (4 - remainder);
+    final padded = remainder == 0 ? stripped : stripped + '=' * (4 - remainder);
     return base64.decode(base64.normalize(padded));
   }
 
@@ -236,9 +238,8 @@ abstract final class HostApi {
     return out;
   }
 
-  static String _toHex(Uint8List bytes) => [
-    for (final b in bytes) b.toRadixString(16).padLeft(2, '0'),
-  ].join();
+  static String _toHex(Uint8List bytes) =>
+      [for (final b in bytes) b.toRadixString(16).padLeft(2, '0')].join();
 
   /// The JS side of the API, evaluated into every extension engine.
   ///

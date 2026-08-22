@@ -90,7 +90,7 @@ class _CatalogViewState extends State<CatalogView> {
       _error = null;
     });
     try {
-      final page = await AppScope.of(context).registry.loadCatalogVersioned(
+      final page = await AppScope.of(context).registry.loadCatalog(
         widget.binding,
         category: widget.category,
         filters: _filters,
@@ -115,7 +115,7 @@ class _CatalogViewState extends State<CatalogView> {
   Future<void> _loadMore() async {
     setState(() => _loadingMore = true);
     try {
-      final page = await AppScope.of(context).registry.loadCatalogVersioned(
+      final page = await AppScope.of(context).registry.loadCatalog(
         widget.binding,
         category: widget.category,
         page: _nextPage,

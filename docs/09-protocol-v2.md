@@ -1,7 +1,7 @@
 # 9. Protocol v2
 
-This document defines the target contract. Version 1 remains readable until
-installed extensions and persisted records have migrated.
+This document defines the production contract. The shell, host, extensions,
+and persisted library records use protocol version 2 only.
 
 ## 9.1 Goals
 
@@ -226,16 +226,14 @@ The adapter is selected by `apiVersion`, never by extension ID.
 | `lastAiredSeason` and `lastAiredEpisode` | `defaultEpisodeRef` |
 | episode values in `extra` | typed `EpisodeIdentity` and episode `MediaRef` |
 
-Persisted v1 records are decoded into v2 in memory and rewritten only through
-the normal storage save path. A migration never deletes a record it cannot
-fully understand.
+Persisted records use the `library.records.v2` schema. Unsupported records are
+ignored and never passed into playback.
 
 ## 9.8 Delivery order
 
-1. Add v2 types and validators without removing v1.
-2. Add versioned extension and persistence adapters.
+1. Add v2 types and validators.
+2. Keep extension and persistence adapters on v2.
 3. Move app consumers to the v2 in-memory model.
 4. Update the JavaScript SDK and examples.
 5. Migrate Nimora and rebuild its bundle.
-6. Remove v1 producer paths.
-7. Retain persisted-record decoding for at least one release cycle.
+6. Keep all producer paths on v2.

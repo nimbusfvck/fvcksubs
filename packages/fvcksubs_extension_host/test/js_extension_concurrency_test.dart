@@ -34,7 +34,7 @@ void main() {
   tearDown(() => server.close(force: true));
 
   Manifest manifestFor(List<String> hosts) => Manifest.parse({
-    'apiVersion': 1,
+    'apiVersion': 2,
     'id': 'concurrent',
     'name': 'concurrent',
     'version': '1.0.0',
@@ -49,7 +49,7 @@ void main() {
             'id': 'c',
             'name': 'C',
             'category': 'live',
-            'kind': 'liveEvent',
+            'kind': 'event',
           },
         ],
       },
@@ -64,13 +64,12 @@ void main() {
 globalThis.__extension = {
   async catalog(query) {
     const r = await fetch(${jsonEncode(baseUrl)} + "/" + query.catalogId);
-    return {
-      items: [{
+    return { sections: [{ id: "main", items: [{
         ref: { extensionId: "concurrent", providerId: "concurrent.p", id: query.catalogId },
-        kind: "liveEvent",
+        kind: "event",
+        schedule: {startsAt: "2026-01-01T00:00:00Z"},
         title: JSON.parse(r.body).path,
-      }],
-    };
+      }] }] };
   },
 };
 ''';
@@ -133,7 +132,7 @@ globalThis.__extension = {
   async catalog(query) {
     if (query.catalogId === "boom") throw new Error("nope");
     const r = await fetch(${jsonEncode(baseUrl)} + "/" + query.catalogId);
-    return { items: [] };
+    return { sections: [{ id: "main", items: [] }] };
   },
 };
 ''',

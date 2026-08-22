@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import 'open_item.dart';
 import '../player/play_item.dart';
 import 'detail_page_v2.dart';
 
@@ -10,11 +9,6 @@ void openVersionedItem(
   VersionedMediaItem item, {
   Object? heroTag,
 }) {
-  final legacy = item.legacyItem;
-  if (legacy != null) {
-    openItem(context, legacy);
-    return;
-  }
   final current = item.item;
   if (current is VideoItemV2 || current is SeriesItemV2) {
     Navigator.of(context).push(

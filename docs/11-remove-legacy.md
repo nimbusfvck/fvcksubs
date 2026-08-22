@@ -1,10 +1,9 @@
 # Remove legacy protocol support
 
-Status: parked
+Status: complete
 
-The production contract is protocol version 2. The remaining version 1 code
-exists only because several app screens, test fixtures, and host tests still
-use the old models. Remove it in buildable checkpoints.
+The production contract is protocol version 2 across the app, host, core,
+storage, SDK, and fixtures.
 
 ## Current state
 
@@ -12,7 +11,7 @@ use the old models. Remove it in buildable checkpoints.
 - Detail, playback, progress, favorites, and Library support protocol v2.
 - The protocol v2 Library types now use the canonical names:
   `LibraryController`, `LibraryState`, `LibraryStore`, and `UserMediaState`.
-- Old Library types are isolated behind the `Legacy` prefix.
+- Old Library types and storage exports have been removed.
 - Nimora already publishes an API version 2 manifest and payloads.
 - The JavaScript SDK documents protocol version 2.
 
@@ -57,16 +56,16 @@ unsupported-version error.
 
 - Remove `MediaItem`, `MediaDetail`, `CatalogPage`, and their supporting
   version 1-only models.
-- Remove `VersionedMediaItem` and its version 1 adapter.
-- Rename the remaining v2 core types only where the suffix no longer adds
-  useful meaning.
+- Keep the catalog envelope as a strict v2-only normalization boundary; it no
+  longer contains a version 1 adapter or fallback.
 - Remove `LegacyLibraryController`, `LegacyLibraryStore`,
   `LegacyUserMediaState`, their exports, and their tests.
 - Remove the old `library.records` storage path. Keep `library.records.v2`
   unless a separate storage migration intentionally changes it.
 
 Done when `rg` finds no production reference to `Legacy`, version 1 content
-models, compatibility adapters, or dual protocol methods.
+models, compatibility adapters, or dual protocol methods. This checkpoint is
+now complete.
 
 ### 5. Update documentation and SDK
 

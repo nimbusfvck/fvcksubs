@@ -172,40 +172,22 @@ class ExtensionRegistry {
     ];
   }
 
-  /// Loads one page of a catalog.
+  /// Loads one protocol-v2 page of a catalog.
   ///
   /// [category] names which of the catalog's categories is being browsed —
   /// pass the one whose chip is selected, since a catalog spanning several
   /// otherwise cannot tell which slice to answer with.
   ///
   /// [page] is `null` for the first page, or a cursor from a previous
-  /// [CatalogPage.nextPage]. Errors propagate to the caller: each shelf owns
+  /// [VersionedCatalogPage.nextPage]. Errors propagate to the caller: each shelf owns
   /// its own failure state, so the registry doesn't swallow them.
-  Future<CatalogPage> loadCatalog(
+  Future<VersionedCatalogPage> loadCatalog(
     CatalogBinding binding, {
     String? category,
     String? page,
     Map<String, String> filters = const {},
     String? subCategory,
   }) => _currentExtension(binding).catalog(
-    CatalogQuery(
-      providerId: binding.providerId,
-      catalogId: binding.catalog.id,
-      category: category,
-      page: page,
-      filters: filters,
-      subCategory: subCategory,
-    ),
-  );
-
-  /// Loads and normalizes one catalog page through its protocol version.
-  Future<VersionedCatalogPage> loadCatalogVersioned(
-    CatalogBinding binding, {
-    String? category,
-    String? page,
-    Map<String, String> filters = const {},
-    String? subCategory,
-  }) => _currentExtension(binding).catalogVersioned(
     CatalogQuery(
       providerId: binding.providerId,
       catalogId: binding.catalog.id,
@@ -229,15 +211,14 @@ class ExtensionRegistry {
   /// Free-text search, fanned out to every installed extension that declares
   /// [ProviderRole.search], merged into one list.
   ///
-  /// Content-agnostic per PLAN.md §10: results are plain [MediaItem]s, so the
-  /// caller never needs to know which extension or vertical a hit came from.
+  /// Content-agnostic search results are merged from every enabled extension.
   /// Tolerant of a single provider failing (network error, provider down) —
   /// mirrors `FvckExtension._sourcesFrom`'s fan-out — so one broken extension
   /// doesn't blank the whole result list. No merged pagination across
   /// providers: each provider's [CatalogPage.nextPage] would need its own
   /// cursor tracked independently, which isn't worth the complexity while
   /// only one search-capable extension exists.
-  Future<List<MediaItem>> search(String query) async {
+  Future<List<VersionedMediaItem>> search(String query) async {
     final providers = <ContentExtension>[
       for (final extension in _extensions)
         if (isExtensionEnabled(extension.manifest.id) &&
@@ -248,28 +229,10 @@ class ExtensionRegistry {
             ))
           extension,
     ];
-    final results = await Future.wait<List<MediaItem>>(
-      providers.map((extension) => _searchOne(extension, query)),
-    );
-    return results.expand((items) => items).toList();
-  }
-
-  /// Searches through the versioned boundary and returns normalized items.
-  Future<List<VersionedMediaItem>> searchVersioned(String query) async {
-    final providers = <ContentExtension>[
-      for (final extension in _extensions)
-        if (isExtensionEnabled(extension.manifest.id) &&
-            extension.manifest.providers.any(
-              (provider) =>
-                  isProviderEnabled(provider.id) &&
-                  provider.roles.contains(ProviderRole.search),
-            ))
-          extension,
-    ];
     final results = await Future.wait<List<VersionedMediaItem>>(
       providers.map((extension) async {
         try {
-          return (await extension.searchVersioned(query)).items.toList();
+          return (await extension.search(query)).items.toList();
         } catch (_) {
           return <VersionedMediaItem>[];
         }
@@ -278,25 +241,13 @@ class ExtensionRegistry {
     return results.expand((items) => items).toList();
   }
 
-  Future<List<MediaItem>> _searchOne(
-    ContentExtension extension,
-    String query,
-  ) async {
-    try {
-      final page = await extension.search(query);
-      return page.items;
-    } catch (_) {
-      return const [];
-    }
-  }
-
   /// Lists playable sources for [item], from the extension that owns it.
   ///
   /// Empty (never a throw) when the owning extension is switched off. Passes
   /// down exactly which of the extension's own *stream*-role providers are
   /// enabled, so an extension fanning out across several internal sources
   /// (Kora, later Cricfy) can filter itself — see [ContentExtension.sources].
-  Future<List<StreamSource>> sources(MediaItem item) {
+  Future<List<StreamSource>> sources(MediaItemV2 item) {
     final extension = extensionById(item.ref.extensionId);
     if (!isExtensionEnabled(extension.manifest.id)) {
       return Future.value(const []);
@@ -321,25 +272,6 @@ class ExtensionRegistry {
     return extension.sources(item, enabledProviders: enabledStreamProviders);
   }
 
-  /// Lists playable sources for a strict protocol-v2 item.
-  Future<List<StreamSource>> sourcesV2(MediaItemV2 item) {
-    final extension = extensionById(item.ref.extensionId);
-    if (!isExtensionEnabled(extension.manifest.id)) {
-      return Future.value(const []);
-    }
-    final declaresStream = extension.manifest.providers.any(
-      (provider) => provider.roles.contains(ProviderRole.stream),
-    );
-    if (!declaresStream) return Future.value(const []);
-    final enabledStreamProviders = <String>{
-      for (final provider in extension.manifest.providers)
-        if (provider.roles.contains(ProviderRole.stream) &&
-            isProviderEnabled(provider.id))
-          provider.id,
-    };
-    return extension.sourcesV2(item, enabledProviders: enabledStreamProviders);
-  }
-
   /// Resolves [sourceId] (produced by [sources] for [ref]) into a stream.
   Future<PlayableStream> resolveSource(MediaRef ref, String sourceId) =>
       extensionById(ref.extensionId).resolve(sourceId);
@@ -352,7 +284,7 @@ class ExtensionRegistry {
   /// doesn't declare [ProviderRole.subtitles] at all — mirrors [sources]'
   /// guard for the same reason: this is a nice-to-have on top of playback,
   /// not something every detail/player screen should have to handle failing.
-  Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) async {
+  Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) async {
     final extension = extensionById(item.ref.extensionId);
     if (!isExtensionEnabled(extension.manifest.id)) return const [];
 
@@ -368,21 +300,6 @@ class ExtensionRegistry {
     }
   }
 
-  /// Looks up subtitles for a strict protocol-v2 item.
-  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) async {
-    final extension = extensionById(item.ref.extensionId);
-    if (!isExtensionEnabled(extension.manifest.id)) return const [];
-    final declaresSubtitles = extension.manifest.providers.any(
-      (provider) => provider.roles.contains(ProviderRole.subtitles),
-    );
-    if (!declaresSubtitles) return const [];
-    try {
-      return await extension.externalSubtitlesV2(item);
-    } catch (_) {
-      return const [];
-    }
-  }
-
   /// Fetches fresh detail for [ref], from the extension that owns it.
   ///
   /// Not gated on [isExtensionEnabled] (unlike [sources]) — a disabled
@@ -390,12 +307,8 @@ class ExtensionRegistry {
   /// (PLAN.md §14) only needs to treat a ref as unavailable once its
   /// extension is actually gone from [installed], which callers check via
   /// [extensionById] throwing.
-  Future<MediaDetail> meta(MediaRef ref) =>
+  Future<MediaDetailV2> meta(MediaRef ref) =>
       extensionById(ref.extensionId).meta(ref);
-
-  /// Fetches a strict protocol-v2 detail response.
-  Future<MediaDetailV2> metaV2(MediaRef ref) =>
-      extensionById(ref.extensionId).metaV2(ref);
 
   /// The installed extension with [id]. Throws [StateError] if none.
   ContentExtension extensionById(String id) => _extensions.firstWhere(

@@ -7,7 +7,6 @@ import 'addons/installer_controller.dart';
 import 'catalog/catalog_cache.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
-import 'library/legacy_library_controller.dart';
 import 'platform/device_class.dart';
 import 'player/source_cache.dart';
 import 'player/source_priority_controller.dart';
@@ -22,7 +21,6 @@ class AppScope extends InheritedWidget {
     required this.playerBuilder,
     required this.addonsController,
     required this.installerController,
-    required this.legacyLibraryController,
     required this.libraryController,
     required this.pluginController,
     required this.catalogCache,
@@ -42,8 +40,6 @@ class AppScope extends InheritedWidget {
   final AddonsController addonsController;
 
   final InstallerController installerController;
-
-  final LegacyLibraryController legacyLibraryController;
 
   final LibraryController libraryController;
 
@@ -72,7 +68,6 @@ class AppScope extends InheritedWidget {
       playerBuilder != oldWidget.playerBuilder ||
       addonsController != oldWidget.addonsController ||
       installerController != oldWidget.installerController ||
-      legacyLibraryController != oldWidget.legacyLibraryController ||
       libraryController != oldWidget.libraryController ||
       pluginController != oldWidget.pluginController ||
       catalogCache != oldWidget.catalogCache ||

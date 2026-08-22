@@ -249,13 +249,10 @@ class Manifest extends Equatable {
     if (rawVersion is! int) {
       throw const ManifestException('apiVersion missing or not an integer');
     }
-    if (rawVersion < 1) {
-      throw ManifestException('apiVersion $rawVersion is invalid');
-    }
-    if (rawVersion > supportedApiVersion) {
+    if (rawVersion != supportedApiVersion) {
       throw ManifestException(
-        'apiVersion $rawVersion needs a newer app '
-        '(this build supports up to $supportedApiVersion)',
+        'apiVersion $rawVersion is unsupported; this app requires '
+        'protocol version $supportedApiVersion',
       );
     }
     try {

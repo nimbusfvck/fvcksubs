@@ -37,7 +37,7 @@ void main() {
     String version, {
     List<String>? hosts,
   }) => {
-    'apiVersion': 1,
+    'apiVersion': 2,
     'id': id,
     'name': id,
     'version': version,
@@ -53,7 +53,7 @@ void main() {
             'id': 'main',
             'name': 'Main',
             'category': 'live',
-            'kind': 'liveEvent',
+            'kind': 'event',
           },
         ],
       },

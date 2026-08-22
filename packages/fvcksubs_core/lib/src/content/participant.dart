@@ -42,7 +42,7 @@ class Participant extends Equatable {
   /// Optional accent colour, `#RRGGBB` (a shirt colour, a livery — whatever
   /// the catalog has), or `null` when the extension doesn't have one. A
   /// generated banner uses this in place of artwork when there's no
-  /// [MediaItem.poster]; the app otherwise treats it as opaque, same as
+  /// item artwork; the app otherwise treats it as opaque, same as
   /// every other display field.
   final String? color;
 

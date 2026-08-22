@@ -113,7 +113,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
 
   Future<void> _refreshPersisted(AppScope scope) async {
     try {
-      final fresh = await scope.catalogCache.reloadVersioned(
+      final fresh = await scope.catalogCache.reload(
         scope.registry,
         widget.binding,
         category: widget.category,
@@ -144,7 +144,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   Future<void> _loadMore() async {
     setState(() => _loadingMore = true);
     try {
-      final page = await AppScope.of(context).registry.loadCatalogVersioned(
+      final page = await AppScope.of(context).registry.loadCatalog(
         widget.binding,
         category: widget.category,
         page: _nextPage,

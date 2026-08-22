@@ -7,8 +7,6 @@ class CatalogCache {
   CatalogCache({this.store});
 
   final CatalogPageStore? store;
-  final Map<String, Future<CatalogPage>> _entries = {};
-  final Map<String, CatalogPage> _completed = {};
   final Map<String, Future<VersionedCatalogPage>> _versionedEntries = {};
   final Map<String, VersionedCatalogPage> _versionedCompleted = {};
   final Map<String, Future<VersionedCatalogPage>> _versionedRefreshes = {};
@@ -16,9 +14,6 @@ class CatalogCache {
   static String _keyOf(CatalogBinding binding, String category) =>
       '${binding.extensionId}@${binding.extension.manifest.version}/'
       '${binding.catalog.id}/$category';
-
-  CatalogPage? peek(CatalogBinding binding, String category) =>
-      _completed[_keyOf(binding, category)];
 
   VersionedCatalogPage? peekVersioned(
     CatalogBinding binding,
@@ -30,42 +25,11 @@ class CatalogCache {
   Future<VersionedCatalogPage?> readPersistedVersioned(
     CatalogBinding binding,
     String category,
-  ) => store?.read(_keyOf(binding, category)) ??
+  ) =>
+      store?.read(_keyOf(binding, category)) ??
       Future<VersionedCatalogPage?>.value(null);
 
-  Future<CatalogPage> load(
-    ExtensionRegistry registry,
-    CatalogBinding binding, {
-    required String category,
-  }) {
-    final key = _keyOf(binding, category);
-    final existing = _entries[key];
-    if (existing != null) return existing;
-
-    final future = registry
-        .loadCatalog(binding, category: category)
-        .then((page) {
-          _completed[key] = page;
-          return page;
-        })
-        .onError<Object>((error, stack) {
-          _entries.remove(key);
-          throw error;
-        });
-    _entries[key] = future;
-    return future;
-  }
-
-  Future<CatalogPage> reload(
-    ExtensionRegistry registry,
-    CatalogBinding binding, {
-    required String category,
-  }) {
-    _entries.remove(_keyOf(binding, category));
-    return load(registry, binding, category: category);
-  }
-
-  Future<VersionedCatalogPage> loadVersioned(
+  Future<VersionedCatalogPage> load(
     ExtensionRegistry registry,
     CatalogBinding binding, {
     required String category,
@@ -74,7 +38,7 @@ class CatalogCache {
     final existing = _versionedEntries[key];
     if (existing != null) return existing;
 
-    final future = _loadVersioned(registry, binding, category: category)
+    final future = _loadPersistedOrFetch(registry, binding, category: category)
         .then((page) {
           _versionedCompleted[key] = page;
           return page;
@@ -87,7 +51,7 @@ class CatalogCache {
     return future;
   }
 
-  Future<VersionedCatalogPage> _loadVersioned(
+  Future<VersionedCatalogPage> _loadPersistedOrFetch(
     ExtensionRegistry registry,
     CatalogBinding binding, {
     required String category,
@@ -95,15 +59,12 @@ class CatalogCache {
     final key = _keyOf(binding, category);
     final cached = await store?.read(key);
     if (cached != null) return cached;
-    final page = await registry.loadCatalogVersioned(
-      binding,
-      category: category,
-    );
+    final page = await registry.loadCatalog(binding, category: category);
     await store?.write(key, page);
     return page;
   }
 
-  Future<VersionedCatalogPage> reloadVersioned(
+  Future<VersionedCatalogPage> reload(
     ExtensionRegistry registry,
     CatalogBinding binding, {
     required String category,
@@ -113,7 +74,7 @@ class CatalogCache {
     if (refreshing != null) return refreshing;
 
     final future = registry
-        .loadCatalogVersioned(binding, category: category)
+        .loadCatalog(binding, category: category)
         .then((page) async {
           _versionedCompleted[key] = page;
           await store?.write(key, page);
@@ -122,7 +83,7 @@ class CatalogCache {
         .onError<Object>((error, stack) {
           _versionedEntries.remove(key);
           throw error;
-    });
+        });
     _versionedEntries[key] = future;
     _versionedRefreshes[key] = future;
     future.then<void>(
@@ -139,12 +100,10 @@ class CatalogCache {
     required String category,
     bool refresh = false,
   }) => refresh
-      ? reloadVersioned(registry, binding, category: category)
-      : loadVersioned(registry, binding, category: category);
+      ? reload(registry, binding, category: category)
+      : load(registry, binding, category: category);
 
   void clear() {
-    _entries.clear();
-    _completed.clear();
     _versionedEntries.clear();
     _versionedCompleted.clear();
     _versionedRefreshes.clear();

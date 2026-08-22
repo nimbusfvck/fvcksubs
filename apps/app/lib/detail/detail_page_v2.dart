@@ -34,7 +34,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _detail ??= AppScope.of(context).registry.metaV2(widget.item.ref);
+    _detail ??= AppScope.of(context).registry.meta(widget.item.ref);
   }
 
   EpisodeItemV2 _episodeItem(

@@ -9,7 +9,6 @@ import 'package:fvcksubs_app/player/source_cache.dart';
 import 'package:fvcksubs_app/player/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
-import 'package:fvcksubs_app/library/legacy_library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
@@ -43,7 +42,7 @@ class FakeExtension extends ContentExtension {
     String? author,
     String version = '1.0.0',
   }) : _manifest = Manifest.parse({
-         'apiVersion': 1,
+         'apiVersion': 2,
          'id': id,
          'name': name ?? id,
          'version': version,
@@ -85,18 +84,18 @@ class FakeExtension extends ContentExtension {
 
   /// Filter keys the catalog declares (`catalog.filters`).
   final List<String> filterKeys;
-  final List<MediaItem> items;
+  final List<MediaItemV2> items;
 
   /// Cursor-keyed catalog pages, for exercising pagination: `pages[null]` is
   /// the first page, `pages['cursor']` is what a matching `nextPage` yields.
   /// Empty (the default) means [catalog] just returns [items] as one page.
-  final Map<String?, CatalogPage> pages;
+  final Map<String?, VersionedCatalogPage> pages;
   final List<StreamSource> sourceList;
 
   /// Per-item override for [sources] — lets a test vary what's "available"
   /// by episode (e.g. probing for the latest one that actually has a
   /// source) instead of every item getting the same static [sourceList].
-  final List<StreamSource> Function(MediaItem item)? sourceListFor;
+  final List<StreamSource> Function(MediaItemV2 item)? sourceListFor;
 
   /// Holds [catalog] open for this long — lets a test tell a cache hit from
   /// a re-fetch by whether a spinner ever appears.
@@ -118,7 +117,7 @@ class FakeExtension extends ContentExtension {
   final bool searchable;
 
   /// Items [search] returns for any non-empty query.
-  final List<MediaItem> searchResults;
+  final List<MediaItemV2> searchResults;
 
   /// Filters from the most recent [catalog] call — lets a test assert a
   /// filter control actually changed what was queried.
@@ -130,35 +129,37 @@ class FakeExtension extends ContentExtension {
   Manifest get manifest => _manifest;
 
   @override
-  Future<CatalogPage> catalog(CatalogQuery query) async {
+  Future<VersionedCatalogPage> catalog(CatalogQuery query) async {
     catalogCalls++;
     if (catalogDelay != null) await Future<void>.delayed(catalogDelay!);
     lastFilters = query.filters;
     lastSubCategory = query.subCategory;
     lastCategory = query.category;
     if (pages.isNotEmpty) {
-      return pages[query.page] ?? const CatalogPage(items: []);
+      return pages[query.page] ?? const VersionedCatalogPage(sections: []);
     }
     if (query.subCategory != null) {
-      return CatalogPage(
-        items: itemsBySubCategory[query.subCategory] ?? const [],
-        subCategories: subCategories,
-      );
+      return _page(itemsBySubCategory[query.subCategory] ?? const []);
     }
-    return CatalogPage(
-      items: itemsByCategory[query.category] ?? items,
-      // Returned on every response, narrowed or not — the real extensions do
-      // the same so the chips don't vanish once one is picked.
-      subCategories: subCategories,
-    );
+    return _page(itemsByCategory[query.category] ?? items);
   }
 
   @override
-  Future<CatalogPage> search(String query, {String? page}) async =>
-      CatalogPage(items: searchResults);
+  Future<VersionedCatalogPage> search(String query, {String? page}) async =>
+      _page(searchResults);
+
+  VersionedCatalogPage _page(List<MediaItemV2> values) => VersionedCatalogPage(
+    sections: [
+      CatalogSectionV2(
+        id: 'main',
+        items: [for (final item in values) VersionedMediaItem(item: item)],
+      ),
+    ],
+    subCategories: subCategories,
+  );
 
   /// Items to return for a given category, falling back to [items].
-  final Map<String?, List<MediaItem>> itemsByCategory;
+  final Map<String?, List<MediaItemV2>> itemsByCategory;
 
   /// The `category` of the most recent [catalog] call.
   String? lastCategory;
@@ -171,7 +172,7 @@ class FakeExtension extends ContentExtension {
   final List<SubCategory> subCategories;
 
   /// Items to return when a given subcategory is selected.
-  final Map<String, List<MediaItem>> itemsBySubCategory;
+  final Map<String, List<MediaItemV2>> itemsBySubCategory;
 
   /// The `subCategory` of the most recent [catalog] call.
   String? lastSubCategory;
@@ -190,7 +191,7 @@ class FakeExtension extends ContentExtension {
 
   @override
   Future<List<StreamSource>> sources(
-    MediaItem item, {
+    MediaItemV2 item, {
     Set<String>? enabledProviders,
   }) async {
     sourcesCalls++;
@@ -210,10 +211,10 @@ class FakeExtension extends ContentExtension {
 
   /// What [meta] returns; `null` leaves it throwing, matching the protocol
   /// default for extensions that don't implement the role.
-  MediaDetail? metaDetail;
+  MediaDetailV2? metaDetail;
 
   @override
-  Future<MediaDetail> meta(MediaRef ref) async =>
+  Future<MediaDetailV2> meta(MediaRef ref) async =>
       metaDetail ?? (throw UnsupportedError('$id does not provide meta'));
 }
 
@@ -223,7 +224,7 @@ class SubtitleFakeExtension extends ContentExtension {
   /// Creates a fake offering one source per key, resolving to those languages.
   SubtitleFakeExtension({required this.subtitlesBySourceId, this.resolveDelay})
     : _manifest = Manifest.parse({
-        'apiVersion': 1,
+        'apiVersion': 2,
         'id': 'subs',
         'name': 'subs',
         'version': '1.0.0',
@@ -260,12 +261,12 @@ class SubtitleFakeExtension extends ContentExtension {
   Manifest get manifest => _manifest;
 
   @override
-  Future<CatalogPage> catalog(CatalogQuery query) async =>
-      const CatalogPage(items: []);
+  Future<VersionedCatalogPage> catalog(CatalogQuery query) async =>
+      const VersionedCatalogPage(sections: []);
 
   @override
   Future<List<StreamSource>> sources(
-    MediaItem item, {
+    MediaItemV2 item, {
     Set<String>? enabledProviders,
   }) async => [
     for (final id in subtitlesBySourceId.keys)
@@ -287,30 +288,44 @@ class SubtitleFakeExtension extends ContentExtension {
   }
 }
 
-/// Builds a [MediaItem] for tests.
-MediaItem fakeItem({
+/// Builds a protocol-v2 item for tests.
+MediaItemV2 fakeItem({
   String id = 'e1',
   String extensionId = 'fake',
   String title = 'Home vs Away',
   String? subtitle,
-  LiveStatus status = LiveStatus.live,
+  ScheduleState status = ScheduleState.live,
   String? statusLabel,
   DateTime? startsAt,
   List<Participant> participants = const [],
   ImageRef? poster,
   String? group,
-}) => MediaItem(
-  ref: MediaRef(extensionId: extensionId, providerId: '$extensionId.p', id: id),
-  kind: poster == null ? MediaKind.liveEvent : MediaKind.movie,
-  title: title,
-  subtitle: subtitle,
-  startsAt: poster == null ? startsAt ?? DateTime.utc(2026, 1, 1) : null,
-  status: poster == null ? status : LiveStatus.unknown,
-  statusLabel: poster == null ? statusLabel : null,
-  participants: participants,
-  poster: poster,
-  group: group,
-);
+}) {
+  final ref = MediaRef(
+    extensionId: extensionId,
+    providerId: '$extensionId.p',
+    id: id,
+  );
+  if (poster != null) {
+    return VideoItemV2(
+      ref: ref,
+      title: title,
+      subtitle: subtitle,
+      artwork: Artwork(portrait: poster),
+    );
+  }
+  return EventItemV2(
+    ref: ref,
+    title: title,
+    subtitle: subtitle ?? group,
+    schedule: Schedule(
+      startsAt: startsAt ?? DateTime.utc(2026, 1, 1),
+      state: status,
+      label: statusLabel,
+    ),
+    participants: participants,
+  );
+}
 
 /// A player builder that records the stream it was given and renders a marker,
 /// so a test can assert playback started without a native player.
@@ -405,19 +420,6 @@ class FakeRepoStore implements RepoStore {
   Future<void> save(String? url) async => saved = url;
 }
 
-/// In-memory [LegacyLibraryStore] — no real `shared_preferences` plugin in a
-/// widget test.
-class FakeLibraryStore implements LegacyLibraryStore {
-  Map<String, LegacyUserMediaState> saved = {};
-
-  @override
-  Future<Map<String, LegacyUserMediaState>> load() async => saved;
-
-  @override
-  Future<void> save(Map<String, LegacyUserMediaState> records) async =>
-      saved = records;
-}
-
 /// In-memory [SourceListStore].
 class FakeSourceListStore implements SourceListStore {
   Map<String, CachedSourceList> saved = {};
@@ -490,8 +492,7 @@ class FakePluginSelectionStore implements PluginSelectionStore {
 /// the same way they do in the running app. A [child] that brings its own
 /// Scaffold is unaffected by the extra one.
 ///
-/// [addonsController] and [legacyLibraryController] each default to a fresh one
-/// over an in-memory store — pass an explicit one when a test needs to
+/// Controllers default to fresh in-memory stores — pass an explicit one when a test needs to
 /// observe toggles, favorites, or persistence.
 Widget wrapApp({
   required Widget child,
@@ -500,7 +501,6 @@ Widget wrapApp({
   RecordingPlayer? player,
   AddonsController? addonsController,
   InstallerController? installerController,
-  LegacyLibraryController? legacyLibraryController,
   LibraryController? libraryController,
   PluginController? pluginController,
   CatalogCache? catalogCache,
@@ -523,9 +523,6 @@ Widget wrapApp({
         installedStore: FakeInstalledExtensionStore(),
         repoStore: FakeRepoStore(),
       ),
-  legacyLibraryController:
-      legacyLibraryController ??
-      LegacyLibraryController(store: FakeLibraryStore()),
   libraryController:
       libraryController ?? LibraryController(store: _FakeLibraryStoreV2()),
   pluginController:

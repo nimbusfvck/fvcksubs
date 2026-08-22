@@ -85,13 +85,7 @@ class JsExtension extends ContentExtension {
   Manifest get manifest => _manifest;
 
   @override
-  Future<CatalogPage> catalog(CatalogQuery query) async {
-    final decoded = await _call('catalog', query.toJson());
-    return CatalogPage.fromJson(decoded);
-  }
-
-  @override
-  Future<VersionedCatalogPage> catalogVersioned(CatalogQuery query) async {
+  Future<VersionedCatalogPage> catalog(CatalogQuery query) async {
     final decoded = await _call('catalog', query.toJson());
     return VersionedCatalogPage.fromProtocolJson(
       decoded,
@@ -100,16 +94,7 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<CatalogPage> search(String query, {String? page}) async {
-    final decoded = await _call('search', {'query': query, 'page': ?page});
-    return CatalogPage.fromJson(decoded);
-  }
-
-  @override
-  Future<VersionedCatalogPage> searchVersioned(
-    String query, {
-    String? page,
-  }) async {
+  Future<VersionedCatalogPage> search(String query, {String? page}) async {
     final decoded = await _call('search', {'query': query, 'page': ?page});
     return VersionedCatalogPage.fromProtocolJson(
       decoded,
@@ -118,13 +103,7 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<MediaDetail> meta(MediaRef ref) async {
-    final decoded = await _call('meta', {'ref': ref.toJson()});
-    return MediaDetail.fromJson(decoded);
-  }
-
-  @override
-  Future<MediaDetailV2> metaV2(MediaRef ref) async {
+  Future<MediaDetailV2> meta(MediaRef ref) async {
     final decoded = await _call('meta', {'ref': ref.toJson()});
     return MediaDetailV2.fromJson(decoded);
   }
@@ -139,12 +118,6 @@ class JsExtension extends ContentExtension {
   /// stream provider must either carry its own or get one added.
   @override
   Future<List<StreamSource>> sources(
-    MediaItem item, {
-    Set<String>? enabledProviders,
-  }) => _sourcesFromJson(item.toJson(), enabledProviders);
-
-  @override
-  Future<List<StreamSource>> sourcesV2(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
   }) => _sourcesFromJson(item.toJson(), enabledProviders);
@@ -177,11 +150,7 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) =>
-      _subtitlesFromJson(item.toJson());
-
-  @override
-  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) =>
+  Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) =>
       _subtitlesFromJson(item.toJson());
 
   Future<List<SubtitleTrack>> _subtitlesFromJson(

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
-import 'media_card.dart';
+import 'catalog_status_badges.dart';
 
 const List<Color> _bannerPalette = [
   Color(0xFF4338CA), // indigo
@@ -89,13 +89,13 @@ class GeneratedBanner extends StatelessWidget {
   const GeneratedBanner({
     super.key,
     required this.participants,
-    this.status = LiveStatus.unknown,
+    this.status = ScheduleState.unknown,
     this.patternKey,
   });
 
   final List<Participant> participants;
 
-  final LiveStatus status;
+  final ScheduleState status;
 
   final String? patternKey;
 
@@ -159,13 +159,13 @@ class GeneratedBanner extends StatelessWidget {
                 ),
               ],
             ),
-            if (status == LiveStatus.live)
+            if (status == ScheduleState.live)
               const Positioned(
                 left: AppSpacing.xs,
                 top: AppSpacing.xs,
                 child: LiveBadge(),
               )
-            else if (status == LiveStatus.scheduled)
+            else if (status == ScheduleState.scheduled)
               const Positioned(
                 left: AppSpacing.xs,
                 top: AppSpacing.xs,

@@ -11,20 +11,6 @@ import 'playback_media.dart';
 import 'source_priority_controller.dart';
 import 'subtitle_preference_controller.dart';
 
-Future<void> playItem(
-  BuildContext context,
-  MediaItem item, {
-  List<SeriesSeason> seasons = const [],
-  bool replaceCurrent = false,
-  bool returnToDetail = false,
-}) => _playMedia(
-  context,
-  PlaybackMedia.legacy(item),
-  seasons: seasons,
-  replaceCurrent: replaceCurrent,
-  returnToDetail: returnToDetail,
-);
-
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
@@ -33,7 +19,7 @@ Future<void> playItemV2(
   bool returnToDetail = false,
 }) => _playMedia(
   context,
-  PlaybackMedia.v2(item),
+  PlaybackMedia(item),
   episodeGuide: episodeGuide,
   replaceCurrent: replaceCurrent,
   returnToDetail: returnToDetail,
@@ -42,7 +28,6 @@ Future<void> playItemV2(
 Future<void> _playMedia(
   BuildContext context,
   PlaybackMedia item, {
-  List<SeriesSeason> seasons = const [],
   EpisodeGuide? episodeGuide,
   bool replaceCurrent = false,
   bool returnToDetail = false,
@@ -58,7 +43,6 @@ Future<void> _playMedia(
       scope,
       item,
       cached,
-      seasons,
       replaceCurrent,
       episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
@@ -86,7 +70,6 @@ Future<void> _playMedia(
         scope,
         item,
         fast,
-        seasons,
         replaceCurrent,
         episodeGuide: episodeGuide,
         pendingSources: pendingSources,
@@ -117,7 +100,6 @@ Future<void> _playMedia(
     scope,
     item,
     [first],
-    seasons,
     replaceCurrent,
     episodeGuide: episodeGuide,
     pendingSources: result.second,
@@ -185,7 +167,6 @@ void _openPlayer(
   AppScope scope,
   PlaybackMedia item,
   List<ResolvedSource> sources,
-  List<SeriesSeason> seasons,
   bool replaceCurrent, {
   EpisodeGuide? episodeGuide,
   Stream<ResolvedSource>? pendingSources,
@@ -197,28 +178,15 @@ void _openPlayer(
     scope.subtitlePreferenceController,
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
-  final legacyItem = item.legacyItem;
-  if (legacyItem == null) {
-    scope.libraryController.recordWatched(item.v2Item!);
-  } else {
-    scope.legacyLibraryController.recordWatched(legacyItem);
-  }
+  scope.libraryController.recordWatched(item.item);
   final route = MaterialPageRoute<void>(
-    builder: (_) => legacyItem == null
-        ? PlayerPage.v2(
-            item: item.v2Item!,
-            resolvedSources: resolved,
-            pendingSources: pendingSources,
-            episodeGuide: episodeGuide,
-            returnToDetail: returnToDetail,
-          )
-        : PlayerPage(
-            item: legacyItem,
-            resolvedSources: resolved,
-            seasons: seasons,
-            pendingSources: pendingSources,
-            returnToDetail: returnToDetail,
-          ),
+    builder: (_) => PlayerPage(
+      item: item.item,
+      resolvedSources: resolved,
+      pendingSources: pendingSources,
+      episodeGuide: episodeGuide,
+      returnToDetail: returnToDetail,
+    ),
   );
   unawaited(
     replaceCurrent ? navigator.pushReplacement(route) : navigator.push(route),
@@ -257,10 +225,7 @@ Future<List<ResolvedSource>> _playableSources(
 ) async {
   List<StreamSource> sources;
   try {
-    final legacyItem = item.legacyItem;
-    sources = legacyItem == null
-        ? await scope.registry.sourcesV2(item.v2Item!)
-        : await scope.registry.sources(legacyItem);
+    sources = await scope.registry.sources(item.item);
   } catch (_) {
     return const [];
   }
@@ -290,10 +255,7 @@ _resolveFirstPlayable(
 ) async {
   List<StreamSource> sources;
   try {
-    final legacyItem = item.legacyItem;
-    sources = legacyItem == null
-        ? await scope.registry.sourcesV2(item.v2Item!)
-        : await scope.registry.sources(legacyItem);
+    sources = await scope.registry.sources(item.item);
   } catch (_) {
     return (first: null, second: const Stream<ResolvedSource>.empty());
   }

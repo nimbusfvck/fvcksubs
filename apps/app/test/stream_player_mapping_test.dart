@@ -67,7 +67,7 @@ void main() {
       preview: true,
     );
 
-    expect(ds.cacheConfiguration?.useCache, isFalse);
+    expect(ds.cacheConfiguration?.useCache, isTrue);
     expect(ds.bufferingConfiguration.minBufferMs, 1500);
     expect(ds.bufferingConfiguration.maxBufferMs, 5000);
     expect(ds.bufferingConfiguration.bufferForPlaybackMs, 350);

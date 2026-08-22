@@ -79,7 +79,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
 
   Future<void> _refreshPersisted(AppScope scope) async {
     try {
-      final fresh = await scope.catalogCache.reloadVersioned(
+      final fresh = await scope.catalogCache.reload(
         scope.registry,
         widget.binding,
         category: widget.category,

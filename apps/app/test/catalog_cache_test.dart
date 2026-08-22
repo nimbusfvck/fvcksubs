@@ -14,9 +14,9 @@ void main() {
     final store = _Store();
     final cache = CatalogCache(store: store);
 
-    await cache.loadVersioned(registry, binding, category: 'sport');
+    await cache.load(registry, binding, category: 'sport');
     final second = CatalogCache(store: store);
-    await second.loadVersioned(registry, binding, category: 'sport');
+    await second.load(registry, binding, category: 'sport');
 
     expect(extension.catalogCalls, 1);
   });

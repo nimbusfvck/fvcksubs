@@ -1,4 +1,3 @@
-import '../content/media_item.dart';
 import '../content/media_detail_v2.dart';
 import '../content/media_item_v2.dart';
 import '../content/media_ref.dart';
@@ -20,23 +19,12 @@ abstract class ContentExtension {
   Manifest get manifest;
 
   /// Lists items for a catalog. Fills [ProviderRole.catalog].
-  Future<CatalogPage> catalog(CatalogQuery query) =>
+  Future<VersionedCatalogPage> catalog(CatalogQuery query) =>
       throw UnsupportedError('${manifest.id} does not provide a catalog');
 
-  /// Lists a catalog through the versioned compatibility boundary.
-  ///
-  /// Version-1 implementations inherit this adapter. Runtime-backed
-  /// extensions override it so decoding follows [Manifest.apiVersion].
-  Future<VersionedCatalogPage> catalogVersioned(CatalogQuery query) async =>
-      VersionedCatalogPage.fromV1(await catalog(query));
-
   /// Returns one item's detail. Fills [ProviderRole.meta].
-  Future<MediaDetail> meta(MediaRef ref) =>
+  Future<MediaDetailV2> meta(MediaRef ref) =>
       throw UnsupportedError('${manifest.id} does not provide meta');
-
-  /// Returns one item's strict protocol-v2 detail.
-  Future<MediaDetailV2> metaV2(MediaRef ref) =>
-      throw UnsupportedError('${manifest.id} does not provide v2 meta');
 
   /// Lists playable sources for an item. Half of [ProviderRole.stream].
   ///
@@ -55,41 +43,26 @@ abstract class ContentExtension {
   /// fan-out by this; an extension with a single, non-toggleable stream
   /// provider can ignore it.
   Future<List<StreamSource>> sources(
-    MediaItem item, {
-    Set<String>? enabledProviders,
-  }) => throw UnsupportedError('${manifest.id} does not provide sources');
-
-  /// Lists playable sources for a protocol-v2 item.
-  Future<List<StreamSource>> sourcesV2(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
-  }) => throw UnsupportedError('${manifest.id} does not provide v2 sources');
+  }) => throw UnsupportedError('${manifest.id} does not provide sources');
 
   /// Resolves a source id into a ready stream. Half of [ProviderRole.stream].
   Future<PlayableStream> resolve(String sourceId) =>
       throw UnsupportedError('${manifest.id} does not resolve streams');
 
   /// Free-text search. Fills [ProviderRole.search].
-  Future<CatalogPage> search(String query, {String? page}) =>
+  Future<VersionedCatalogPage> search(String query, {String? page}) =>
       throw UnsupportedError('${manifest.id} does not provide search');
-
-  /// Searches through the versioned compatibility boundary.
-  Future<VersionedCatalogPage> searchVersioned(
-    String query, {
-    String? page,
-  }) async => VersionedCatalogPage.fromV1(await search(query, page: page));
 
   /// Looks up subtitles for [item] independently of any resolved source.
   /// Fills [ProviderRole.subtitles].
   ///
   /// Takes the full [item], not just its [MediaRef] — a lookup keyed by an
-  /// external id (TMDB, say) needs whatever [MediaItem.extra] carries for a
+  /// external id (TMDB, say) needs whatever provider-owned reference data
+  /// accompanies the
   /// series episode, and re-deriving that from a ref id alone isn't
   /// guaranteed to be possible.
-  Future<List<SubtitleTrack>> externalSubtitles(MediaItem item) =>
+  Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) =>
       throw UnsupportedError('${manifest.id} does not provide subtitles');
-
-  /// Looks up subtitles for a protocol-v2 item.
-  Future<List<SubtitleTrack>> externalSubtitlesV2(MediaItemV2 item) =>
-      throw UnsupportedError('${manifest.id} does not provide v2 subtitles');
 }
