@@ -16,7 +16,22 @@ Record the concrete symptom before changing code:
 Do not infer token expiry, network failure, native-player behavior, or an
 upstream outage without evidence from the active request or player logs.
 
-## 13.2 Reproduce and narrow scope
+## 13.2 Evidence and uncertainty
+
+Do not hallucinate causes, logs, API behavior, user intent, or validation
+results. State what is known, what is inferred, and what remains unknown.
+
+Do not overthink by exploring unrelated subsystems, adding speculative
+defenses, or designing a broad replacement before the smallest relevant
+evidence has been checked.
+
+Ask the user for clarification when a missing fact or choice would materially
+change the fix, such as the expected product behavior, the affected platform,
+a missing reproducible case, or permission to change external state. Make a
+reasonable, low-risk assumption only when it stays within the reported issue;
+state that assumption in the handoff.
+
+## 13.3 Reproduce and narrow scope
 
 Reproduce the issue with the smallest reliable case. Identify which boundary
 owns the failing behavior:
@@ -33,7 +48,7 @@ owns the failing behavior:
 Keep the investigation in the owning layer. Do not introduce provider-specific
 logic into the app shell to compensate for an extension or upstream failure.
 
-## 13.3 Form and test the hypothesis
+## 13.4 Form and test the hypothesis
 
 State the suspected cause in one sentence, then verify it with a focused test,
 fixture, log, or inspection. Change only the minimum code necessary to test or
@@ -42,7 +57,7 @@ fix that hypothesis.
 If the evidence disproves it, remove the exploratory change and continue from
 the new evidence. Do not accumulate defensive branches around unproven causes.
 
-## 13.4 Implement the root-cause fix
+## 13.5 Implement the root-cause fix
 
 Make the fix at the lowest layer that owns the behavior. Preserve existing
 contracts unless the contract itself is the defect.
@@ -59,7 +74,7 @@ When a temporary workaround is unavoidable, meet every condition in
 make it observable in safe logs, and document its removal condition in a short
 English comment.
 
-## 13.5 Prove the fix
+## 13.6 Prove the fix
 
 Add or update the narrowest regression coverage that would have failed before
 the fix. Use the injected registry and player builder seams; widget tests must
@@ -87,7 +102,7 @@ Native playback, a real upstream, and device-specific behavior still require
 manual verification. Report that boundary clearly; passing headless tests does
 not prove a physical-device playback fix.
 
-## 13.6 Handoff
+## 13.7 Handoff
 
 Summarize the symptom, confirmed cause, code path changed, regression coverage,
 validation run, and anything still requiring device or upstream verification.
