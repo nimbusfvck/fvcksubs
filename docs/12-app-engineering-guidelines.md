@@ -146,7 +146,29 @@ When modifying an already-large class, reduce it below the limit as part of the
 same change whenever practical. Do not add new behavior to a class already
 over 500 lines without first extracting the affected responsibility.
 
-## 12.8 Testing and validation
+## 12.8 Fix causes, not symptoms
+
+Fix the underlying cause of an issue. Do not add a workaround, special-case
+branch, silent fallback, retry loop, timeout, or UI-only suppression merely to
+hide a symptom.
+
+A temporary workaround is allowed only when all of the following are true:
+
+1. the issue is reproducible or has concrete production evidence;
+2. the underlying cause cannot be identified after relevant code, logs, and
+   dependency or upstream behavior have been investigated;
+3. the workaround is narrow, safe, observable, and does not silently lose
+   data, security guarantees, playback information, or user intent;
+4. the code comment states the external blocker, the user-visible protection,
+   and the condition for removing the workaround; and
+5. a regression test covers both the observed failure and the protected path
+   where that is technically possible.
+
+Never bypass TLS validation, relax extension-host permissions, hardcode a
+provider-specific exception in the shell, or silently replace a failed source
+with unrelated content as a workaround.
+
+## 12.9 Testing and validation
 
 Test workflow and state transitions at the Cubit/controller or service level.
 Widget tests cover rendering and user intent; they must use the injected
