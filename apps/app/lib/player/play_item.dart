@@ -37,12 +37,15 @@ Future<void> _playMedia(
   final messenger = ScaffoldMessenger.of(context);
 
   final cached = scope.sourceCache.peek(item.ref);
-  if (cached != null) {
+  final enabledCached = cached
+      ?.where((source) => scope.registry.isSourceEnabled(source.source))
+      .toList();
+  if (enabledCached != null && enabledCached.isNotEmpty) {
     _openPlayer(
       navigator,
       scope,
       item,
-      cached,
+      enabledCached,
       replaceCurrent,
       episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
@@ -54,12 +57,16 @@ Future<void> _playMedia(
   }
 
   final cachedList = scope.sourceCache.peekSourceList(item.ref);
-  if (cachedList != null && cachedList.isNotEmpty) {
+  final enabledCachedList = cachedList
+      ?.where(scope.registry.isSourceEnabled)
+      .toList();
+  if (enabledCachedList != null && enabledCachedList.isNotEmpty) {
     final fast = await _resolveWithOverlay(
       context,
       navigator,
-      (progress) =>
-          _resolveKnownSources(scope, item, [cachedList.first], progress),
+      (progress) => _resolveKnownSources(scope, item, [
+        enabledCachedList.first,
+      ], progress),
     );
     if (fast == null) return; // abandoned mid-resolve
     if (fast.isNotEmpty) {
@@ -364,6 +371,11 @@ Future<List<ResolvedSource>> _resolveKnownSources(
   List<StreamSource> sources,
   _ResolveProgress progress,
 ) async {
+  sources = [
+    for (final source in sources)
+      if (scope.registry.isSourceEnabled(source)) source,
+  ];
+  if (sources.isEmpty) return const [];
   sources = scope.sourcePriorityController.order(sources);
   progress.begin([for (final source in sources) source.label]);
 

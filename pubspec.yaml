@@ -15,3 +15,6 @@ workspace:
   - packages/fvcksubs_storage
   - packages/fvcksubs_js_runtime
   - apps/app
+
+dev_dependencies:
+  analyzer: ^12.1.0

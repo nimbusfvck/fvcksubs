@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
@@ -43,6 +44,24 @@ void main() {
       expect((await emitted).revision, 1);
       await Future<void>.delayed(Duration.zero);
       expect(store.saved?.disabledProviderIds, {'a.p'});
+    },
+  );
+
+  test(
+    'disabled providers are excluded even when an extension returns them',
+    () async {
+      final extension = FakeExtension(
+        id: 'a',
+        sourceList: const [
+          StreamSource(id: 'a-1', label: 'Source A', providerId: 'a.p'),
+        ],
+      );
+      final registry = ExtensionRegistry([extension]);
+
+      registry.setProviderEnabled('a.p', false);
+
+      expect(await registry.sources(fakeItem(extensionId: 'a')), isEmpty);
+      expect(extension.lastEnabledProviders, isEmpty);
     },
   );
 }

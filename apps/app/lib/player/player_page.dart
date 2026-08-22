@@ -11,8 +11,10 @@ import '../detail/episode_target_v2.dart';
 import '../library/library_controller.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
+import 'live_timeline.dart';
 import 'play_item.dart';
 import 'playback_media.dart';
+import 'player_controls_overlay.dart';
 import 'stream_player_mapping.dart'
     show
         subtitleIndicatorLabel,
@@ -29,11 +31,27 @@ const Duration _kMinResumeProgress = Duration(seconds: 5);
 const Duration _kResumeEndGuard = Duration(seconds: 30);
 
 const Duration _kProgressReportInterval = Duration(seconds: 10);
-const Duration _kLiveEdgeSnapThreshold = Duration(seconds: 2);
-const Duration _kLiveEdgeSeekBackoff = Duration(seconds: 2);
-const Duration _kLiveEdgeSyncTolerance = Duration(seconds: 5);
 const Duration _kBufferingIndicatorDelay = Duration(milliseconds: 700);
 const Duration _kBufferingProgressTolerance = Duration(milliseconds: 250);
+
+/// Returns the matching VOD position after a source change.
+///
+/// Live streams use a moving DVR window, so their position cannot safely be
+/// carried over to another source. A shorter VOD fallback resumes at its end
+/// rather than seeking beyond its available duration.
+Duration? sourceSwitchSeekPosition({
+  required bool isLive,
+  required Duration? previousPosition,
+  required Duration? duration,
+}) {
+  if (isLive ||
+      previousPosition == null ||
+      duration == null ||
+      duration <= Duration.zero) {
+    return null;
+  }
+  return previousPosition > duration ? duration : previousPosition;
+}
 
 List<BetterPlayerAsmsTrack> dedupedQualityTracks(
   List<BetterPlayerAsmsTrack> tracks,
@@ -49,26 +67,6 @@ List<BetterPlayerAsmsTrack> dedupedQualityTracks(
   }
   return byHeight.values.toList()
     ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
-}
-
-Duration liveSeekEdge(VideoPlayerValue? value) {
-  if (value == null) return Duration.zero;
-  var edge = value.duration ?? Duration.zero;
-  if (value.position > edge) edge = value.position;
-  for (final range in value.buffered) {
-    if (range.end > edge) edge = range.end;
-  }
-  return edge;
-}
-
-/// The furthest buffered point used for the seekbar's secondary track.
-Duration bufferedSeekEdge(VideoPlayerValue? value) {
-  if (value == null) return Duration.zero;
-  var edge = value.position;
-  for (final range in value.buffered) {
-    if (range.end > edge) edge = range.end;
-  }
-  return edge;
 }
 
 /// Refreshes resolved sources without dropping the source already playing.
@@ -90,36 +88,6 @@ List<ResolvedSource> mergeResolvedSources(
   ];
   return merged;
 }
-
-/// Converts a rightmost live scrub into a safe seek near the live edge.
-///
-/// Seeking to the exact end of a dynamic DASH window can flush the decoder at
-/// a position whose segment is not available yet. If playback is already live,
-/// avoid that redundant flush entirely. Otherwise stay one small segment
-/// behind the edge while remaining inside the LIVE indicator tolerance.
-Duration? liveSeekTarget(
-  Duration target,
-  Duration edge, {
-  required Duration currentPosition,
-}) {
-  if (edge <= Duration.zero) return target;
-  final snapStart = edge - _kLiveEdgeSnapThreshold;
-  if (target < snapStart) return target;
-  if (isAtLiveEdge(currentPosition, edge)) return null;
-
-  final safeEdge = edge - _kLiveEdgeSeekBackoff;
-  return safeEdge > Duration.zero ? safeEdge : Duration.zero;
-}
-
-/// Whether playback is close enough to the current live edge to be in sync.
-bool isAtLiveEdge(Duration position, Duration edge) {
-  if (edge <= Duration.zero) return true;
-  return position >= edge - _kLiveEdgeSyncTolerance;
-}
-
-/// Advances a live timeline while playback is intentionally paused.
-Duration liveEdgeAfterPause(Duration edge, Duration pausedFor) =>
-    pausedFor > Duration.zero ? edge + pausedFor : edge;
 
 class ResolvedSource {
   const ResolvedSource({required this.source, required this.stream});
@@ -180,6 +148,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _retrying = false;
 
   int _sourceRevision = 0;
+  int _playbackAttempt = 0;
+  Duration? _pendingSourceSwitchPosition;
 
   BetterPlayerController? _errorListenerController;
 
@@ -251,6 +221,17 @@ class _PlayerPageState extends State<PlayerPage> {
     if (value == null || !value.initialized) return;
     _lastKnownPosition = value.position;
     _lastKnownDuration = value.duration;
+    final switchPosition = sourceSwitchSeekPosition(
+      isLive: _isLive,
+      previousPosition: _pendingSourceSwitchPosition,
+      duration: value.duration,
+    );
+    if (switchPosition != null) {
+      _pendingSourceSwitchPosition = null;
+      _lastKnownPosition = switchPosition;
+      final controller = _betterController;
+      if (controller != null) unawaited(controller.seekTo(switchPosition));
+    }
     if (!_hasResumed) {
       _hasResumed = true;
       _maybeResumePosition(value.duration);
@@ -266,7 +247,9 @@ class _PlayerPageState extends State<PlayerPage> {
       _errorListenerController?.removeEventsListener(oldListener);
     }
     _errorListenerController = controller;
-    void listener(BetterPlayerEvent event) => _onPlayerEvent(controller, event);
+    final attempt = _playbackAttempt;
+    void listener(BetterPlayerEvent event) =>
+        _onPlayerEvent(controller, attempt, event);
     _errorListener = listener;
     controller.addEventsListener(listener);
     _playbackError = null;
@@ -274,11 +257,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _onPlayerEvent(
     BetterPlayerController controller,
+    int attempt,
     BetterPlayerEvent event,
   ) {
+    if (attempt != _playbackAttempt) return;
     if (event.betterPlayerEventType == BetterPlayerEventType.finished) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !identical(controller, _errorListenerController)) {
+        if (!mounted ||
+            attempt != _playbackAttempt ||
+            !identical(controller, _errorListenerController)) {
           return;
         }
         _handleNearEnd();
@@ -288,7 +275,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (event.betterPlayerEventType != BetterPlayerEventType.exception) return;
     final message = event.parameters?['exception']?.toString();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || attempt != _playbackAttempt) return;
       if (!identical(controller, _errorListenerController)) return;
       setState(() {
         _playbackError = (message == null || message.isEmpty)
@@ -302,6 +289,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _retryPlayback() async {
     final controller = _betterController;
     if (controller == null || _retrying) return;
+    final attempt = ++_playbackAttempt;
     setState(() {
       _retrying = true;
       _playbackError = null;
@@ -318,7 +306,7 @@ class _PlayerPageState extends State<PlayerPage> {
           'The refreshed source is not playable on this device.',
         );
       }
-      if (!mounted) return;
+      if (!mounted || attempt != _playbackAttempt) return;
       setState(() {
         _resolvedSources[_currentIndex] = ResolvedSource(
           source: _current.source,
@@ -329,7 +317,7 @@ class _PlayerPageState extends State<PlayerPage> {
       });
       scope.sourceCache.store(widget.media.ref, _resolvedSources);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || attempt != _playbackAttempt) return;
       setState(() {
         _retrying = false;
         _playbackError =
@@ -426,7 +414,16 @@ class _PlayerPageState extends State<PlayerPage> {
     if (picked != null) {
       final index = _resolvedSources.indexOf(picked);
       if (index != -1 && index != _currentIndex) {
-        setState(() => _currentIndex = index);
+        setState(() {
+          _pendingSourceSwitchPosition = _isLive ? null : _lastKnownPosition;
+          _currentIndex = index;
+          _playbackAttempt++;
+          _playbackError = null;
+          _retrying = false;
+          _sourceRevision++;
+          _betterController = null;
+          _onVisibilityChanged = null;
+        });
         AppScope.of(
           context,
         ).sourceCache.promote(widget.media.ref, picked.source.id);
@@ -1090,474 +1087,83 @@ class _NetflixControlsOverlayState extends State<_NetflixControlsOverlay> {
     _revealControls();
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (duration.inHours > 0) {
-      final hours = duration.inHours.toString();
-      return '$hours:$minutes:$seconds';
-    }
-    return '$minutes:$seconds';
-  }
-
   @override
   Widget build(BuildContext context) {
     final value = _videoValue?.value;
-    final isPlaying = value?.isPlaying ?? false;
     final position = value?.position ?? Duration.zero;
     final duration = value?.duration ?? Duration.zero;
     final timelineExtent = widget.isLive
         ? (_liveEdge > liveSeekEdge(value) ? _liveEdge : liveSeekEdge(value))
         : duration;
-    final bufferedExtent = bufferedSeekEdge(value);
-    final atLiveEdge = isAtLiveEdge(position, timelineExtent);
-    final isBuffering =
-        widget.controller != null &&
-        (_showBufferingIndicator || !_isReady(value));
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _handleBackgroundTap,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: _controlsVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xCC000000), Colors.transparent],
-                      stops: [0.0, 1.0],
-                    ),
-                  ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xxs,
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                            color: Colors.white,
-                            iconSize: 22,
-                            tooltip: 'Back',
-                            onPressed: widget.onBack,
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: Text(
-                              widget.media.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.titleMd.copyWith(
-                                color: Colors.white,
-                                shadows: [
-                                  const Shadow(
-                                    color: Colors.black87,
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          _PlaybackFavoriteButton(media: widget.media),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+    final upNextCard = widget.upNextV2 == null
+        ? null
+        : Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: AppSpacing.xl * 2,
+            child: SafeArea(
+              child: _UpNextCard(
+                seriesTitle: widget.upNextV2!.seriesTitle,
+                subtitle:
+                    '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
+                countdown: _upNextCountdown,
+                paused: widget.upNextPaused,
+                onPlayNext: widget.onPlayNext,
+                onCancel: widget.onCancelUpNext,
               ),
             ),
-          ),
+          );
 
-          AnimatedOpacity(
-            opacity: _controlsVisible ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: IgnorePointer(
-              ignoring: !_controlsVisible,
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!widget.isLive) ...[
-                      IconButton(
-                        icon: const Icon(Icons.replay_10_rounded),
-                        color: Colors.white,
-                        iconSize: 38,
-                        onPressed: () => _skip(-10),
-                      ),
-                      const SizedBox(width: AppSpacing.xl),
-                    ],
-                    if (isBuffering)
-                      const SizedBox(
-                        width: 64,
-                        height: 64,
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
-                        ),
-                      )
-                    else
-                      IconButton(
-                        icon: Icon(
-                          isPlaying
-                              ? Icons.pause_circle_filled_rounded
-                              : Icons.play_circle_fill_rounded,
-                        ),
-                        color: Colors.white,
-                        iconSize: 64,
-                        onPressed: _togglePlayPause,
-                      ),
-                    if (!widget.isLive) ...[
-                      const SizedBox(width: AppSpacing.xl),
-                      IconButton(
-                        icon: const Icon(Icons.forward_10_rounded),
-                        color: Colors.white,
-                        iconSize: 38,
-                        onPressed: () => _skip(10),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: AnimatedOpacity(
-              opacity: _controlsVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Color(0xCC000000), Colors.transparent],
-                      stops: [0.0, 1.0],
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.xs,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (widget.resolvedSources.isNotEmpty)
-                                    InkWell(
-                                      onTap: () {
-                                        _hideTimer?.cancel();
-                                        widget.onChangeSource();
-                                      },
-                                      borderRadius: AppRadius.sm,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.sm,
-                                          vertical: AppSpacing.xxs + 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white12,
-                                          borderRadius: AppRadius.sm,
-                                          border: Border.all(
-                                            color: Colors.white24,
-                                            width: 0.5,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.playlist_play_rounded,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                            const SizedBox(
-                                              width: AppSpacing.xxs,
-                                            ),
-                                            Text(
-                                              _current.source.label,
-                                              style: AppTypography.bodySm
-                                                  .copyWith(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  if (widget.upNextV2 != null)
-                                    TextButton.icon(
-                                      onPressed: widget.onPlayNext,
-                                      icon: const Icon(
-                                        Icons.skip_next_rounded,
-                                        size: 22,
-                                      ),
-                                      label: const Text('Next Episode'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.xs,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (!widget.isLive)
-                                    GestureDetector(
-                                      onTap: _openSubtitlePicker,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.xs,
-                                          vertical: AppSpacing.xxs,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              _activeSubtitleLabel != null
-                                                  ? Icons.closed_caption_rounded
-                                                  : Icons
-                                                        .closed_caption_off_rounded,
-                                              color:
-                                                  _activeSubtitleLabel != null
-                                                  ? AppColors.brandAccent
-                                                  : Colors.white,
-                                              size: 26,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  GestureDetector(
-                                    onTap: _openQualityPicker,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: AppSpacing.xs,
-                                        vertical: AppSpacing.xxs,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_activeQualityLabel == null)
-                                            Icon(
-                                              Icons.high_quality_rounded,
-                                              color: _activeQualityLabel != null
-                                                  ? AppColors.brandAccent
-                                                  : Colors.white,
-                                              size: 26,
-                                            ),
-                                          if (_activeQualityLabel != null) ...[
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _activeQualityLabel!,
-                                              style: AppTypography.caption
-                                                  .copyWith(
-                                                    color:
-                                                        AppColors.brandAccent,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-
-                          if (widget.isLive || duration > Duration.zero) ...[
-                            Row(
-                              children: [
-                                if (widget.isLive)
-                                  _PlayerLiveIndicator(isAtLiveEdge: atLiveEdge)
-                                else
-                                  Text(
-                                    _formatDuration(position),
-                                    style: AppTypography.caption.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                Expanded(
-                                  child: SliderTheme(
-                                    data: const SliderThemeData(
-                                      trackHeight: 3,
-                                      thumbShape: RoundSliderThumbShape(
-                                        enabledThumbRadius: 6,
-                                      ),
-                                      activeTrackColor: AppColors.brandAccent,
-                                      secondaryActiveTrackColor: Colors.white54,
-                                      inactiveTrackColor: Colors.white24,
-                                      thumbColor: AppColors.brandAccent,
-                                    ),
-                                    child: Slider(
-                                      value:
-                                          (_dragValueMs ??
-                                                  position.inMilliseconds
-                                                      .toDouble())
-                                              .clamp(
-                                                0.0,
-                                                timelineExtent.inMilliseconds
-                                                    .toDouble(),
-                                              ),
-                                      min: 0.0,
-                                      max: timelineExtent > Duration.zero
-                                          ? timelineExtent.inMilliseconds
-                                                .toDouble()
-                                          : 1.0,
-                                      secondaryTrackValue:
-                                          timelineExtent > Duration.zero
-                                          ? bufferedExtent.inMilliseconds
-                                                .clamp(
-                                                  0,
-                                                  timelineExtent.inMilliseconds,
-                                                )
-                                                .toDouble()
-                                          : null,
-                                      onChangeStart:
-                                          timelineExtent > Duration.zero
-                                          ? (val) {
-                                              _hideTimer?.cancel();
-                                              setState(
-                                                () => _dragValueMs = val,
-                                              );
-                                            }
-                                          : null,
-                                      onChanged: timelineExtent > Duration.zero
-                                          ? (val) {
-                                              setState(
-                                                () => _dragValueMs = val,
-                                              );
-                                            }
-                                          : null,
-                                      onChangeEnd:
-                                          timelineExtent > Duration.zero
-                                          ? (val) {
-                                              final target = Duration(
-                                                milliseconds: val.round(),
-                                              );
-                                              final seekTarget = widget.isLive
-                                                  ? liveSeekTarget(
-                                                      target,
-                                                      timelineExtent,
-                                                      currentPosition: position,
-                                                    )
-                                                  : target;
-                                              if (seekTarget != null) {
-                                                _seekTo(seekTarget);
-                                              }
-                                              setState(
-                                                () => _dragValueMs = null,
-                                              );
-                                              _revealControls();
-                                            }
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                if (!widget.isLive)
-                                  Text(
-                                    _formatDuration(duration),
-                                    style: AppTypography.caption.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          if (widget.upNextV2 != null)
-            Positioned(
-              left: AppSpacing.md,
-              right: AppSpacing.md,
-              bottom: AppSpacing.xl * 2,
-              child: SafeArea(
-                child: _UpNextCard(
-                  seriesTitle: widget.upNextV2!.seriesTitle,
-                  subtitle:
-                      '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
-                  countdown: _upNextCountdown,
-                  paused: widget.upNextPaused,
-                  onPlayNext: widget.onPlayNext,
-                  onCancel: widget.onCancelUpNext,
-                ),
-              ),
-            ),
-        ],
-      ),
+    return PlayerControlsOverlayView(
+      title: widget.media.title,
+      favoriteAction: _PlaybackFavoriteButton(media: widget.media),
+      controlsVisible: _controlsVisible,
+      isLive: widget.isLive,
+      isPlaying: value?.isPlaying ?? false,
+      isBuffering:
+          widget.controller != null &&
+          (_showBufferingIndicator || !_isReady(value)),
+      sourceLabel: widget.resolvedSources.isEmpty
+          ? null
+          : _current.source.label,
+      activeSubtitleLabel: _activeSubtitleLabel,
+      activeQualityLabel: _activeQualityLabel,
+      position: position,
+      duration: duration,
+      timelineExtent: timelineExtent,
+      bufferedExtent: bufferedSeekEdge(value),
+      atLiveEdge: isAtLiveEdge(position, timelineExtent),
+      dragValueMs: _dragValueMs,
+      onBackgroundTap: _handleBackgroundTap,
+      onBack: widget.onBack,
+      onSkip: _skip,
+      onTogglePlayPause: _togglePlayPause,
+      onChangeSource: () {
+        _hideTimer?.cancel();
+        widget.onChangeSource();
+      },
+      onPlayNext: widget.upNextV2 == null ? null : widget.onPlayNext,
+      onOpenSubtitlePicker: _openSubtitlePicker,
+      onOpenQualityPicker: _openQualityPicker,
+      onTimelineChangeStart: (value) {
+        _hideTimer?.cancel();
+        setState(() => _dragValueMs = value);
+      },
+      onTimelineChanged: (value) {
+        setState(() => _dragValueMs = value);
+      },
+      onTimelineChangeEnd: (value) {
+        final target = Duration(milliseconds: value.round());
+        final seekTarget = widget.isLive
+            ? liveSeekTarget(target, timelineExtent, currentPosition: position)
+            : target;
+        if (seekTarget != null) _seekTo(seekTarget);
+        setState(() => _dragValueMs = null);
+        _revealControls();
+      },
+      upNextCard: upNextCard,
     );
   }
-}
-
-class _PlayerLiveIndicator extends StatelessWidget {
-  const _PlayerLiveIndicator({required this.isAtLiveEdge});
-
-  final bool isAtLiveEdge;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: isAtLiveEdge
-        ? 'Live broadcast, at live edge'
-        : 'Live broadcast, behind live edge',
-    child: Container(
-      key: const Key('player-live-indicator'),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xxs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.liveAccent,
-        borderRadius: AppRadius.sm,
-      ),
-      child: Text(
-        'LIVE',
-        style: AppTypography.liveBadge.copyWith(color: AppColors.primary),
-      ),
-    ),
-  );
 }
 
 class _UpNextCard extends StatefulWidget {

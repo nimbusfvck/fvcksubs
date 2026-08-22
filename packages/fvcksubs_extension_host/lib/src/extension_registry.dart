@@ -97,6 +97,14 @@ class ExtensionRegistry {
   bool isProviderEnabled(String providerId) =>
       !_disabledProviderIds.contains(providerId);
 
+  /// Whether a source may be offered under the current Addons preferences.
+  ///
+  /// Older source descriptors may not carry a provider id. Keep those
+  /// compatible sources available; a descriptor with an id must always obey
+  /// the matching per-provider switch.
+  bool isSourceEnabled(StreamSource source) =>
+      source.providerId.isEmpty || isProviderEnabled(source.providerId);
+
   /// Switches one provider on or off — the per-source toggle. Independent of
   /// [setExtensionEnabled]: an extension can stay on with one of its stream
   /// providers off.
@@ -269,7 +277,9 @@ class ExtensionRegistry {
             isProviderEnabled(provider.id))
           provider.id,
     };
-    return extension.sources(item, enabledProviders: enabledStreamProviders);
+    return extension
+        .sources(item, enabledProviders: enabledStreamProviders)
+        .then((sources) => sources.where(isSourceEnabled).toList());
   }
 
   /// Resolves [sourceId] (produced by [sources] for [ref]) into a stream.

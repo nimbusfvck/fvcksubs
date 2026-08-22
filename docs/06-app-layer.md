@@ -231,7 +231,7 @@ flowchart TB
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
-| Source cache | Persists source descriptors but never resolved streams. The selected source stays first when discovery refreshes, so playback can start from the cached or first playable source while remaining sources are added to the picker individually as each resolves; a slow or stalled provider must not hide a ready fallback. |
+| Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. The selected source stays first when discovery refreshes, so playback can start from the cached or first playable source while remaining sources are added to the picker individually as each resolves; a slow or stalled provider must not hide a ready fallback. |
 | Errors | **Never auto-advance.** Live streams report spurious errors, and auto-advancing skips good sources. |
 
 ## 6.7 Platform handling

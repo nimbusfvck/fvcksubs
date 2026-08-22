@@ -1,0 +1,608 @@
+import 'package:flutter/material.dart';
+
+import '../theme/tokens.dart';
+
+class PlayerControlsOverlayView extends StatelessWidget {
+  const PlayerControlsOverlayView({
+    super.key,
+    required this.title,
+    required this.favoriteAction,
+    required this.controlsVisible,
+    required this.isLive,
+    required this.isPlaying,
+    required this.isBuffering,
+    required this.sourceLabel,
+    required this.activeSubtitleLabel,
+    required this.activeQualityLabel,
+    required this.position,
+    required this.duration,
+    required this.timelineExtent,
+    required this.bufferedExtent,
+    required this.atLiveEdge,
+    required this.dragValueMs,
+    required this.onBackgroundTap,
+    required this.onBack,
+    required this.onSkip,
+    required this.onTogglePlayPause,
+    required this.onChangeSource,
+    required this.onPlayNext,
+    required this.onOpenSubtitlePicker,
+    required this.onOpenQualityPicker,
+    required this.onTimelineChangeStart,
+    required this.onTimelineChanged,
+    required this.onTimelineChangeEnd,
+    this.upNextCard,
+  });
+
+  final String title;
+  final Widget favoriteAction;
+  final bool controlsVisible;
+  final bool isLive;
+  final bool isPlaying;
+  final bool isBuffering;
+  final String? sourceLabel;
+  final String? activeSubtitleLabel;
+  final String? activeQualityLabel;
+  final Duration position;
+  final Duration duration;
+  final Duration timelineExtent;
+  final Duration bufferedExtent;
+  final bool atLiveEdge;
+  final double? dragValueMs;
+  final VoidCallback onBackgroundTap;
+  final VoidCallback onBack;
+  final ValueChanged<int> onSkip;
+  final VoidCallback onTogglePlayPause;
+  final VoidCallback onChangeSource;
+  final VoidCallback? onPlayNext;
+  final VoidCallback onOpenSubtitlePicker;
+  final VoidCallback onOpenQualityPicker;
+  final ValueChanged<double> onTimelineChangeStart;
+  final ValueChanged<double> onTimelineChanged;
+  final ValueChanged<double> onTimelineChangeEnd;
+  final Widget? upNextCard;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onBackgroundTap,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        _PlayerTopControls(
+          title: title,
+          favoriteAction: favoriteAction,
+          visible: controlsVisible,
+          onBack: onBack,
+        ),
+        _PlayerTransportControls(
+          visible: controlsVisible,
+          isLive: isLive,
+          isPlaying: isPlaying,
+          isBuffering: isBuffering,
+          onSkip: onSkip,
+          onTogglePlayPause: onTogglePlayPause,
+        ),
+        _PlayerBottomControls(
+          visible: controlsVisible,
+          isLive: isLive,
+          sourceLabel: sourceLabel,
+          activeSubtitleLabel: activeSubtitleLabel,
+          activeQualityLabel: activeQualityLabel,
+          position: position,
+          duration: duration,
+          timelineExtent: timelineExtent,
+          bufferedExtent: bufferedExtent,
+          atLiveEdge: atLiveEdge,
+          dragValueMs: dragValueMs,
+          onChangeSource: onChangeSource,
+          onPlayNext: onPlayNext,
+          onOpenSubtitlePicker: onOpenSubtitlePicker,
+          onOpenQualityPicker: onOpenQualityPicker,
+          onTimelineChangeStart: onTimelineChangeStart,
+          onTimelineChanged: onTimelineChanged,
+          onTimelineChangeEnd: onTimelineChangeEnd,
+        ),
+        if (upNextCard case final Widget card) card,
+      ],
+    ),
+  );
+}
+
+class _PlayerTopControls extends StatelessWidget {
+  const _PlayerTopControls({
+    required this.title,
+    required this.favoriteAction,
+    required this.visible,
+    required this.onBack,
+  });
+
+  final String title;
+  final Widget favoriteAction;
+  final bool visible;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    child: AnimatedOpacity(
+      opacity: visible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xCC000000), Colors.transparent],
+              stops: [0.0, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xxs,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                    color: Colors.white,
+                    iconSize: 22,
+                    tooltip: 'Back',
+                    onPressed: onBack,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.titleMd.copyWith(
+                        color: Colors.white,
+                        shadows: [
+                          const Shadow(color: Colors.black87, blurRadius: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  favoriteAction,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PlayerTransportControls extends StatelessWidget {
+  const _PlayerTransportControls({
+    required this.visible,
+    required this.isLive,
+    required this.isPlaying,
+    required this.isBuffering,
+    required this.onSkip,
+    required this.onTogglePlayPause,
+  });
+
+  final bool visible;
+  final bool isLive;
+  final bool isPlaying;
+  final bool isBuffering;
+  final ValueChanged<int> onSkip;
+  final VoidCallback onTogglePlayPause;
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+    opacity: visible ? 1.0 : 0.0,
+    duration: const Duration(milliseconds: 200),
+    child: IgnorePointer(
+      ignoring: !visible,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isLive) ...[
+              IconButton(
+                icon: const Icon(Icons.replay_10_rounded),
+                color: Colors.white,
+                iconSize: 38,
+                onPressed: () => onSkip(-10),
+              ),
+              const SizedBox(width: AppSpacing.xl),
+            ],
+            if (isBuffering)
+              const SizedBox(
+                width: 64,
+                height: 64,
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 3,
+                  ),
+                ),
+              )
+            else
+              IconButton(
+                icon: Icon(
+                  isPlaying
+                      ? Icons.pause_circle_filled_rounded
+                      : Icons.play_circle_fill_rounded,
+                ),
+                color: Colors.white,
+                iconSize: 64,
+                onPressed: onTogglePlayPause,
+              ),
+            if (!isLive) ...[
+              const SizedBox(width: AppSpacing.xl),
+              IconButton(
+                icon: const Icon(Icons.forward_10_rounded),
+                color: Colors.white,
+                iconSize: 38,
+                onPressed: () => onSkip(10),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _PlayerBottomControls extends StatelessWidget {
+  const _PlayerBottomControls({
+    required this.visible,
+    required this.isLive,
+    required this.sourceLabel,
+    required this.activeSubtitleLabel,
+    required this.activeQualityLabel,
+    required this.position,
+    required this.duration,
+    required this.timelineExtent,
+    required this.bufferedExtent,
+    required this.atLiveEdge,
+    required this.dragValueMs,
+    required this.onChangeSource,
+    required this.onPlayNext,
+    required this.onOpenSubtitlePicker,
+    required this.onOpenQualityPicker,
+    required this.onTimelineChangeStart,
+    required this.onTimelineChanged,
+    required this.onTimelineChangeEnd,
+  });
+
+  final bool visible;
+  final bool isLive;
+  final String? sourceLabel;
+  final String? activeSubtitleLabel;
+  final String? activeQualityLabel;
+  final Duration position;
+  final Duration duration;
+  final Duration timelineExtent;
+  final Duration bufferedExtent;
+  final bool atLiveEdge;
+  final double? dragValueMs;
+  final VoidCallback onChangeSource;
+  final VoidCallback? onPlayNext;
+  final VoidCallback onOpenSubtitlePicker;
+  final VoidCallback onOpenQualityPicker;
+  final ValueChanged<double> onTimelineChangeStart;
+  final ValueChanged<double> onTimelineChanged;
+  final ValueChanged<double> onTimelineChangeEnd;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: 0,
+    right: 0,
+    bottom: 0,
+    child: AnimatedOpacity(
+      opacity: visible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0xCC000000), Colors.transparent],
+              stops: [0.0, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (sourceLabel != null)
+                            InkWell(
+                              onTap: onChangeSource,
+                              borderRadius: AppRadius.sm,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.sm,
+                                  vertical: AppSpacing.xxs + 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white12,
+                                  borderRadius: AppRadius.sm,
+                                  border: Border.all(
+                                    color: Colors.white24,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.playlist_play_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: AppSpacing.xxs),
+                                    Text(
+                                      sourceLabel!,
+                                      style: AppTypography.bodySm.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          if (onPlayNext != null)
+                            TextButton.icon(
+                              onPressed: onPlayNext,
+                              icon: const Icon(
+                                Icons.skip_next_rounded,
+                                size: 22,
+                              ),
+                              label: const Text('Next Episode'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.xs,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!isLive)
+                            GestureDetector(
+                              onTap: onOpenSubtitlePicker,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.xs,
+                                  vertical: AppSpacing.xxs,
+                                ),
+                                child: Icon(
+                                  activeSubtitleLabel != null
+                                      ? Icons.closed_caption_rounded
+                                      : Icons.closed_caption_off_rounded,
+                                  color: activeSubtitleLabel != null
+                                      ? AppColors.brandAccent
+                                      : Colors.white,
+                                  size: 26,
+                                ),
+                              ),
+                            ),
+                          GestureDetector(
+                            onTap: onOpenQualityPicker,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.xs,
+                                vertical: AppSpacing.xxs,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (activeQualityLabel == null)
+                                    const Icon(
+                                      Icons.high_quality_rounded,
+                                      color: Colors.white,
+                                      size: 26,
+                                    ),
+                                  if (activeQualityLabel != null) ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      activeQualityLabel!,
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.brandAccent,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (isLive || duration > Duration.zero)
+                    _PlayerTimeline(
+                      isLive: isLive,
+                      position: position,
+                      duration: duration,
+                      timelineExtent: timelineExtent,
+                      bufferedExtent: bufferedExtent,
+                      atLiveEdge: atLiveEdge,
+                      dragValueMs: dragValueMs,
+                      onChangeStart: onTimelineChangeStart,
+                      onChanged: onTimelineChanged,
+                      onChangeEnd: onTimelineChangeEnd,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PlayerTimeline extends StatelessWidget {
+  const _PlayerTimeline({
+    required this.isLive,
+    required this.position,
+    required this.duration,
+    required this.timelineExtent,
+    required this.bufferedExtent,
+    required this.atLiveEdge,
+    required this.dragValueMs,
+    required this.onChangeStart,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final bool isLive;
+  final Duration position;
+  final Duration duration;
+  final Duration timelineExtent;
+  final Duration bufferedExtent;
+  final bool atLiveEdge;
+  final double? dragValueMs;
+  final ValueChanged<double> onChangeStart;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final durationStyle = AppTypography.caption.copyWith(
+      color: Colors.white70,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final timeLabelWidth = _timeLabelWidth(context, durationStyle);
+
+    return Row(
+      children: [
+        if (isLive)
+          PlayerLiveIndicator(isAtLiveEdge: atLiveEdge)
+        else
+          SizedBox(
+            width: timeLabelWidth,
+            child: Text(
+              _formatDuration(position),
+              key: const Key('player-position-label'),
+              style: durationStyle,
+            ),
+          ),
+        Expanded(
+          child: SliderTheme(
+            data: const SliderThemeData(
+              trackHeight: 3,
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+              activeTrackColor: AppColors.brandAccent,
+              secondaryActiveTrackColor: Colors.white54,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: AppColors.brandAccent,
+            ),
+            child: Slider(
+              value: (dragValueMs ?? position.inMilliseconds.toDouble()).clamp(
+                0.0,
+                timelineExtent.inMilliseconds.toDouble(),
+              ),
+              min: 0.0,
+              max: timelineExtent > Duration.zero
+                  ? timelineExtent.inMilliseconds.toDouble()
+                  : 1.0,
+              secondaryTrackValue: timelineExtent > Duration.zero
+                  ? bufferedExtent.inMilliseconds
+                        .clamp(0, timelineExtent.inMilliseconds)
+                        .toDouble()
+                  : null,
+              onChangeStart: timelineExtent > Duration.zero
+                  ? onChangeStart
+                  : null,
+              onChanged: timelineExtent > Duration.zero ? onChanged : null,
+              onChangeEnd: timelineExtent > Duration.zero ? onChangeEnd : null,
+            ),
+          ),
+        ),
+        if (!isLive)
+          SizedBox(
+            width: timeLabelWidth,
+            child: Text(
+              _formatDuration(duration),
+              key: const Key('player-duration-label'),
+              style: durationStyle,
+              textAlign: TextAlign.right,
+            ),
+          ),
+      ],
+    );
+  }
+
+  double _timeLabelWidth(BuildContext context, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: _formatDuration(duration), style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width + AppSpacing.xs;
+  }
+}
+
+class PlayerLiveIndicator extends StatelessWidget {
+  const PlayerLiveIndicator({super.key, required this.isAtLiveEdge});
+
+  final bool isAtLiveEdge;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: isAtLiveEdge
+        ? 'Live broadcast, at live edge'
+        : 'Live broadcast, behind live edge',
+    child: Container(
+      key: const Key('player-live-indicator'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.liveAccent,
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text(
+        'LIVE',
+        style: AppTypography.liveBadge.copyWith(color: AppColors.primary),
+      ),
+    ),
+  );
+}
+
+String _formatDuration(Duration duration) {
+  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (duration.inHours > 0) {
+    final hours = duration.inHours.toString();
+    return '$hours:$minutes:$seconds';
+  }
+  return '$minutes:$seconds';
+}

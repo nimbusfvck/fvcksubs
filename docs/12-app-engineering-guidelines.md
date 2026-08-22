@@ -146,6 +146,12 @@ When modifying an already-large class, reduce it below the limit as part of the
 same change whenever practical. Do not add new behavior to a class already
 over 500 lines without first extracting the affected responsibility.
 
+Run this check from the workspace root before merging app or package changes:
+
+```sh
+dart run tool/check_class_length.dart
+```
+
 ## 12.8 Fix causes, not symptoms
 
 Fix the underlying cause of an issue. Do not add a workaround, special-case
