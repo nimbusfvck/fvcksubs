@@ -120,7 +120,33 @@ implementation history. Prefer a clear name over a comment. Document public
 APIs and security, protocol, caching, or native-player decisions that are easy
 to break accidentally.
 
-## 12.7 Testing and validation
+## 12.7 Class size and widget composition
+
+One class must not exceed **500 lines**. Treat 500 lines as a hard upper
+limit, not a target. A Flutter page or widget that approaches the limit must
+be split before adding more behavior.
+
+Split by responsibility while keeping ownership clear:
+
+- move independent visual regions into private feature widgets;
+- move asynchronous state and workflows into a Cubit/controller or focused
+  service;
+- move pure formatting, selection, and mapping rules into small helpers with
+  unit tests;
+- keep native-player lifecycle handling isolated from controls and page
+  navigation;
+- keep each extracted widget's inputs explicit and minimal.
+
+Do not split a class only to bypass the line limit. Avoid passing `BuildContext`,
+large mutable state, or many callback chains through several widgets. Extract a
+meaningful unit with one responsibility, give it a clear name, and keep its
+state at the lowest owner that needs it.
+
+When modifying an already-large class, reduce it below the limit as part of the
+same change whenever practical. Do not add new behavior to a class already
+over 500 lines without first extracting the affected responsibility.
+
+## 12.8 Testing and validation
 
 Test workflow and state transitions at the Cubit/controller or service level.
 Widget tests cover rendering and user intent; they must use the injected
