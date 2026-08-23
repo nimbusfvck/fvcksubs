@@ -139,15 +139,16 @@ class SourcePriorityPage extends StatelessWidget {
                         ),
                       ),
                     const SizedBox(width: AppSpacing.xs),
-                    ReorderableDragStartListener(
+                    ReorderableDelayedDragStartListener(
                       index: index,
-                      child: Semantics(
-                        button: true,
-                        label:
-                            'Reorder ${provider.name ?? _providerLabel(provider)}',
-                        child: const Padding(
-                          padding: EdgeInsets.all(AppSpacing.xs),
-                          child: Icon(Icons.drag_handle),
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Semantics(
+                          button: true,
+                          label:
+                              'Reorder ${provider.name ?? _providerLabel(provider)}',
+                          child: const Icon(Icons.drag_handle),
                         ),
                       ),
                     ),
