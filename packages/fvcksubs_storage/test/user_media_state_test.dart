@@ -15,6 +15,7 @@ void main() {
   test('protocol-v2 record round-trips', () {
     final state = UserMediaState(
       item: item,
+      contentRating: ContentRating.mature,
       favorite: true,
       progress: const Duration(seconds: 12),
       duration: const Duration(minutes: 42),
@@ -22,6 +23,13 @@ void main() {
     );
 
     expect(UserMediaState.fromJson(state.toJson()), state);
+  });
+
+  test('missing content rating stays backward compatible', () {
+    final state = UserMediaState.fromJson({'item': item.toJson()});
+
+    expect(state.contentRating, ContentRating.unknown);
+    expect(state.toJson().containsKey('contentRating'), isFalse);
   });
 
   test('copyWith can clear progress', () {

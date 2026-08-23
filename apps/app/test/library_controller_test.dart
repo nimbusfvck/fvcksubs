@@ -41,6 +41,22 @@ void main() {
     expect(controller.history.single.lastWatched, DateTime.utc(2026, 8, 19));
   });
 
+  test('watching persists the content rating for visibility filters', () {
+    final controller = LibraryController(store: _MemoryLibraryStoreV2());
+
+    controller.recordWatched(
+      item(),
+      contentRating: ContentRating.mature,
+      progress: const Duration(minutes: 2),
+    );
+    controller.recordWatched(item(), progress: const Duration(minutes: 3));
+
+    expect(
+      controller.recordFor(item().ref)?.contentRating,
+      ContentRating.mature,
+    );
+  });
+
   test('watching can explicitly clear progress', () {
     final controller = LibraryController(store: _MemoryLibraryStoreV2());
     controller.recordWatched(item(), progress: const Duration(minutes: 12));

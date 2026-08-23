@@ -124,7 +124,11 @@ Extensions may declare `contentRating` as `general`, `mature`, or `unknown` on t
 manifest. A catalog may override the manifest value. The app's **Show NSFW content**
 preference hides catalogs marked `mature` when disabled. Existing extensions that omit the
 field remain `unknown` for backward compatibility; the declaration is self-reported and
-must not be treated as a security boundary.
+must not be treated as a security boundary. When playback starts, the app stores the
+effective rating with the library snapshot so **Continue Watching** applies the same
+visibility rule, including after restart. Legacy snapshots without a rating are
+stored as `unknown`; the registry may still infer a mature rating from the installed
+extension or remembered catalog origin.
 
 ## 5.3 App-owned state
 
@@ -133,6 +137,7 @@ classDiagram
     class UserMediaState {
         MediaRef ref
         MediaItem item
+        ContentRating contentRating
         bool favorite
         Duration? progress
         DateTime? lastWatched

@@ -15,12 +15,14 @@ Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
   EpisodeGuide? episodeGuide,
+  ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
 }) => _playMedia(
   context,
   PlaybackMedia(item),
   episodeGuide: episodeGuide,
+  contentRating: contentRating,
   replaceCurrent: replaceCurrent,
   returnToDetail: returnToDetail,
 );
@@ -29,6 +31,7 @@ Future<void> _playMedia(
   BuildContext context,
   PlaybackMedia item, {
   EpisodeGuide? episodeGuide,
+  ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
 }) async {
@@ -51,6 +54,7 @@ Future<void> _playMedia(
       item,
       enabledCached,
       replaceCurrent,
+      contentRating: contentRating,
       episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
     );
@@ -82,6 +86,7 @@ Future<void> _playMedia(
         item,
         fast,
         replaceCurrent,
+        contentRating: contentRating,
         episodeGuide: episodeGuide,
         pendingSources: pendingSources,
         returnToDetail: returnToDetail,
@@ -112,6 +117,7 @@ Future<void> _playMedia(
     item,
     [first],
     replaceCurrent,
+    contentRating: contentRating,
     episodeGuide: episodeGuide,
     pendingSources: result.second,
     returnToDetail: returnToDetail,
@@ -179,6 +185,7 @@ void _openPlayer(
   PlaybackMedia item,
   List<ResolvedSource> sources,
   bool replaceCurrent, {
+  required ContentRating contentRating,
   EpisodeGuide? episodeGuide,
   Stream<ResolvedSource>? pendingSources,
   bool returnToDetail = false,
@@ -189,7 +196,18 @@ void _openPlayer(
     scope.subtitlePreferenceController,
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
-  scope.libraryController.recordWatched(item.item);
+  final savedRating = scope.libraryController
+      .recordFor(item.ref)
+      ?.contentRating;
+  final effectiveRating = contentRating != ContentRating.unknown
+      ? contentRating
+      : savedRating != null && savedRating != ContentRating.unknown
+      ? savedRating
+      : scope.registry.contentRatingFor(item.ref);
+  scope.libraryController.recordWatched(
+    item.item,
+    contentRating: effectiveRating,
+  );
   final route = MaterialPageRoute<void>(
     builder: (_) => PlayerPage(
       item: item.item,

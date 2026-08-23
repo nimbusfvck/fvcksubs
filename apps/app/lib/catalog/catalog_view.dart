@@ -155,10 +155,19 @@ class _CatalogViewState extends State<CatalogView> {
     _load();
   }
 
-  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
+  void _open(VersionedMediaItem item) => openVersionedItem(
+    context,
+    item,
+    contentRating: widget.binding.contentRating,
+  );
 
   void _openWithHero(VersionedMediaItem item, Object heroTag) =>
-      openVersionedItem(context, item, heroTag: heroTag);
+      openVersionedItem(
+        context,
+        item,
+        heroTag: heroTag,
+        contentRating: widget.binding.contentRating,
+      );
 
   @override
   Widget build(BuildContext context) {

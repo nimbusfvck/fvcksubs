@@ -51,6 +51,9 @@ class _CatalogShelfState extends State<CatalogShelf> {
     if (_future != null) return;
     final scope = AppScope.of(context);
     _cached = scope.catalogCache.peekVersioned(widget.binding, widget.category);
+    if (_cached != null) {
+      scope.registry.rememberCatalogPage(widget.binding, _cached!);
+    }
     _future = _load();
   }
 
@@ -67,6 +70,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
       widget.category,
     );
     if (persisted != null) {
+      scope.registry.rememberCatalogPage(widget.binding, persisted);
       unawaited(_refreshPersisted(scope));
       return persisted;
     }
@@ -107,10 +111,19 @@ class _CatalogShelfState extends State<CatalogShelf> {
     });
   }
 
-  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
+  void _open(VersionedMediaItem item) => openVersionedItem(
+    context,
+    item,
+    contentRating: widget.binding.contentRating,
+  );
 
   void _openWithHero(VersionedMediaItem item, Object heroTag) =>
-      openVersionedItem(context, item, heroTag: heroTag);
+      openVersionedItem(
+        context,
+        item,
+        heroTag: heroTag,
+        contentRating: widget.binding.contentRating,
+      );
 
   void _openCatalog({String? subCategory, String? title}) =>
       Navigator.of(context).push(

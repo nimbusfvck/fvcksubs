@@ -6,6 +6,7 @@ class UserMediaState extends Equatable {
   /// Creates a persisted item snapshot.
   const UserMediaState({
     required this.item,
+    this.contentRating = ContentRating.unknown,
     this.favorite = false,
     this.progress,
     this.duration,
@@ -42,6 +43,10 @@ class UserMediaState extends Equatable {
     }
     return UserMediaState(
       item: MediaItemV2.fromJson(item.cast<String, Object?>()),
+      contentRating: ContentRating.values.firstWhere(
+        (value) => value.name == json['contentRating'],
+        orElse: () => ContentRating.unknown,
+      ),
       favorite: favorite as bool? ?? false,
       progress: progress == null
           ? null
@@ -57,6 +62,11 @@ class UserMediaState extends Equatable {
 
   /// Last known item data.
   final MediaItemV2 item;
+
+  /// Audience classification captured when the item entered playback.
+  ///
+  /// Older records omit this field and remain visible for compatibility.
+  final ContentRating contentRating;
 
   /// Stable content identity.
   MediaRef get ref => item.ref;
@@ -83,12 +93,14 @@ class UserMediaState extends Equatable {
   /// Returns a copy with selected values replaced.
   UserMediaState copyWith({
     MediaItemV2? item,
+    ContentRating? contentRating,
     bool? favorite,
     Object? progress = _unset,
     Object? duration = _unset,
     Object? lastWatched = _unset,
   }) => UserMediaState(
     item: item ?? this.item,
+    contentRating: contentRating ?? this.contentRating,
     favorite: favorite ?? this.favorite,
     progress: identical(progress, _unset)
         ? this.progress
@@ -106,6 +118,8 @@ class UserMediaState extends Equatable {
   /// Encodes this record.
   Map<String, Object?> toJson() => {
     'item': item.toJson(),
+    if (contentRating != ContentRating.unknown)
+      'contentRating': contentRating.name,
     'favorite': favorite,
     if (progress != null) 'progressMs': progress!.inMilliseconds,
     if (duration != null) 'durationMs': duration!.inMilliseconds,
@@ -114,5 +128,12 @@ class UserMediaState extends Equatable {
   };
 
   @override
-  List<Object?> get props => [item, favorite, progress, duration, lastWatched];
+  List<Object?> get props => [
+    item,
+    contentRating,
+    favorite,
+    progress,
+    duration,
+    lastWatched,
+  ];
 }

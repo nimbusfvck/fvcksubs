@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/home_shell.dart';
 import 'package:fvcksubs_app/widgets/app_page_bar.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -144,6 +147,37 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
+  testWidgets('Continue Watching hides mature records when NSFW is off', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(categories: ['all']),
+    ]);
+    final item = fakeItem(title: 'Mature item');
+    final library = LibraryController(
+      store: _TestLibraryStore(),
+      initial: {
+        UserMediaState.keyFor(item.ref): UserMediaState(
+          item: item,
+          contentRating: ContentRating.mature,
+          progress: const Duration(minutes: 2),
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: registry,
+        libraryController: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue Watching'), findsNothing);
+    expect(find.text('Mature item'), findsNothing);
+  });
+
   testWidgets('expanded sectioned catalogs keep their section heading', (
     tester,
   ) async {
@@ -171,4 +205,12 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class _TestLibraryStore implements LibraryStore {
+  @override
+  Future<Map<String, UserMediaState>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

@@ -20,9 +20,16 @@ class ContinueWatchingShelf extends StatelessWidget {
   final LibraryController controller;
   final ExtensionRegistry registry;
 
-  bool _isAvailable(UserMediaState record) => registry.installed.any(
-    (manifest) => manifest.id == record.ref.extensionId,
-  );
+  bool _isAvailable(UserMediaState record) {
+    final installed = registry.installed.any(
+      (manifest) => manifest.id == record.ref.extensionId,
+    );
+    if (!installed) return false;
+    final rating = record.contentRating == ContentRating.unknown
+        ? registry.contentRatingFor(record.ref)
+        : record.contentRating;
+    return !rating.isHiddenWhenNsfwDisabled(registry.showNsfw);
+  }
 
   @override
   Widget build(

@@ -99,12 +99,16 @@ class LibraryController extends Cubit<LibraryState> {
 
   void recordWatched(
     MediaItemV2 item, {
+    Object? contentRating = _unspecified,
     Object? progress = _unspecified,
     Object? duration = _unspecified,
   }) {
     final existing = recordFor(item.ref);
     final base = existing ?? UserMediaState(item: item);
     var next = base.copyWith(item: item, lastWatched: _now());
+    if (!identical(contentRating, _unspecified)) {
+      next = next.copyWith(contentRating: contentRating as ContentRating);
+    }
     if (!identical(progress, _unspecified)) {
       next = next.copyWith(progress: progress);
     }

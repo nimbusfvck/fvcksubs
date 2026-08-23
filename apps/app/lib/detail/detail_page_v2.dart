@@ -17,10 +17,16 @@ import '../widgets/shimmer_placeholder.dart';
 import 'open_versioned_item.dart';
 
 class DetailPageV2 extends StatefulWidget {
-  const DetailPageV2({super.key, required this.item, this.heroTag});
+  const DetailPageV2({
+    super.key,
+    required this.item,
+    this.heroTag,
+    this.contentRating = ContentRating.unknown,
+  });
 
   final MediaItemV2 item;
   final Object? heroTag;
+  final ContentRating contentRating;
 
   @override
   State<DetailPageV2> createState() => _DetailPageV2State();
@@ -232,6 +238,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                                     context,
                                     primaryTarget,
                                     episodeGuide: guide,
+                                    contentRating: widget.contentRating,
                                     returnToDetail: true,
                                   ),
                             label: _playLabel(
@@ -340,6 +347,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                         context,
                         _episodeItem(item, selectedGroup, entry.$1),
                         episodeGuide: guide,
+                        contentRating: widget.contentRating,
                         returnToDetail: true,
                       ),
                     ),
@@ -368,6 +376,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                             context,
                             VersionedMediaItem(item: recommendation),
                             heroTag: heroTag,
+                            contentRating: widget.contentRating,
                           ),
                         ),
                       );

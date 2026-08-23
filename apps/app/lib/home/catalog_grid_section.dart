@@ -49,10 +49,13 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    final cached = AppScope.of(
-      context,
-    ).catalogCache.peekVersioned(widget.binding, widget.category);
+    final scope = AppScope.of(context);
+    final cached = scope.catalogCache.peekVersioned(
+      widget.binding,
+      widget.category,
+    );
     if (cached != null) {
+      scope.registry.rememberCatalogPage(widget.binding, cached);
       _page = cached;
       _nextPage = cached.nextPage;
       _loading = false;
@@ -101,6 +104,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
       await _load();
       return;
     }
+    scope.registry.rememberCatalogPage(widget.binding, persisted);
     if (!mounted) return;
     setState(() {
       _page = persisted;
@@ -161,10 +165,19 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
     }
   }
 
-  void _open(VersionedMediaItem item) => openVersionedItem(context, item);
+  void _open(VersionedMediaItem item) => openVersionedItem(
+    context,
+    item,
+    contentRating: widget.binding.contentRating,
+  );
 
   void _openWithHero(VersionedMediaItem item, Object heroTag) =>
-      openVersionedItem(context, item, heroTag: heroTag);
+      openVersionedItem(
+        context,
+        item,
+        heroTag: heroTag,
+        contentRating: widget.binding.contentRating,
+      );
 
   @override
   Widget build(BuildContext context) {

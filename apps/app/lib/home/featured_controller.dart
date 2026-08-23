@@ -116,6 +116,7 @@ class FeaturedController extends Cubit<FeaturedState> {
           category,
         );
         if (persisted != null) {
+          registry.rememberCatalogPage(binding, persisted);
           return _FeaturedLoadResult.page(persisted, fromPersistentCache: true);
         }
       }

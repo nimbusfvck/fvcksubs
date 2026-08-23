@@ -26,6 +26,57 @@ void main() {
     expect(registry.categories, isEmpty);
     expect(registry.catalogsFor('movie'), isEmpty);
   });
+
+  test('dedicated mature providers can rate persisted items', () {
+    final extension = _FakeExtension(
+      ContentRating.general,
+      catalogRating: ContentRating.mature,
+    );
+    final registry = ExtensionRegistry([extension]);
+
+    expect(
+      registry.contentRatingFor(
+        const MediaRef(
+          extensionId: 'example',
+          providerId: 'example.catalog',
+          id: 'item-1',
+        ),
+      ),
+      ContentRating.mature,
+    );
+  });
+
+  test('catalog origin is remembered for mixed providers', () {
+    final extension = _FakeExtension(ContentRating.general);
+    final registry = ExtensionRegistry([extension]);
+    final binding = CatalogBinding(
+      extension: extension,
+      providerId: 'example.catalog',
+      catalog: extension.manifest.providers.single.catalogs.single,
+    );
+    final item = const VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'example',
+        providerId: 'example.catalog',
+        id: 'item-2',
+      ),
+      title: 'Item',
+    );
+
+    registry.rememberCatalogPage(
+      binding,
+      VersionedCatalogPage(
+        sections: [
+          CatalogSectionV2(
+            id: 'main',
+            items: [VersionedMediaItem(item: item)],
+          ),
+        ],
+      ),
+    );
+
+    expect(registry.contentRatingFor(item.ref), ContentRating.general);
+  });
 }
 
 class _FakeExtension extends ContentExtension {

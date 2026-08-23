@@ -28,6 +28,7 @@ class ExtensionRegistry {
   final List<ContentExtension> _extensions;
   final Set<String> _disabledExtensionIds;
   final Set<String> _disabledProviderIds;
+  final Map<String, ContentRating> _contentRatingsByRef = {};
 
   /// Whether catalogs explicitly marked mature/NSFW may be shown.
   bool showNsfw;
@@ -107,6 +108,43 @@ class ExtensionRegistry {
   /// Whether the catalog is allowed by the current NSFW preference.
   bool isCatalogAllowed(CatalogBinding binding) =>
       !binding.contentRating.isHiddenWhenNsfwDisabled(showNsfw);
+
+  /// Best-effort rating for an item that no longer carries its catalog
+  /// binding, such as a persisted Continue Watching record.
+  ///
+  /// A dedicated mature provider can be identified safely. Mixed providers
+  /// stay unknown until the originating catalog supplies an explicit rating.
+  ContentRating contentRatingFor(MediaRef ref) {
+    final known = _contentRatingsByRef[_mediaRefKey(ref)];
+    if (known != null) return known;
+    final extension = extensionById(ref.extensionId);
+    final manifestRating = extension.manifest.contentRating;
+    if (manifestRating == ContentRating.mature) return manifestRating;
+    final provider = extension.manifest.providers.firstWhere(
+      (value) => value.id == ref.providerId,
+      orElse: () => const ProviderDecl(id: '', roles: []),
+    );
+    if (provider.catalogs.isNotEmpty &&
+        provider.catalogs.every(
+          (catalog) =>
+              (catalog.contentRating ?? manifestRating) == ContentRating.mature,
+        )) {
+      return ContentRating.mature;
+    }
+    return manifestRating;
+  }
+
+  /// Remembers the catalog origin for items shown in the current session.
+  ///
+  /// Catalog-level ratings otherwise disappear when an item is persisted for
+  /// Continue Watching, so keep this small in-memory index alongside the
+  /// registry. The persisted library snapshot still stores the rating once
+  /// playback begins.
+  void rememberCatalogPage(CatalogBinding binding, VersionedCatalogPage page) {
+    for (final item in page.items) {
+      _contentRatingsByRef[_mediaRefKey(item.ref)] = binding.contentRating;
+    }
+  }
 
   /// Whether a source may be offered under the current Addons preferences.
   ///
@@ -238,15 +276,19 @@ class ExtensionRegistry {
     String? page,
     Map<String, String> filters = const {},
     String? subCategory,
-  }) => _currentExtension(binding).catalog(
-    _catalogQuery(
-      binding,
-      category: category,
-      page: page,
-      filters: filters,
-      subCategory: subCategory,
-    ),
-  );
+  }) async {
+    final pageResult = await _currentExtension(binding).catalog(
+      _catalogQuery(
+        binding,
+        category: category,
+        page: page,
+        filters: filters,
+        subCategory: subCategory,
+      ),
+    );
+    rememberCatalogPage(binding, pageResult);
+    return pageResult;
+  }
 
   CatalogQuery _catalogQuery(
     CatalogBinding binding, {
@@ -395,3 +437,6 @@ class ExtensionRegistry {
     orElse: () => throw StateError('No extension installed with id "$id"'),
   );
 }
+
+String _mediaRefKey(MediaRef ref) =>
+    '${ref.extensionId}/${ref.providerId}/${ref.id}';
