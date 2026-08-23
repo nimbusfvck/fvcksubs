@@ -372,10 +372,19 @@ class _PlayerPageState extends State<PlayerPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => PlayerSourcePickerSheet(
-        resolvedSources: _resolvedSources,
-        current: _current,
-      ),
+      builder: (_) {
+        final registry = AppScope.of(context).registry;
+        final providerNames = {
+          for (final manifest in registry.installed)
+            for (final provider in manifest.providers)
+              if (provider.name != null) provider.id: provider.name!,
+        };
+        return PlayerSourcePickerSheet(
+          resolvedSources: _resolvedSources,
+          current: _current,
+          providerNames: providerNames,
+        );
+      },
     );
     if (!mounted || picked == null) return;
     final index = _resolvedSources.indexOf(picked);

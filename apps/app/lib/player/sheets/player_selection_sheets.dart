@@ -22,10 +22,28 @@ class PlayerSourcePickerSheet extends StatelessWidget {
     super.key,
     required this.resolvedSources,
     required this.current,
+    this.providerNames = const {},
   });
 
   final List<ResolvedSource> resolvedSources;
   final ResolvedSource current;
+  final Map<String, String> providerNames;
+
+  Map<String, List<ResolvedSource>> _groupedSources() {
+    final groups = <String, List<ResolvedSource>>{};
+    for (final source in resolvedSources) {
+      final providerId = source.source.providerId;
+      final providerName =
+          providerNames[providerId] ??
+          (source.source.provider.isNotEmpty
+              ? source.source.provider
+              : providerId.isNotEmpty
+              ? providerId.split('.').last
+              : 'Unknown provider');
+      groups.putIfAbsent(providerName, () => []).add(source);
+    }
+    return groups;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,23 +73,39 @@ class PlayerSourcePickerSheet extends StatelessWidget {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  for (final item in resolvedSources)
-                    ListTile(
-                      title: Text(
-                        item.source.label,
-                        style: AppTypography.bodyMd.copyWith(
-                          color: AppColors.onDark,
+                  for (final group in _groupedSources().entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                        AppSpacing.md,
+                        AppSpacing.xs,
+                      ),
+                      child: Text(
+                        group.key,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.onDarkSoft,
                         ),
                       ),
-                      subtitle: _subtitleSummary(item),
-                      trailing: item.source.id == current.source.id
-                          ? const Icon(
-                              Icons.check,
-                              color: AppColors.brandAccent,
-                            )
-                          : null,
-                      onTap: () => Navigator.of(context).pop(item),
                     ),
+                    for (final item in group.value)
+                      ListTile(
+                        title: Text(
+                          item.source.label,
+                          style: AppTypography.bodyMd.copyWith(
+                            color: AppColors.onDark,
+                          ),
+                        ),
+                        subtitle: _subtitleSummary(item),
+                        trailing: item.source.id == current.source.id
+                            ? const Icon(
+                                Icons.check,
+                                color: AppColors.brandAccent,
+                              )
+                            : null,
+                        onTap: () => Navigator.of(context).pop(item),
+                      ),
+                  ],
                 ],
               ),
             ),
