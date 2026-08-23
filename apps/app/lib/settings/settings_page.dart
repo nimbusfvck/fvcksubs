@@ -101,6 +101,7 @@ class SourcePriorityPage extends StatelessWidget {
         final providers = controller.availableProviders;
         return ReorderableListView.builder(
           padding: const EdgeInsets.all(AppSpacing.md),
+          buildDefaultDragHandles: false,
           header: Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Text(
@@ -138,7 +139,18 @@ class SourcePriorityPage extends StatelessWidget {
                         ),
                       ),
                     const SizedBox(width: AppSpacing.xs),
-                    const Icon(Icons.drag_handle),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Semantics(
+                        button: true,
+                        label:
+                            'Reorder ${provider.name ?? _providerLabel(provider)}',
+                        child: const Padding(
+                          padding: EdgeInsets.all(AppSpacing.xs),
+                          child: Icon(Icons.drag_handle),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
