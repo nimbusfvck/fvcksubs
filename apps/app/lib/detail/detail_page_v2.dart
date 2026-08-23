@@ -198,12 +198,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
-    final selectedGroup = groups.isEmpty
-        ? null
-        : groups.firstWhere(
-            (group) => group.id == _selectedGroupId,
-            orElse: () => groups.last,
-          );
 
     return CustomScrollView(
       slivers: [
@@ -307,52 +301,12 @@ class _DetailPageV2State extends State<DetailPageV2> {
                 const SizedBox(height: AppSpacing.sm),
                 _Credits(values: detail.credits),
               ],
-              if (selectedGroup != null) ...[
-                const SizedBox(height: AppSpacing.xl),
-                Row(
-                  children: [
-                    const Expanded(child: _SectionTitle('Episodes')),
-                    if (groups.length > 1)
-                      Flexible(
-                        child: DropdownButton<String>(
-                          value: selectedGroup.id,
-                          isExpanded: true,
-                          dropdownColor: AppColors.surfaceDarkElevated,
-                          items: [
-                            for (final group in groups)
-                              DropdownMenuItem(
-                                value: group.id,
-                                child: Text(
-                                  group.title,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          onChanged: (value) =>
-                              setState(() => _selectedGroupId = value),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final entry in selectedGroup.episodes.indexed)
-                  BlocBuilder<LibraryController, LibraryState>(
-                    bloc: libraryController,
-                    builder: (context, state) => _EpisodeTile(
-                      episode: entry.$2,
-                      progress: _progressFraction(
-                        state.recordFor(entry.$2.ref),
-                      ),
-                      onTap: () => playItemV2(
-                        context,
-                        _episodeItem(item, selectedGroup, entry.$1),
-                        episodeGuide: guide,
-                        contentRating: widget.contentRating,
-                        returnToDetail: true,
-                      ),
-                    ),
-                  ),
-              ],
+              _episodesSection(
+                detail: detail,
+                guide: guide,
+                groups: groups,
+                libraryController: libraryController,
+              ),
               if (detail.recommendations.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
                 const _SectionTitle('You Might Also Like'),
@@ -389,6 +343,81 @@ class _DetailPageV2State extends State<DetailPageV2> {
         ),
       ],
     );
+  }
+
+  Widget _episodesSection({
+    required MediaDetailV2 detail,
+    required EpisodeGuide? guide,
+    required List<EpisodeGroup> groups,
+    required LibraryController libraryController,
+  }) => BlocBuilder<LibraryController, LibraryState>(
+    bloc: libraryController,
+    builder: (context, state) {
+      final selectedGroup = _selectedGroup(detail, groups, state);
+      if (selectedGroup == null) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              const Expanded(child: _SectionTitle('Episodes')),
+              if (groups.length > 1)
+                Flexible(
+                  child: DropdownButton<String>(
+                    value: selectedGroup.id,
+                    isExpanded: true,
+                    dropdownColor: AppColors.surfaceDarkElevated,
+                    items: [
+                      for (final group in groups)
+                        DropdownMenuItem(
+                          value: group.id,
+                          child: Text(
+                            group.title,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _selectedGroupId = value),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final entry in selectedGroup.episodes.indexed)
+            _EpisodeTile(
+              episode: entry.$2,
+              progress: _progressFraction(state.recordFor(entry.$2.ref)),
+              onTap: () => playItemV2(
+                context,
+                _episodeItem(detail.item, selectedGroup, entry.$1),
+                episodeGuide: guide,
+                contentRating: widget.contentRating,
+                returnToDetail: true,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+
+  EpisodeGroup? _selectedGroup(
+    MediaDetailV2 detail,
+    List<EpisodeGroup> groups,
+    LibraryState library,
+  ) {
+    if (groups.isEmpty) return null;
+    final selectedId = _selectedGroupId;
+    if (selectedId != null) {
+      for (final group in groups) {
+        if (group.id == selectedId) return group;
+      }
+    }
+    final resumed = detail.episodeGuide == null
+        ? null
+        : _resumedEpisode(detail.episodeGuide!, detail.item.ref, library);
+    return resumed?.group ?? groups.last;
   }
 
   Future<void> _openTrailer(BuildContext context, MediaTrailer trailer) async {
