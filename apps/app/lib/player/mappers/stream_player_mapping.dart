@@ -18,12 +18,8 @@ BetterPlayerDataSource betterPlayerDataSource(
   subtitles: isLive
       ? null
       : _subtitles(stream.subtitles, preferredSubtitleLanguage),
-  cacheConfiguration: BetterPlayerCacheConfiguration(
-    useCache: !isLive,
-    maxCacheSize: 100 * 1024 * 1024, // 100 MB
-    maxCacheFileSize: 10 * 1024 * 1024,
-    key: stream.label,
-  ),
+  // Keep signed and header-authenticated streams on the native network path.
+  cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
   bufferingConfiguration: preview
       ? const BetterPlayerBufferingConfiguration(
           minBufferMs: 1500,

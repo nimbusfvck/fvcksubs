@@ -67,7 +67,9 @@ contracts unless the contract itself is the defect.
 - Keep extension data and provider knowledge in extensions.
 - Keep source discovery separate from fresh stream resolution.
 - Preserve usable cached data during a recoverable refresh failure.
-- Never auto-advance playback after an error; offer retry or source switching.
+- Never auto-advance after playback has started; offer retry or source switching.
+  A source that fails before initialization may be marked failed and replaced by
+  the next already-resolved source once.
 
 When a temporary workaround is unavoidable, meet every condition in
 [App Engineering Guidelines §12.8](12-app-engineering-guidelines.md#128-fix-causes-not-symptoms),

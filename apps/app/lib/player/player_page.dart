@@ -15,6 +15,7 @@ import 'models/playback_media.dart';
 import 'models/app_player_controller.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
+import 'state/source_fallback_policy.dart';
 import 'widgets/player_overlays.dart';
 import 'workflow/play_item.dart';
 
@@ -77,6 +78,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _retrying = false;
   int _sourceRevision = 0;
   int _playbackAttempt = 0;
+  final Set<String> _failedSourceIds = <String>{};
+  bool _sourceStarted = false;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
@@ -145,6 +148,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void _onVideoValueChanged() {
     final value = _videoValue?.value;
     if (value == null || !value.initialized) return;
+    _sourceStarted = true;
     _lastPosition = value.position;
     _lastDuration = value.duration;
     final position = sourceSwitchSeekPosition(
@@ -202,6 +206,18 @@ class _PlayerPageState extends State<PlayerPage> {
           !identical(controller, _controller)) {
         return;
       }
+      _failedSourceIds.add(_current.source.id);
+      if (!_sourceStarted) {
+        final nextIndex = nextUnfailedSourceIndex(
+          sources: _resolvedSources,
+          currentIndex: _currentIndex,
+          failedSourceIds: _failedSourceIds,
+        );
+        if (nextIndex != null) {
+          _switchToResolvedSource(nextIndex);
+          return;
+        }
+      }
       setState(() {
         _playbackError = (message == null || message.isEmpty)
             ? 'Playback failed.'
@@ -214,6 +230,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _retryPlayback() async {
     if (_controller == null || _retrying) return;
     final attempt = ++_playbackAttempt;
+    _failedSourceIds.remove(_current.source.id);
+    _sourceStarted = false;
     setState(() {
       _retrying = true;
       _playbackError = null;
@@ -236,6 +254,7 @@ class _PlayerPageState extends State<PlayerPage> {
           stream: stream,
         );
         _sourceRevision++;
+        _controller = null;
         _retrying = false;
       });
       scope.sourceCache.store(widget.media.ref, _resolvedSources);
@@ -319,6 +338,32 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller != null) unawaited(controller.toggleFullScreen());
   }
 
+  void _switchToResolvedSource(int index) {
+    if (index < 0 ||
+        index >= _resolvedSources.length ||
+        index == _currentIndex) {
+      return;
+    }
+    final picked = _resolvedSources[index];
+    _failedSourceIds.remove(picked.source.id);
+    unawaited(_eventSubscription?.cancel());
+    _eventSubscription = null;
+    setState(() {
+      _pendingSwitchPosition = _isLive ? null : _lastPosition;
+      _currentIndex = index;
+      _playbackAttempt++;
+      _playbackError = null;
+      _retrying = false;
+      _sourceRevision++;
+      _sourceStarted = false;
+      _controller = null;
+      _onVisibilityChanged = null;
+    });
+    AppScope.of(
+      context,
+    ).sourceCache.promote(widget.media.ref, picked.source.id);
+  }
+
   Future<void> _changeSource() async {
     final picked = await showModalBottomSheet<ResolvedSource>(
       context: context,
@@ -335,19 +380,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!mounted || picked == null) return;
     final index = _resolvedSources.indexOf(picked);
     if (index < 0 || index == _currentIndex) return;
-    setState(() {
-      _pendingSwitchPosition = _isLive ? null : _lastPosition;
-      _currentIndex = index;
-      _playbackAttempt++;
-      _playbackError = null;
-      _retrying = false;
-      _sourceRevision++;
-      _controller = null;
-      _onVisibilityChanged = null;
-    });
-    AppScope.of(
-      context,
-    ).sourceCache.promote(widget.media.ref, picked.source.id);
+    _switchToResolvedSource(index);
   }
 
   Widget _controlsFor(AppPlayerController? controller) =>

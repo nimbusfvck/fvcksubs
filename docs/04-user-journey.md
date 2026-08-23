@@ -294,9 +294,10 @@ stateDiagram-v2
     Error --> Playing: retry, or pick another source
     Playing --> [*]: back
     note right of Error
-        Never auto-advances on error.
-        Live streams report spurious errors,
-        and auto-advancing skips good sources.
+        An error before playback initializes tries the next already-resolved source once.
+        After playback starts, it never auto-advances; retry and source switching remain available.
+        Live streams can report spurious errors, so fallback is limited to
+        the pre-initialization window.
     end note
 ```
 
