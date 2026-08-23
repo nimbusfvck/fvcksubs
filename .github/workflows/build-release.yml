@@ -11,55 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: Analyze and test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        working-directory: apps/app
-        run: flutter pub get
-
-      - name: Analyze
-        working-directory: apps/app
-        run: flutter analyze
-
-      - name: Test
-        working-directory: apps/app
-        run: flutter test --coverage --reporter compact
-
-      - name: Show coverage in summary
-        working-directory: apps/app
-        run: |
-          read -r TOTAL HIT <<EOF
-          $(awk -F: '/^LF:/ { total += $2 } /^LH:/ { hit += $2 } END { print total, hit }' coverage/lcov.info)
-          EOF
-          if [ "${TOTAL:-0}" -gt 0 ]; then
-            PERCENT=$(awk -v hit="$HIT" -v total="$TOTAL" 'BEGIN { printf "%.2f", (hit / total) * 100 }')
-          else
-            PERCENT="0.00"
-          fi
-          {
-            echo "## Flutter test coverage"
-            echo
-            echo "| Metric | Covered | Total | Percentage |"
-            echo "| --- | ---: | ---: | ---: |"
-            echo "| Lines | $HIT | $TOTAL | **${PERCENT}%** |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload test coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: fvcksubs-coverage-${{ github.ref_name }}
-          path: apps/app/coverage/lcov.info
-          if-no-files-found: error
+    uses: ./.github/workflows/test.yml
 
   android:
     name: Android APK
