@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../mappers/stream_player_mapping.dart';
@@ -93,6 +94,14 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   @override
   Future<void> setAudioTrack(AppAudioTrack track) async => _controller
       .setAudioTrack(track.platformTrack! as BetterPlayerAsmsAudioTrack);
+
+  @override
+  Future<void> setFit(PlayerFitMode mode) async {
+    _controller.setOverriddenFit(
+      mode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
+    );
+  }
+
   @override
   Future<void> setSubtitle(SubtitleTrack? track) =>
       _controller.setupSubtitleSource(

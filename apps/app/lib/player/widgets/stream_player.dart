@@ -5,10 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../diagnostics/player_diagnostics.dart';
 import '../mappers/stream_player_mapping.dart';
+import '../state/player_wakelock.dart';
 import 'better_player_controller_adapter.dart';
 import 'platform_player_builder.dart';
 
@@ -90,9 +90,7 @@ class BetterPlayerView extends StatefulWidget {
     this.aspectRatio,
     this.looping = false,
     this.muted = false,
-    // Fill the player bounds in landscape/fullscreen. The source aspect ratio
-    // is preserved; only the excess edges are cropped.
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
     this.playing = true,
     this.preview = false,
   });
@@ -136,7 +134,8 @@ class BetterPlayerView extends StatefulWidget {
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
 }
 
-class _BetterPlayerViewState extends State<BetterPlayerView> {
+class _BetterPlayerViewState extends State<BetterPlayerView>
+    with WidgetsBindingObserver {
   late final BetterPlayerController _controller;
   late final BetterPlayerControllerAdapter _adapter;
   final GlobalKey _betterPlayerKey = GlobalKey();
@@ -144,6 +143,8 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   late final BetterPlayerSubtitlesSource? _preferredSubtitle;
   Timer? _liveHeartbeatTimer;
   Timer? _bufferingDiagnosticTimer;
+  Timer? _wakelockRefreshTimer;
+  PlayerWakelockLease? _wakelock;
   bool _waitingForPreferredSubtitle = false;
   bool _dataSourceReady = false;
 
@@ -178,10 +179,12 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   void initState() {
     super.initState();
     if (!widget.preview) {
-      // Better Player only applies allowedScreenSleep while its own
-      // fullscreen route is active. The main player also runs embedded, so
-      // keep the device awake for that route explicitly.
-      unawaited(WakelockPlus.enable());
+      WidgetsBinding.instance.addObserver(this);
+      _wakelock = PlayerWakelockLease.acquire();
+      _wakelockRefreshTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _wakelock?.refresh(),
+      );
     }
     _preferredSubtitle = widget.isLive
         ? null
@@ -274,16 +277,23 @@ class _BetterPlayerViewState extends State<BetterPlayerView> {
   void dispose() {
     _liveHeartbeatTimer?.cancel();
     _bufferingDiagnosticTimer?.cancel();
+    _wakelockRefreshTimer?.cancel();
+    if (!widget.preview) {
+      WidgetsBinding.instance.removeObserver(this);
+      _wakelock?.release();
+    }
     if (kDebugMode) {
       _controller.removeEventsListener(_onDiagnosticEvent);
       _logPlayback('dispose');
     }
-    if (!widget.preview) {
-      unawaited(WakelockPlus.disable());
-    }
     _controller.dispose();
     _adapter.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _wakelock?.refresh();
   }
 
   @override

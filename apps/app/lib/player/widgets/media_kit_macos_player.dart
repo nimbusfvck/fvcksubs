@@ -36,6 +36,7 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
   late final VideoController _video;
   late final _MediaKitControllerAdapter _adapter;
   final GlobalKey<VideoState> _videoKey = GlobalKey();
+  PlayerFitMode _fitMode = PlayerFitMode.contain;
 
   @override
   void initState() {
@@ -48,6 +49,9 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
       isFullScreen: () => _videoKey.currentState?.isFullscreen() ?? false,
       toggleFullScreen: () async => _videoKey.currentState?.toggleFullscreen(),
       exitFullScreen: () async => _videoKey.currentState?.exitFullscreen(),
+      setFit: (mode) {
+        if (mounted) setState(() => _fitMode = mode);
+      },
     );
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
@@ -87,7 +91,7 @@ class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
   Widget build(BuildContext context) => Video(
     key: _videoKey,
     controller: _video,
-    fit: BoxFit.contain,
+    fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
     // MediaKit moves only the Video widget into its fullscreen route. Use its
     // desktop controls there so pointer input and keyboard focus stay inside
     // that route; the app-owned overlay remains responsible while embedded.
@@ -104,9 +108,11 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     required bool Function() isFullScreen,
     required Future<void> Function() toggleFullScreen,
     required Future<void> Function() exitFullScreen,
+    required void Function(PlayerFitMode mode) setFit,
   }) : _isFullScreen = isFullScreen,
        _toggleFullScreen = toggleFullScreen,
-       _exitFullScreen = exitFullScreen {
+       _exitFullScreen = exitFullScreen,
+       _setFit = setFit {
     _subscriptions = [
       _player.stream.position.listen((value) => _update(position: value)),
       _player.stream.duration.listen((value) => _update(duration: value)),
@@ -127,6 +133,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   final bool Function() _isFullScreen;
   final Future<void> Function() _toggleFullScreen;
   final Future<void> Function() _exitFullScreen;
+  final void Function(PlayerFitMode mode) _setFit;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
   );
@@ -207,6 +214,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   @override
   Future<void> setAudioTrack(AppAudioTrack track) =>
       _player.setAudioTrack(track.platformTrack! as mk.AudioTrack);
+
+  @override
+  Future<void> setFit(PlayerFitMode mode) async => _setFit(mode);
 
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {

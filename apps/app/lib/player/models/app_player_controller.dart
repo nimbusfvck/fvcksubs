@@ -81,6 +81,16 @@ class PlayerSubtitleSelection {
   final SubtitleTrack? track;
 }
 
+/// Controls whether the video keeps its source ratio or fills the viewport.
+enum PlayerFitMode {
+  contain,
+  cover;
+
+  PlayerFitMode get toggled => this == contain ? cover : contain;
+
+  String get label => this == contain ? 'Fit ratio' : 'Fit screen';
+}
+
 abstract interface class AppPlayerController {
   ValueListenable<AppPlayerValue> get value;
   Stream<AppPlayerEvent> get events;
@@ -97,6 +107,7 @@ abstract interface class AppPlayerController {
   Future<void> setSubtitle(SubtitleTrack? track);
   Future<void> setQuality(AppQualityTrack? track);
   Future<void> setAudioTrack(AppAudioTrack track);
+  Future<void> setFit(PlayerFitMode mode);
   Future<void> toggleFullScreen();
   Future<void> exitFullScreen();
 }

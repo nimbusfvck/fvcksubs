@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/tokens.dart';
+import '../models/app_player_controller.dart';
+import '../widgets/player_fit_button.dart';
+
+void _noFitToggle() {}
 
 class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({
@@ -24,6 +28,8 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.onBackgroundTap,
     required this.onBack,
     this.onToggleFullScreen,
+    this.fitMode = PlayerFitMode.contain,
+    this.onToggleFit = _noFitToggle,
     required this.onSkip,
     required this.onTogglePlayPause,
     required this.onChangeSource,
@@ -94,6 +100,12 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Toggles fullscreen; null hides the fullscreen action.
   final VoidCallback? onToggleFullScreen;
 
+  /// Current video viewport mode.
+  final PlayerFitMode fitMode;
+
+  /// Toggles between preserving the source ratio and filling the viewport.
+  final VoidCallback onToggleFit;
+
   /// Skips forward or backward by the requested number of seconds.
   final ValueChanged<int> onSkip;
 
@@ -140,6 +152,8 @@ class PlayerControlsOverlayView extends StatelessWidget {
           visible: controlsVisible,
           onBack: onBack,
           onToggleFullScreen: onToggleFullScreen,
+          fitMode: fitMode,
+          onToggleFit: onToggleFit,
         ),
         _PlayerTransportControls(
           visible: controlsVisible,
@@ -184,6 +198,8 @@ class _PlayerTopControls extends StatelessWidget {
     required this.visible,
     required this.onBack,
     required this.onToggleFullScreen,
+    required this.fitMode,
+    required this.onToggleFit,
   });
 
   final String title;
@@ -191,6 +207,8 @@ class _PlayerTopControls extends StatelessWidget {
   final bool visible;
   final VoidCallback onBack;
   final VoidCallback? onToggleFullScreen;
+  final PlayerFitMode fitMode;
+  final VoidCallback onToggleFit;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -250,6 +268,7 @@ class _PlayerTopControls extends StatelessWidget {
                       tooltip: 'Toggle fullscreen',
                       onPressed: onToggleFullScreen,
                     ),
+                  PlayerFitButton(mode: fitMode, onToggle: onToggleFit),
                 ],
               ),
             ),

@@ -157,6 +157,8 @@ class _RecoveryController implements AppPlayerController {
   @override
   Future<void> setAudioTrack(AppAudioTrack track) async {}
   @override
+  Future<void> setFit(PlayerFitMode mode) async {}
+  @override
   Future<void> toggleFullScreen() async {}
   @override
   Future<void> exitFullScreen() async {}

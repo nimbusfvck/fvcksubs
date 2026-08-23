@@ -49,6 +49,7 @@ void main() {
       expect(find.byIcon(Icons.replay_10_rounded), findsNothing);
       expect(find.byIcon(Icons.forward_10_rounded), findsNothing);
       expect(find.byIcon(Icons.closed_caption_off_rounded), findsNothing);
+      expect(find.byIcon(Icons.fullscreen_rounded), findsNothing);
 
       await tester.tap(find.text('Source A'));
       expect(sourceChanges, 1);

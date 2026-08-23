@@ -22,6 +22,8 @@ const Duration _upNextCountdown = Duration(seconds: 8);
 const Duration _bufferingIndicatorDelay = Duration(milliseconds: 700);
 const Duration _bufferingProgressTolerance = Duration(milliseconds: 250);
 
+void _noFitToggle() {}
+
 class PlayerPlaybackControls extends StatefulWidget {
   const PlayerPlaybackControls({
     super.key,
@@ -33,6 +35,8 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.onChangeSource,
     required this.onBack,
     this.onToggleFullScreen,
+    this.fitMode = PlayerFitMode.contain,
+    this.onToggleFit = _noFitToggle,
     required this.isLive,
     this.upNextV2,
     this.upNextPaused = false,
@@ -51,6 +55,8 @@ class PlayerPlaybackControls extends StatefulWidget {
   final VoidCallback onChangeSource;
   final VoidCallback onBack;
   final VoidCallback? onToggleFullScreen;
+  final PlayerFitMode fitMode;
+  final VoidCallback onToggleFit;
   final bool isLive;
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
@@ -454,6 +460,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onBackgroundTap: _handleBackgroundTap,
       onBack: widget.onBack,
       onToggleFullScreen: widget.onToggleFullScreen,
+      fitMode: widget.fitMode,
+      onToggleFit: widget.onToggleFit,
       onSkip: _skip,
       onTogglePlayPause: _togglePlayPause,
       onChangeSource: () {

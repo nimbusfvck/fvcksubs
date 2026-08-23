@@ -80,11 +80,13 @@ class _PlayerPageState extends State<PlayerPage> {
   int _playbackAttempt = 0;
   final Set<String> _failedSourceIds = <String>{};
   bool _sourceStarted = false;
+  PlayerFitMode _fitMode = PlayerFitMode.contain;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
 
   bool get _isLive => widget.media.isLive;
+  bool get _supportsFullScreen => defaultTargetPlatform == TargetPlatform.macOS;
   ResolvedSource get _current => _resolvedSources[_currentIndex];
 
   @override
@@ -334,8 +336,16 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleFullScreen() {
+    if (!_supportsFullScreen) return;
     final controller = _controller;
     if (controller != null) unawaited(controller.toggleFullScreen());
+  }
+
+  void _toggleFit() {
+    final next = _fitMode.toggled;
+    setState(() => _fitMode = next);
+    final controller = _controller;
+    if (controller != null) unawaited(controller.setFit(next));
   }
 
   void _switchToResolvedSource(int index) {
@@ -401,7 +411,9 @@ class _PlayerPageState extends State<PlayerPage> {
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
         onBack: () => _dismiss(controller),
-        onToggleFullScreen: _toggleFullScreen,
+        onToggleFullScreen: _supportsFullScreen ? _toggleFullScreen : null,
+        fitMode: _fitMode,
+        onToggleFit: _toggleFit,
         isLive: _isLive,
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
@@ -427,7 +439,8 @@ class _PlayerPageState extends State<PlayerPage> {
           _seekBy(const Duration(seconds: -5)),
       const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
           _seekBy(const Duration(seconds: 5)),
-      const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
+      if (_supportsFullScreen)
+        const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
       const SingleActivator(LogicalKeyboardKey.escape): () =>
           unawaited(_controller?.exitFullScreen()),
     },
@@ -454,6 +467,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       _controller = value as AppPlayerController?;
                       if (_controller != null) {
                         _attachEventListener(_controller!);
+                        unawaited(_controller!.setFit(_fitMode));
                       }
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) setState(() {});

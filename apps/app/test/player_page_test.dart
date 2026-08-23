@@ -219,6 +219,9 @@ class _FakePlayerController implements AppPlayerController {
   Future<void> setAudioTrack(AppAudioTrack track) async {}
 
   @override
+  Future<void> setFit(PlayerFitMode mode) async {}
+
+  @override
   Future<void> toggleFullScreen() async {}
 
   @override
