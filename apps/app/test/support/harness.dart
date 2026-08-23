@@ -23,6 +23,7 @@ class FakeExtension extends ContentExtension {
     this.expanded = false,
     this.filterKeys = const [],
     this.items = const [],
+    this.sectionTitle,
     this.itemsByCategory = const {},
     this.pages = const {},
     this.subCategories = const [],
@@ -94,6 +95,8 @@ class FakeExtension extends ContentExtension {
   final List<String> filterKeys;
   final List<MediaItemV2> items;
 
+  final String? sectionTitle;
+
   /// Cursor-keyed catalog pages, for exercising pagination: `pages[null]` is
   /// the first page, `pages['cursor']` is what a matching `nextPage` yields.
   /// Empty (the default) means [catalog] just returns [items] as one page.
@@ -160,6 +163,7 @@ class FakeExtension extends ContentExtension {
     sections: [
       CatalogSectionV2(
         id: 'main',
+        title: sectionTitle,
         items: [for (final item in values) VersionedMediaItem(item: item)],
       ),
     ],

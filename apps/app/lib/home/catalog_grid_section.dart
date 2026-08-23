@@ -228,6 +228,11 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
           onTap: _open,
           onTapWithHero: _openWithHero,
           scrollable: false,
+          // Preserve section labels for catalogs that split a large feed into
+          // named groups, while keeping flat catalogs as a plain grid.
+          showSectionHeaders: page.sections.any(
+            (section) => section.title != null,
+          ),
         ),
         if (_loadingMore)
           const Padding(

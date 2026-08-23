@@ -143,4 +143,32 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });
+
+  testWidgets('expanded sectioned catalogs keep their section heading', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: ExtensionRegistry([
+          FakeExtension(
+            categories: ['nsfw'],
+            expanded: true,
+            sectionTitle: 'Section title',
+            items: [fakeItem(title: 'Catalog item')],
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Section title'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Catalog item'),
+      ),
+      findsOneWidget,
+    );
+  });
 }

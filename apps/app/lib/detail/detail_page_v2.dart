@@ -34,7 +34,17 @@ class _DetailPageV2State extends State<DetailPageV2> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _detail ??= AppScope.of(context).registry.meta(widget.item.ref);
+    _detail ??= _loadDetail();
+  }
+
+  Future<MediaDetailV2> _loadDetail() async {
+    try {
+      return await AppScope.of(context).registry.meta(widget.item.ref);
+    } catch (_) {
+      // Catalogs may provide playable items without a separate metadata role.
+      // Keep the listing snapshot usable so the item's Play action still works.
+      return MediaDetailV2(item: widget.item);
+    }
   }
 
   EpisodeItemV2 _episodeItem(
