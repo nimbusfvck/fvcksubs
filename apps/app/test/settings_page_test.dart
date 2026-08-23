@@ -75,8 +75,41 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Enable'));
+    await tester.pumpAndSettle();
 
     expect(controller.state.showNsfw, isTrue);
     expect(store.saved.showNsfw, isTrue);
+  });
+
+  testWidgets('cancelling the NSFW confirmation keeps it disabled', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([]);
+    final store = FakeNsfwSettingsStore();
+    final controller = NsfwController(
+      registry: registry,
+      store: store,
+      showNsfw: false,
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SettingsPage(),
+        registry: registry,
+        nsfwController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('Show NSFW content?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(controller.state.showNsfw, isFalse);
+    expect(store.saved.showNsfw, isFalse);
   });
 }

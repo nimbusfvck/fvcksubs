@@ -65,7 +65,7 @@ class _NsfwPreference extends StatelessWidget {
     clipBehavior: Clip.antiAlias,
     child: SwitchListTile(
       value: showNsfw,
-      onChanged: controller.setShowNsfw,
+      onChanged: (enabled) => _onChanged(context, enabled),
       title: const Text('Show NSFW content'),
       subtitle: const Text(
         'Allow catalogs marked as mature or NSFW to appear in the app.',
@@ -73,6 +73,37 @@ class _NsfwPreference extends StatelessWidget {
       secondary: const Icon(Icons.visibility_outlined),
     ),
   );
+
+  Future<void> _onChanged(BuildContext context, bool enabled) async {
+    if (!enabled) {
+      controller.setShowNsfw(false);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Show NSFW content?'),
+        content: const Text(
+          'This will show catalogs marked as mature or NSFW. You can turn '
+          'this setting off again at any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      controller.setShowNsfw(true);
+    }
+  }
 }
 
 class _SourcePriorityEntry extends StatelessWidget {
