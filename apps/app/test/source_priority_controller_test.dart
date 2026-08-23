@@ -52,27 +52,4 @@ void main() {
       ['a', 'x', 'y'],
     );
   });
-
-  test('movie aliases are preferred before provider priority', () {
-    final controller = SourcePriorityController(
-      registry: ExtensionRegistry([FakeExtension(id: 'first')]),
-      store: FakeSourcePriorityStore(),
-    );
-
-    expect(
-      controller
-          .order(const [
-            StreamSource(id: 'a', label: 'Other', providerId: 'first.p'),
-            StreamSource(id: 'b', label: 'Harbour', providerId: 'first.p'),
-            StreamSource(
-              id: 'c',
-              label: 'Juniper (English)',
-              providerId: 'first.p',
-            ),
-            StreamSource(id: 'd', label: 'Willow', providerId: 'first.p'),
-          ], preferReliableAliases: true)
-          .map((source) => source.id),
-      ['d', 'c', 'b', 'a'],
-    );
-  });
 }

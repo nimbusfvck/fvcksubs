@@ -12,12 +12,6 @@ class SourcePriorityState {
 }
 
 class SourcePriorityController extends Cubit<SourcePriorityState> {
-  static const _preferredMovieAliases = {
-    'willow': 0,
-    'juniper': 1,
-    'harbour': 2,
-  };
-
   SourcePriorityController({
     required this.registry,
     required this.store,
@@ -56,39 +50,15 @@ class SourcePriorityController extends Cubit<SourcePriorityState> {
     return rank < 0 ? state.orderedProviderIds.length : rank;
   }
 
-  List<StreamSource> order(
-    List<StreamSource> sources, {
-    bool preferReliableAliases = false,
-  }) {
+  List<StreamSource> order(List<StreamSource> sources) {
     final indexed = sources.indexed.toList();
     indexed.sort((a, b) {
-      final result = compareSources(
-        a.$2,
-        b.$2,
-        preferReliableAliases: preferReliableAliases,
-      );
+      final aRank = rankOf(a.$2.providerId);
+      final bRank = rankOf(b.$2.providerId);
+      final result = aRank.compareTo(bRank);
       return result == 0 ? a.$1.compareTo(b.$1) : result;
     });
     return [for (final entry in indexed) entry.$2];
-  }
-
-  int compareSources(
-    StreamSource a,
-    StreamSource b, {
-    bool preferReliableAliases = false,
-  }) {
-    if (preferReliableAliases) {
-      final aliasResult = _movieAliasRank(
-        a.label,
-      ).compareTo(_movieAliasRank(b.label));
-      if (aliasResult != 0) return aliasResult;
-    }
-    return rankOf(a.providerId).compareTo(rankOf(b.providerId));
-  }
-
-  int _movieAliasRank(String label) {
-    final normalized = label.split(' (').first.trim().toLowerCase();
-    return _preferredMovieAliases[normalized] ?? _preferredMovieAliases.length;
   }
 
   void _save(List<String> ids) {

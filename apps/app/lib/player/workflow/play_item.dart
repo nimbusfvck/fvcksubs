@@ -183,7 +183,6 @@ void _openPlayer(
     sources,
     scope.sourcePriorityController,
     scope.subtitlePreferenceController,
-    preferReliableAliases: !item.isLive,
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
   scope.libraryController.recordWatched(item.item);
@@ -204,9 +203,8 @@ void _openPlayer(
 List<ResolvedSource> _preferredFirst(
   List<ResolvedSource> sources,
   SourcePriorityController sourcePriority,
-  SubtitlePreferenceController subtitlePreference, {
-  bool preferReliableAliases = false,
-}) {
+  SubtitlePreferenceController subtitlePreference,
+) {
   final indexed = sources.indexed.toList();
   indexed.sort((a, b) {
     final aHasSubtitle = subtitlePreference.isSatisfiedBy(
@@ -219,12 +217,10 @@ List<ResolvedSource> _preferredFirst(
       aHasSubtitle ? 1 : 0,
     );
     if (subtitleResult != 0) return subtitleResult;
-    final sourceResult = sourcePriority.compareSources(
-      a.$2.source,
-      b.$2.source,
-      preferReliableAliases: preferReliableAliases,
-    );
-    return sourceResult == 0 ? a.$1.compareTo(b.$1) : sourceResult;
+    final providerResult = sourcePriority
+        .rankOf(a.$2.source.providerId)
+        .compareTo(sourcePriority.rankOf(b.$2.source.providerId));
+    return providerResult == 0 ? a.$1.compareTo(b.$1) : providerResult;
   });
   return [for (final entry in indexed) entry.$2];
 }
@@ -275,10 +271,7 @@ _resolveFirstPlayable(
   }
 
   scope.sourceCache.recordSourceList(item.ref, sources);
-  final ordered = scope.sourcePriorityController.order(
-    sources,
-    preferReliableAliases: !item.isLive,
-  );
+  final ordered = scope.sourcePriorityController.order(sources);
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [
@@ -383,10 +376,7 @@ Future<List<ResolvedSource>> _resolveKnownSources(
       if (scope.registry.isSourceEnabled(source)) source,
   ];
   if (sources.isEmpty) return const [];
-  sources = scope.sourcePriorityController.order(
-    sources,
-    preferReliableAliases: !item.isLive,
-  );
+  sources = scope.sourcePriorityController.order(sources);
   progress.begin([for (final source in sources) source.label]);
 
   final target = PlaybackTarget.detect();
