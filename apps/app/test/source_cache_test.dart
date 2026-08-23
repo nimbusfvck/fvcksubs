@@ -40,6 +40,18 @@ void main() {
       expect(cache.peek(ref), sources);
     });
 
+    test('rejects a relative URL from a stale resolved cache entry', () {
+      const source = ResolvedSource(
+        source: StreamSource(id: 'stale', label: 'stale'),
+        stream: PlayableStream(
+          url: '/stream/stale/master.m3u8',
+          format: StreamFormat.hls,
+        ),
+      );
+
+      expect(source.hasAbsoluteHttpUrl, isFalse);
+    });
+
     test('a fresh entry is not stale', () {
       final now = DateTime(2026);
       final cache = SourceCache(now: () => now);

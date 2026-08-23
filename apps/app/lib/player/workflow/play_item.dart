@@ -38,7 +38,11 @@ Future<void> _playMedia(
 
   final cached = scope.sourceCache.peek(item.ref);
   final enabledCached = cached
-      ?.where((source) => scope.registry.isSourceEnabled(source.source))
+      ?.where(
+        (source) =>
+            source.hasAbsoluteHttpUrl &&
+            scope.registry.isSourceEnabled(source.source),
+      )
       .toList();
   if (enabledCached != null && enabledCached.isNotEmpty) {
     _openPlayer(
@@ -358,8 +362,9 @@ Future<ResolvedSource?> _resolveOne(
 ) async {
   try {
     final stream = await scope.registry.resolveSource(item.ref, source.id);
-    if (!target.canPlay(stream)) return null;
-    return ResolvedSource(source: source, stream: stream);
+    final resolved = ResolvedSource(source: source, stream: stream);
+    if (!resolved.hasAbsoluteHttpUrl || !target.canPlay(stream)) return null;
+    return resolved;
   } catch (_) {
     return null;
   }
@@ -384,8 +389,11 @@ Future<List<ResolvedSource>> _resolveKnownSources(
     sources.map((source) async {
       try {
         final stream = await scope.registry.resolveSource(item.ref, source.id);
-        if (!target.canPlay(stream)) return null;
-        return ResolvedSource(source: source, stream: stream);
+        final resolved = ResolvedSource(source: source, stream: stream);
+        if (!resolved.hasAbsoluteHttpUrl || !target.canPlay(stream)) {
+          return null;
+        }
+        return resolved;
       } catch (_) {
         return null;
       } finally {
