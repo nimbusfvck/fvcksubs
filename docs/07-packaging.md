@@ -202,6 +202,11 @@ The prerequisite `test` job calls the reusable `.github/workflows/test.yml` work
 reuse the same test job with `uses: ./.github/workflows/test.yml`; Android and macOS builds
 start only after this job succeeds.
 
+For version tags (`v*`), the `release` job waits for both platform builds, creates a GitHub
+Release with generated notes, and attaches `fvcksubs-v<version>.apk` and
+`fvcksubs-macos-v<version>.zip`. The release job requires `contents: write`; no additional
+secret is needed because it uses the workflow's `GITHUB_TOKEN`.
+
 These artifacts are build outputs, not store submissions. Configure the Android secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
 `ANDROID_KEY_PASSWORD` before running the workflow. macOS output still requires Developer ID

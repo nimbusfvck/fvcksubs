@@ -104,3 +104,38 @@ jobs:
           name: fvcksubs-macos-${{ github.ref_name }}
           path: apps/app/fvcksubs-macos.zip
           if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - android
+      - macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fvcksubs-apk-${{ github.ref_name }}
+          path: release-assets
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fvcksubs-macos-${{ github.ref_name }}
+          path: release-assets
+
+      - name: Rename release assets
+        run: |
+          mv release-assets/app-release.apk "release-assets/fvcksubs-${GITHUB_REF_NAME}.apk"
+          mv release-assets/fvcksubs-macos.zip "release-assets/fvcksubs-macos-${GITHUB_REF_NAME}.zip"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/fvcksubs-${{ github.ref_name }}.apk
+            release-assets/fvcksubs-macos-${{ github.ref_name }}.zip
