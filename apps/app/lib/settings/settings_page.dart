@@ -82,23 +82,46 @@ class _NsfwPreference extends StatelessWidget {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Show NSFW content?'),
-        content: const Text(
-          'This will show catalogs marked as mature or NSFW. You can turn '
-          'this setting off again at any time.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+      builder: (context) {
+        var isAdult = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Show NSFW content?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This will show catalogs marked as mature or NSFW. You can '
+                  'turn this setting off again at any time.',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: isAdult,
+                  onChanged: (value) => setState(() {
+                    isAdult = value ?? false;
+                  }),
+                  title: const Text('I confirm that I am 18 or older.'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isAdult
+                    ? () => Navigator.of(context).pop(true)
+                    : null,
+                child: const Text('Enable'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
+        );
+      },
     );
     if (confirmed == true && context.mounted) {
       controller.setShowNsfw(true);

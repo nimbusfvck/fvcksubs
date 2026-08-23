@@ -75,6 +75,12 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pump();
+    final enableButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Enable'),
+    );
+    expect(enableButton.onPressed, isNull);
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Enable'));
     await tester.pumpAndSettle();
 
