@@ -356,6 +356,19 @@ class _PlayerBottomControls extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (onPlayNext != null)
+                            IconButton(
+                              onPressed: onPlayNext,
+                              icon: const Icon(Icons.skip_next_rounded),
+                              color: Colors.white,
+                              iconSize: 24,
+                              tooltip: 'Next Episode',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 40,
+                              ),
+                            ),
                           if (sourceLabel != null)
                             InkWell(
                               onTap: onChangeSource,
@@ -390,21 +403,6 @@ class _PlayerBottomControls extends StatelessWidget {
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ),
-                          if (onPlayNext != null)
-                            TextButton.icon(
-                              onPressed: onPlayNext,
-                              icon: const Icon(
-                                Icons.skip_next_rounded,
-                                size: 22,
-                              ),
-                              label: const Text('Next Episode'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.xs,
                                 ),
                               ),
                             ),
