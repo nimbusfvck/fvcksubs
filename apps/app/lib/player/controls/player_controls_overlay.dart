@@ -37,35 +37,94 @@ class PlayerControlsOverlayView extends StatelessWidget {
     this.upNextCard,
   });
 
+  /// Media title shown in the top bar.
   final String title;
+
+  /// Favorite control rendered in the top bar.
   final Widget favoriteAction;
+
+  /// Whether the transport and top/bottom controls are visible.
   final bool controlsVisible;
+
+  /// Whether playback is live, which changes timeline and live-edge behavior.
   final bool isLive;
+
+  /// Current playback state used by the play/pause control.
   final bool isPlaying;
+
+  /// Whether the player is buffering and should show a loading indicator.
   final bool isBuffering;
+
+  /// Current source label; null hides the source selector.
   final String? sourceLabel;
+
+  /// Active subtitle label shown in the subtitle control.
   final String? activeSubtitleLabel;
+
+  /// Active audio-track label shown in the audio control.
   final String? activeAudioLabel;
+
+  /// Active quality label shown in the quality control.
   final String? activeQualityLabel;
+
+  /// Current playback position.
   final Duration position;
+
+  /// Media duration used for the displayed timeline values.
   final Duration duration;
+
+  /// Maximum seekable timeline extent, including the live edge when relevant.
   final Duration timelineExtent;
+
+  /// End of the currently buffered range shown behind the seek progress.
   final Duration bufferedExtent;
+
+  /// Whether the current live position is at the live edge.
   final bool atLiveEdge;
+
+  /// Temporary timeline position while the user is dragging the seekbar.
   final double? dragValueMs;
+
+  /// Handles taps on the player background, usually to toggle controls.
   final VoidCallback onBackgroundTap;
+
+  /// Handles leaving the player screen.
   final VoidCallback onBack;
+
+  /// Toggles fullscreen; null hides the fullscreen action.
   final VoidCallback? onToggleFullScreen;
+
+  /// Skips forward or backward by the requested number of seconds.
   final ValueChanged<int> onSkip;
+
+  /// Toggles playback between playing and paused.
   final VoidCallback onTogglePlayPause;
+
+  /// Opens the source-selection UI.
   final VoidCallback onChangeSource;
+
+  /// Starts the next episode manually; null hides the manual next icon.
   final VoidCallback? onPlayNext;
+
+  /// Opens the subtitle-selection UI.
   final VoidCallback onOpenSubtitlePicker;
+
+  /// Opens audio-track selection; null hides the audio action.
   final VoidCallback? onOpenAudioPicker;
+
+  /// Opens quality-selection UI.
   final VoidCallback onOpenQualityPicker;
+
+  /// Receives the timeline value when dragging starts.
   final ValueChanged<double> onTimelineChangeStart;
+
+  /// Receives timeline values continuously while dragging.
   final ValueChanged<double> onTimelineChanged;
+
+  /// Receives the final timeline value when dragging ends.
   final ValueChanged<double> onTimelineChangeEnd;
+
+  /// Optional auto-next episode card displayed over the player.
   final Widget? upNextCard;
 
   @override
@@ -356,19 +415,6 @@ class _PlayerBottomControls extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (onPlayNext != null)
-                            IconButton(
-                              onPressed: onPlayNext,
-                              icon: const Icon(Icons.skip_next_rounded),
-                              color: Colors.white,
-                              iconSize: 24,
-                              tooltip: 'Next Episode',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 40,
-                                minHeight: 40,
-                              ),
-                            ),
                           if (sourceLabel != null)
                             InkWell(
                               onTap: onChangeSource,
@@ -411,6 +457,19 @@ class _PlayerBottomControls extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (onPlayNext != null)
+                            IconButton(
+                              onPressed: onPlayNext,
+                              icon: const Icon(Icons.skip_next_rounded),
+                              color: Colors.white,
+                              iconSize: 24,
+                              tooltip: 'Next Episode',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 40,
+                              ),
+                            ),
                           if (!isLive)
                             GestureDetector(
                               onTap: onOpenSubtitlePicker,

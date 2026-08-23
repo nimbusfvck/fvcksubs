@@ -13,6 +13,15 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'support/harness.dart';
 
 void main() {
+  testWidgets('manual next is visible before the up-next card appears', (
+    tester,
+  ) async {
+    final controller = _RecoveryController();
+    await tester.pumpWidget(_controls(controller, manualNext: () {}));
+
+    expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
+  });
+
   testWidgets('repeated buffering resumes when playback is still intended', (
     tester,
   ) async {
@@ -70,40 +79,42 @@ void main() {
   });
 }
 
-Widget _controls(_RecoveryController controller) => wrapApp(
-  registry: ExtensionRegistry([]),
-  child: PlayerPlaybackControls(
-    controller: controller,
-    onVisibilityChanged: (_) {},
-    media: const PlaybackMedia(
-      VideoItemV2(
-        ref: MediaRef(
-          extensionId: 'test',
-          providerId: 'test.provider',
-          id: 'movie-1',
+Widget _controls(_RecoveryController controller, {VoidCallback? manualNext}) =>
+    wrapApp(
+      registry: ExtensionRegistry([]),
+      child: PlayerPlaybackControls(
+        controller: controller,
+        onVisibilityChanged: (_) {},
+        media: const PlaybackMedia(
+          VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'movie-1',
+            ),
+            title: 'Movie',
+          ),
         ),
-        title: 'Movie',
+        resolvedSources: const [
+          ResolvedSource(
+            source: StreamSource(id: 'source-1', label: 'Source 1'),
+            stream: PlayableStream(
+              url: 'https://stream.example/movie.m3u8',
+              format: StreamFormat.hls,
+            ),
+          ),
+        ],
+        currentIndex: 0,
+        onChangeSource: () {},
+        onBack: () {},
+        isLive: false,
+        onManualNext: manualNext,
+        onNearEnd: () {},
+        onPlayNext: () {},
+        onPauseUpNext: () {},
+        onCancelUpNext: () {},
       ),
-    ),
-    resolvedSources: const [
-      ResolvedSource(
-        source: StreamSource(id: 'source-1', label: 'Source 1'),
-        stream: PlayableStream(
-          url: 'https://stream.example/movie.m3u8',
-          format: StreamFormat.hls,
-        ),
-      ),
-    ],
-    currentIndex: 0,
-    onChangeSource: () {},
-    onBack: () {},
-    isLive: false,
-    onNearEnd: () {},
-    onPlayNext: () {},
-    onPauseUpNext: () {},
-    onCancelUpNext: () {},
-  ),
-);
+    );
 
 class _RecoveryController implements AppPlayerController {
   _RecoveryController([AppPlayerValue value = const AppPlayerValue()])

@@ -406,6 +406,7 @@ class _PlayerPageState extends State<PlayerPage> {
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _showNextEpisode,
+        onManualNext: _nextEpisode == null ? null : _playNextEpisode,
         onPlayNext: _playNextEpisode,
         onPauseUpNext: () => setState(() => _upNextPaused = true),
         onCancelUpNext: () => setState(() {

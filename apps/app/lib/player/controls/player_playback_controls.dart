@@ -37,6 +37,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
+    this.onManualNext,
     required this.onPlayNext,
     required this.onPauseUpNext,
     required this.onCancelUpNext,
@@ -54,6 +55,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
   final VoidCallback onNearEnd;
+  final VoidCallback? onManualNext;
   final VoidCallback onPlayNext;
   final VoidCallback onPauseUpNext;
   final VoidCallback onCancelUpNext;
@@ -458,7 +460,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         _hideTimer?.cancel();
         widget.onChangeSource();
       },
-      onPlayNext: widget.upNextV2 == null ? null : widget.onPlayNext,
+      onPlayNext: widget.onManualNext,
       onOpenSubtitlePicker: _openSubtitlePicker,
       onOpenAudioPicker: audioTracks.length > 1 ? _openAudioPicker : null,
       onOpenQualityPicker: _openQualityPicker,
