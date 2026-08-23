@@ -61,7 +61,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: fvcksubs-android-apk
+          name: fvcksubs-apk-${{ github.ref_name }}
           path: apps/app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
@@ -96,6 +96,6 @@ jobs:
       - name: Upload macOS app
         uses: actions/upload-artifact@v4
         with:
-          name: fvcksubs-macos-app
+          name: fvcksubs-macos-${{ github.ref_name }}
           path: apps/app/fvcksubs-macos.zip
           if-no-files-found: error

@@ -189,11 +189,12 @@ Test guidelines:
 ## 7.8 App build artifacts
 
 The repository workflow at `.github/workflows/build-release.yml` builds the Flutter app on
-manual dispatch and on version tags (`v*`). It publishes two GitHub Actions artifacts:
+manual dispatch and on version tags (`v*`). It publishes two GitHub Actions artifacts
+whose names include the triggering branch or release tag (`github.ref_name`):
 
-- `fvcksubs-android-apk` — the release APK from `flutter build apk --release`, signed with
+- `fvcksubs-apk-v<version>` — the release APK from `flutter build apk --release`, signed with
   the keystore supplied through GitHub Secrets.
-- `fvcksubs-macos-app` — a zip containing the release `.app` from `flutter build macos --release`.
+- `fvcksubs-macos-v<version>` — a zip containing the release `.app` from `flutter build macos --release`.
 
 These artifacts are build outputs, not store submissions. Configure the Android secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
