@@ -242,15 +242,20 @@ flowchart TB
 - **Capability gating** is a positive list per platform: a stream is playable only if this
   platform is known to handle its container and its protection scheme. A newly-encountered
   combination is dropped rather than optimistically attempted, and the user is told when
-  nothing survives. Android and iOS use BetterPlayer. macOS uses MediaKit/libmpv for clear
-  HLS and DASH, forwarding extension-provided HTTP headers and external subtitles; all DRM is
-  intentionally rejected on macOS until a tested platform-specific license flow exists.
+  nothing survives. Android uses BetterPlayer/ExoPlayer. macOS and iOS use MediaKit/libmpv
+  for clear HLS and DASH, forwarding extension-provided HTTP headers and external subtitles;
+  all DRM is intentionally rejected on both until a tested platform-specific license flow
+  exists, because libmpv has no CDM.
+- **iOS runs on libmpv rather than AVPlayer** because AVPlayer trusts a segment's declared
+  MIME type. Several live providers serve MPEG-TS mislabelled as `text/plain` or
+  `application/zstd`; ExoPlayer and libmpv sniff the container and play them, AVPlayer
+  buffers until it reports a stall. The cost is libmpv's native payload in the iOS build.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
   arrow keys seek five seconds, F or the fullscreen button toggles fullscreen, and Escape exits it. This
   keeps source, subtitle, quality, retry, and Up Next controls available across player backends. MediaKit's
   fullscreen route uses its desktop controls, which own pointer input and keyboard focus while fullscreen.
-- **Audio tracks** are exposed through the shared player contract whenever MediaKit (macOS) or
-  BetterPlayer's HLS/DASH parser (Android and iOS) reports more than one track. The same picker
+- **Audio tracks** are exposed through the shared player contract whenever MediaKit (macOS
+  and iOS) or BetterPlayer's HLS/DASH parser (Android) reports more than one track. The same picker
   and selection UI is used on every backend.
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame
   out against a narrower fallback, and text that sizes tightly to its content stays clipped

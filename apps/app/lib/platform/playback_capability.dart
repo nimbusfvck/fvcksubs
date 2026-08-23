@@ -19,11 +19,10 @@ enum PlaybackTarget {
 
   bool canPlay(PlayableStream stream) => switch (this) {
     PlaybackTarget.android => stream.drm?.scheme != DrmScheme.unsupported,
-    PlaybackTarget.ios =>
-      stream.drm == null && stream.format != StreamFormat.dash,
-    // libmpv handles clear HLS/DASH on macOS. DRM schemes stay blocked until
-    // a platform-specific license flow has been implemented and tested.
-    PlaybackTarget.macos => stream.drm == null,
+    // iOS and macOS both play through libmpv, which handles clear HLS and
+    // DASH alike. DRM schemes stay blocked on both until a platform-specific
+    // license flow has been implemented and tested — libmpv has no CDM.
+    PlaybackTarget.ios || PlaybackTarget.macos => stream.drm == null,
     PlaybackTarget.unsupported => false,
   };
 }

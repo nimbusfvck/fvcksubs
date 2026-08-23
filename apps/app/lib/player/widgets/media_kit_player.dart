@@ -6,12 +6,18 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
 
-/// macOS-native player. This file is reached only by the macOS platform
-/// builder; its libmpv payload is provided by media_kit_libs_macos_video.
-class MediaKitMacosPlayerView extends StatefulWidget {
-  const MediaKitMacosPlayerView({
+/// libmpv-backed player, used on macOS and iOS.
+///
+/// iOS is here rather than on BetterPlayer because AVPlayer trusts a
+/// segment's declared MIME type, and several live providers serve MPEG-TS
+/// mislabelled as `text/plain` or `application/zstd`. libmpv sniffs the
+/// container instead, so those streams play. The native payload comes from
+/// media_kit_libs_macos_video and media_kit_libs_ios_video.
+class MediaKitPlayerView extends StatefulWidget {
+  const MediaKitPlayerView({
     super.key,
     required this.stream,
     required this.isLive,
@@ -27,11 +33,11 @@ class MediaKitMacosPlayerView extends StatefulWidget {
   final String? preferredSubtitleLanguage;
 
   @override
-  State<MediaKitMacosPlayerView> createState() =>
-      _MediaKitMacosPlayerViewState();
+  State<MediaKitPlayerView> createState() =>
+      _MediaKitPlayerViewState();
 }
 
-class _MediaKitMacosPlayerViewState extends State<MediaKitMacosPlayerView> {
+class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
   late final mk.Player _player;
   late final VideoController _video;
   late final _MediaKitControllerAdapter _adapter;
@@ -125,7 +131,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
             (_) =>
                 _events.add(const AppPlayerEvent(AppPlayerEventType.completed)),
           ),
-      _player.stream.error.listen(reportError),
+      _player.stream.error.listen(_onLogError),
     ];
   }
 
@@ -262,6 +268,24 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     );
   }
 
+  /// mpv error *log lines*, which are not the same as playback failing —
+  /// see [isFatalPlayerError]. A non-fatal one is kept for debugging rather
+  /// than shown, so working video is never replaced by a failure screen.
+  void _onLogError(Object error) {
+    if (!isFatalPlayerError(
+      error,
+      playbackStarted: _value.value.initialized,
+    )) {
+      if (kDebugMode) {
+        debugPrint('[Player] non-fatal: ${redactPlaybackLogText(error)}');
+      }
+      return;
+    }
+    reportError(error);
+  }
+
+  /// Reports a failure that really did stop playback — an `open` that threw,
+  /// or an mpv error line that [isFatalPlayerError] judged fatal.
   void reportError(Object error) =>
       _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
 

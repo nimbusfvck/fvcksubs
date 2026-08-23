@@ -2,11 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import 'media_kit_macos_player.dart';
+import 'media_kit_player.dart';
 import 'stream_player.dart' show mobilePlayerBuilder;
 
-/// Keeps MediaKit's native payload out of the mobile plugin graph: only the
-/// macOS builder instantiates it. Mobile continues through BetterPlayer.
+/// Apple platforms play through MediaKit/libmpv; Android stays on
+/// BetterPlayer/ExoPlayer.
+///
+/// ExoPlayer sniffs a segment's container, so Android needs no help. AVPlayer
+/// does not, and providers that mislabel MPEG-TS stall on it — so iOS pays
+/// for libmpv's native payload to get those streams playing.
 Widget platformPlayerBuilder(
   BuildContext context,
   PlayableStream stream, {
@@ -21,8 +25,9 @@ Widget platformPlayerBuilder(
   customControlsBuilder,
   String? preferredSubtitleLanguage,
   Key? key,
-}) => defaultTargetPlatform == TargetPlatform.macOS
-    ? MediaKitMacosPlayerView(
+}) => defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.iOS
+    ? MediaKitPlayerView(
         key: key,
         stream: stream,
         isLive: isLive,

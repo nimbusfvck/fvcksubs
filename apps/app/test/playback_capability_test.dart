@@ -72,7 +72,7 @@ void main() {
     });
   });
 
-  group('PlaybackTarget.canPlay — iOS (AVPlayer, clear HLS only)', () {
+  group('PlaybackTarget.canPlay — iOS (libmpv, clear containers)', () {
     const target = PlaybackTarget.ios;
 
     test('plain HLS plays', () {
@@ -84,17 +84,16 @@ void main() {
       );
     });
 
-    test(
-      'DASH is refused even with no DRM — this integration sets none on iOS',
-      () {
-        expect(
-          target.canPlay(
-            const PlayableStream(url: 'x', format: StreamFormat.dash),
-          ),
-          isFalse,
-        );
-      },
-    );
+    // iOS moved off AVPlayer, which refused DASH outright and trusted a
+    // segment's declared MIME type. libmpv reads both containers.
+    test('clear DASH plays now that iOS runs on libmpv', () {
+      expect(
+        target.canPlay(
+          const PlayableStream(url: 'x', format: StreamFormat.dash),
+        ),
+        isTrue,
+      );
+    });
 
     test('any DRM at all is refused, regardless of scheme or container', () {
       for (final scheme in [
@@ -102,16 +101,33 @@ void main() {
         DrmScheme.widevine,
         DrmScheme.unsupported,
       ]) {
-        expect(
-          target.canPlay(
-            PlayableStream(
-              url: 'x',
-              format: StreamFormat.hls,
-              drm: DrmConfig(scheme: scheme),
+        for (final format in [StreamFormat.hls, StreamFormat.dash]) {
+          expect(
+            target.canPlay(
+              PlayableStream(url: 'x', format: format, drm: DrmConfig(scheme: scheme)),
             ),
-          ),
-          isFalse,
-          reason: 'DRM scheme $scheme should never play on iOS here',
+            isFalse,
+            reason: 'DRM scheme $scheme should never play on iOS — no CDM',
+          );
+        }
+      }
+    });
+
+    test('matches macOS exactly — both run the same player', () {
+      for (final stream in [
+        const PlayableStream(url: 'x', format: StreamFormat.hls),
+        const PlayableStream(url: 'x', format: StreamFormat.dash),
+        const PlayableStream(url: 'x', format: StreamFormat.other),
+        const PlayableStream(
+          url: 'x',
+          format: StreamFormat.hls,
+          drm: DrmConfig(scheme: DrmScheme.clearKey),
+        ),
+      ]) {
+        expect(
+          target.canPlay(stream),
+          PlaybackTarget.macos.canPlay(stream),
+          reason: 'iOS and macOS share a backend, so they must agree',
         );
       }
     });
