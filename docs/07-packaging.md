@@ -196,6 +196,10 @@ whose names include the triggering branch or release tag (`github.ref_name`):
   the keystore supplied through GitHub Secrets.
 - `fvcksubs-macos-v<version>` — a zip containing the release `.app` from `flutter build macos --release`.
 
+The prerequisite `test` job runs `flutter test --coverage` and publishes
+`fvcksubs-coverage-v<version>` containing `coverage/lcov.info`. Android and macOS builds
+start only after this job succeeds.
+
 These artifacts are build outputs, not store submissions. Configure the Android secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
 `ANDROID_KEY_PASSWORD` before running the workflow. macOS output still requires Developer ID

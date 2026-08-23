@@ -33,7 +33,14 @@ jobs:
 
       - name: Test
         working-directory: apps/app
-        run: flutter test --reporter compact
+        run: flutter test --coverage --reporter compact
+
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvcksubs-coverage-${{ github.ref_name }}
+          path: apps/app/coverage/lcov.info
+          if-no-files-found: error
 
   android:
     name: Android APK
