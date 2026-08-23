@@ -269,7 +269,7 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
   Widget build(BuildContext context) => Material(
     color: Colors.transparent,
     child: Container(
-      width: MediaQuery.sizeOf(context).width,
+      width: double.infinity,
       padding: EdgeInsets.fromLTRB(
         AppSpacing.sm,
         widget.paused ? AppSpacing.xxs : AppSpacing.sm,

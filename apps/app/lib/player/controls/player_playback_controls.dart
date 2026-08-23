@@ -156,7 +156,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       }
     } else if (!_showBufferingIndicator && _bufferingIndicatorTimer == null) {
       _scheduleBufferingIndicator(value?.position ?? Duration.zero);
-      if (_wasPlaying && _playbackIntent) _resumeAfterBuffering = true;
+      if (_playbackIntent) _resumeAfterBuffering = true;
     }
 
     if (widget.isLive) {
@@ -411,14 +411,20 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
             right: AppSpacing.md,
             bottom: AppSpacing.xl * 2,
             child: SafeArea(
-              child: PlayerUpNextCard(
-                seriesTitle: widget.upNextV2!.seriesTitle,
-                subtitle:
-                    '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
-                countdown: _upNextCountdown,
-                paused: widget.upNextPaused,
-                onPlayNext: widget.onPlayNext,
-                onCancel: widget.onCancelUpNext,
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: SizedBox(
+                  width: 280,
+                  child: PlayerUpNextCard(
+                    seriesTitle: widget.upNextV2!.seriesTitle,
+                    subtitle:
+                        '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
+                    countdown: _upNextCountdown,
+                    paused: widget.upNextPaused,
+                    onPlayNext: widget.onPlayNext,
+                    onCancel: widget.onCancelUpNext,
+                  ),
+                ),
               ),
             ),
           );

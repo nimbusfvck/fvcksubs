@@ -550,6 +550,9 @@ class _PlayerTimeline extends StatelessWidget {
       color: Colors.white70,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
+    final displayedPosition = dragValueMs == null
+        ? position
+        : Duration(milliseconds: dragValueMs!.round());
     final timeLabelWidth = _timeLabelWidth(context, durationStyle);
 
     return Row(
@@ -560,7 +563,7 @@ class _PlayerTimeline extends StatelessWidget {
           SizedBox(
             width: timeLabelWidth,
             child: Text(
-              _formatDuration(position),
+              _formatDuration(displayedPosition),
               key: const Key('player-position-label'),
               style: durationStyle,
             ),

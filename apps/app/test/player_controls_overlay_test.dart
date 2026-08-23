@@ -100,6 +100,46 @@ void main() {
     expect(find.byIcon(Icons.closed_caption_off_rounded), findsOneWidget);
   });
 
+  testWidgets('on-demand timeline shows the dragged position', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerControlsOverlayView(
+            title: 'Movie',
+            favoriteAction: const SizedBox(),
+            controlsVisible: true,
+            isLive: false,
+            isPlaying: true,
+            isBuffering: false,
+            sourceLabel: null,
+            activeSubtitleLabel: null,
+            activeQualityLabel: null,
+            position: const Duration(seconds: 30),
+            duration: const Duration(minutes: 2),
+            timelineExtent: const Duration(minutes: 2),
+            bufferedExtent: const Duration(seconds: 45),
+            atLiveEdge: true,
+            dragValueMs: const Duration(seconds: 75).inMilliseconds.toDouble(),
+            onBackgroundTap: () {},
+            onBack: () {},
+            onSkip: (_) {},
+            onTogglePlayPause: () {},
+            onChangeSource: () {},
+            onPlayNext: null,
+            onOpenSubtitlePicker: () {},
+            onOpenQualityPicker: () {},
+            onTimelineChangeStart: (_) {},
+            onTimelineChanged: (_) {},
+            onTimelineChangeEnd: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('01:15'), findsOneWidget);
+    expect(find.text('02:00'), findsOneWidget);
+  });
+
   testWidgets('on-demand timeline keeps its slider width across an hour', (
     tester,
   ) async {
