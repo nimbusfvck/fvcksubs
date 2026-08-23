@@ -137,7 +137,7 @@ class _NetworkAccessDetails extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: Text(
-              '• $host',
+              '• ${describeHostPattern(host)}',
               style: AppTypography.bodyMd.copyWith(color: AppColors.liveAccent),
             ),
           ),
@@ -151,10 +151,18 @@ class _NetworkAccessDetails extends StatelessWidget {
         const SizedBox(height: 2),
         for (final host in request.alreadyGrantedHosts)
           Text(
-            '• $host',
+            '• ${describeHostPattern(host)}',
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
           ),
       ],
     ],
   );
 }
+
+/// A host pattern as the person approving it needs to read it.
+///
+/// `*` is an allowlist opt-out rather than a host, and rendering it verbatim
+/// would show a bullet saying nothing. Spell out what is actually granted so
+/// consent is informed.
+String describeHostPattern(String host) =>
+    host.trim() == '*' ? 'Any site (unrestricted network access)' : host;

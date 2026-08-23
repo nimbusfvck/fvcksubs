@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
+import 'package:fvcksubs_app/player/models/playback_media.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
+import 'package:fvcksubs_app/player/workflow/play_item.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
@@ -29,6 +31,24 @@ void main() {
   StreamSource source(String id) => StreamSource(id: id, label: id);
 
   group('resolved sources: peek/store/isStale', () {
+    test('live playback bypasses resolved and persisted source caches', () {
+      final live = PlaybackMedia(
+        EventItemV2(
+          ref: ref,
+          title: 'Home vs Away',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 1, 1),
+            state: ScheduleState.live,
+          ),
+          participants: const [],
+        ),
+      );
+      const vod = PlaybackMedia(VideoItemV2(ref: ref, title: 'A movie'));
+
+      expect(canUseCachedPlaybackSources(live), isFalse);
+      expect(canUseCachedPlaybackSources(vod), isTrue);
+    });
+
     test('peek is null before anything is stored', () {
       expect(SourceCache().peek(ref), isNull);
     });

@@ -144,4 +144,46 @@ void main() {
       open.dispose();
     }
   });
+
+  test('a bare "*" entry permits a host no pattern names', () async {
+    final open = JsEngine(allowedHosts: const {'*'});
+    try {
+      final result = await open.evalAsync(
+        'fetch(${jsonEncode(urlFor('localhost', '/blocked'))})'
+        '.then(r => r.status)',
+      );
+      expect(result, '200');
+    } finally {
+      open.dispose();
+    }
+  });
+
+  test('a bare "*" also permits a redirect hop to another host', () async {
+    final open = JsEngine(allowedHosts: const {'*'});
+    try {
+      final result = await open.evalAsync(
+        'fetch(${jsonEncode(urlFor('127.0.0.1', '/redirect-blocked'))})'
+        '.then(r => r.status)',
+      );
+      expect(result, '200');
+      expect(blockedHitCount, 1);
+    } finally {
+      open.dispose();
+    }
+  });
+
+  test('"*" as a label, not the whole entry, still matches one label', () async {
+    final open = JsEngine(allowedHosts: const {'*.0.0.1'});
+    try {
+      await expectLater(
+        open.evalAsync(
+          'await fetch(${jsonEncode(urlFor('localhost', '/blocked'))})',
+        ),
+        throwsA(isA<JsEvalException>()),
+      );
+      expect(blockedHitCount, 0);
+    } finally {
+      open.dispose();
+    }
+  });
 }

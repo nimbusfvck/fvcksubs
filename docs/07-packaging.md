@@ -176,7 +176,8 @@ Test guidelines:
 
 ## 7.7 Release checklist
 
-1. Every new host — **including redirect targets** — is declared in `permissions.hosts`.
+1. Every new host — **including redirect targets** — is declared in `permissions.hosts`,
+   unless the extension has waived the allowlist with a bare `*`.
 2. Every new provider and catalog is declared in `manifest.json`.
 3. `version` is bumped, in plain dotted-integer form.
 4. The bundle is regenerated and the freshness test passes.

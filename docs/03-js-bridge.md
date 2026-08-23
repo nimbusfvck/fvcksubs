@@ -368,8 +368,13 @@ flowchart LR
     NEXT --> C1
 ```
 
-- Entries are an **exact host**, or a **single-label wildcard**: `*.example.com` matches
-  `api.example.com` but neither `example.com` nor `a.b.example.com`.
+- Entries are an **exact host**, a **single-label wildcard** (`*.example.com` matches
+  `api.example.com` but neither `example.com` nor `a.b.example.com`), or a bare `*`.
+- A bare `*` **allows every host**, disabling the allowlist for that extension. It exists
+  for extensions whose stream URLs come from upstream at runtime and therefore cannot be
+  enumerated ahead of time. It is a real reduction in isolation — the extension can then
+  read any host it can name — so the install prompt spells it out as unrestricted access
+  and the user approves it explicitly. Pin hosts wherever they are knowable.
 - Matching is on the parsed host, case-insensitive.
 - **Every hop is re-checked.** A redirect to an undeclared host is rejected before the next
   request is sent.

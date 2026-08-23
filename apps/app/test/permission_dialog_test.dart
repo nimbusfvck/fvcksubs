@@ -278,4 +278,40 @@ void main() {
     expect(find.byType(SingleChildScrollView), findsWidgets);
     expect(find.text('• host-0.example'), findsOneWidget);
   });
+
+  testWidgets('a bare "*" is spelled out rather than shown verbatim', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      PermissionRequest(
+        entry: entry(hosts: const ['*']),
+        newHosts: const ['*'],
+        alreadyGrantedHosts: const [],
+        isUpdate: false,
+      ),
+    );
+
+    expect(find.text('• *'), findsNothing);
+    expect(
+      find.text('• Any site (unrestricted network access)'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an ordinary host pattern is left exactly as declared', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      PermissionRequest(
+        entry: entry(hosts: const ['*.example.com']),
+        newHosts: const ['*.example.com'],
+        alreadyGrantedHosts: const [],
+        isUpdate: false,
+      ),
+    );
+
+    expect(find.text('• *.example.com'), findsOneWidget);
+  });
 }

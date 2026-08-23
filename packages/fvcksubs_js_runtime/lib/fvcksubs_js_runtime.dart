@@ -385,11 +385,20 @@ class JsEngine {
 
 /// Single-label wildcard host matching for PLAN.md §19's allowlist:
 /// `*.suffix` matches exactly one label in front of `suffix`.
+///
+/// A bare `*` entry allows every host. It is a deliberate opt-out of the
+/// allowlist, not a shorthand: an extension whose stream URLs are handed to
+/// it by upstream at runtime cannot enumerate the hosts it will contact, and
+/// pinning them made the manifest churn without bounding playback, which
+/// reaches those hosts through the native player rather than through `fetch`.
+/// The install prompt states the widened access, so the user decides.
 bool _hostAllowed(String host, Set<String> allowed) {
   final lower = host.toLowerCase();
   for (final pattern in allowed) {
     final lowerPattern = pattern.toLowerCase();
-    if (lowerPattern.startsWith('*.')) {
+    if (lowerPattern == '*') {
+      return true;
+    } else if (lowerPattern.startsWith('*.')) {
       final suffix = lowerPattern.substring(1); // ".suffix"
       if (lower.length <= suffix.length || !lower.endsWith(suffix)) continue;
       final label = lower.substring(0, lower.length - suffix.length);

@@ -104,7 +104,7 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
 | `entry` | Names the bundle file. The loader reads this — it knows nothing extension-specific. |
 | `categories` | The union of what the catalogs declare. These become the shell's top-level chips. |
 | `providers[].name` | Optional user-facing provider name. Keep `id` stable for routing and saved settings; use `name` when the upstream identity should not be displayed. |
-| `permissions.hosts` | **Enforced on every network call**, and shown to the user before install. Not documentation. |
+| `permissions.hosts` | **Enforced on every network call**, and shown to the user before install. Not documentation. A bare `*` entry opts out of the allowlist entirely and is surfaced to the user as unrestricted access. |
 | `description`, `author`, `iconUrl` | Optional and additive, so older manifests still parse and older builds ignore what they do not know. `author` is asserted by the manifest about itself and verified by nothing — it is a label. |
 | `contentRating` | Optional `general`, `mature`, or `unknown` audience label. It is the default for the extension's catalogs and is self-declared, not a security guarantee. |
 

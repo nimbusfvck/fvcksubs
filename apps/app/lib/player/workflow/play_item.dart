@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../app_scope.dart';
 import '../../platform/playback_capability.dart';
 import '../../theme/tokens.dart';
+import '../diagnostics/player_diagnostics.dart';
 import '../models/playback_media.dart';
 import '../player_page.dart';
 import '../state/source_priority_controller.dart';
@@ -39,7 +41,11 @@ Future<void> _playMedia(
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
 
-  final cached = scope.sourceCache.peek(item.ref);
+  // Live providers commonly sign URLs for a short window. Reusing a
+  // resolved live stream after an extension update can hand AVPlayer an old
+  // URL even though source discovery itself is still valid.
+  final canUseCache = canUseCachedPlaybackSources(item);
+  final cached = canUseCache ? scope.sourceCache.peek(item.ref) : null;
   final enabledCached = cached
       ?.where(
         (source) =>
@@ -64,7 +70,9 @@ Future<void> _playMedia(
     return;
   }
 
-  final cachedList = scope.sourceCache.peekSourceList(item.ref);
+  final cachedList = canUseCache
+      ? scope.sourceCache.peekSourceList(item.ref)
+      : null;
   final enabledCachedList = cachedList
       ?.where(scope.registry.isSourceEnabled)
       .toList();
@@ -124,6 +132,10 @@ Future<void> _playMedia(
   );
 }
 
+/// Resolved URLs for live events and channels are usually signed and short
+/// lived, so live playback must begin from a fresh resolution.
+bool canUseCachedPlaybackSources(PlaybackMedia item) => !item.isLive;
+
 Future<T?> _resolveWithOverlay<T>(
   BuildContext context,
   NavigatorState navigator,
@@ -163,6 +175,8 @@ Future<List<ResolvedSource>?> _revalidate(
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
+const _sourceDiscoveryTimeout = Duration(seconds: 20);
+const _sourceResolveTimeout = Duration(seconds: 20);
 
 /// A live event can be visible before a provider's event feed or stream
 /// endpoint has settled. Give that transient window one automatic retry so a
@@ -252,12 +266,7 @@ Future<List<ResolvedSource>> _playableSources(
   PlaybackMedia item,
   _ResolveProgress progress,
 ) async {
-  List<StreamSource> sources;
-  try {
-    sources = await scope.registry.sources(item.item);
-  } catch (_) {
-    return const [];
-  }
+  final sources = await _loadSources(scope, item);
   if (sources.isEmpty) return const [];
 
   scope.sourceCache.recordSourceList(item.ref, sources);
@@ -282,12 +291,7 @@ _resolveFirstPlayable(
   PlaybackMedia item,
   _ResolveProgress progress,
 ) async {
-  List<StreamSource> sources;
-  try {
-    sources = await scope.registry.sources(item.item);
-  } catch (_) {
-    return (first: null, second: const Stream<ResolvedSource>.empty());
-  }
+  final sources = await _loadSources(scope, item);
   if (sources.isEmpty) {
     return (first: null, second: const Stream<ResolvedSource>.empty());
   }
@@ -297,7 +301,8 @@ _resolveFirstPlayable(
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [
-    for (final source in ordered) _resolveOne(scope, item, source, target),
+    for (final source in ordered)
+      _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
   final first = await _firstNonNull(futures);
@@ -315,6 +320,44 @@ _resolveFirstPlayable(
     Future<ResolvedSource?>.delayed(_subtitleSourceGrace, () => null),
   ]);
   return (first: subtitleMatch ?? first, second: all);
+}
+
+Future<List<StreamSource>> _loadSources(
+  AppScope scope,
+  PlaybackMedia item,
+) async {
+  final stopwatch = Stopwatch()..start();
+  try {
+    final sources = await scope.registry
+        .sources(item.item)
+        .timeout(_sourceDiscoveryTimeout);
+    final providers = sources
+        .map(
+          (source) => source.providerId.isNotEmpty
+              ? source.providerId
+              : source.provider,
+        )
+        .where((provider) => provider.isNotEmpty)
+        .toSet()
+        .join(',');
+    _debugSourceLog(
+      'discovery_ok count=${sources.length} '
+      'providers=${providers.isEmpty ? 'none' : providers} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return sources;
+  } on TimeoutException {
+    _debugSourceLog(
+      'discovery_timeout after=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return const [];
+  } catch (error) {
+    _debugSourceLog(
+      'discovery_error error=${redactPlaybackLogText(error)} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return const [];
+  }
 }
 
 Future<ResolvedSource?> _firstNonNull(List<Future<ResolvedSource?>> futures) =>
@@ -377,14 +420,48 @@ Future<ResolvedSource?> _resolveOne(
   PlaybackMedia item,
   StreamSource source,
   PlaybackTarget target,
+  _ResolveProgress progress,
 ) async {
+  final stopwatch = Stopwatch()..start();
   try {
-    final stream = await scope.registry.resolveSource(item.ref, source.id);
+    final stream = await scope.registry
+        .resolveSource(item.ref, source.id)
+        .timeout(_sourceResolveTimeout);
     final resolved = ResolvedSource(source: source, stream: stream);
-    if (!resolved.hasAbsoluteHttpUrl || !target.canPlay(stream)) return null;
+    if (!resolved.hasAbsoluteHttpUrl) {
+      _debugSourceLog(
+        'resolve_rejected source=${_sourceLogName(source)} reason=relative_url',
+      );
+      return null;
+    }
+    if (!target.canPlay(stream)) {
+      _debugSourceLog(
+        'resolve_rejected source=${_sourceLogName(source)} '
+        'reason=unsupported format=${stream.format.name} '
+        'drm=${stream.drm?.scheme.name ?? 'none'}',
+      );
+      return null;
+    }
+    _debugSourceLog(
+      'resolve_ok source=${_sourceLogName(source)} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
     return resolved;
-  } catch (_) {
+  } on TimeoutException {
+    _debugSourceLog(
+      'resolve_timeout source=${_sourceLogName(source)} '
+      'after=${stopwatch.elapsedMilliseconds}ms',
+    );
     return null;
+  } catch (error) {
+    _debugSourceLog(
+      'resolve_error source=${_sourceLogName(source)} '
+      'error=${redactPlaybackLogText(error)} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return null;
+  } finally {
+    progress.markSettled(source.label);
   }
 }
 
@@ -404,28 +481,27 @@ Future<List<ResolvedSource>> _resolveKnownSources(
 
   final target = PlaybackTarget.detect();
   final resolved = await Future.wait(
-    sources.map((source) async {
-      try {
-        final stream = await scope.registry.resolveSource(item.ref, source.id);
-        final resolved = ResolvedSource(source: source, stream: stream);
-        if (!resolved.hasAbsoluteHttpUrl || !target.canPlay(stream)) {
-          return null;
-        }
-        return resolved;
-      } catch (_) {
-        return null;
-      } finally {
-        progress.markSettled(source.label);
-      }
-    }),
+    sources.map((source) => _resolveOne(scope, item, source, target, progress)),
   );
   return resolved.whereType<ResolvedSource>().toList();
+}
+
+String _sourceLogName(StreamSource source) {
+  final provider = source.providerId.isNotEmpty
+      ? source.providerId
+      : source.provider;
+  return provider.isEmpty ? source.label : '$provider/${source.label}';
+}
+
+void _debugSourceLog(String message) {
+  if (kDebugMode) debugPrint('[PlaybackSources] $message');
 }
 
 class _ResolveProgress extends ChangeNotifier {
   final List<String> _outstanding = [];
   int _total = 0;
   int _settled = 0;
+  bool _disposed = false;
 
   List<String> get outstanding => List.unmodifiable(_outstanding);
 
@@ -433,6 +509,7 @@ class _ResolveProgress extends ChangeNotifier {
   int get total => _total;
 
   void begin(List<String> names) {
+    if (_disposed) return;
     _outstanding
       ..clear()
       ..addAll(names);
@@ -442,9 +519,19 @@ class _ResolveProgress extends ChangeNotifier {
   }
 
   void markSettled(String name) {
+    // The first playable source can open the player while the remaining
+    // resolves continue in the background. Those futures may settle after
+    // the loading overlay has disposed this notifier.
+    if (_disposed) return;
     _outstanding.remove(name);
     _settled++;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 
