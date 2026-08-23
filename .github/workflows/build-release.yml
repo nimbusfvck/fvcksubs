@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  android:
-    name: Android APK
+  test:
+    name: Analyze and test
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -34,6 +34,24 @@ jobs:
       - name: Test
         working-directory: apps/app
         run: flutter test --reporter compact
+
+  android:
+    name: Android APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: apps/app
+        run: flutter pub get
 
       - name: Configure release signing
         working-directory: apps/app/android
@@ -67,6 +85,7 @@ jobs:
 
   macos:
     name: macOS app
+    needs: test
     runs-on: macos-14
     steps:
       - name: Check out source
