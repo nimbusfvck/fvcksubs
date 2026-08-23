@@ -7,5 +7,9 @@ pubspec_overrides.yaml
 .idea/
 .DS_Store
 
+# Android release signing material.
+apps/app/android/key.properties
+apps/app/android/app/upload-keystore.jks
+
 # Planning doc — kept in the folder, not tracked.
 PLAN.md

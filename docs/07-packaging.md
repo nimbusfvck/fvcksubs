@@ -185,3 +185,26 @@ Test guidelines:
 7. Add concise `releaseNotes` for changes users will notice.
 8. If the update widens `hosts`, expect users to be asked again — make sure the additions
    are ones you can justify on a consent sheet.
+
+## 7.8 App build artifacts
+
+The repository workflow at `.github/workflows/build-release.yml` builds the Flutter app on
+manual dispatch and on version tags (`v*`). It publishes two GitHub Actions artifacts:
+
+- `fvcksubs-android-apk` — the release APK from `flutter build apk --release`, signed with
+  the keystore supplied through GitHub Secrets.
+- `fvcksubs-macos-app` — a zip containing the release `.app` from `flutter build macos --release`.
+
+These artifacts are build outputs, not store submissions. Configure the Android secrets
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
+`ANDROID_KEY_PASSWORD` before running the workflow. macOS output still requires Developer ID
+signing and notarization before public distribution.
+
+Generate the keystore once and store only its base64 value and passwords in the repository's
+Actions secrets; never commit the `.jks` file or `key.properties`:
+
+```bash
+keytool -genkeypair -v -keystore upload-keystore.jks \
+  -alias fvcksubs-upload -keyalg RSA -keysize 2048 -validity 10000
+base64 -i upload-keystore.jks | pbcopy
+```

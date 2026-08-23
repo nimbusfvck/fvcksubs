@@ -8,7 +8,7 @@
 PRODUCT_NAME = fvcksubs
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.fvcksubs.fvcksubsApp
+PRODUCT_BUNDLE_IDENTIFIER = com.fvcksubs.app
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.fvcksubs. All rights reserved.
