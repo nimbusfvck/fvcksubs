@@ -44,6 +44,14 @@ jobs:
           test -n "$ANDROID_KEY_ALIAS" || { echo "ANDROID_KEY_ALIAS is not configured"; exit 1; }
           test -n "$ANDROID_KEY_PASSWORD" || { echo "ANDROID_KEY_PASSWORD is not configured"; exit 1; }
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/upload-keystore.jks
+          keytool -list -v \
+            -keystore app/upload-keystore.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null || {
+              echo "ANDROID_KEY_ALIAS does not exist in the supplied keystore (or the store password is wrong)";
+              echo "Inspect it locally with: keytool -list -v -keystore upload-keystore.jks";
+              exit 1;
+            }
           printf '%s\n' \
             "storePassword=$ANDROID_KEYSTORE_PASSWORD" \
             "keyPassword=$ANDROID_KEY_PASSWORD" \

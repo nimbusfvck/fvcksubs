@@ -11,6 +11,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.8
   fvcksubs_core:
     path: ../../packages/fvcksubs_core
   fvcksubs_extension_host:
