@@ -74,6 +74,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration? _lastPosition;
   Duration? _lastDuration;
   Duration? _pendingSwitchPosition;
+  Duration? _pendingFitPosition;
+  AppPlayerController? _pendingFitController;
   String? _playbackError;
   bool _retrying = false;
   int _sourceRevision = 0;
@@ -81,6 +83,10 @@ class _PlayerPageState extends State<PlayerPage> {
   final Set<String> _failedSourceIds = <String>{};
   bool _sourceStarted = false;
   PlayerFitMode _fitMode = PlayerFitMode.contain;
+  AppPlayerController? _aspectRatioController;
+  double? _appliedViewportAspectRatio;
+  bool? _systemUiImmersive;
+  bool? _landscape;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
@@ -106,6 +112,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _library = AppScope.of(context).libraryController;
+    _syncSystemUi();
     _progressTimer ??= Timer.periodic(
       _progressInterval,
       (_) => _reportProgress(),
@@ -136,6 +143,12 @@ class _PlayerPageState extends State<PlayerPage> {
     _videoValue?.removeListener(_onVideoValueChanged);
     unawaited(_eventSubscription?.cancel());
     _reportProgress();
+    final landscape = _landscape == true;
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        landscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+      ),
+    );
     super.dispose();
   }
 
@@ -342,10 +355,54 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleFit() {
+    final controller = _controller;
+    final position = !_isLive ? controller?.value.value.position : null;
+    _pendingFitPosition = position;
+    _pendingFitController = controller;
     final next = _fitMode.toggled;
     setState(() => _fitMode = next);
-    final controller = _controller;
+    _syncSystemUi();
     if (controller != null) unawaited(controller.setFit(next));
+    if (position != null && controller != null) {
+      unawaited(_restoreFitPosition(controller, position));
+    }
+  }
+
+  Future<void> _restoreFitPosition(
+    AppPlayerController controller,
+    Duration position,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted ||
+        _pendingFitPosition != position ||
+        !identical(_pendingFitController, controller) ||
+        !identical(_controller, controller)) {
+      return;
+    }
+    _pendingFitPosition = null;
+    _pendingFitController = null;
+    final current = controller.value.value.position;
+    final delta = current >= position ? current - position : position - current;
+    if (delta > const Duration(seconds: 1)) {
+      unawaited(controller.seekTo(position));
+    }
+  }
+
+  void _syncSystemUi() {
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    _landscape = landscape;
+    final immersive = _fitMode == PlayerFitMode.cover || landscape;
+    if (_systemUiImmersive == immersive) return;
+    _systemUiImmersive = immersive;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _systemUiImmersive != immersive) return;
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(
+          immersive ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+        ),
+      );
+    });
   }
 
   void _switchToResolvedSource(int index) {
@@ -366,6 +423,8 @@ class _PlayerPageState extends State<PlayerPage> {
       _retrying = false;
       _sourceRevision++;
       _sourceStarted = false;
+      _pendingFitPosition = null;
+      _pendingFitController = null;
       _controller = null;
       _onVisibilityChanged = null;
     });
@@ -427,6 +486,72 @@ class _PlayerPageState extends State<PlayerPage> {
         }),
       );
 
+  Widget _buildPlayer(BuildContext context) =>
+      AppScope.of(context).playerBuilder(
+        context,
+        _current.stream,
+        isLive: _isLive,
+        key: ValueKey('${_current.source.id}:$_sourceRevision'),
+        preferredSubtitleLanguage: AppScope.of(
+          context,
+        ).subtitlePreferenceController.languageCode,
+        onControllerCreated: (value) {
+          _controller = value as AppPlayerController?;
+          if (_controller != null) {
+            _attachEventListener(_controller!);
+            unawaited(_controller!.setFit(_fitMode));
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        },
+        onPlaybackReady: (value) {
+          final controller = value as AppPlayerController?;
+          if (controller != null) _trackPosition(controller);
+        },
+        customControlsBuilder: (context, value, onVisibilityChanged) {
+          final controller = value as AppPlayerController?;
+          _controller ??= controller;
+          _onVisibilityChanged = onVisibilityChanged;
+          return controller?.isFullScreen == true
+              ? _controlsFor(controller)
+              : const SizedBox.shrink();
+        },
+      );
+
+  Widget _playerViewport(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final maxHeight = constraints.maxHeight;
+        final cover = _fitMode == PlayerFitMode.cover;
+        final viewportRatio = maxHeight > 0 ? maxWidth / maxHeight : 16 / 9;
+        final containWidth = maxHeight > 0 && viewportRatio > 16 / 9
+            ? maxHeight * (16 / 9)
+            : maxWidth;
+        final containHeight = containWidth / (16 / 9);
+        final ratio = cover ? viewportRatio : 16 / 9;
+        final controller = _controller;
+        if (controller != null &&
+            (!identical(controller, _aspectRatioController) ||
+                _appliedViewportAspectRatio != ratio)) {
+          _aspectRatioController = controller;
+          _appliedViewportAspectRatio = ratio;
+          unawaited(controller.setViewportAspectRatio(ratio));
+        }
+        final player = _buildPlayer(context);
+        return Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: cover ? maxWidth : containWidth,
+            height: cover ? maxHeight : containHeight,
+            child: player,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) => CallbackShortcuts(
     bindings: {
@@ -452,43 +577,7 @@ class _PlayerPageState extends State<PlayerPage> {
           backgroundColor: Colors.black,
           body: Stack(
             children: [
-              Center(
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: AppScope.of(context).playerBuilder(
-                    context,
-                    _current.stream,
-                    isLive: _isLive,
-                    key: ValueKey('${_current.source.id}:$_sourceRevision'),
-                    preferredSubtitleLanguage: AppScope.of(
-                      context,
-                    ).subtitlePreferenceController.languageCode,
-                    onControllerCreated: (value) {
-                      _controller = value as AppPlayerController?;
-                      if (_controller != null) {
-                        _attachEventListener(_controller!);
-                        unawaited(_controller!.setFit(_fitMode));
-                      }
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) setState(() {});
-                      });
-                    },
-                    onPlaybackReady: (value) {
-                      final controller = value as AppPlayerController?;
-                      if (controller != null) _trackPosition(controller);
-                    },
-                    customControlsBuilder:
-                        (context, value, onVisibilityChanged) {
-                          final controller = value as AppPlayerController?;
-                          _controller ??= controller;
-                          _onVisibilityChanged = onVisibilityChanged;
-                          return controller?.isFullScreen == true
-                              ? _controlsFor(controller)
-                              : const SizedBox.shrink();
-                        },
-                  ),
-                ),
-              ),
+              _playerViewport(context),
               Positioned.fill(child: _controlsFor(_controller)),
               if (_playbackError != null)
                 Positioned.fill(

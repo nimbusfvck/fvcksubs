@@ -108,6 +108,7 @@ abstract interface class AppPlayerController {
   Future<void> setQuality(AppQualityTrack? track);
   Future<void> setAudioTrack(AppAudioTrack track);
   Future<void> setFit(PlayerFitMode mode);
+  Future<void> setViewportAspectRatio(double ratio);
   Future<void> toggleFullScreen();
   Future<void> exitFullScreen();
 }

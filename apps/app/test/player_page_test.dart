@@ -222,6 +222,9 @@ class _FakePlayerController implements AppPlayerController {
   Future<void> setFit(PlayerFitMode mode) async {}
 
   @override
+  Future<void> setViewportAspectRatio(double ratio) async {}
+
+  @override
   Future<void> toggleFullScreen() async {}
 
   @override

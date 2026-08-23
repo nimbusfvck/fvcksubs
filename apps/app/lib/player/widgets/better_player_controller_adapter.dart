@@ -103,6 +103,11 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   }
 
   @override
+  Future<void> setViewportAspectRatio(double ratio) async {
+    _controller.setOverriddenAspectRatio(ratio);
+  }
+
+  @override
   Future<void> setSubtitle(SubtitleTrack? track) =>
       _controller.setupSubtitleSource(
         track == null

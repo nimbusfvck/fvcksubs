@@ -219,6 +219,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   Future<void> setFit(PlayerFitMode mode) async => _setFit(mode);
 
   @override
+  Future<void> setViewportAspectRatio(double ratio) async {}
+
+  @override
   Future<void> setSubtitle(SubtitleTrack? track) async {
     _activeSubtitle = track;
     await _player.setSubtitleTrack(

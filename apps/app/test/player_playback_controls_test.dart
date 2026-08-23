@@ -159,6 +159,8 @@ class _RecoveryController implements AppPlayerController {
   @override
   Future<void> setFit(PlayerFitMode mode) async {}
   @override
+  Future<void> setViewportAspectRatio(double ratio) async {}
+  @override
   Future<void> toggleFullScreen() async {}
   @override
   Future<void> exitFullScreen() async {}
