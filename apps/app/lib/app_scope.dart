@@ -12,6 +12,7 @@ import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'player/widgets/stream_player.dart';
+import 'settings/nsfw_controller.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({
@@ -28,6 +29,7 @@ class AppScope extends InheritedWidget {
     required this.sourcePriorityController,
     required this.homeCategoryStore,
     required this.sourceCache,
+    required this.nsfwController,
     required super.child,
   });
 
@@ -55,6 +57,8 @@ class AppScope extends InheritedWidget {
 
   final SourceCache sourceCache;
 
+  final NsfwController nsfwController;
+
   static AppScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
     assert(scope != null, 'No AppScope found in context');
@@ -74,5 +78,6 @@ class AppScope extends InheritedWidget {
       subtitlePreferenceController != oldWidget.subtitlePreferenceController ||
       sourcePriorityController != oldWidget.sourcePriorityController ||
       homeCategoryStore != oldWidget.homeCategoryStore ||
-      sourceCache != oldWidget.sourceCache;
+      sourceCache != oldWidget.sourceCache ||
+      nsfwController != oldWidget.nsfwController;
 }

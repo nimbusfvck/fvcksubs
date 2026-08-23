@@ -18,6 +18,7 @@ import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
+import 'settings/nsfw_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,13 +26,21 @@ Future<void> main() async {
 
   final settingsStore = SharedPreferencesAddonSettingsStore();
   final settings = await settingsStore.load();
+  final nsfwStore = SharedPreferencesNsfwSettingsStore();
+  final nsfwSettings = await nsfwStore.load();
   final registry = buildRegistry(
     disabledExtensionIds: settings.disabledExtensionIds,
     disabledProviderIds: settings.disabledProviderIds,
+    showNsfw: nsfwSettings.showNsfw,
   );
   final addonsController = AddonsController(
     registry: registry,
     store: settingsStore,
+  );
+  final nsfwController = NsfwController(
+    registry: registry,
+    store: nsfwStore,
+    showNsfw: nsfwSettings.showNsfw,
   );
 
   final installedStore = SharedPreferencesInstalledExtensionStore();
@@ -97,6 +106,7 @@ Future<void> main() async {
       sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
+      nsfwController: nsfwController,
       navigatorKey: navigatorKey,
     ),
   );
@@ -136,9 +146,11 @@ Future<void> loadInstalledExtensions(
 ExtensionRegistry buildRegistry({
   Set<String> disabledExtensionIds = const {},
   Set<String> disabledProviderIds = const {},
+  bool showNsfw = false,
   ContentExtension? initialExtension,
 }) => ExtensionRegistry(
   [?initialExtension],
   disabledExtensionIds: disabledExtensionIds,
   disabledProviderIds: disabledProviderIds,
+  showNsfw: showNsfw,
 );

@@ -118,6 +118,14 @@ flowchart LR
 Subtitle tracks contain a language, URL, and optional label. The player detects SRT or VTT
 from the response content, so the protocol does not include a subtitle format field.
 
+### Audience filtering
+
+Extensions may declare `contentRating` as `general`, `mature`, or `unknown` on the
+manifest. A catalog may override the manifest value. The app's **Show NSFW content**
+preference hides catalogs marked `mature` when disabled. Existing extensions that omit the
+field remain `unknown` for backward compatibility; the declaration is self-reported and
+must not be treated as a security boundary.
+
 ## 5.3 App-owned state
 
 ```mermaid

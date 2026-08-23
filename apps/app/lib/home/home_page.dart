@@ -18,6 +18,7 @@ import 'category_chips.dart';
 import 'continue_watching_shelf.dart';
 import 'featured_controller.dart';
 import 'featured_hero.dart';
+import '../settings/nsfw_controller.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -121,9 +122,12 @@ class _HomePageState extends State<HomePage> {
     final scope = AppScope.of(context);
     return BlocBuilder<InstallerController, InstallerState>(
       bloc: scope.installerController,
-      builder: (context, _) => ListenableBuilder(
-        listenable: scope.pluginController,
-        builder: (context, _) => _body(context, scope),
+      builder: (context, _) => BlocBuilder<NsfwController, NsfwState>(
+        bloc: scope.nsfwController,
+        builder: (context, _) => ListenableBuilder(
+          listenable: scope.pluginController,
+          builder: (context, _) => _body(context, scope),
+        ),
       ),
     );
   }

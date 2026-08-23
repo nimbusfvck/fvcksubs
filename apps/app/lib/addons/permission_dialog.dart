@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
 import 'installer_controller.dart';
@@ -40,6 +41,10 @@ class _PermissionDialog extends StatelessWidget {
               else
                 'Version ${entry.version}',
               if (entry.author != null) 'by ${entry.author}',
+              if (entry.contentRating == ContentRating.mature)
+                'Content rating: Mature / NSFW'
+              else if (entry.contentRating == ContentRating.general)
+                'Content rating: General',
             ].join(' · '),
             style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
           ),

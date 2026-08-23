@@ -6,6 +6,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import '../app_scope.dart';
 import '../player/state/source_priority_controller.dart';
 import '../player/state/subtitle_preference_controller.dart';
+import 'nsfw_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 
@@ -15,6 +16,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context).subtitlePreferenceController;
+    final nsfwController = AppScope.of(context).nsfwController;
     return Scaffold(
       appBar: const AppPageBar(title: 'Settings'),
       body: ListenableBuilder(
@@ -35,11 +37,42 @@ class SettingsPage extends StatelessWidget {
             const _SourcePriorityEntry(),
             const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
+            const SizedBox(height: AppSpacing.md),
+            BlocBuilder<NsfwController, NsfwState>(
+              bloc: nsfwController,
+              builder: (context, state) => _NsfwPreference(
+                controller: nsfwController,
+                showNsfw: state.showNsfw,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+class _NsfwPreference extends StatelessWidget {
+  const _NsfwPreference({required this.controller, required this.showNsfw});
+
+  final NsfwController controller;
+  final bool showNsfw;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceDarkElevated,
+    borderRadius: AppRadius.lg,
+    clipBehavior: Clip.antiAlias,
+    child: SwitchListTile(
+      value: showNsfw,
+      onChanged: controller.setShowNsfw,
+      title: const Text('Show NSFW content'),
+      subtitle: const Text(
+        'Allow catalogs marked as mature or NSFW to appear in the app.',
+      ),
+      secondary: const Icon(Icons.visibility_outlined),
+    ),
+  );
 }
 
 class _SourcePriorityEntry extends StatelessWidget {

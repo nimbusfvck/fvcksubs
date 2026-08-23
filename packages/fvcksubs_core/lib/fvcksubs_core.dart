@@ -18,6 +18,7 @@ export 'src/matcher/team_name_normalizer.dart';
 export 'src/protocol/catalog.dart';
 export 'src/protocol/catalog_v2.dart';
 export 'src/protocol/content_extension.dart';
+export 'src/protocol/content_rating.dart';
 export 'src/protocol/extension_repo.dart';
 export 'src/protocol/installed_extension.dart';
 export 'src/protocol/manifest.dart';

@@ -86,6 +86,7 @@ flowchart LR
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
 | Subtitle preference | its own language code | On an uncached play, a source with a matching stream-provided track gets a 300 ms head start before the first playable source is used; this keeps startup responsive without needlessly discarding the preference. For on-demand playback, autoplay waits for the selected source's track to apply; a subtitle failure releases playback rather than blocking it. External subtitles are fetched only after an explicit viewer action. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
+| NSFW visibility | the registry plus a persisted app preference | **Show NSFW content** controls catalogs explicitly marked `mature`; unknown declarations remain compatible with older extensions. |
 
 ## 6.4 Screens
 

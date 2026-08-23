@@ -24,4 +24,8 @@ class CatalogBinding {
 
   /// Id of the owning extension.
   String get extensionId => extension.manifest.id;
+
+  /// Effective audience classification, with the manifest as the default.
+  ContentRating get contentRating =>
+      catalog.contentRating ?? extension.manifest.contentRating;
 }

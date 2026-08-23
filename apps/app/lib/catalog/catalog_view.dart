@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -9,6 +10,7 @@ import 'catalog_filter_bar.dart';
 import 'catalog_cache.dart';
 import 'media_grid_v2.dart';
 import 'sub_category_chips.dart';
+import '../settings/nsfw_controller.dart';
 
 class CatalogView extends StatefulWidget {
   const CatalogView({
@@ -159,24 +161,35 @@ class _CatalogViewState extends State<CatalogView> {
       openVersionedItem(context, item, heroTag: heroTag);
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (widget.binding.catalog.filters.isNotEmpty)
-        CatalogFilterBar(
-          filterKeys: widget.binding.catalog.filters,
-          values: _filters,
-          onChanged: _onFilterChanged,
-        ),
-      if (_subCategories.isNotEmpty && widget.initialSubCategory == null)
-        SubCategoryChips(
-          subCategories: _subCategories,
-          selected: _subCategory,
-          onSelected: _onSubCategorySelected,
-        ),
-      Expanded(child: _body()),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    return BlocBuilder<NsfwController, NsfwState>(
+      bloc: scope.nsfwController,
+      builder: (context, _) {
+        if (!scope.registry.isCatalogAllowed(widget.binding)) {
+          return const Center(child: Text('NSFW content is disabled.'));
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.binding.catalog.filters.isNotEmpty)
+              CatalogFilterBar(
+                filterKeys: widget.binding.catalog.filters,
+                values: _filters,
+                onChanged: _onFilterChanged,
+              ),
+            if (_subCategories.isNotEmpty && widget.initialSubCategory == null)
+              SubCategoryChips(
+                subCategories: _subCategories,
+                selected: _subCategory,
+                onSelected: _onSubCategorySelected,
+              ),
+            Expanded(child: _body()),
+          ],
+        );
+      },
+    );
+  }
 
   Widget _body() {
     if (_loading) return const Center(child: CircularProgressIndicator());

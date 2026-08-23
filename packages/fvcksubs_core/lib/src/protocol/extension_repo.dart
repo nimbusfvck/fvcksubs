@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../json_util.dart';
+import 'content_rating.dart';
 
 /// Thrown when a repo index cannot be parsed.
 class ExtensionRepoException implements Exception {
@@ -37,6 +38,7 @@ class ExtensionRepoEntry extends Equatable {
     this.author,
     this.iconUrl,
     this.releaseNotes = const [],
+    this.contentRating = ContentRating.unknown,
   });
 
   /// Parses one entry from JSON.
@@ -54,6 +56,11 @@ class ExtensionRepoEntry extends Equatable {
         author: json['author'] as String?,
         iconUrl: json['iconUrl'] as String?,
         releaseNotes: stringList(json['releaseNotes']),
+        contentRating: enumByName(
+          ContentRating.values,
+          json['contentRating'],
+          orElse: ContentRating.unknown,
+        ),
       );
     } on TypeError catch (e) {
       throw ExtensionRepoException('malformed repo entry: $e');
@@ -100,6 +107,9 @@ class ExtensionRepoEntry extends Equatable {
   /// Short user-facing changes for this release, shown before an update.
   final List<String> releaseNotes;
 
+  /// Audience classification shown before the extension is installed.
+  final ContentRating contentRating;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -113,6 +123,8 @@ class ExtensionRepoEntry extends Equatable {
     if (author != null) 'author': author,
     if (iconUrl != null) 'iconUrl': iconUrl,
     if (releaseNotes.isNotEmpty) 'releaseNotes': releaseNotes,
+    if (contentRating != ContentRating.unknown)
+      'contentRating': contentRating.name,
   };
 
   @override
@@ -128,6 +140,7 @@ class ExtensionRepoEntry extends Equatable {
     author,
     iconUrl,
     releaseNotes,
+    contentRating,
   ];
 }
 

@@ -20,6 +20,7 @@ class ExtensionRegistry {
     List<ContentExtension> extensions, {
     Set<String> disabledExtensionIds = const {},
     Set<String> disabledProviderIds = const {},
+    this.showNsfw = false,
   }) : _extensions = [...extensions],
        _disabledExtensionIds = {...disabledExtensionIds},
        _disabledProviderIds = {...disabledProviderIds};
@@ -27,6 +28,9 @@ class ExtensionRegistry {
   final List<ContentExtension> _extensions;
   final Set<String> _disabledExtensionIds;
   final Set<String> _disabledProviderIds;
+
+  /// Whether catalogs explicitly marked mature/NSFW may be shown.
+  bool showNsfw;
 
   /// Manifests of every installed extension, in install order — enabled or
   /// not; Addons needs to list disabled ones too, to offer turning them
@@ -97,6 +101,13 @@ class ExtensionRegistry {
   bool isProviderEnabled(String providerId) =>
       !_disabledProviderIds.contains(providerId);
 
+  /// Updates the global NSFW visibility preference.
+  void setNsfwEnabled(bool enabled) => showNsfw = enabled;
+
+  /// Whether the catalog is allowed by the current NSFW preference.
+  bool isCatalogAllowed(CatalogBinding binding) =>
+      !binding.contentRating.isHiddenWhenNsfwDisabled(showNsfw);
+
   /// Whether a source may be offered under the current Addons preferences.
   ///
   /// Older source descriptors may not carry a provider id. Keep those
@@ -123,8 +134,41 @@ class ExtensionRegistry {
     final ordered = <String>[];
     for (final extension in _extensions) {
       if (!isExtensionEnabled(extension.manifest.id)) continue;
-      for (final category in extension.manifest.categories) {
-        if (seen.add(category)) ordered.add(category);
+      final declaredCatalogs = [
+        for (final provider in extension.manifest.providers)
+          for (final catalog in provider.catalogs)
+            CatalogBinding(
+              extension: extension,
+              providerId: provider.id,
+              catalog: catalog,
+            ),
+      ];
+      if (declaredCatalogs.isEmpty) {
+        if (extension.manifest.contentRating.isHiddenWhenNsfwDisabled(
+          showNsfw,
+        )) {
+          continue;
+        }
+        for (final category in extension.manifest.categories) {
+          if (seen.add(category)) ordered.add(category);
+        }
+        continue;
+      }
+      final catalogs = [
+        for (final provider in extension.manifest.providers)
+          if (isProviderEnabled(provider.id))
+            for (final catalog in provider.catalogs)
+              CatalogBinding(
+                extension: extension,
+                providerId: provider.id,
+                catalog: catalog,
+              ),
+      ];
+      for (final binding in catalogs) {
+        if (!isCatalogAllowed(binding)) continue;
+        for (final category in binding.categories) {
+          if (seen.add(category)) ordered.add(category);
+        }
       }
     }
     return ordered;
@@ -152,13 +196,12 @@ class ExtensionRegistry {
         if (!isProviderEnabled(provider.id)) continue;
         for (final catalog in provider.catalogs) {
           if (catalog.categories.contains(category)) {
-            bindings.add(
-              CatalogBinding(
-                extension: extension,
-                providerId: provider.id,
-                catalog: catalog,
-              ),
+            final binding = CatalogBinding(
+              extension: extension,
+              providerId: provider.id,
+              catalog: catalog,
             );
+            if (isCatalogAllowed(binding)) bindings.add(binding);
           }
         }
       }
@@ -196,15 +239,36 @@ class ExtensionRegistry {
     Map<String, String> filters = const {},
     String? subCategory,
   }) => _currentExtension(binding).catalog(
-    CatalogQuery(
-      providerId: binding.providerId,
-      catalogId: binding.catalog.id,
+    _catalogQuery(
+      binding,
       category: category,
       page: page,
       filters: filters,
       subCategory: subCategory,
     ),
   );
+
+  CatalogQuery _catalogQuery(
+    CatalogBinding binding, {
+    String? category,
+    String? page,
+    required Map<String, String> filters,
+    String? subCategory,
+  }) {
+    if (!isCatalogAllowed(binding)) {
+      throw StateError(
+        'Catalog "${binding.catalog.id}" is hidden by NSFW settings.',
+      );
+    }
+    return CatalogQuery(
+      providerId: binding.providerId,
+      catalogId: binding.catalog.id,
+      category: category,
+      page: page,
+      filters: filters,
+      subCategory: subCategory,
+    );
+  }
 
   ContentExtension _currentExtension(CatalogBinding binding) {
     final index = _extensions.indexWhere(
@@ -240,6 +304,11 @@ class ExtensionRegistry {
     final results = await Future.wait<List<VersionedMediaItem>>(
       providers.map((extension) async {
         try {
+          if (extension.manifest.contentRating.isHiddenWhenNsfwDisabled(
+            showNsfw,
+          )) {
+            return <VersionedMediaItem>[];
+          }
           return (await extension.search(query)).items.toList();
         } catch (_) {
           return <VersionedMediaItem>[];

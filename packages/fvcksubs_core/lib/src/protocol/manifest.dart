@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../json_util.dart';
+import 'content_rating.dart';
 
 /// A role a provider can fill. One provider may fill several.
 enum ProviderRole {
@@ -84,6 +85,7 @@ class CatalogDecl extends Equatable {
     this.display = CatalogDisplay.grid,
     this.filters = const [],
     this.expanded = false,
+    this.contentRating,
   });
 
   /// Builds a [CatalogDecl] from decoded JSON.
@@ -104,6 +106,13 @@ class CatalogDecl extends Equatable {
     ),
     filters: stringList(json['filters']),
     expanded: (json['expanded'] as bool?) ?? false,
+    contentRating: json.containsKey('contentRating')
+        ? enumByName(
+            ContentRating.values,
+            json['contentRating'],
+            orElse: ContentRating.unknown,
+          )
+        : null,
   );
 
   /// Catalog id, unique within its provider.
@@ -134,6 +143,10 @@ class CatalogDecl extends Equatable {
   /// front, not what shape it's shown in.
   final bool expanded;
 
+  /// Optional audience classification. When absent, the manifest rating
+  /// supplies the catalog default.
+  final ContentRating? contentRating;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -142,10 +155,19 @@ class CatalogDecl extends Equatable {
     'display': display.name,
     if (filters.isNotEmpty) 'filters': filters,
     if (expanded) 'expanded': expanded,
+    if (contentRating != null) 'contentRating': contentRating!.name,
   };
 
   @override
-  List<Object?> get props => [id, name, categories, display, filters, expanded];
+  List<Object?> get props => [
+    id,
+    name,
+    categories,
+    display,
+    filters,
+    expanded,
+    contentRating,
+  ];
 }
 
 /// One provider declared by an extension.
@@ -231,6 +253,7 @@ class Manifest extends Equatable {
     this.description,
     this.author,
     this.iconUrl,
+    this.contentRating = ContentRating.unknown,
   });
 
   /// Highest protocol version this app build can run.
@@ -266,6 +289,11 @@ class Manifest extends Equatable {
         description: json['description'] as String?,
         author: json['author'] as String?,
         iconUrl: json['iconUrl'] as String?,
+        contentRating: enumByName(
+          ContentRating.values,
+          json['contentRating'],
+          orElse: ContentRating.unknown,
+        ),
         categories: stringList(json['categories']),
         providers: ((json['providers'] as List?) ?? const [])
             .map((p) => ProviderDecl.fromJson(p as Map<String, Object?>))
@@ -312,6 +340,9 @@ class Manifest extends Equatable {
   /// without one falls back to a plain tile, not a broken image.
   final String? iconUrl;
 
+  /// Default audience classification for this extension's catalogs.
+  final ContentRating contentRating;
+
   /// Categories this extension contributes (`["live", "sport"]`). Each one
   /// becomes a chip on Home.
   final List<String> categories;
@@ -333,6 +364,8 @@ class Manifest extends Equatable {
     if (description != null) 'description': description,
     if (author != null) 'author': author,
     if (iconUrl != null) 'iconUrl': iconUrl,
+    if (contentRating != ContentRating.unknown)
+      'contentRating': contentRating.name,
     'categories': categories,
     'providers': providers.map((p) => p.toJson()).toList(),
     'permissions': permissions.toJson(),
@@ -349,6 +382,7 @@ class Manifest extends Equatable {
     description,
     author,
     iconUrl,
+    contentRating,
     categories,
     providers,
     permissions,

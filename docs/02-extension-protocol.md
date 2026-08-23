@@ -68,6 +68,7 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
   "description": "Optional — shown on the install prompt.",
   "author": "Optional — a label, not verified provenance.",
   "iconUrl": "https://cdn.example.com/icon.png",
+  "contentRating": "general",
 
   "categories": ["live", "sport"],
 
@@ -105,6 +106,7 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
 | `providers[].name` | Optional user-facing provider name. Keep `id` stable for routing and saved settings; use `name` when the upstream identity should not be displayed. |
 | `permissions.hosts` | **Enforced on every network call**, and shown to the user before install. Not documentation. |
 | `description`, `author`, `iconUrl` | Optional and additive, so older manifests still parse and older builds ignore what they do not know. `author` is asserted by the manifest about itself and verified by nothing — it is a label. |
+| `contentRating` | Optional `general`, `mature`, or `unknown` audience label. It is the default for the extension's catalogs and is self-declared, not a security guarantee. |
 
 ### The manifest is not read from the bundle
 
@@ -131,6 +133,11 @@ flowchart LR
 | category | manifest, as a **list** | no | top-level chips |
 | subCategory | **response** | no — ids are opaque and echoed back | chips, or sections on the browse screen |
 | group | a field on each item | no | headings within one list |
+
+`contentRating` may be declared on a catalog to override the manifest default. A catalog
+marked `mature` is hidden when the user disables the app's **Show NSFW content** setting.
+For a mixed catalog, use separate catalogs until the protocol gains item-level audience
+metadata. The rating is a filter hint supplied by the extension, not content inspection.
 
 **`categories` is a list, not a single value.** One catalog legitimately spans several, and
 the same item may surface under more than one. Which one the user is browsing arrives with

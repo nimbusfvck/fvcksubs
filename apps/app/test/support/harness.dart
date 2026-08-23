@@ -8,6 +8,7 @@ import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
+import 'package:fvcksubs_app/settings/nsfw_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -41,6 +42,8 @@ class FakeExtension extends ContentExtension {
     String? description,
     String? author,
     String version = '1.0.0',
+    this.contentRating = ContentRating.unknown,
+    ContentRating? catalogContentRating,
   }) : _manifest = Manifest.parse({
          'apiVersion': 2,
          'id': id,
@@ -49,6 +52,8 @@ class FakeExtension extends ContentExtension {
          'runtime': 'builtin',
          'description': ?description,
          'author': ?author,
+         if (contentRating != ContentRating.unknown)
+           'contentRating': contentRating.name,
          'categories': categories,
          'providers': [
            {
@@ -67,6 +72,8 @@ class FakeExtension extends ContentExtension {
                  'display': display.name,
                  if (expanded) 'expanded': expanded,
                  if (filterKeys.isNotEmpty) 'filters': filterKeys,
+                 if (catalogContentRating != null)
+                   'contentRating': catalogContentRating.name,
                },
              ],
            },
@@ -76,6 +83,7 @@ class FakeExtension extends ContentExtension {
 
   final String id;
   final List<String> categories;
+  final ContentRating contentRating;
   final CatalogDisplay display;
 
   /// Whether the catalog declares `expanded: true` — shown in full on Home
@@ -485,6 +493,17 @@ class FakePluginSelectionStore implements PluginSelectionStore {
   Future<void> save(String? extensionId) async => saved = extensionId;
 }
 
+/// In-memory NSFW preference store.
+class FakeNsfwSettingsStore implements NsfwSettingsStore {
+  NsfwSettings saved = const NsfwSettings();
+
+  @override
+  Future<NsfwSettings> load() async => saved;
+
+  @override
+  Future<void> save(NsfwSettings settings) async => saved = settings;
+}
+
 /// Wraps [child] in an [AppScope] + [MaterialApp] for pumping a screen.
 ///
 /// Pages that aren't themselves a [Scaffold] (HomePage, which normally sits
@@ -508,6 +527,7 @@ Widget wrapApp({
   SourcePriorityController? sourcePriorityController,
   CategorySelectionStore? homeCategoryStore,
   SourceCache? sourceCache,
+  NsfwController? nsfwController,
 }) => AppScope(
   registry: registry,
   deviceClass: deviceClass,
@@ -539,6 +559,13 @@ Widget wrapApp({
       ),
   homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
+  nsfwController:
+      nsfwController ??
+      NsfwController(
+        registry: registry,
+        store: FakeNsfwSettingsStore(),
+        showNsfw: registry.showNsfw,
+      ),
   child: MaterialApp(home: Scaffold(body: child)),
 );
 

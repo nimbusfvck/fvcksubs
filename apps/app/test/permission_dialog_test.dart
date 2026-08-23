@@ -10,6 +10,7 @@ void main() {
     String? description,
     String? author,
     List<String> releaseNotes = const [],
+    ContentRating contentRating = ContentRating.unknown,
   }) => ExtensionRepoEntry(
     id: 'remote_ext',
     name: 'Remote Extension',
@@ -21,6 +22,7 @@ void main() {
     description: description,
     author: author,
     releaseNotes: releaseNotes,
+    contentRating: contentRating,
   );
 
   /// Pumps the dialog and returns whatever it resolved to.
@@ -221,6 +223,23 @@ void main() {
 
     expect(find.text('Football fixtures and streams.'), findsOneWidget);
     expect(find.textContaining('by Someone'), findsOneWidget);
+  });
+
+  testWidgets('shows a mature content rating before install', (tester) async {
+    await show(
+      tester,
+      PermissionRequest(
+        entry: entry(contentRating: ContentRating.mature),
+        newHosts: const [],
+        alreadyGrantedHosts: const [],
+        isUpdate: false,
+      ),
+    );
+
+    expect(
+      find.textContaining('Content rating: Mature / NSFW'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('an entry with no description still renders', (tester) async {
