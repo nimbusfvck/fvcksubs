@@ -26,6 +26,7 @@ typedef PlayerBuilder =
       )?
       customControlsBuilder,
       String? preferredSubtitleLanguage,
+      SubtitleTrack? preferredExternalSubtitle,
       Key? key,
     });
 
@@ -42,6 +43,7 @@ Widget defaultPlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  SubtitleTrack? preferredExternalSubtitle,
   Key? key,
 }) => platformPlayerBuilder(
   context,
@@ -50,6 +52,7 @@ Widget defaultPlayerBuilder(
   onControllerCreated: onControllerCreated,
   onPlaybackReady: onPlaybackReady,
   customControlsBuilder: customControlsBuilder,
+  preferredExternalSubtitle: preferredExternalSubtitle,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
   key: key,
 );
@@ -67,6 +70,7 @@ Widget mobilePlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  SubtitleTrack? preferredExternalSubtitle,
   Key? key,
 }) => BetterPlayerView(
   key: key,
@@ -76,6 +80,7 @@ Widget mobilePlayerBuilder(
   onPlaybackReady: onPlaybackReady,
   customControlsBuilder: customControlsBuilder,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
+  preferredExternalSubtitle: preferredExternalSubtitle,
 );
 
 class BetterPlayerView extends StatefulWidget {
@@ -87,6 +92,7 @@ class BetterPlayerView extends StatefulWidget {
     this.onPlaybackReady,
     this.customControlsBuilder,
     this.preferredSubtitleLanguage,
+    this.preferredExternalSubtitle,
     this.aspectRatio,
     this.looping = false,
     this.muted = false,
@@ -111,6 +117,8 @@ class BetterPlayerView extends StatefulWidget {
   customControlsBuilder;
 
   final String? preferredSubtitleLanguage;
+
+  final SubtitleTrack? preferredExternalSubtitle;
 
   /// Optional container ratio used by embedded previews.
   final double? aspectRatio;
@@ -140,12 +148,10 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
   late final BetterPlayerControllerAdapter _adapter;
   final GlobalKey _betterPlayerKey = GlobalKey();
   final Stopwatch _diagnosticClock = Stopwatch();
-  late final BetterPlayerSubtitlesSource? _preferredSubtitle;
   Timer? _liveHeartbeatTimer;
   Timer? _bufferingDiagnosticTimer;
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
-  bool _waitingForPreferredSubtitle = false;
   bool _dataSourceReady = false;
 
   @override
@@ -159,9 +165,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
       // its layout while preserving the native playback controller.
       _controller.setOverriddenFit(widget.fit);
     }
-    if (oldWidget.playing == widget.playing ||
-        !_dataSourceReady ||
-        _waitingForPreferredSubtitle) {
+    if (oldWidget.playing == widget.playing || !_dataSourceReady) {
       return;
     }
     final playing = widget.playing;
@@ -186,18 +190,11 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
         (_) => _wakelock?.refresh(),
       );
     }
-    _preferredSubtitle = widget.isLive
-        ? null
-        : preferredSubtitleSource(
-            widget.stream.subtitles,
-            widget.preferredSubtitleLanguage,
-          );
-    _waitingForPreferredSubtitle = _preferredSubtitle != null;
     _controller = BetterPlayerController(
       BetterPlayerConfiguration(
         allowedScreenSleep: false,
         aspectRatio: widget.aspectRatio ?? 16 / 9,
-        autoPlay: widget.playing && !_waitingForPreferredSubtitle,
+        autoPlay: widget.playing,
         looping: widget.looping,
         fit: widget.fit,
         autoDetectFullscreenDeviceOrientation: true,
@@ -247,6 +244,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
           widget.stream,
           isLive: widget.isLive,
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
+          skipPreferredSubtitle: widget.preferredExternalSubtitle != null,
           preview: widget.preview,
         ),
       );
@@ -258,18 +256,12 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
       if (!widget.playing) await _controller.pause();
       _adapter.syncValue();
       widget.onPlaybackReady?.call(_adapter);
-      final preferredSubtitle = _preferredSubtitle;
-      if (preferredSubtitle != null) {
-        await _controller.setupSubtitleSource(preferredSubtitle);
+      final preferredExternal = widget.preferredExternalSubtitle;
+      if (preferredExternal != null) {
+        await _controller.setupSubtitleSource(subtitleSourceFor(preferredExternal));
       }
     } catch (error) {
       _logPlayback('setup_error error=${redactPlaybackLogText(error)}');
-      // A broken subtitle must not prevent playback of an otherwise valid VOD.
-    } finally {
-      if (mounted && _waitingForPreferredSubtitle) {
-        setState(() => _waitingForPreferredSubtitle = false);
-        if (widget.playing) unawaited(_controller.play());
-      }
     }
   }
 

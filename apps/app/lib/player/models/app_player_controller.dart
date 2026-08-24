@@ -74,11 +74,12 @@ class AppAudioTrack {
 }
 
 class PlayerSubtitleSelection {
-  const PlayerSubtitleSelection.off() : track = null;
+  const PlayerSubtitleSelection.off() : track = null, isExternal = false;
 
-  const PlayerSubtitleSelection.track(this.track);
+  const PlayerSubtitleSelection.track(this.track, {this.isExternal = false});
 
   final SubtitleTrack? track;
+  final bool isExternal;
 }
 
 /// Controls whether the video keeps its source ratio or fills the viewport.

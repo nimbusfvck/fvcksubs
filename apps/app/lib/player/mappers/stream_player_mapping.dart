@@ -7,6 +7,7 @@ BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {
   required bool isLive,
   String? preferredSubtitleLanguage,
+  bool skipPreferredSubtitle = false,
   bool preview = false,
 }) => BetterPlayerDataSource(
   BetterPlayerDataSourceType.network,
@@ -17,7 +18,11 @@ BetterPlayerDataSource betterPlayerDataSource(
   drmConfiguration: _drm(stream),
   subtitles: isLive
       ? null
-      : _subtitles(stream.subtitles, preferredSubtitleLanguage),
+      : _subtitles(
+          stream.subtitles,
+          preferredLanguage: preferredSubtitleLanguage,
+          skipPreferredSubtitle: skipPreferredSubtitle,
+        ),
   // Keep signed and header-authenticated streams on the native network path.
   cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
   bufferingConfiguration: preview
@@ -37,24 +42,26 @@ BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
 };
 
 List<BetterPlayerSubtitlesSource>? _subtitles(
-  List<SubtitleTrack> tracks,
+  List<SubtitleTrack> tracks, {
   String? preferredLanguage,
-) {
+  bool skipPreferredSubtitle = false,
+}) {
   final sorted = subtitlesForPicker(tracks);
   if (sorted.isEmpty) return null;
 
-  final preferred = preferredSubtitleSource(tracks, preferredLanguage);
+  final preferred = skipPreferredSubtitle
+      ? null
+      : preferredSubtitleSource(tracks, preferredLanguage);
 
   return [
-    for (var i = 0; i < sorted.length; i++)
+    for (final track in sorted)
       subtitleSourceFor(
-        sorted[i],
-        selectedByDefault: preferred?.urls?.first == sorted[i].url,
+        track,
+        selectedByDefault: preferred?.urls?.first == track.url,
       ),
   ];
 }
 
-/// Returns the matching stream-provided subtitle track, if the user has one.
 BetterPlayerSubtitlesSource? preferredSubtitleSource(
   List<SubtitleTrack> tracks,
   String? preferredLanguage,

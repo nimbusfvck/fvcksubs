@@ -326,9 +326,12 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (widget.isLive) return;
     _hideTimer?.cancel();
     final currentSub = widget.controller?.activeSubtitle;
-    final tracks = AppScope.of(
+    final subtitlePreference = AppScope.of(
       context,
-    ).subtitlePreferenceController.tracksForPicker(_current.stream.subtitles);
+    ).subtitlePreferenceController;
+    final tracks = subtitlePreference.tracksForPicker(
+      _current.stream.subtitles,
+    );
     final picked = await showModalBottomSheet<PlayerSubtitleSelection>(
       context: context,
       isScrollControlled: true,
@@ -340,14 +343,22 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         media: widget.media,
         tracks: tracks,
         current: currentSub,
-        filterTracks: AppScope.of(
-          context,
-        ).subtitlePreferenceController.tracksForPicker,
+        filterTracks: subtitlePreference.tracksForPicker,
+        initialExternalTracks: subtitlePreference.rememberedExternalSubtitles(
+          widget.media.ref,
+        ),
+        onExternalTracksFetched: (tracks) => subtitlePreference
+            .rememberExternalSubtitles(widget.media.ref, tracks),
       ),
     );
     if (!mounted) return;
     if (picked != null) {
       unawaited(widget.controller?.setSubtitle(picked.track));
+      AppScope.of(context).subtitlePreferenceController.rememberSubtitle(
+        widget.media.ref,
+        track: picked.track,
+        external: picked.isExternal,
+      );
       final isOff = picked.track == null;
       setState(() {
         _activeSubtitleLabel = isOff

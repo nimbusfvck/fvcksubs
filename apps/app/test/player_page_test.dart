@@ -225,6 +225,7 @@ class _FailingPlayer extends RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
     Key? key,
   }) {
     final widget = super.build(
@@ -235,6 +236,7 @@ class _FailingPlayer extends RecordingPlayer {
       onPlaybackReady: onPlaybackReady,
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredExternalSubtitle: preferredExternalSubtitle,
       key: key,
     );
     if (controllers.isEmpty) {

@@ -24,8 +24,10 @@ Widget platformPlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  SubtitleTrack? preferredExternalSubtitle,
   Key? key,
-}) => defaultTargetPlatform == TargetPlatform.macOS ||
+}) =>
+    defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.iOS
     ? MediaKitPlayerView(
         key: key,
@@ -34,6 +36,7 @@ Widget platformPlayerBuilder(
         onControllerCreated: onControllerCreated,
         onPlaybackReady: onPlaybackReady,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
+        preferredExternalSubtitle: preferredExternalSubtitle,
       )
     : mobilePlayerBuilder(
         context,
@@ -43,5 +46,6 @@ Widget platformPlayerBuilder(
         onPlaybackReady: onPlaybackReady,
         customControlsBuilder: customControlsBuilder,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
+        preferredExternalSubtitle: preferredExternalSubtitle,
         key: key,
       );

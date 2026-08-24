@@ -375,6 +375,7 @@ class RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
     Key? key,
   }) {
     played = stream;
@@ -451,11 +452,42 @@ class FakeSubtitlePreferenceStore implements SubtitlePreferenceStore {
 
   String? saved;
 
+  final Map<String, SubtitleTrack> externalSelections = {};
+  final Map<String, List<SubtitleTrack>> externalTracks = {};
+
   @override
   Future<String?> load() async => saved;
 
   @override
   Future<void> save(String? languageCode) async => saved = languageCode;
+
+  @override
+  Future<Map<String, SubtitleTrack>> loadExternalSelections() async =>
+      Map.of(externalSelections);
+
+  @override
+  Future<void> saveExternalSelection(MediaRef ref, SubtitleTrack? track) async {
+    final key = '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+    if (track == null) {
+      externalSelections.remove(key);
+    } else {
+      externalSelections[key] = track;
+    }
+  }
+
+  @override
+  Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async => {
+    for (final entry in externalTracks.entries) entry.key: List.of(entry.value),
+  };
+
+  @override
+  Future<void> saveExternalTracks(
+    MediaRef ref,
+    List<SubtitleTrack> tracks,
+  ) async {
+    final key = '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+    externalTracks[key] = List.of(tracks);
+  }
 }
 
 class FakeSourcePriorityStore implements SourcePriorityStore {

@@ -24,6 +24,7 @@ class MediaKitPlayerView extends StatefulWidget {
     this.onControllerCreated,
     this.onPlaybackReady,
     this.preferredSubtitleLanguage,
+    this.preferredExternalSubtitle,
   });
 
   final PlayableStream stream;
@@ -31,7 +32,7 @@ class MediaKitPlayerView extends StatefulWidget {
   final void Function(Object? controller)? onControllerCreated;
   final void Function(Object? controller)? onPlaybackReady;
   final String? preferredSubtitleLanguage;
-
+  final SubtitleTrack? preferredExternalSubtitle;
   @override
   State<MediaKitPlayerView> createState() => _MediaKitPlayerViewState();
 }
@@ -75,17 +76,25 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
     }
 
     try {
-      final preferred = widget.preferredSubtitleLanguage;
-      if (preferred != null && !widget.isLive) {
-        final track = widget.stream.subtitles.cast<SubtitleTrack?>().firstWhere(
-          (item) => item?.language.toLowerCase() == preferred.toLowerCase(),
-          orElse: () => null,
-        );
-        if (track != null) await _adapter.setSubtitle(track);
+      final preferredExternal = widget.preferredExternalSubtitle;
+      if (preferredExternal != null) {
+        await _adapter.setSubtitle(preferredExternal);
+      } else {
+        final preferred = widget.preferredSubtitleLanguage;
+        if (preferred != null && !widget.isLive) {
+          final track = widget.stream.subtitles
+              .cast<SubtitleTrack?>()
+              .firstWhere(
+                (item) =>
+                    item?.language.toLowerCase() == preferred.toLowerCase(),
+                orElse: () => null,
+              );
+          if (track != null) await _adapter.setSubtitle(track);
+        }
       }
     } catch (error) {
-      // A broken external subtitle must not turn a playable video into a
-      // source failure. The adapter also clears the failed active track.
+      // A broken remembered or source subtitle must not turn a playable video
+      // into a source failure.
       if (kDebugMode) {
         debugPrint(
           '[Player] subtitle unavailable: '

@@ -529,6 +529,11 @@ class _PlayerPageState extends State<PlayerPage> {
         preferredSubtitleLanguage: AppScope.of(
           context,
         ).subtitlePreferenceController.languageCode,
+        preferredExternalSubtitle: AppScope.of(
+          context,
+        ).subtitlePreferenceController.rememberedExternalSubtitle(
+          widget.media.ref,
+        ),
         onControllerCreated: (value) {
           _controller = value as AppPlayerController?;
           if (_controller != null) {

@@ -78,6 +78,8 @@ Future<void> main() async {
   final subtitlePreferenceController = SubtitlePreferenceController(
     store: subtitleStore,
     initial: await subtitleStore.load(),
+    initialExternalSelections: await subtitleStore.loadExternalSelections(),
+    initialExternalTracks: await subtitleStore.loadExternalTracks(),
   );
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
