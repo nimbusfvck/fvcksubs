@@ -4,6 +4,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
 import '../utils/media_item_metadata.dart';
+import 'artwork_placeholder.dart';
 import 'generated_banner.dart';
 import 'media_hero.dart';
 import 'catalog_status_badges.dart';
@@ -82,14 +83,9 @@ class _Poster extends StatelessWidget {
             width: double.infinity,
             fadeInDuration: Duration.zero,
             placeholder: (_, _) =>
-                const ColoredBox(color: AppColors.surfaceDarkElevated),
-            errorWidget: (_, _, _) => const ColoredBox(
-              color: AppColors.surfaceDarkElevated,
-              child: Icon(
-                Icons.play_circle_outline,
-                color: AppColors.onDarkSoft,
-              ),
-            ),
+                const ArtworkPlaceholder(icon: Icons.movie_outlined),
+            errorWidget: (_, _, _) =>
+                const ArtworkPlaceholder(icon: Icons.movie_outlined),
           ),
         ),
       ),
@@ -219,33 +215,38 @@ class _Summary extends StatelessWidget {
   Widget build(BuildContext context) {
     final event = item is EventItemV2 ? item as EventItemV2 : null;
     final detail = showSubtitle ? mediaItemSecondaryText(item) : null;
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (event != null) _ScheduleStatus(schedule: event.schedule),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
-          ),
-          if (detail != null)
-            Text.rich(
-              mediaItemSecondarySpan(
-                item,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.onDarkSoft,
-                ),
-                ratingColor: AppColors.ratingAccent,
+    return Column(
+      children: [
+        const Expanded(child: ArtworkPlaceholder(icon: Icons.movie_outlined)),
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (event != null) _ScheduleStatus(schedule: event.schedule),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-        ],
-      ),
+              if (detail != null)
+                Text.rich(
+                  mediaItemSecondarySpan(
+                    item,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                    ratingColor: AppColors.ratingAccent,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

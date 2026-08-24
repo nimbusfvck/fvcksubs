@@ -76,6 +76,28 @@ void main() {
     expect(star?.style?.color, AppColors.ratingAccent);
   });
 
+  testWidgets('video without artwork shows the shared placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: VideoItemV2(ref: ref, title: 'Text-only video'),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.movie_outlined), findsOneWidget);
+    expect(find.text('Text-only video'), findsOneWidget);
+  });
+
   testWidgets('event renders schedule and participants', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

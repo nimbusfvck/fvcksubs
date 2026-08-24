@@ -7,6 +7,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import '../detail/detail_page_v2.dart';
 import '../detail/open_versioned_item.dart';
+import '../catalog/artwork_placeholder.dart';
 import '../library/library_controller.dart';
 import '../theme/tokens.dart';
 
@@ -134,11 +135,13 @@ class _ContinueCard extends StatelessWidget {
               CachedNetworkImage(
                 imageUrl: image.url,
                 fit: BoxFit.cover,
+                placeholder: (_, _) =>
+                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
                 errorWidget: (_, _, _) =>
-                    const ColoredBox(color: AppColors.surfaceDarkElevated),
+                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
               )
             else
-              const ColoredBox(color: AppColors.surfaceDarkElevated),
+              const ArtworkPlaceholder(icon: Icons.movie_outlined),
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

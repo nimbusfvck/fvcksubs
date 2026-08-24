@@ -6,6 +6,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_scope.dart';
+import '../catalog/artwork_placeholder.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
@@ -482,7 +483,7 @@ class _Header extends StatelessWidget {
           if (image != null)
             _HeaderArtwork(item: item, image: image, heroTag: heroTag)
           else
-            const ColoredBox(color: AppColors.surfaceDarkElevated),
+            const ArtworkPlaceholder(icon: Icons.movie_outlined),
           if (preview != null)
             Positioned.fill(child: TrailerPreview(trailer: preview)),
           const DecoratedBox(
