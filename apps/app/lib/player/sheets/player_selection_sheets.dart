@@ -102,9 +102,7 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
             ),
             const SizedBox(height: AppSpacing.md),
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: Row(
                 children: [
                   // Balances the control so the title stays optically centred.
@@ -313,12 +311,14 @@ class PlayerAudioPickerSheet extends StatelessWidget {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  for (final (index, track) in tracks.indexed)
+                  for (final track in tracks)
                     ListTile(
                       title: Text(
-                        track.label == 'Audio'
-                            ? 'Audio ${index + 1}'
-                            : track.label,
+                        audioTrackLabel(
+                          label: track.label,
+                          language: track.language,
+                          details: track.details,
+                        ),
                         style: AppTypography.bodyMd.copyWith(
                           color: AppColors.onDark,
                         ),

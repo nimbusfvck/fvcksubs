@@ -64,13 +64,52 @@ class AppAudioTrack {
     required this.id,
     required this.label,
     this.language,
+    this.details,
     this.platformTrack,
   });
 
   final String id;
   final String label;
   final String? language;
+  final String? details;
   final Object? platformTrack;
+}
+
+String audioTrackLabel({
+  required String? label,
+  required String? language,
+  String? details,
+}) {
+  final named = label?.trim();
+  if (named != null && named.isNotEmpty && named.toLowerCase() != 'audio') {
+    return named;
+  }
+
+  final normalizedLanguage = language?.trim();
+  if (normalizedLanguage != null && normalizedLanguage.isNotEmpty) {
+    final primary = normalizedLanguage
+        .split(RegExp('[-_]'))
+        .first
+        .toLowerCase();
+    return switch (primary) {
+      'id' => 'Indonesia',
+      'en' => 'English',
+      'ja' => 'Japanese',
+      'ko' => 'Korean',
+      'zh' => 'Chinese',
+      'ar' => 'Arabic',
+      'es' => 'Spanish',
+      'fr' => 'French',
+      'de' => 'German',
+      'pt' => 'Portuguese',
+      'ru' => 'Russian',
+      'und' => details?.trim().isNotEmpty == true ? details!.trim() : 'Audio',
+      _ => normalizedLanguage,
+    };
+  }
+
+  final technical = details?.trim();
+  return technical == null || technical.isEmpty ? 'Audio' : technical;
 }
 
 class PlayerSubtitleSelection {

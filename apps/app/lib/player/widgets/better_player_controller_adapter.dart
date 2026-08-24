@@ -123,7 +123,7 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
 
   AppAudioTrack _audioTrack(BetterPlayerAsmsAudioTrack track) => AppAudioTrack(
     id: '${track.id ?? track.label ?? track.language ?? 'audio'}',
-    label: track.label ?? track.language ?? 'Audio',
+    label: audioTrackLabel(label: track.label, language: track.language),
     language: track.language,
     platformTrack: track,
   );

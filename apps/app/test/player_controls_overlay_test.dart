@@ -9,10 +9,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _overlay(
-        title: 'Example Series',
-        subtitle: 'Season 2 · Episode 3',
-      ),
+      _overlay(title: 'Example Series', subtitle: 'Season 2 · Episode 3'),
     );
 
     expect(find.text('Example Series'), findsOneWidget);
@@ -223,10 +220,10 @@ void main() {
     );
 
     expect(find.text('English'), findsOneWidget);
-    expect(find.text('Audio 2'), findsOneWidget);
+    expect(find.text('Indonesia'), findsOneWidget);
     expect(find.text('id'), findsOneWidget);
 
-    await tester.tap(find.text('Audio 2'));
+    await tester.tap(find.text('Indonesia'));
     expect(find.byIcon(Icons.check), findsOneWidget);
   });
 }

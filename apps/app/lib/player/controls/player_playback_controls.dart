@@ -83,7 +83,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Timer? _hideTimer;
   double? _dragValueMs;
   String? _activeSubtitleLabel;
-  String? _activeAudioLabel;
   String? _activeQualityLabel;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
@@ -438,8 +437,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (!mounted) return;
     if (picked != null) {
       await widget.controller?.setAudioTrack(picked);
-      if (!mounted) return;
-      setState(() => _activeAudioLabel = picked.label);
     }
     _revealControls();
   }
@@ -489,8 +486,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
           ? null
           : _current.source.label,
       activeSubtitleLabel: _activeSubtitleLabel,
-      activeAudioLabel:
-          _activeAudioLabel ?? widget.controller?.activeAudio?.label,
       activeQualityLabel: _activeQualityLabel,
       position: position,
       duration: duration,

@@ -18,7 +18,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.isBuffering,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
-    this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -70,9 +69,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Active subtitle label shown in the subtitle control.
   final String? activeSubtitleLabel;
-
-  /// Active audio-track label shown in the audio control.
-  final String? activeAudioLabel;
 
   /// Active quality label shown in the quality control.
   final String? activeQualityLabel;
@@ -173,7 +169,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
           isLive: isLive,
           sourceLabel: sourceLabel,
           activeSubtitleLabel: activeSubtitleLabel,
-          activeAudioLabel: activeAudioLabel,
           activeQualityLabel: activeQualityLabel,
           position: position,
           duration: duration,
@@ -396,7 +391,6 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.isLive,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
-    required this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -418,7 +412,6 @@ class _PlayerBottomControls extends StatelessWidget {
   final bool isLive;
   final String? sourceLabel;
   final String? activeSubtitleLabel;
-  final String? activeAudioLabel;
   final String? activeQualityLabel;
   final Duration position;
   final Duration duration;
@@ -547,30 +540,15 @@ class _PlayerBottomControls extends StatelessWidget {
                           if (onOpenAudioPicker != null)
                             GestureDetector(
                               onTap: onOpenAudioPicker,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: AppSpacing.xs,
                                   vertical: AppSpacing.xxs,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.audiotrack_rounded,
-                                      color: Colors.white,
-                                      size: 26,
-                                    ),
-                                    if (activeAudioLabel != null) ...[
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        activeAudioLabel!,
-                                        style: AppTypography.caption.copyWith(
-                                          color: AppColors.brandAccent,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                                child: Icon(
+                                  Icons.audiotrack_rounded,
+                                  color: Colors.white,
+                                  size: 26,
                                 ),
                               ),
                             ),

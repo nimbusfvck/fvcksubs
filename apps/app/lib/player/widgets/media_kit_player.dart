@@ -151,9 +151,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       final params = _player.state.videoParams;
       if ((params.w ?? 0) <= 0 || (params.h ?? 0) <= 0) {
         await _player.stream.videoParams
-            .firstWhere(
-              (value) => (value.w ?? 0) > 0 && (value.h ?? 0) > 0,
-            )
+            .firstWhere((value) => (value.w ?? 0) > 0 && (value.h ?? 0) > 0)
             .timeout(const Duration(seconds: 8));
       }
       if (!mounted || _adapter.activeSubtitle != track) return;
@@ -360,10 +358,28 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   AppAudioTrack _audioTrack(mk.AudioTrack track) => AppAudioTrack(
     id: track.id,
-    label: track.title ?? track.language ?? 'Audio',
+    label: audioTrackLabel(
+      label: track.title,
+      language: track.language,
+      details: _audioTrackDetails(track),
+    ),
     language: track.language,
+    details: _audioTrackDetails(track),
     platformTrack: track,
   );
+
+  String? _audioTrackDetails(mk.AudioTrack track) {
+    final values = <String>[];
+    final codec = track.codec?.trim();
+    if (codec != null && codec.isNotEmpty) values.add(codec.toUpperCase());
+    final channels = track.channels?.trim();
+    if (channels != null && channels.isNotEmpty) {
+      values.add(channels);
+    } else if (track.channelscount != null && track.channelscount! > 0) {
+      values.add('${track.channelscount}ch');
+    }
+    return values.isEmpty ? null : values.join(' · ');
+  }
 
   void _update({
     Duration? position,
