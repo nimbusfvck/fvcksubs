@@ -166,6 +166,11 @@ void main() {
   });
 
   test('remembered external subtitle prevents source pre-selection', () {
+    const external = SubtitleTrack(
+      language: 'id',
+      label: 'Indonesia (Segu)',
+      url: 'https://subs.example/id-external.vtt',
+    );
     final ds = betterPlayerDataSource(
       const PlayableStream(
         url: 'https://edge/movie.m3u8',
@@ -177,9 +182,12 @@ void main() {
       ),
       isLive: false,
       preferredSubtitleLanguage: 'id',
-      skipPreferredSubtitle: true,
+      preferredExternalSubtitle: external,
     );
-    expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
+    expect(
+      ds.subtitles!.where((s) => s.selectedByDefault == true).single.name,
+      'Indonesia (Segu)',
+    );
   });
 
   test(
@@ -208,7 +216,7 @@ void main() {
         (track) => track.selectedByDefault == true,
       );
       expect(selected.single.urls, [external.url]);
-      expect(selected.single.name, '🇮🇩 Indonesia');
+      expect(selected.single.name, 'Indonesia (Segu)');
     },
   );
 

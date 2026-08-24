@@ -11,6 +11,7 @@ import '../mappers/stream_player_mapping.dart';
 import '../state/player_wakelock.dart';
 import 'better_player_controller_adapter.dart';
 import 'platform_player_builder.dart';
+import 'player_subtitle_style.dart';
 
 typedef PlayerBuilder =
     Widget Function(
@@ -198,7 +199,9 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
         looping: widget.looping,
         fit: widget.fit,
         subtitlesConfiguration: const BetterPlayerSubtitlesConfiguration(
-          fontSize: 16,
+          fontSize: playerSubtitleFontSize,
+          backgroundColor: playerSubtitleBackgroundColor,
+          outlineEnabled: false,
         ),
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [
@@ -247,7 +250,6 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
           widget.stream,
           isLive: widget.isLive,
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
-          skipPreferredSubtitle: widget.preferredExternalSubtitle != null,
           preferredExternalSubtitle: widget.preferredExternalSubtitle,
           preview: widget.preview,
         ),

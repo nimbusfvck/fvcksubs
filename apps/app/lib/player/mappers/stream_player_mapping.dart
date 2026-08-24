@@ -7,7 +7,6 @@ BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {
   required bool isLive,
   String? preferredSubtitleLanguage,
-  bool skipPreferredSubtitle = false,
   SubtitleTrack? preferredExternalSubtitle,
   bool preview = false,
 }) => BetterPlayerDataSource(
@@ -22,7 +21,6 @@ BetterPlayerDataSource betterPlayerDataSource(
       : _subtitles(
           stream.subtitles,
           preferredLanguage: preferredSubtitleLanguage,
-          skipPreferredSubtitle: skipPreferredSubtitle,
           preferredExternalSubtitle: preferredExternalSubtitle,
         ),
   // Keep signed and header-authenticated streams on the native network path.
@@ -46,7 +44,6 @@ BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
 List<BetterPlayerSubtitlesSource>? _subtitles(
   List<SubtitleTrack> tracks, {
   String? preferredLanguage,
-  bool skipPreferredSubtitle = false,
   SubtitleTrack? preferredExternalSubtitle,
 }) {
   final sorted = subtitlesForPicker([?preferredExternalSubtitle, ...tracks]);
@@ -54,9 +51,7 @@ List<BetterPlayerSubtitlesSource>? _subtitles(
 
   final BetterPlayerSubtitlesSource? preferred =
       preferredExternalSubtitle == null
-      ? (skipPreferredSubtitle
-            ? null
-            : preferredSubtitleSource(tracks, preferredLanguage))
+      ? preferredSubtitleSource(tracks, preferredLanguage)
       : subtitleSourceFor(preferredExternalSubtitle);
 
   return [
@@ -119,8 +114,10 @@ String _primary(String lang) {
       : lang.substring(0, dash).toLowerCase();
 }
 
-String _subtitleLabel(SubtitleTrack track) =>
-    subtitleLanguageLabel(track.language);
+String _subtitleLabel(SubtitleTrack track) {
+  final custom = track.label.trim();
+  return custom.isEmpty ? subtitleLanguageLabel(track.language) : custom;
+}
 
 /// Returns the compact label used for the active subtitle control.
 String subtitleIndicatorLabel(String? sourceName) {

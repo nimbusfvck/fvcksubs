@@ -9,6 +9,14 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_wakelock.dart';
+import 'player_subtitle_style.dart';
+
+@visibleForTesting
+bool shouldApplyDeferredSubtitle({
+  required bool mounted,
+  required int expectedRevision,
+  required int currentRevision,
+}) => mounted && expectedRevision == currentRevision;
 
 /// libmpv-backed player, used on macOS and iOS.
 ///
@@ -130,7 +138,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     // before mpv reports video dimensions can leave it selected in state while
     // no cues are rendered. Wait for the decoder, then apply the preference.
     if (preferredSubtitle != null) {
-      unawaited(_applyPreferredSubtitle(preferredSubtitle));
+      unawaited(
+        _applyPreferredSubtitle(
+          preferredSubtitle,
+          expectedRevision: _adapter.subtitleSelectionRevision,
+        ),
+      );
     }
   }
 
@@ -146,7 +159,10 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     );
   }
 
-  Future<void> _applyPreferredSubtitle(SubtitleTrack track) async {
+  Future<void> _applyPreferredSubtitle(
+    SubtitleTrack track, {
+    required int expectedRevision,
+  }) async {
     try {
       final params = _player.state.videoParams;
       if ((params.w ?? 0) <= 0 || (params.h ?? 0) <= 0) {
@@ -154,7 +170,13 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
             .firstWhere((value) => (value.w ?? 0) > 0 && (value.h ?? 0) > 0)
             .timeout(const Duration(seconds: 8));
       }
-      if (!mounted || _adapter.activeSubtitle != track) return;
+      if (!shouldApplyDeferredSubtitle(
+        mounted: mounted,
+        expectedRevision: expectedRevision,
+        currentRevision: _adapter.subtitleSelectionRevision,
+      )) {
+        return;
+      }
       await _adapter.setSubtitle(track);
     } catch (error) {
       // A broken remembered or source subtitle must not turn a playable video
@@ -189,15 +211,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     controller: _video,
     fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
     subtitleViewConfiguration: const SubtitleViewConfiguration(
-      style: TextStyle(
-        height: 1.4,
-        fontSize: 48,
-        letterSpacing: 0,
-        wordSpacing: 0,
-        color: Colors.white,
-        fontWeight: FontWeight.normal,
-        backgroundColor: Color(0xaa000000),
-      ),
+      style: playerSubtitleTextStyle,
     ),
     // MediaKit moves only the Video widget into its fullscreen route. Use its
     // desktop controls there so pointer input and keyboard focus stay inside
@@ -254,6 +268,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   late final List<StreamSubscription<Object?>> _subscriptions;
   SubtitleTrack? _activeSubtitle;
   String? _failedSubtitleUrl;
+  int _subtitleSelectionRevision = 0;
+
+  int get subtitleSelectionRevision => _subtitleSelectionRevision;
 
   @override
   ValueListenable<AppPlayerValue> get value => _value;
@@ -337,6 +354,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {
+    _subtitleSelectionRevision++;
     _failedSubtitleUrl = null;
     _activeSubtitle = track;
     try {

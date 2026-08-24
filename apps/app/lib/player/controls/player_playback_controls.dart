@@ -105,30 +105,18 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   ResolvedSource get _current => widget.resolvedSources[widget.currentIndex];
 
-  String get _overlayTitle => switch (widget.media.item) {
-    EpisodeItemV2(:final subtitle?) => subtitle,
-    _ => widget.media.title,
-  };
+  String get _overlayTitle {
+    final item = widget.media.item;
+    return item is EpisodeItemV2
+        ? episodeSeriesTitle(item)
+        : widget.media.title;
+  }
 
   String? get _overlaySubtitle {
     final item = widget.media.item;
-    if (item case EpisodeItemV2(:final episode)) {
-      final groupTitle = widget.episodeGuide?.groups
-          .where((group) => group.id == episode.groupId)
-          .map((group) => group.title)
-          .firstOrNull;
-      final season = groupTitle ?? _seasonFallback(episode.groupId);
-      return '$season · Episode ${episode.position}';
-    }
-    return null;
-  }
-
-  String _seasonFallback(String groupId) {
-    final match = RegExp(
-      r'^(?:season|s)[\s:_-]*(\d+)$',
-      caseSensitive: false,
-    ).firstMatch(groupId.trim());
-    return match == null ? groupId : 'Season ${match.group(1)}';
+    return item is EpisodeItemV2
+        ? currentEpisodeContextLabel(item, widget.episodeGuide)
+        : null;
   }
 
   @override
@@ -462,8 +450,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
                   width: 280,
                   child: PlayerUpNextCard(
                     seriesTitle: widget.upNextV2!.seriesTitle,
-                    subtitle:
-                        '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
+                    subtitle: nextEpisodeContextLabel(widget.upNextV2!),
                     countdown: _upNextCountdown,
                     paused: widget.upNextPaused,
                     onPlayNext: widget.onPlayNext,
