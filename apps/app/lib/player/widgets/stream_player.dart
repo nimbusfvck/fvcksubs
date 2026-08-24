@@ -197,6 +197,9 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
         autoPlay: widget.playing,
         looping: widget.looping,
         fit: widget.fit,
+        subtitlesConfiguration: const BetterPlayerSubtitlesConfiguration(
+          fontSize: 16,
+        ),
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [
           DeviceOrientation.portraitUp,
@@ -245,6 +248,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
           isLive: widget.isLive,
           preferredSubtitleLanguage: widget.preferredSubtitleLanguage,
           skipPreferredSubtitle: widget.preferredExternalSubtitle != null,
+          preferredExternalSubtitle: widget.preferredExternalSubtitle,
           preview: widget.preview,
         ),
       );
@@ -256,10 +260,6 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
       if (!widget.playing) await _controller.pause();
       _adapter.syncValue();
       widget.onPlaybackReady?.call(_adapter);
-      final preferredExternal = widget.preferredExternalSubtitle;
-      if (preferredExternal != null) {
-        await _controller.setupSubtitleSource(subtitleSourceFor(preferredExternal));
-      }
     } catch (error) {
       _logPlayback('setup_error error=${redactPlaybackLogText(error)}');
     }

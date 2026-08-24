@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../../app_scope.dart';
 import '../../detail/episode_target_v2.dart';
 import '../../library/library_controller.dart';
@@ -38,6 +39,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
     required this.isLive,
+    this.episodeGuide,
     this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
@@ -58,6 +60,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
   final bool isLive;
+  final EpisodeGuide? episodeGuide;
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
   final VoidCallback onNearEnd;
@@ -102,6 +105,32 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       !_isReady(_videoValue?.value) || _showBufferingIndicator;
 
   ResolvedSource get _current => widget.resolvedSources[widget.currentIndex];
+
+  String get _overlayTitle => switch (widget.media.item) {
+    EpisodeItemV2(:final subtitle?) => subtitle,
+    _ => widget.media.title,
+  };
+
+  String? get _overlaySubtitle {
+    final item = widget.media.item;
+    if (item case EpisodeItemV2(:final episode)) {
+      final groupTitle = widget.episodeGuide?.groups
+          .where((group) => group.id == episode.groupId)
+          .map((group) => group.title)
+          .firstOrNull;
+      final season = groupTitle ?? _seasonFallback(episode.groupId);
+      return '$season · Episode ${episode.position}';
+    }
+    return null;
+  }
+
+  String _seasonFallback(String groupId) {
+    final match = RegExp(
+      r'^(?:season|s)[\s:_-]*(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(groupId.trim());
+    return match == null ? groupId : 'Season ${match.group(1)}';
+  }
 
   @override
   void initState() {
@@ -449,7 +478,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
           );
     final audioTracks = widget.controller?.audioTracks ?? const [];
     return PlayerControlsOverlayView(
-      title: widget.media.title,
+      title: _overlayTitle,
+      subtitle: _overlaySubtitle,
       favoriteAction: PlayerFavoriteButton(media: widget.media),
       controlsVisible: _controlsVisible,
       isLive: widget.isLive,

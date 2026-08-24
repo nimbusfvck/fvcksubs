@@ -10,6 +10,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({
     super.key,
     required this.title,
+    this.subtitle,
     required this.favoriteAction,
     required this.controlsVisible,
     required this.isLive,
@@ -45,6 +46,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Media title shown in the top bar.
   final String title;
+
+  /// Optional secondary line shown below the media title.
+  final String? subtitle;
 
   /// Favorite control rendered in the top bar.
   final Widget favoriteAction;
@@ -148,6 +152,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
       children: [
         _PlayerTopControls(
           title: title,
+          subtitle: subtitle,
           favoriteAction: favoriteAction,
           visible: controlsVisible,
           onBack: onBack,
@@ -194,6 +199,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
 class _PlayerTopControls extends StatelessWidget {
   const _PlayerTopControls({
     required this.title,
+    required this.subtitle,
     required this.favoriteAction,
     required this.visible,
     required this.onBack,
@@ -203,6 +209,7 @@ class _PlayerTopControls extends StatelessWidget {
   });
 
   final String title;
+  final String? subtitle;
   final Widget favoriteAction;
   final bool visible;
   final VoidCallback onBack;
@@ -250,16 +257,42 @@ class _PlayerTopControls extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.titleMd.copyWith(
-                        color: Colors.white,
-                        shadows: [
-                          const Shadow(color: Colors.black87, blurRadius: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleMd.copyWith(
+                            color: Colors.white,
+                            shadows: [
+                              const Shadow(
+                                color: Colors.black87,
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (subtitle case final value?) ...[
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySm.copyWith(
+                              color: Colors.white70,
+                              shadows: [
+                                const Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                   favoriteAction,

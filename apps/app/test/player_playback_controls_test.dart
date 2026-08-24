@@ -13,6 +13,58 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'support/harness.dart';
 
 void main() {
+  testWidgets('episode controls show series title and season context', (
+    tester,
+  ) async {
+    const seriesRef = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'series-1',
+    );
+    const episodeRef = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'series-1-s2e3',
+    );
+    const episode = EpisodeItemV2(
+      ref: episodeRef,
+      title: 'Episode title',
+      subtitle: 'Example Series',
+      episode: EpisodeIdentity(
+        parentRef: seriesRef,
+        groupId: 'season-2',
+        position: 3,
+      ),
+    );
+    const guide = EpisodeGuide(
+      groups: [
+        EpisodeGroup(
+          id: 'season-2',
+          title: 'Season 2',
+          episodes: [
+            EpisodeSummary(
+              ref: episodeRef,
+              title: 'Episode title',
+              position: 3,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        _RecoveryController(),
+        media: const PlaybackMedia(episode),
+        episodeGuide: guide,
+      ),
+    );
+
+    expect(find.text('Example Series'), findsOneWidget);
+    expect(find.text('Season 2 · Episode 3'), findsOneWidget);
+    expect(find.text('Episode title'), findsNothing);
+  });
+
   testWidgets('manual next is visible before the up-next card appears', (
     tester,
   ) async {
@@ -79,13 +131,19 @@ void main() {
   });
 }
 
-Widget _controls(_RecoveryController controller, {VoidCallback? manualNext}) =>
-    wrapApp(
-      registry: ExtensionRegistry([]),
-      child: PlayerPlaybackControls(
-        controller: controller,
-        onVisibilityChanged: (_) {},
-        media: const PlaybackMedia(
+Widget _controls(
+  _RecoveryController controller, {
+  VoidCallback? manualNext,
+  PlaybackMedia? media,
+  EpisodeGuide? episodeGuide,
+}) => wrapApp(
+  registry: ExtensionRegistry([]),
+  child: PlayerPlaybackControls(
+    controller: controller,
+    onVisibilityChanged: (_) {},
+    media:
+        media ??
+        const PlaybackMedia(
           VideoItemV2(
             ref: MediaRef(
               extensionId: 'test',
@@ -95,26 +153,27 @@ Widget _controls(_RecoveryController controller, {VoidCallback? manualNext}) =>
             title: 'Movie',
           ),
         ),
-        resolvedSources: const [
-          ResolvedSource(
-            source: StreamSource(id: 'source-1', label: 'Source 1'),
-            stream: PlayableStream(
-              url: 'https://stream.example/movie.m3u8',
-              format: StreamFormat.hls,
-            ),
-          ),
-        ],
-        currentIndex: 0,
-        onChangeSource: () {},
-        onBack: () {},
-        isLive: false,
-        onManualNext: manualNext,
-        onNearEnd: () {},
-        onPlayNext: () {},
-        onPauseUpNext: () {},
-        onCancelUpNext: () {},
+    resolvedSources: const [
+      ResolvedSource(
+        source: StreamSource(id: 'source-1', label: 'Source 1'),
+        stream: PlayableStream(
+          url: 'https://stream.example/movie.m3u8',
+          format: StreamFormat.hls,
+        ),
       ),
-    );
+    ],
+    currentIndex: 0,
+    onChangeSource: () {},
+    onBack: () {},
+    isLive: false,
+    episodeGuide: episodeGuide,
+    onManualNext: manualNext,
+    onNearEnd: () {},
+    onPlayNext: () {},
+    onPauseUpNext: () {},
+    onCancelUpNext: () {},
+  ),
+);
 
 class _RecoveryController implements AppPlayerController {
   _RecoveryController([AppPlayerValue value = const AppPlayerValue()])

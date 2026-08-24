@@ -508,6 +508,7 @@ class _PlayerPageState extends State<PlayerPage> {
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
         isLive: _isLive,
+        episodeGuide: widget.episodeGuide,
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _showNextEpisode,

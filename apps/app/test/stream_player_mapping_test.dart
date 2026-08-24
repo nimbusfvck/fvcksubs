@@ -182,6 +182,36 @@ void main() {
     expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
   });
 
+  test(
+    'remembered external subtitle is selected in the source subtitle list',
+    () {
+      const external = SubtitleTrack(
+        language: 'id',
+        label: 'Indonesia (Segu)',
+        url: 'https://subs.example/id-external.vtt',
+      );
+      final ds = betterPlayerDataSource(
+        const PlayableStream(
+          url: 'https://edge/movie.m3u8',
+          format: StreamFormat.hls,
+          subtitles: [
+            SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
+          ],
+        ),
+        isLive: false,
+        preferredSubtitleLanguage: 'id',
+        preferredExternalSubtitle: external,
+      );
+
+      expect(ds.subtitles, hasLength(2));
+      final selected = ds.subtitles!.where(
+        (track) => track.selectedByDefault == true,
+      );
+      expect(selected.single.urls, [external.url]);
+      expect(selected.single.name, '🇮🇩 Indonesia');
+    },
+  );
+
   test('a region variant remains available by primary language subtag', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(

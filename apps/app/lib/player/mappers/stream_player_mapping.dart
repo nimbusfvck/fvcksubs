@@ -8,6 +8,7 @@ BetterPlayerDataSource betterPlayerDataSource(
   required bool isLive,
   String? preferredSubtitleLanguage,
   bool skipPreferredSubtitle = false,
+  SubtitleTrack? preferredExternalSubtitle,
   bool preview = false,
 }) => BetterPlayerDataSource(
   BetterPlayerDataSourceType.network,
@@ -22,6 +23,7 @@ BetterPlayerDataSource betterPlayerDataSource(
           stream.subtitles,
           preferredLanguage: preferredSubtitleLanguage,
           skipPreferredSubtitle: skipPreferredSubtitle,
+          preferredExternalSubtitle: preferredExternalSubtitle,
         ),
   // Keep signed and header-authenticated streams on the native network path.
   cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
@@ -45,13 +47,17 @@ List<BetterPlayerSubtitlesSource>? _subtitles(
   List<SubtitleTrack> tracks, {
   String? preferredLanguage,
   bool skipPreferredSubtitle = false,
+  SubtitleTrack? preferredExternalSubtitle,
 }) {
-  final sorted = subtitlesForPicker(tracks);
+  final sorted = subtitlesForPicker([?preferredExternalSubtitle, ...tracks]);
   if (sorted.isEmpty) return null;
 
-  final preferred = skipPreferredSubtitle
-      ? null
-      : preferredSubtitleSource(tracks, preferredLanguage);
+  final BetterPlayerSubtitlesSource? preferred =
+      preferredExternalSubtitle == null
+      ? (skipPreferredSubtitle
+            ? null
+            : preferredSubtitleSource(tracks, preferredLanguage))
+      : subtitleSourceFor(preferredExternalSubtitle);
 
   return [
     for (final track in sorted)

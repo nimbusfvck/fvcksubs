@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
+import '../state/player_wakelock.dart';
 
 /// libmpv-backed player, used on macOS and iOS.
 ///
@@ -37,16 +38,25 @@ class MediaKitPlayerView extends StatefulWidget {
   State<MediaKitPlayerView> createState() => _MediaKitPlayerViewState();
 }
 
-class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
+class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
+    with WidgetsBindingObserver {
   late final mk.Player _player;
   late final VideoController _video;
   late final _MediaKitControllerAdapter _adapter;
   final GlobalKey<VideoState> _videoKey = GlobalKey();
   PlayerFitMode _fitMode = PlayerFitMode.contain;
+  Timer? _wakelockRefreshTimer;
+  PlayerWakelockLease? _wakelock;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _wakelock = PlayerWakelockLease.acquire();
+    _wakelockRefreshTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _wakelock?.refresh(),
+    );
     mk.MediaKit.ensureInitialized();
     _player = mk.Player();
     _video = VideoController(_player);
@@ -75,31 +85,19 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
       return;
     }
 
-    try {
-      final preferredExternal = widget.preferredExternalSubtitle;
-      if (preferredExternal != null) {
-        await _adapter.setSubtitle(preferredExternal);
-      } else {
-        final preferred = widget.preferredSubtitleLanguage;
-        if (preferred != null && !widget.isLive) {
-          final track = widget.stream.subtitles
-              .cast<SubtitleTrack?>()
-              .firstWhere(
-                (item) =>
-                    item?.language.toLowerCase() == preferred.toLowerCase(),
-                orElse: () => null,
-              );
-          if (track != null) await _adapter.setSubtitle(track);
+    final preferredSubtitle = _preferredSubtitle();
+    if (preferredSubtitle != null) {
+      try {
+        await _adapter.setSubtitle(preferredSubtitle);
+      } catch (error) {
+        // A broken remembered or source subtitle must not turn a playable
+        // video into a source failure.
+        if (kDebugMode) {
+          debugPrint(
+            '[Player] subtitle unavailable: '
+            '${redactPlaybackLogText(error)}',
+          );
         }
-      }
-    } catch (error) {
-      // A broken remembered or source subtitle must not turn a playable video
-      // into a source failure.
-      if (kDebugMode) {
-        debugPrint(
-          '[Player] subtitle unavailable: '
-          '${redactPlaybackLogText(error)}',
-        );
       }
     }
 
@@ -127,13 +125,64 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
         );
       }
     }
+
+    // media_kit's open() only queues the media. Applying an external subtitle
+    // before mpv reports video dimensions can leave it selected in state while
+    // no cues are rendered. Wait for the decoder, then apply the preference.
+    if (preferredSubtitle != null) {
+      unawaited(_applyPreferredSubtitle(preferredSubtitle));
+    }
+  }
+
+  SubtitleTrack? _preferredSubtitle() {
+    final preferredExternal = widget.preferredExternalSubtitle;
+    if (preferredExternal != null) return preferredExternal;
+
+    final preferred = widget.preferredSubtitleLanguage;
+    if (preferred == null || widget.isLive) return null;
+    return widget.stream.subtitles.cast<SubtitleTrack?>().firstWhere(
+      (item) => item?.language.toLowerCase() == preferred.toLowerCase(),
+      orElse: () => null,
+    );
+  }
+
+  Future<void> _applyPreferredSubtitle(SubtitleTrack track) async {
+    try {
+      final params = _player.state.videoParams;
+      if ((params.w ?? 0) <= 0 || (params.h ?? 0) <= 0) {
+        await _player.stream.videoParams
+            .firstWhere(
+              (value) => (value.w ?? 0) > 0 && (value.h ?? 0) > 0,
+            )
+            .timeout(const Duration(seconds: 8));
+      }
+      if (!mounted || _adapter.activeSubtitle != track) return;
+      await _adapter.setSubtitle(track);
+    } catch (error) {
+      // A broken remembered or source subtitle must not turn a playable video
+      // into a source failure.
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] subtitle unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
+    _wakelockRefreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _wakelock?.release();
     _adapter.dispose();
     unawaited(_player.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _wakelock?.refresh();
   }
 
   @override
@@ -141,6 +190,17 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
     key: _videoKey,
     controller: _video,
     fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
+    subtitleViewConfiguration: const SubtitleViewConfiguration(
+      style: TextStyle(
+        height: 1.4,
+        fontSize: 48,
+        letterSpacing: 0,
+        wordSpacing: 0,
+        color: Colors.white,
+        fontWeight: FontWeight.normal,
+        backgroundColor: Color(0xaa000000),
+      ),
+    ),
     // MediaKit moves only the Video widget into its fullscreen route. Use its
     // desktop controls there so pointer input and keyboard focus stay inside
     // that route; the app-owned overlay remains responsible while embedded.
