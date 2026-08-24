@@ -376,6 +376,7 @@ class RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
     Key? key,
   }) {
     played = stream;
@@ -451,6 +452,8 @@ class FakeSubtitlePreferenceStore implements SubtitlePreferenceStore {
   FakeSubtitlePreferenceStore({String? initial}) : saved = initial;
 
   String? saved;
+  SubtitleAppearancePreferences appearanceSaved =
+      const SubtitleAppearancePreferences();
 
   final Map<String, SubtitleTrack> externalSelections = {};
   final Map<String, List<SubtitleTrack>> externalTracks = {};
@@ -460,6 +463,15 @@ class FakeSubtitlePreferenceStore implements SubtitlePreferenceStore {
 
   @override
   Future<void> save(String? languageCode) async => saved = languageCode;
+
+  @override
+  Future<SubtitleAppearancePreferences> loadAppearance() async =>
+      appearanceSaved;
+
+  @override
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {
+    appearanceSaved = appearance;
+  }
 
   @override
   Future<Map<String, SubtitleTrack>> loadExternalSelections() async =>

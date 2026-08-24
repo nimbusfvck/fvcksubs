@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -226,6 +227,7 @@ class _FailingPlayer extends RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
     Key? key,
   }) {
     final widget = super.build(
@@ -237,6 +239,7 @@ class _FailingPlayer extends RecordingPlayer {
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
       preferredExternalSubtitle: preferredExternalSubtitle,
+      subtitleAppearance: subtitleAppearance,
       key: key,
     );
     if (controllers.isEmpty) {

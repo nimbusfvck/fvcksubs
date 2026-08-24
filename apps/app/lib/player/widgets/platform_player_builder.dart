@@ -4,6 +4,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import 'media_kit_player.dart';
 import 'stream_player.dart' show mobilePlayerBuilder;
+import '../state/subtitle_preference_controller.dart';
 
 /// Apple platforms play through MediaKit/libmpv; Android stays on
 /// BetterPlayer/ExoPlayer.
@@ -25,6 +26,7 @@ Widget platformPlayerBuilder(
   customControlsBuilder,
   String? preferredSubtitleLanguage,
   SubtitleTrack? preferredExternalSubtitle,
+  SubtitleAppearance? subtitleAppearance,
   Key? key,
 }) =>
     defaultTargetPlatform == TargetPlatform.macOS ||
@@ -37,6 +39,7 @@ Widget platformPlayerBuilder(
         onPlaybackReady: onPlaybackReady,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
         preferredExternalSubtitle: preferredExternalSubtitle,
+        subtitleAppearance: subtitleAppearance,
       )
     : mobilePlayerBuilder(
         context,
@@ -47,5 +50,6 @@ Widget platformPlayerBuilder(
         customControlsBuilder: customControlsBuilder,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
         preferredExternalSubtitle: preferredExternalSubtitle,
+        subtitleAppearance: subtitleAppearance,
         key: key,
       );

@@ -9,6 +9,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../mappers/stream_player_mapping.dart';
 import '../state/player_wakelock.dart';
+import '../state/subtitle_preference_controller.dart';
 import 'better_player_controller_adapter.dart';
 import 'platform_player_builder.dart';
 import 'player_subtitle_style.dart';
@@ -28,6 +29,7 @@ typedef PlayerBuilder =
       customControlsBuilder,
       String? preferredSubtitleLanguage,
       SubtitleTrack? preferredExternalSubtitle,
+      SubtitleAppearance? subtitleAppearance,
       Key? key,
     });
 
@@ -45,6 +47,7 @@ Widget defaultPlayerBuilder(
   customControlsBuilder,
   String? preferredSubtitleLanguage,
   SubtitleTrack? preferredExternalSubtitle,
+  SubtitleAppearance? subtitleAppearance,
   Key? key,
 }) => platformPlayerBuilder(
   context,
@@ -54,6 +57,7 @@ Widget defaultPlayerBuilder(
   onPlaybackReady: onPlaybackReady,
   customControlsBuilder: customControlsBuilder,
   preferredExternalSubtitle: preferredExternalSubtitle,
+  subtitleAppearance: subtitleAppearance,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
   key: key,
 );
@@ -72,6 +76,7 @@ Widget mobilePlayerBuilder(
   customControlsBuilder,
   String? preferredSubtitleLanguage,
   SubtitleTrack? preferredExternalSubtitle,
+  SubtitleAppearance? subtitleAppearance,
   Key? key,
 }) => BetterPlayerView(
   key: key,
@@ -82,6 +87,7 @@ Widget mobilePlayerBuilder(
   customControlsBuilder: customControlsBuilder,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
   preferredExternalSubtitle: preferredExternalSubtitle,
+  subtitleAppearance: subtitleAppearance,
 );
 
 class BetterPlayerView extends StatefulWidget {
@@ -94,6 +100,7 @@ class BetterPlayerView extends StatefulWidget {
     this.customControlsBuilder,
     this.preferredSubtitleLanguage,
     this.preferredExternalSubtitle,
+    this.subtitleAppearance,
     this.aspectRatio,
     this.looping = false,
     this.muted = false,
@@ -120,6 +127,8 @@ class BetterPlayerView extends StatefulWidget {
   final String? preferredSubtitleLanguage;
 
   final SubtitleTrack? preferredExternalSubtitle;
+
+  final SubtitleAppearance? subtitleAppearance;
 
   /// Optional container ratio used by embedded previews.
   final double? aspectRatio;
@@ -198,10 +207,14 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
         autoPlay: widget.playing,
         looping: widget.looping,
         fit: widget.fit,
-        subtitlesConfiguration: const BetterPlayerSubtitlesConfiguration(
-          fontSize: playerSubtitleFontSize,
-          backgroundColor: playerSubtitleBackgroundColor,
-          outlineEnabled: false,
+        subtitlesConfiguration: BetterPlayerSubtitlesConfiguration(
+          fontSize:
+              widget.subtitleAppearance?.fontSize ?? playerSubtitleFontSize,
+          fontColor: widget.subtitleAppearance?.textColor ?? Colors.white,
+          backgroundColor:
+              widget.subtitleAppearance?.backgroundColor ??
+              playerSubtitleBackgroundColor,
+          outlineEnabled: widget.subtitleAppearance?.outline ?? false,
         ),
         autoDetectFullscreenDeviceOrientation: true,
         deviceOrientationsAfterFullScreen: const [

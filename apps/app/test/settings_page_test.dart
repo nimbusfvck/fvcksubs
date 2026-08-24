@@ -33,6 +33,44 @@ void main() {
     expect(store.saved, 'id');
   });
 
+  testWidgets('subtitle appearance can be changed and persisted', (
+    tester,
+  ) async {
+    final store = FakeSubtitlePreferenceStore();
+    final controller = SubtitlePreferenceController(store: store);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SettingsPage(),
+        registry: ExtensionRegistry([]),
+        subtitlePreferenceController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Subtitle appearance'));
+    await tester.pumpAndSettle();
+
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    slider.onChanged!(36);
+    await tester.pump();
+    await tester.tap(find.text('Yellow'));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Blue'));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+
+    expect(controller.appearance.fontSize, 36);
+    expect(controller.appearance.textColor, const Color(0xffffeb3b));
+    expect(controller.appearance.backgroundColor, const Color(0xdd10243d));
+    expect(controller.appearance.outline, isTrue);
+    expect(store.appearanceSaved.fontSize, 36);
+    expect(store.appearanceSaved.outline, isTrue);
+  });
+
   testWidgets('source priority opens a ranked provider list', (tester) async {
     final registry = ExtensionRegistry([
       FakeExtension(id: 'first', name: 'Nimora', providerName: 'Atlas'),
@@ -73,6 +111,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch));
     await tester.pump();
     final enableButton = tester.widget<FilledButton>(
@@ -108,6 +148,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.text('Show NSFW content?'), findsOneWidget);

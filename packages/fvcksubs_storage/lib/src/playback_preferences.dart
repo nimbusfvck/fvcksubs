@@ -3,6 +3,32 @@ import 'dart:convert';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class SubtitleAppearancePreferences {
+  const SubtitleAppearancePreferences({
+    this.fontSize = 24,
+    this.textColorValue = 0xffffffff,
+    this.backgroundColorValue = 0xaa000000,
+    this.outline = false,
+  });
+
+  final double fontSize;
+  final int textColorValue;
+  final int backgroundColorValue;
+  final bool outline;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SubtitleAppearancePreferences &&
+      other.fontSize == fontSize &&
+      other.textColorValue == textColorValue &&
+      other.backgroundColorValue == backgroundColorValue &&
+      other.outline == outline;
+
+  @override
+  int get hashCode =>
+      Object.hash(fontSize, textColorValue, backgroundColorValue, outline);
+}
+
 /// The subtitle language the viewer wants, as a primary language subtag
 /// (`"id"`, `"en"`), or `null` for no preference.
 ///
@@ -23,11 +49,21 @@ abstract class SubtitlePreferenceStore {
   /// Saves [languageCode], or clears the preference when `null`.
   Future<void> save(String? languageCode);
 
+  /// Loads the global subtitle appearance preferences.
+  Future<SubtitleAppearancePreferences> loadAppearance() async =>
+      const SubtitleAppearancePreferences();
+
+  /// Persists the global subtitle appearance preferences.
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {}
+
   /// Loads the last explicitly selected external subtitle per media item.
   Future<Map<String, SubtitleTrack>> loadExternalSelections() async => {};
 
   /// Persists or clears an explicit external subtitle selection.
-  Future<void> saveExternalSelection(MediaRef ref, SubtitleTrack? track) async {}
+  Future<void> saveExternalSelection(
+    MediaRef ref,
+    SubtitleTrack? track,
+  ) async {}
 
   /// Loads all external subtitle tracks fetched for each media item.
   Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async => {};
@@ -46,6 +82,10 @@ class SharedPreferencesSubtitlePreferenceStore
   const SharedPreferencesSubtitlePreferenceStore();
 
   static const String _key = 'playback.subtitleLanguage';
+  static const String _fontSizeKey = 'playback.subtitleFontSize';
+  static const String _textColorKey = 'playback.subtitleTextColor';
+  static const String _backgroundColorKey = 'playback.subtitleBackgroundColor';
+  static const String _outlineKey = 'playback.subtitleOutline';
   static const String _externalKey = 'playback.externalSubtitleSelections';
   static const String _externalTracksKey = 'playback.externalSubtitleTracks';
 
@@ -64,6 +104,35 @@ class SharedPreferencesSubtitlePreferenceStore
       return;
     }
     await prefs.setString(_key, languageCode);
+  }
+
+  @override
+  Future<SubtitleAppearancePreferences> loadAppearance() async {
+    final prefs = await SharedPreferences.getInstance();
+    final fontSize = prefs.getDouble(_fontSizeKey);
+    return SubtitleAppearancePreferences(
+      fontSize: fontSize != null && fontSize >= 12 && fontSize <= 48
+          ? fontSize
+          : const SubtitleAppearancePreferences().fontSize,
+      textColorValue:
+          prefs.getInt(_textColorKey) ??
+          const SubtitleAppearancePreferences().textColorValue,
+      backgroundColorValue:
+          prefs.getInt(_backgroundColorKey) ??
+          const SubtitleAppearancePreferences().backgroundColorValue,
+      outline:
+          prefs.getBool(_outlineKey) ??
+          const SubtitleAppearancePreferences().outline,
+    );
+  }
+
+  @override
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_fontSizeKey, appearance.fontSize);
+    await prefs.setInt(_textColorKey, appearance.textColorValue);
+    await prefs.setInt(_backgroundColorKey, appearance.backgroundColorValue);
+    await prefs.setBool(_outlineKey, appearance.outline);
   }
 
   @override
@@ -88,10 +157,7 @@ class SharedPreferencesSubtitlePreferenceStore
   }
 
   @override
-  Future<void> saveExternalSelection(
-    MediaRef ref,
-    SubtitleTrack? track,
-  ) async {
+  Future<void> saveExternalSelection(MediaRef ref, SubtitleTrack? track) async {
     final prefs = await SharedPreferences.getInstance();
     final selections = await loadExternalSelections();
     final key = _mediaKey(ref);

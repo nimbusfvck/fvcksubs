@@ -55,4 +55,18 @@ void main() {
     await store.saveExternalSelection(first, null);
     expect(await store.loadExternalSelections(), hasLength(1));
   });
+
+  test('subtitle appearance preferences round-trip', () async {
+    const store = SharedPreferencesSubtitlePreferenceStore();
+    const appearance = SubtitleAppearancePreferences(
+      fontSize: 36,
+      textColorValue: 0xffffeb3b,
+      backgroundColorValue: 0xdd10243d,
+      outline: true,
+    );
+
+    await store.saveAppearance(appearance);
+
+    expect(await store.loadAppearance(), appearance);
+  });
 }

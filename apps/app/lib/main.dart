@@ -78,6 +78,7 @@ Future<void> main() async {
   final subtitlePreferenceController = SubtitlePreferenceController(
     store: subtitleStore,
     initial: await subtitleStore.load(),
+    initialAppearance: await subtitleStore.loadAppearance(),
     initialExternalSelections: await subtitleStore.loadExternalSelections(),
     initialExternalTracks: await subtitleStore.loadExternalTracks(),
   );

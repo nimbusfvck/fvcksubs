@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_wakelock.dart';
+import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 
 @visibleForTesting
@@ -34,6 +35,7 @@ class MediaKitPlayerView extends StatefulWidget {
     this.onPlaybackReady,
     this.preferredSubtitleLanguage,
     this.preferredExternalSubtitle,
+    this.subtitleAppearance,
   });
 
   final PlayableStream stream;
@@ -42,6 +44,7 @@ class MediaKitPlayerView extends StatefulWidget {
   final void Function(Object? controller)? onPlaybackReady;
   final String? preferredSubtitleLanguage;
   final SubtitleTrack? preferredExternalSubtitle;
+  final SubtitleAppearance? subtitleAppearance;
   @override
   State<MediaKitPlayerView> createState() => _MediaKitPlayerViewState();
 }
@@ -210,8 +213,8 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     key: _videoKey,
     controller: _video,
     fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
-    subtitleViewConfiguration: const SubtitleViewConfiguration(
-      style: playerSubtitleTextStyle,
+    subtitleViewConfiguration: SubtitleViewConfiguration(
+      style: widget.subtitleAppearance?.textStyle ?? playerSubtitleTextStyle,
     ),
     // MediaKit moves only the Video widget into its fullscreen route. Use its
     // desktop controls there so pointer input and keyboard focus stay inside
