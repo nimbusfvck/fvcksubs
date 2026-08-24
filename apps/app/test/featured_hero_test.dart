@@ -84,6 +84,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('featured event logos have no identity frame', (tester) async {
+    final item = VersionedMediaItem(
+      item: EventItemV2(
+        ref: const MediaRef(
+          extensionId: 'live',
+          providerId: 'live.catalog',
+          id: 'two-logos',
+        ),
+        title: 'Two-logo event',
+        schedule: Schedule(
+          startsAt: DateTime.utc(2026, 8, 20),
+          state: ScheduleState.live,
+        ),
+        participants: const [
+          Participant(
+            name: 'Home',
+            logo: ImageRef('https://image.example/home.png'),
+          ),
+          Participant(
+            name: 'Away',
+            logo: ImageRef('https://image.example/away.png'),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    final firstLogo = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('live-identity-logo-0')).first,
+    );
+    expect(firstLogo.width, greaterThan(120));
+    expect(find.byType(CachedNetworkImage), findsNWidgets(2));
+    for (final logo in tester.widgetList<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    )) {
+      expect(logo.filterQuality, FilterQuality.high);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('page indicator is centered at the bottom', (tester) async {
     final items = [
       VersionedMediaItem(

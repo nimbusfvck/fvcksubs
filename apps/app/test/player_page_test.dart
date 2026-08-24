@@ -115,6 +115,89 @@ void main() {
       findsNothing,
     );
   });
+
+  // First play resolves nothing from cache: the player opens on the first
+  // source that lands and the slower providers arrive afterwards on
+  // `pendingSources`. Kora consistently settles about a second after Cricfy,
+  // so if that stream never reaches the picker, its sources never show up.
+  testWidgets('sources arriving after the player opens reach the picker', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    final first = _resolvedSource('cricfy-1', 'Server 3');
+    final later = _resolvedSource('kora-1', 'Bein Sport 1');
+    final controller = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'live-1',
+            ),
+            title: 'Match',
+          ),
+          resolvedSources: [first],
+          pendingSources: controller.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    controller.add(later);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Server 3'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Bein Sport 1'),
+      findsOneWidget,
+      reason: 'a source that settled after the player opened must be listed',
+    );
+    await controller.close();
+  });
+
+  // The same stream, but the event is emitted before anyone subscribes —
+  // exactly what happens while the first source is still being awaited,
+  // before the player route has been built at all.
+  testWidgets('sources emitted before the page subscribes are not lost', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    final first = _resolvedSource('cricfy-1', 'Server 3');
+    final later = _resolvedSource('kora-1', 'Bein Sport 1');
+    final controller = StreamController<ResolvedSource>();
+    controller.add(later);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'live-1',
+            ),
+            title: 'Match',
+          ),
+          resolvedSources: [first],
+          pendingSources: controller.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Server 3'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bein Sport 1'), findsOneWidget);
+    await controller.close();
+  });
 }
 
 ResolvedSource _resolvedSource(String id, String label) => ResolvedSource(

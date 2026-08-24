@@ -33,8 +33,7 @@ class MediaKitPlayerView extends StatefulWidget {
   final String? preferredSubtitleLanguage;
 
   @override
-  State<MediaKitPlayerView> createState() =>
-      _MediaKitPlayerViewState();
+  State<MediaKitPlayerView> createState() => _MediaKitPlayerViewState();
 }
 
 class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
@@ -52,6 +51,8 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
     _video = VideoController(_player);
     _adapter = _MediaKitControllerAdapter(
       _player,
+      audioUrl: widget.stream.audioUrl,
+      videoUrl: widget.stream.url,
       isFullScreen: () => _videoKey.currentState?.isFullscreen() ?? false,
       toggleFullScreen: () async => _videoKey.currentState?.toggleFullscreen(),
       exitFullScreen: () async => _videoKey.currentState?.exitFullscreen(),
@@ -68,6 +69,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
       await _player.open(
         mk.Media(widget.stream.url, httpHeaders: widget.stream.headers),
       );
+    } catch (error) {
+      _adapter.reportError(error);
+      return;
+    }
+
+    try {
       final preferred = widget.preferredSubtitleLanguage;
       if (preferred != null && !widget.isLive) {
         final track = widget.stream.subtitles.cast<SubtitleTrack?>().firstWhere(
@@ -76,13 +83,40 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
         );
         if (track != null) await _adapter.setSubtitle(track);
       }
+    } catch (error) {
+      // A broken external subtitle must not turn a playable video into a
+      // source failure. The adapter also clears the failed active track.
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] subtitle unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+
+    try {
       final audioUrl = widget.stream.audioUrl;
       if (audioUrl != null && audioUrl.isNotEmpty) {
         await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
       }
+    } catch (error) {
+      // A broken external audio track must not turn a playable video into a
+      // source failure.
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] audio unavailable: ${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+    try {
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
-      _adapter.reportError(error);
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] playback-ready callback failed: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
     }
   }
 
@@ -111,11 +145,15 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView> {
 class _MediaKitControllerAdapter implements AppPlayerController {
   _MediaKitControllerAdapter(
     this._player, {
+    required String? audioUrl,
+    required String videoUrl,
     required bool Function() isFullScreen,
     required Future<void> Function() toggleFullScreen,
     required Future<void> Function() exitFullScreen,
     required void Function(PlayerFitMode mode) setFit,
-  }) : _isFullScreen = isFullScreen,
+  }) : _audioUrl = audioUrl,
+       _videoUrl = videoUrl,
+       _isFullScreen = isFullScreen,
        _toggleFullScreen = toggleFullScreen,
        _exitFullScreen = exitFullScreen,
        _setFit = setFit {
@@ -136,6 +174,8 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   }
 
   final mk.Player _player;
+  final String? _audioUrl;
+  final String _videoUrl;
   final bool Function() _isFullScreen;
   final Future<void> Function() _toggleFullScreen;
   final Future<void> Function() _exitFullScreen;
@@ -146,6 +186,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   final StreamController<AppPlayerEvent> _events = StreamController.broadcast();
   late final List<StreamSubscription<Object?>> _subscriptions;
   SubtitleTrack? _activeSubtitle;
+  String? _failedSubtitleUrl;
 
   @override
   ValueListenable<AppPlayerValue> get value => _value;
@@ -229,16 +270,23 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {
+    _failedSubtitleUrl = null;
     _activeSubtitle = track;
-    await _player.setSubtitleTrack(
-      track == null
-          ? mk.SubtitleTrack.no()
-          : mk.SubtitleTrack.uri(
-              track.url,
-              title: track.label,
-              language: track.language,
-            ),
-    );
+    try {
+      await _player.setSubtitleTrack(
+        track == null
+            ? mk.SubtitleTrack.no()
+            : mk.SubtitleTrack.uri(
+                track.url,
+                title: track.label,
+                language: track.language,
+              ),
+      );
+    } catch (_) {
+      if (identical(_activeSubtitle, track)) _activeSubtitle = null;
+      _failedSubtitleUrl = track?.url;
+      rethrow;
+    }
   }
 
   AppAudioTrack _audioTrack(mk.AudioTrack track) => AppAudioTrack(
@@ -275,6 +323,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     if (!isFatalPlayerError(
       error,
       playbackStarted: _value.value.initialized,
+      subtitleUrl: _activeSubtitle?.url ?? _failedSubtitleUrl,
+      audioUrl: _audioUrl,
+      videoUrl: _videoUrl,
     )) {
       if (kDebugMode) {
         debugPrint('[Player] non-fatal: ${redactPlaybackLogText(error)}');

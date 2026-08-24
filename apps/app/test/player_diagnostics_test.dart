@@ -66,5 +66,61 @@ void main() {
         isFalse,
       );
     });
+
+    test('a failed external subtitle is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:subtitles.shegu.st',
+          playbackStarted: false,
+          subtitleUrl: 'https://subtitles.shegu.st/episode.vtt',
+        ),
+        isFalse,
+      );
+    });
+
+    test('an external file error for another host remains fatal', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:video.example/episode.m3u8',
+          playbackStarted: false,
+          subtitleUrl: 'https://subtitles.shegu.st/episode.vtt',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a failed external audio track is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:audio.example/track.aac',
+          playbackStarted: false,
+          audioUrl: 'https://audio.example/track.aac',
+          videoUrl: 'https://video.example/main.m3u8',
+        ),
+        isFalse,
+      );
+    });
+
+    test('an unrelated mpv log line is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'decoder warning: no hardware device',
+          playbackStarted: false,
+          videoUrl: 'https://video.example/main.m3u8',
+        ),
+        isFalse,
+      );
+    });
+
+    test('a pre-start error tied to the video remains fatal', () {
+      expect(
+        isFatalPlayerError(
+          'Could not open https:video.example/main.m3u8',
+          playbackStarted: false,
+          videoUrl: 'https://video.example/main.m3u8',
+        ),
+        isTrue,
+      );
+    });
   });
 }

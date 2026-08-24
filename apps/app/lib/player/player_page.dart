@@ -63,6 +63,7 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late int _currentIndex;
   late List<ResolvedSource> _resolvedSources;
+  Future<List<ResolvedSource>>? _refetch;
   late final NextEpisodeV2? _nextEpisode;
   bool _showUpNext = false;
   bool _upNextPaused = false;
@@ -135,6 +136,38 @@ class _PlayerPageState extends State<PlayerPage> {
         if (_currentIndex < 0) _currentIndex = 0;
       });
     }
+  }
+
+  /// Discovery again, on request, merged into what is already playing.
+  ///
+  /// One in-flight refetch at a time, and the guard lives here rather than in
+  /// the sheet because closing and reopening the picker builds a fresh sheet:
+  /// a sheet-local flag would let every reopen start another fan-out. That
+  /// matters more than it looks — the extension runs on a single QuickJS
+  /// event loop, so concurrent fan-outs compete with the resolves feeding
+  /// playback instead of finishing any sooner.
+  Future<List<ResolvedSource>> _refetchSources() =>
+      _refetch ??= _runRefetch().whenComplete(() => _refetch = null);
+
+  Future<List<ResolvedSource>> _runRefetch() async {
+    final scope = AppScope.of(context);
+    final found = await refetchPlayableSources(scope, widget.media);
+    if (!mounted || found.isEmpty) return _resolvedSources;
+
+    // Merge, never replace: the source being watched keeps playing and keeps
+    // its place, exactly as it does for sources that settle late.
+    final playingId = _current.source.id;
+    final merged = mergeResolvedSources(_resolvedSources, found);
+    scope.sourceCache.store(widget.media.ref, merged);
+    scope.sourceCache.promote(widget.media.ref, playingId);
+    setState(() {
+      _resolvedSources = merged;
+      _currentIndex = merged.indexWhere(
+        (source) => source.source.id == playingId,
+      );
+      if (_currentIndex < 0) _currentIndex = 0;
+    });
+    return merged;
   }
 
   @override
@@ -452,6 +485,7 @@ class _PlayerPageState extends State<PlayerPage> {
           resolvedSources: _resolvedSources,
           current: _current,
           providerNames: providerNames,
+          onRefresh: _refetchSources,
         );
       },
     );
@@ -589,6 +623,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         ? _changeSource
                         : null,
                     onBack: () => _dismiss(_controller),
+                    onHide: () => setState(() => _playbackError = null),
                   ),
                 ),
             ],

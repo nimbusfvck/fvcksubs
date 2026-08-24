@@ -136,6 +136,27 @@ Future<void> _playMedia(
 /// lived, so live playback must begin from a fresh resolution.
 bool canUseCachedPlaybackSources(PlaybackMedia item) => !item.isLive;
 
+/// Runs discovery and resolution again for [item], for the source picker's
+/// refresh control.
+///
+/// Discovery is one call covering every provider on a single shared budget,
+/// so a provider that is slow on the first attempt contributes nothing and
+/// gets no second chance within that playback — the automatic retry only
+/// fires when *no* source resolved at all. This is that second chance, asked
+/// for explicitly. Returns what resolved; the caller merges rather than
+/// replaces, so playback is never interrupted.
+Future<List<ResolvedSource>> refetchPlayableSources(
+  AppScope scope,
+  PlaybackMedia item,
+) async {
+  final progress = _ResolveProgress();
+  try {
+    return await _playableSources(scope, item, progress);
+  } finally {
+    progress.dispose();
+  }
+}
+
 Future<T?> _resolveWithOverlay<T>(
   BuildContext context,
   NavigatorState navigator,

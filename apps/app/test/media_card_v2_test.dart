@@ -122,7 +122,11 @@ void main() {
               item: EventItemV2(
                 ref: ref,
                 title: 'Single-sided broadcast',
-                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                schedule: Schedule(
+                  startsAt: DateTime.utc(2026, 8, 20),
+                  state: ScheduleState.scheduled,
+                  label: '20 Aug 21:00',
+                ),
                 artwork: const Artwork(
                   landscape: ImageRef('https://cdn.example/event.jpg'),
                 ),
@@ -136,6 +140,7 @@ void main() {
 
     expect(find.byType(CachedNetworkImage), findsOneWidget);
     expect(find.text('Single-sided broadcast'), findsOneWidget);
+    expect(find.text('20 Aug 21:00'), findsOneWidget);
   });
 
   testWidgets('single participant logo uses generated event artwork', (

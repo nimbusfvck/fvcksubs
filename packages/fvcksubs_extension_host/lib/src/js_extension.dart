@@ -52,9 +52,16 @@ class JsExtension extends ContentExtension {
     required String source,
     String? prelude,
     Duration? scriptTimeout,
+    Duration? fetchTimeout,
   }) {
     final engine = JsEngine(
       allowedHosts: manifest.permissions.hosts.toSet(),
+      // Deliberately well under the app's whole-discovery budget. A role call
+      // fans out across every provider in one `sources()`, so a single host
+      // that accepts a connection and then stalls would otherwise spend most
+      // of that budget on its own and take every other provider's results
+      // down with it when the budget runs out.
+      fetchTimeout: fetchTimeout ?? const Duration(seconds: 10),
       scriptTimeout: scriptTimeout ?? const Duration(seconds: 10),
     );
     try {

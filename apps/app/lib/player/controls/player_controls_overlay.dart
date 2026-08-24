@@ -238,12 +238,15 @@ class _PlayerTopControls extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    color: Colors.white,
-                    iconSize: 22,
-                    tooltip: 'Back',
-                    onPressed: onBack,
+                  Transform.translate(
+                    offset: const Offset(-AppSpacing.xs, 0),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      color: Colors.white,
+                      iconSize: 22,
+                      tooltip: 'Back',
+                      onPressed: onBack,
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(

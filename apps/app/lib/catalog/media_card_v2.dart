@@ -112,7 +112,6 @@ class _Match extends StatelessWidget {
         child: GeneratedBanner(
           participants: item.participants,
           status: item.schedule.state,
-          patternKey: item.subtitle,
         ),
       ),
       _Text(
@@ -186,10 +185,7 @@ class _SingleEventArtwork extends StatelessWidget {
           left: AppSpacing.xs,
           right: AppSpacing.xs,
           top: AppSpacing.xs,
-          child: _ScheduleStatus(
-            schedule: item.schedule,
-            showLabel: item.schedule.state != ScheduleState.live,
-          ),
+          child: _ScheduleStatus(schedule: item.schedule, showLabel: false),
         ),
       ],
     );
