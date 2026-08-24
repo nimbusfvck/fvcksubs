@@ -71,6 +71,7 @@ class _PlayerPageState extends State<PlayerPage> {
   LibraryController? _library;
   Timer? _progressTimer;
   ValueListenable<AppPlayerValue>? _videoValue;
+  AppPlayerController? _trackedPositionController;
   bool _hasResumed = false;
   Duration? _lastPosition;
   Duration? _lastDuration;
@@ -173,7 +174,7 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
-    _videoValue?.removeListener(_onVideoValueChanged);
+    _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
     _reportProgress();
     final landscape = _landscape == true;
@@ -187,13 +188,25 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _trackPosition(AppPlayerController controller) {
     final next = controller.value;
-    if (identical(next, _videoValue)) return;
-    _videoValue?.removeListener(_onVideoValueChanged);
+    if (identical(next, _videoValue) &&
+        identical(controller, _trackedPositionController)) {
+      return;
+    }
+    _detachPositionListener();
+    _trackedPositionController = controller;
     _videoValue = next..addListener(_onVideoValueChanged);
     _onVideoValueChanged();
   }
 
+  void _detachPositionListener() {
+    _videoValue?.removeListener(_onVideoValueChanged);
+    _videoValue = null;
+    _trackedPositionController = null;
+  }
+
   void _onVideoValueChanged() {
+    final controller = _trackedPositionController;
+    if (controller == null || !identical(controller, _controller)) return;
     final value = _videoValue?.value;
     if (value == null || !value.initialized) return;
     _sourceStarted = true;
@@ -207,10 +220,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (position != null) {
       _pendingSwitchPosition = null;
       _lastPosition = position;
-      final controller = _controller;
-      if (controller != null) {
-        unawaited(controller.seekTo(position));
-      }
+      unawaited(controller.seekTo(position));
     }
     if (!_hasResumed) {
       _hasResumed = true;
@@ -296,7 +306,10 @@ class _PlayerPageState extends State<PlayerPage> {
         );
       }
       if (!mounted || attempt != _playbackAttempt) return;
+      final position = _isLive ? null : _positionForSourceSwitch();
+      _detachPositionListener();
       setState(() {
+        _pendingSwitchPosition = position;
         _resolvedSources[_currentIndex] = ResolvedSource(
           source: _current.source,
           stream: stream,
@@ -445,11 +458,13 @@ class _PlayerPageState extends State<PlayerPage> {
       return;
     }
     final picked = _resolvedSources[index];
+    final position = _isLive ? null : _positionForSourceSwitch();
+    _detachPositionListener();
     _failedSourceIds.remove(picked.source.id);
     unawaited(_eventSubscription?.cancel());
     _eventSubscription = null;
     setState(() {
-      _pendingSwitchPosition = _isLive ? null : _lastPosition;
+      _pendingSwitchPosition = position;
       _currentIndex = index;
       _playbackAttempt++;
       _playbackError = null;
@@ -464,6 +479,12 @@ class _PlayerPageState extends State<PlayerPage> {
     AppScope.of(
       context,
     ).sourceCache.promote(widget.media.ref, picked.source.id);
+  }
+
+  Duration? _positionForSourceSwitch() {
+    final value = _controller?.value.value;
+    if (value != null && value.initialized) return value.position;
+    return _lastPosition;
   }
 
   Future<void> _changeSource() async {
@@ -533,11 +554,9 @@ class _PlayerPageState extends State<PlayerPage> {
         subtitleAppearance: AppScope.of(
           context,
         ).subtitlePreferenceController.appearance,
-        preferredExternalSubtitle: AppScope.of(
-          context,
-        ).subtitlePreferenceController.rememberedExternalSubtitle(
-          widget.media.ref,
-        ),
+        preferredExternalSubtitle: AppScope.of(context)
+            .subtitlePreferenceController
+            .rememberedExternalSubtitle(widget.media.ref),
         onControllerCreated: (value) {
           _controller = value as AppPlayerController?;
           if (_controller != null) {

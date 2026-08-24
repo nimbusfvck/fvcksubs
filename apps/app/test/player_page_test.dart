@@ -42,7 +42,7 @@ void main() {
   testWidgets('switching source recreates playback with the selected stream', (
     tester,
   ) async {
-    final player = RecordingPlayer();
+    final player = _PositionRecordingPlayer();
     final first = _resolvedSource('first', 'Source A');
     final second = _resolvedSource('second', 'Source B');
 
@@ -73,6 +73,7 @@ void main() {
 
     expect(player.played, second.stream);
     expect(player.buildCount, greaterThan(initialBuilds));
+    expect(player.controllers[1].lastSeekPosition, const Duration(minutes: 25));
     expect(find.text('Source B'), findsOneWidget);
   });
 
@@ -251,12 +252,69 @@ class _FailingPlayer extends RecordingPlayer {
   }
 }
 
+class _PositionRecordingPlayer extends RecordingPlayer {
+  final List<_FakePlayerController> controllers = [];
+  String? _lastUrl;
+
+  @override
+  Widget build(
+    BuildContext context,
+    PlayableStream stream, {
+    required bool isLive,
+    void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
+    Widget Function(
+      BuildContext context,
+      Object? controller,
+      void Function(bool visibility) onVisibilityChanged,
+    )?
+    customControlsBuilder,
+    String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
+    Key? key,
+  }) {
+    final widget = super.build(
+      context,
+      stream,
+      isLive: isLive,
+      onControllerCreated: onControllerCreated,
+      onPlaybackReady: onPlaybackReady,
+      customControlsBuilder: customControlsBuilder,
+      preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredExternalSubtitle: preferredExternalSubtitle,
+      subtitleAppearance: subtitleAppearance,
+      key: key,
+    );
+    if (_lastUrl == stream.url) return widget;
+    _lastUrl = stream.url;
+    final controller = _FakePlayerController(
+      initialValue: controllers.isEmpty
+          ? const AppPlayerValue(
+              initialized: true,
+              position: Duration(minutes: 25),
+              duration: Duration(hours: 1),
+            )
+          : const AppPlayerValue(
+              initialized: true,
+              duration: Duration(hours: 1),
+            ),
+    );
+    controllers.add(controller);
+    onControllerCreated?.call(controller);
+    onPlaybackReady?.call(controller);
+    return widget;
+  }
+}
+
 class _FakePlayerController implements AppPlayerController {
-  final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
-    const AppPlayerValue(),
-  );
+  _FakePlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
+    : _value = ValueNotifier(initialValue);
+
+  final ValueNotifier<AppPlayerValue> _value;
   final StreamController<AppPlayerEvent> _events =
       StreamController<AppPlayerEvent>.broadcast(sync: true);
+  Duration? lastSeekPosition;
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
@@ -295,7 +353,7 @@ class _FakePlayerController implements AppPlayerController {
   Future<void> pause() async {}
 
   @override
-  Future<void> seekTo(Duration position) async {}
+  Future<void> seekTo(Duration position) async => lastSeekPosition = position;
 
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {}
