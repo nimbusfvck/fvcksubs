@@ -226,6 +226,19 @@ void main() {
     await tester.tap(find.text('Indonesia'));
     expect(find.byIcon(Icons.check), findsOneWidget);
   });
+
+  test('unnamed audio tracks receive distinct ids and picker labels', () {
+    const first = AppAudioTrack(id: 'audio', label: 'Audio');
+    const second = AppAudioTrack(id: 'audio', label: 'Audio');
+
+    expect(uniqueAudioTrackId(base: 'audio', occurrence: 0, index: 0), 'audio');
+    expect(
+      uniqueAudioTrackId(base: 'audio', occurrence: 1, index: 1),
+      'audio-1',
+    );
+    expect(audioTrackPickerLabel(first, 0), 'Audio 1');
+    expect(audioTrackPickerLabel(second, 1), 'Audio 2');
+  });
 }
 
 Widget _overlay({required String title, String? subtitle}) => MaterialApp(

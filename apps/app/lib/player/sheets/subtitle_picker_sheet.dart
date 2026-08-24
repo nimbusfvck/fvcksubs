@@ -62,12 +62,19 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     final fetched = await registry.externalSubtitles(widget.media.item);
     if (!mounted) return;
     final visibleTracks = widget.filterTracks(fetched);
-    if (visibleTracks.isNotEmpty) {
-      widget.onExternalTracksFetched?.call(visibleTracks);
-    }
+    final current = widget.current;
+    final currentIsExternal =
+        current != null &&
+        !widget.tracks.any((track) => track.url == current.url);
+    final merged = subtitlesForPicker([
+      ..._externalTracks,
+      if (currentIsExternal) current,
+      ...visibleTracks,
+    ]);
+    widget.onExternalTracksFetched?.call(merged);
     setState(() {
-      _externalTracks = visibleTracks;
-      _externalState = visibleTracks.isEmpty
+      _externalTracks = merged;
+      _externalState = merged.isEmpty
           ? _ExternalFetchState.foundNone
           : _ExternalFetchState.idle;
     });

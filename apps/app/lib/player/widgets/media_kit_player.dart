@@ -306,15 +306,25 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   }
 
   @override
-  List<AppAudioTrack> get audioTracks => [
-    for (final track in _player.state.tracks.audio)
-      if (track.id != 'no' && track.id != 'auto') _audioTrack(track),
-  ];
+  List<AppAudioTrack> get audioTracks {
+    final occurrences = <String, int>{};
+    final tracks = _player.state.tracks.audio.where(
+      (track) => track.id != 'no' && track.id != 'auto',
+    );
+    return [
+      for (final (index, track) in tracks.indexed)
+        _audioTrack(track, index, occurrences),
+    ];
+  }
 
   @override
   AppAudioTrack? get activeAudio {
     final track = _player.state.track.audio;
-    return track.id == 'no' || track.id == 'auto' ? null : _audioTrack(track);
+    if (track.id == 'no' || track.id == 'auto') return null;
+    for (final audio in audioTracks) {
+      if (identical(audio.platformTrack, track)) return audio;
+    }
+    return null;
   }
 
   @override
@@ -377,17 +387,32 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     }
   }
 
-  AppAudioTrack _audioTrack(mk.AudioTrack track) => AppAudioTrack(
-    id: track.id,
-    label: audioTrackLabel(
+  AppAudioTrack _audioTrack(
+    mk.AudioTrack track,
+    int index,
+    Map<String, int> occurrences,
+  ) {
+    final details = _audioTrackDetails(track);
+    final base = audioTrackBaseId(
+      id: track.id,
       label: track.title,
       language: track.language,
-      details: _audioTrackDetails(track),
-    ),
-    language: track.language,
-    details: _audioTrackDetails(track),
-    platformTrack: track,
-  );
+      details: details,
+    );
+    final occurrence = occurrences[base] ?? 0;
+    occurrences[base] = occurrence + 1;
+    return AppAudioTrack(
+      id: uniqueAudioTrackId(base: base, occurrence: occurrence, index: index),
+      label: audioTrackLabel(
+        label: track.title,
+        language: track.language,
+        details: details,
+      ),
+      language: track.language,
+      details: details,
+      platformTrack: track,
+    );
+  }
 
   String? _audioTrackDetails(mk.AudioTrack track) {
     final values = <String>[];

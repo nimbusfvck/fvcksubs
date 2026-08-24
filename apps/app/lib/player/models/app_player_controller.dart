@@ -112,6 +112,40 @@ String audioTrackLabel({
   return technical == null || technical.isEmpty ? 'Audio' : technical;
 }
 
+String audioTrackBaseId({
+  required String? id,
+  required String? label,
+  required String? language,
+  required String? details,
+}) {
+  final candidates = [id, language, details, label];
+  for (final candidate in candidates) {
+    final value = candidate?.trim();
+    if (value != null &&
+        value.isNotEmpty &&
+        value.toLowerCase() != 'audio' &&
+        value.toLowerCase() != 'unknown') {
+      return value;
+    }
+  }
+  return 'audio';
+}
+
+String uniqueAudioTrackId({
+  required String base,
+  required int occurrence,
+  required int index,
+}) => occurrence == 0 ? base : '$base-$index';
+
+String audioTrackPickerLabel(AppAudioTrack track, int index) {
+  final label = audioTrackLabel(
+    label: track.label,
+    language: track.language,
+    details: track.details,
+  );
+  return label.toLowerCase() == 'audio' ? 'Audio ${index + 1}' : label;
+}
+
 class PlayerSubtitleSelection {
   const PlayerSubtitleSelection.off() : track = null, isExternal = false;
 

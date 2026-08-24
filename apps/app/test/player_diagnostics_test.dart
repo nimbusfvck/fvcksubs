@@ -95,20 +95,51 @@ void main() {
           'Can not open external file https:audio.example/track.aac',
           playbackStarted: false,
           audioUrl: 'https://audio.example/track.aac',
-          videoUrl: 'https://video.example/main.m3u8',
         ),
         isFalse,
       );
     });
 
-    test('an unrelated mpv log line is not a video failure', () {
+    test('a known hardware warning is not a video failure', () {
       expect(
         isFatalPlayerError(
           'decoder warning: no hardware device',
           playbackStarted: false,
-          videoUrl: 'https://video.example/main.m3u8',
         ),
         isFalse,
+      );
+    });
+
+    test('generic codec and format failures are fatal before playback', () {
+      expect(
+        isFatalPlayerError(
+          'Failed to recognize file format.',
+          playbackStarted: false,
+        ),
+        isTrue,
+      );
+      expect(
+        isFatalPlayerError('Could not open codec.', playbackStarted: false),
+        isTrue,
+      );
+    });
+
+    test('same-host audio failure is ignored only when its path matches', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:media.example/audio.aac',
+          playbackStarted: false,
+          audioUrl: 'https://media.example/audio.aac',
+        ),
+        isFalse,
+      );
+      expect(
+        isFatalPlayerError(
+          'HTTP 403 https:media.example/video.m3u8',
+          playbackStarted: false,
+          audioUrl: 'https://media.example/audio.m3u8',
+        ),
+        isTrue,
       );
     });
 
@@ -117,7 +148,6 @@ void main() {
         isFatalPlayerError(
           'Could not open https:video.example/main.m3u8',
           playbackStarted: false,
-          videoUrl: 'https://video.example/main.m3u8',
         ),
         isTrue,
       );

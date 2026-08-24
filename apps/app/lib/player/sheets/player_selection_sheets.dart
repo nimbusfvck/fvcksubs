@@ -311,14 +311,10 @@ class PlayerAudioPickerSheet extends StatelessWidget {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  for (final track in tracks)
+                  for (final (index, track) in tracks.indexed)
                     ListTile(
                       title: Text(
-                        audioTrackLabel(
-                          label: track.label,
-                          language: track.language,
-                          details: track.details,
-                        ),
+                        audioTrackPickerLabel(track, index),
                         style: AppTypography.bodyMd.copyWith(
                           color: AppColors.onDark,
                         ),

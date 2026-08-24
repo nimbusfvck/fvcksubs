@@ -68,8 +68,20 @@ class SubtitlePreferenceController extends ChangeNotifier {
   void rememberExternalSubtitles(MediaRef ref, List<SubtitleTrack> tracks) {
     if (tracks.isEmpty) return;
     final key = _mediaKey(ref);
-    _externalTracks[key] = List.of(tracks);
-    unawaited(store.saveExternalTracks(ref, tracks));
+    final merged = _mergeTracks([...?_externalTracks[key], ...tracks]);
+    _externalTracks[key] = merged;
+    unawaited(store.saveExternalTracks(ref, merged));
+    notifyListeners();
+  }
+
+  void restoreExternalTracks(Map<String, List<SubtitleTrack>> tracks) {
+    if (tracks.isEmpty) return;
+    for (final entry in tracks.entries) {
+      _externalTracks[entry.key] = _mergeTracks([
+        ...?_externalTracks[entry.key],
+        ...entry.value,
+      ]);
+    }
     notifyListeners();
   }
 
@@ -113,6 +125,14 @@ class SubtitlePreferenceController extends ChangeNotifier {
 
   static String _mediaKey(MediaRef ref) =>
       '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+
+  static List<SubtitleTrack> _mergeTracks(List<SubtitleTrack> tracks) {
+    final seen = <String>{};
+    return [
+      for (final track in tracks)
+        if (seen.add(track.url)) track,
+    ];
+  }
 }
 
 class SubtitleAppearance {

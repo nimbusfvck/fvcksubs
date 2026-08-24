@@ -18,7 +18,7 @@ void main() {
   });
 
   test('external subtitle selections round-trip per media item', () async {
-    const store = SharedPreferencesSubtitlePreferenceStore();
+    final store = SharedPreferencesSubtitlePreferenceStore();
     const first = MediaRef(
       extensionId: 'ext',
       providerId: 'movies',
@@ -57,7 +57,7 @@ void main() {
   });
 
   test('subtitle appearance preferences round-trip', () async {
-    const store = SharedPreferencesSubtitlePreferenceStore();
+    final store = SharedPreferencesSubtitlePreferenceStore();
     const appearance = SubtitleAppearancePreferences(
       fontSize: 36,
       textColorValue: 0xffffeb3b,
@@ -69,4 +69,27 @@ void main() {
 
     expect(await store.loadAppearance(), appearance);
   });
+
+  test(
+    'external subtitle track cache evicts the oldest media entries',
+    () async {
+      final store = SharedPreferencesSubtitlePreferenceStore();
+      const track = SubtitleTrack(
+        language: 'id',
+        url: 'https://subs.example/id.vtt',
+      );
+
+      for (var index = 0; index <= 10; index++) {
+        await store.saveExternalTracks(
+          MediaRef(extensionId: 'ext', providerId: 'movies', id: 'item-$index'),
+          const [track],
+        );
+      }
+
+      final loaded = await store.loadExternalTracks();
+    expect(loaded, hasLength(10));
+      expect(loaded.keys.any((key) => key.endsWith('\u0000item-0')), isFalse);
+    expect(loaded.keys.any((key) => key.endsWith('\u0000item-10')), isTrue);
+    },
+  );
 }

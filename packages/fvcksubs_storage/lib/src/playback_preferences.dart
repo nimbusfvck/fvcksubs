@@ -79,7 +79,7 @@ abstract class SubtitlePreferenceStore {
 class SharedPreferencesSubtitlePreferenceStore
     implements SubtitlePreferenceStore {
   /// Creates the store.
-  const SharedPreferencesSubtitlePreferenceStore();
+  SharedPreferencesSubtitlePreferenceStore();
 
   static const String _key = 'playback.subtitleLanguage';
   static const String _fontSizeKey = 'playback.subtitleFontSize';
@@ -88,6 +88,10 @@ class SharedPreferencesSubtitlePreferenceStore
   static const String _outlineKey = 'playback.subtitleOutline';
   static const String _externalKey = 'playback.externalSubtitleSelections';
   static const String _externalTracksKey = 'playback.externalSubtitleTracks';
+  /// Maximum number of media entries retained in the external-track cache.
+  static const int maxPersistedExternalTrackEntries = 10;
+
+  Map<String, List<SubtitleTrack>>? _externalTracksCache;
 
   @override
   Future<String?> load() async {
@@ -177,23 +181,8 @@ class SharedPreferencesSubtitlePreferenceStore
   @override
   Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_externalTracksKey);
-    if (raw == null || raw.isEmpty) return {};
-
-    try {
-      final decoded = jsonDecode(raw) as Map;
-      return {
-        for (final entry in decoded.entries)
-          entry.key as String: [
-            for (final value in (entry.value as List))
-              SubtitleTrack.fromJson((value as Map).cast<String, Object?>()),
-          ],
-      };
-    } on FormatException {
-      return {};
-    } on TypeError {
-      return {};
-    }
+    final records = await _externalTrackRecords(prefs);
+    return _copyExternalTrackRecords(records);
   }
 
   @override
@@ -202,21 +191,84 @@ class SharedPreferencesSubtitlePreferenceStore
     List<SubtitleTrack> tracks,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    final records = await loadExternalTracks();
+    final records = await _externalTrackRecords(prefs);
     final key = _mediaKey(ref);
     if (tracks.isEmpty) {
       records.remove(key);
     } else {
-      records[key] = List.of(tracks);
+      records.remove(key);
+      records[key] = _dedupeTracks(tracks);
     }
-    await prefs.setString(
-      _externalTracksKey,
-      jsonEncode({
-        for (final entry in records.entries)
-          entry.key: [for (final track in entry.value) track.toJson()],
-      }),
-    );
+    _evictExternalTrackRecords(records);
+    await _persistExternalTrackRecords(prefs, records);
   }
+
+  Future<Map<String, List<SubtitleTrack>>> _externalTrackRecords(
+    SharedPreferences prefs,
+  ) async {
+    final cached = _externalTracksCache;
+    if (cached != null) return cached;
+
+    final raw = prefs.getString(_externalTracksKey);
+    if (raw == null || raw.isEmpty) {
+      _externalTracksCache = {};
+      return _externalTracksCache!;
+    }
+
+    Map<String, List<SubtitleTrack>> decodedRecords;
+    try {
+      final decoded = jsonDecode(raw) as Map;
+      decodedRecords = {
+        for (final entry in decoded.entries)
+          entry.key as String: [
+            for (final value in (entry.value as List))
+              SubtitleTrack.fromJson((value as Map).cast<String, Object?>()),
+          ],
+      };
+    } on FormatException {
+      decodedRecords = {};
+    } on TypeError {
+      decodedRecords = {};
+    }
+    _externalTracksCache = decodedRecords;
+    if (_evictExternalTrackRecords(decodedRecords)) {
+      await _persistExternalTrackRecords(prefs, decodedRecords);
+    }
+    return decodedRecords;
+  }
+
+  bool _evictExternalTrackRecords(Map<String, List<SubtitleTrack>> records) {
+    final count = records.length - maxPersistedExternalTrackEntries;
+    if (count <= 0) return false;
+    final oldest = records.keys.take(count).toList();
+    for (final key in oldest) {
+      records.remove(key);
+    }
+    return true;
+  }
+
+  Future<void> _persistExternalTrackRecords(
+    SharedPreferences prefs,
+    Map<String, List<SubtitleTrack>> records,
+  ) => prefs.setString(
+    _externalTracksKey,
+    jsonEncode({
+      for (final entry in records.entries)
+        entry.key: [for (final track in entry.value) track.toJson()],
+    }),
+  );
+
+  static List<SubtitleTrack> _dedupeTracks(List<SubtitleTrack> tracks) {
+    final seen = <String>{};
+    return [
+      for (final track in tracks)
+        if (seen.add(track.url)) track,
+    ];
+  }
+
+  static Map<String, List<SubtitleTrack>> _copyExternalTrackRecords(
+    Map<String, List<SubtitleTrack>> records,
+  ) => {for (final entry in records.entries) entry.key: List.of(entry.value)};
 
   static String _mediaKey(MediaRef ref) =>
       '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
