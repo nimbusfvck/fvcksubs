@@ -177,8 +177,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
       r'\b(?:season|s)\s*([0-9]+)\b',
       caseSensitive: false,
     ).firstMatch(target.group.title)?.group(1);
-    if (season == null) return target.resuming ? 'Continue' : 'Play';
-    final label = 'S${season}E${target.group.episodes[target.index].position}';
+    final position = target.group.episodes[target.index].position;
+    // A group with no season in its title is still a numbered run — an anime
+    // cour is one group called "Episodes". Dropping to a bare "Continue" threw
+    // away the one thing the button should say: which episode.
+    final label = season == null ? 'E$position' : 'S${season}E$position';
     return target.resuming ? 'Continue $label' : 'Play $label';
   }
 
@@ -1078,6 +1081,12 @@ class _EpisodeTile extends StatelessWidget {
     final unreleased =
         availableAt != null && availableAt.isAfter(DateTime.now().toUtc());
     final image = episode.artwork?.landscape ?? episode.artwork?.portrait;
+    // The protocol requires a title, so a provider with no episode names sends
+    // the position back as one. Printing both lines then says "Episode 5"
+    // twice; the number carries the tile on its own instead.
+    final position = 'Episode ${episode.position}';
+    final name = episode.title.trim();
+    final named = name.isNotEmpty && name != position;
     return Opacity(
       opacity: unreleased ? 0.5 : 1,
       child: ListTile(
@@ -1099,18 +1108,21 @@ class _EpisodeTile extends StatelessWidget {
           ),
         ),
         title: Text(
-          'Episode ${episode.position}',
-          style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+          position,
+          style: named
+              ? AppTypography.caption.copyWith(color: AppColors.onDarkSoft)
+              : AppTypography.bodyMd.copyWith(color: AppColors.onDark),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              episode.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
-            ),
+            if (named)
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMd.copyWith(color: AppColors.onDark),
+              ),
             if (unreleased)
               Text(
                 'Releases ${formatReleaseDate(availableAt.toLocal())}',

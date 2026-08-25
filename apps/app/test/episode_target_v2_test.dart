@@ -76,6 +76,18 @@ void main() {
     expect(next!.item.availableAt, DateTime.utc(2026, 8, 22));
   });
 
+  test('a lone unnumbered group is left out of the context label', () {
+    // "Episodes · Episode 3" says the same word twice. A numbered season is
+    // kept even when it is the only group, because it still places the episode.
+    const guide = EpisodeGuide(
+      groups: [
+        EpisodeGroup(id: 'opaque-group-2', title: 'Episodes', episodes: []),
+      ],
+    );
+
+    expect(currentEpisodeContextLabel(episode, guide), 'Episode 3');
+  });
+
   test('series title falls back to episode title when subtitle is absent', () {
     const item = EpisodeItemV2(
       ref: episodeRef,

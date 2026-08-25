@@ -114,9 +114,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Season 2'), findsOneWidget);
-    expect(find.text('Episode 2'), findsNWidgets(2));
+    // Once, not twice: the guide gave no episode name beyond the position, so
+    // the tile prints the number instead of printing it above itself.
+    expect(find.text('Episode 2'), findsOneWidget);
     expect(find.text('Episode 1'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Continue S2E2'), findsOneWidget);
+  });
+
+  testWidgets('an unseasoned group still names the episode on Play', (
+    tester,
+  ) async {
+    // An anime cour is one group called "Episodes". The button used to fall
+    // back to a bare "Continue", dropping the only detail it should carry.
+    const seriesRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'cour',
+    );
+    const episodeRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'cour-e5',
+    );
+    const series = SeriesItemV2(ref: seriesRef, title: 'A Cour');
+    const detail = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Episodes',
+            episodes: [
+              EpisodeSummary(ref: episodeRef, title: 'Episode 5', position: 5),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: series),
+        registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, 'Play E5'), findsOneWidget);
   });
 
   group('a group too long to scroll', () {

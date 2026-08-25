@@ -10,7 +10,7 @@ class NextEpisodeV2 {
 
   final EpisodeItemV2 item;
   final String seriesTitle;
-  final String groupTitle;
+  final String? groupTitle;
   final int episode;
 }
 
@@ -19,11 +19,25 @@ String episodeSeriesTitle(EpisodeItemV2 item) => item.subtitle ?? item.title;
 String episodeContextLabel({String? groupTitle, required int episode}) =>
     groupTitle == null ? 'Episode $episode' : '$groupTitle · Episode $episode';
 
-String currentEpisodeContextLabel(EpisodeItemV2 item, EpisodeGuide? guide) {
-  final groupTitle = guide?.groups
-      .where((group) => group.id == item.episode.groupId)
+/// The group name to put in front of an episode number, if any.
+///
+/// A series split into groups always needs one — the number alone does not say
+/// which season. A lone group only earns one when its name says more than "the
+/// episodes": an anime cour is a single group called "Episodes", and
+/// "Episodes · Episode 1" is the same word twice, while "Season 2 · Episode 3"
+/// still places the episode.
+String? groupTitleFor(EpisodeGuide? guide, String groupId) {
+  if (guide == null) return null;
+  final title = guide.groups
+      .where((group) => group.id == groupId)
       .map((group) => group.title)
       .firstOrNull;
+  if (title == null || guide.groups.length > 1) return title;
+  return RegExp(r'\d').hasMatch(title) ? title : null;
+}
+
+String currentEpisodeContextLabel(EpisodeItemV2 item, EpisodeGuide? guide) {
+  final groupTitle = groupTitleFor(guide, item.episode.groupId);
   return episodeContextLabel(
     groupTitle: groupTitle,
     episode: item.episode.position,
@@ -96,7 +110,7 @@ NextEpisodeV2? nextEpisodeOfV2(
       availableAt: episode.availableAt,
     ),
     seriesTitle: current.subtitle ?? current.title,
-    groupTitle: nextGroup.title,
+    groupTitle: groupTitleFor(guide, nextGroup.id),
     episode: episode.position,
   );
 }
