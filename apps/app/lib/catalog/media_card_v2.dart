@@ -40,6 +40,7 @@ class MediaCardV2 extends StatelessWidget {
         item: value,
         image: portrait,
         heroTag: heroTag ?? mediaArtworkHeroTag(value.ref),
+        showSubtitle: showSubtitle,
       );
     }
     if (value is EventItemV2) {
@@ -64,11 +65,13 @@ class _Poster extends StatelessWidget {
     required this.item,
     required this.image,
     required this.heroTag,
+    required this.showSubtitle,
   });
 
   final MediaItemV2 item;
   final ImageRef image;
   final Object heroTag;
+  final bool showSubtitle;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -83,13 +86,13 @@ class _Poster extends StatelessWidget {
             width: double.infinity,
             fadeInDuration: Duration.zero,
             placeholder: (_, _) =>
-                const ArtworkPlaceholder(icon: Icons.movie_outlined),
+                ArtworkPlaceholder(icon: _placeholderIcon(item)),
             errorWidget: (_, _, _) =>
-                const ArtworkPlaceholder(icon: Icons.movie_outlined),
+                ArtworkPlaceholder(icon: _placeholderIcon(item)),
           ),
         ),
       ),
-      _Text(item: item),
+      _CardFooter(item: item, showSubtitle: showSubtitle),
     ],
   );
 }
@@ -104,16 +107,8 @@ class _Match extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
-        child: GeneratedBanner(
-          participants: item.participants,
-          status: item.schedule.state,
-        ),
-      ),
-      _Text(
-        item: item,
-        secondary: _eventMeta(item, showSubtitle: showSubtitle),
-      ),
+      Expanded(child: GeneratedBanner(participants: item.participants)),
+      _CardFooter(item: item, showSubtitle: showSubtitle),
     ],
   );
 }
@@ -129,10 +124,7 @@ class _SingleEvent extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(child: _SingleEventArtwork(item: item)),
-      _Text(
-        item: item,
-        secondary: _eventMeta(item, showSubtitle: showSubtitle),
-      ),
+      _CardFooter(item: item, showSubtitle: showSubtitle),
     ],
   );
 }
@@ -177,12 +169,6 @@ class _SingleEventArtwork extends StatelessWidget {
               ),
             ),
           ),
-        Positioned(
-          left: AppSpacing.xs,
-          right: AppSpacing.xs,
-          top: AppSpacing.xs,
-          child: _ScheduleStatus(schedule: item.schedule, showLabel: false),
-        ),
       ],
     );
   }
@@ -213,58 +199,41 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final event = item is EventItemV2 ? item as EventItemV2 : null;
-    final detail = showSubtitle ? mediaItemSecondaryText(item) : null;
+    final icon = item is EventItemV2
+        ? Icons.live_tv_outlined
+        : Icons.movie_outlined;
     return Column(
       children: [
-        const Expanded(child: ArtworkPlaceholder(icon: Icons.movie_outlined)),
-        Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (event != null) _ScheduleStatus(schedule: event.schedule),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
-              ),
-              if (detail != null)
-                Text.rich(
-                  mediaItemSecondarySpan(
-                    item,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onDarkSoft,
-                    ),
-                    ratingColor: AppColors.ratingAccent,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-            ],
-          ),
-        ),
+        Expanded(child: ArtworkPlaceholder(icon: icon)),
+        _CardFooter(item: item, showSubtitle: showSubtitle),
       ],
     );
   }
 }
 
-class _Text extends StatelessWidget {
-  const _Text({required this.item, this.secondary});
+class _CardFooter extends StatelessWidget {
+  const _CardFooter({required this.item, required this.showSubtitle});
 
   final MediaItemV2 item;
-  final String? secondary;
+  final bool showSubtitle;
 
   @override
   Widget build(BuildContext context) {
-    final detail = secondary ?? mediaItemSecondaryText(item);
+    final event = item is EventItemV2 ? item as EventItemV2 : null;
+    final detail = event != null
+        ? _eventMeta(event, showSubtitle: showSubtitle)
+        : showSubtitle
+        ? mediaItemSecondaryText(item)
+        : null;
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (event != null) ...[
+            _ScheduleStatus(schedule: event.schedule, showLabel: false),
+            const SizedBox(height: AppSpacing.xxs),
+          ],
           Text(
             item.title,
             maxLines: 2,
@@ -272,7 +241,7 @@ class _Text extends StatelessWidget {
             style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
           ),
           if (detail != null)
-            secondary != null
+            event != null
                 ? Text(
                     detail,
                     maxLines: 1,
@@ -297,6 +266,9 @@ class _Text extends StatelessWidget {
     );
   }
 }
+
+IconData _placeholderIcon(MediaItemV2 item) =>
+    item is EventItemV2 ? Icons.live_tv_outlined : Icons.movie_outlined;
 
 class _ScheduleStatus extends StatelessWidget {
   const _ScheduleStatus({required this.schedule, this.showLabel = true});

@@ -163,6 +163,7 @@ void main() {
     expect(find.byType(CachedNetworkImage), findsOneWidget);
     expect(find.text('Single-sided broadcast'), findsOneWidget);
     expect(find.text('20 Aug 21:00'), findsOneWidget);
+    expect(find.text('UPCOMING'), findsOneWidget);
   });
 
   testWidgets('single participant logo uses generated event artwork', (
