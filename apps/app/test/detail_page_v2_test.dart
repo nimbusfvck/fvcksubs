@@ -118,6 +118,115 @@ void main() {
     expect(find.text('Episode 1'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Continue S2E2'), findsOneWidget);
   });
+
+  group('a group too long to scroll', () {
+    const seriesRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'long-series',
+    );
+    const series = SeriesItemV2(ref: seriesRef, title: 'Long Runner');
+
+    MediaRef episodeRef(int position) =>
+        MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'e$position');
+
+    MediaDetailV2 detailWith(int episodes) => MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Episodes',
+            episodes: [
+              for (var position = 1; position <= episodes; position++)
+                EpisodeSummary(
+                  ref: episodeRef(position),
+                  title: 'Episode $position',
+                  position: position,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    Future<void> open(
+      WidgetTester tester,
+      MediaDetailV2 detail, {
+      LibraryController? library,
+    }) async {
+      await tester.pumpWidget(
+        wrapApp(
+          child: const DetailPageV2(item: series),
+          registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+          libraryController: library,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('is split into ranges of a hundred', (tester) async {
+      await open(tester, detailWith(250));
+
+      expect(find.text('1–100'), findsOneWidget);
+      expect(find.text('101–200'), findsOneWidget);
+      expect(find.text('201–250'), findsOneWidget);
+
+      // Only the selected range is built. Episode tiles are built eagerly, so
+      // this bounds the work as much as the scrolling. Nothing is watched, so
+      // the range shown is the one Play would start from — the newest.
+      expect(find.text('Episode 250'), findsWidgets);
+      expect(find.text('Episode 200'), findsNothing);
+    });
+
+    testWidgets('opens on the range holding what Play would resume', (
+      tester,
+    ) async {
+      final library = LibraryController(
+        store: _MemoryLibraryStore(),
+        initial: {
+          UserMediaState.keyFor(episodeRef(150)): UserMediaState(
+            item: EpisodeItemV2(
+              ref: episodeRef(150),
+              title: 'Episode 150',
+              subtitle: 'Long Runner',
+              episode: const EpisodeIdentity(
+                parentRef: seriesRef,
+                groupId: 'season:1',
+                position: 150,
+              ),
+            ),
+            progress: const Duration(minutes: 4),
+            lastWatched: DateTime.utc(2026, 8, 23),
+          ),
+        },
+      );
+
+      await open(tester, detailWith(250), library: library);
+
+      // Resuming episode 150 must not begin with a scroll from episode 1.
+      expect(find.text('Episode 150'), findsWidgets);
+      expect(find.text('Episode 1'), findsNothing);
+    });
+
+    testWidgets('switches range when a chip is tapped', (tester) async {
+      await open(tester, detailWith(250));
+
+      await tester.tap(find.text('1–100'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Episode 1'), findsWidgets);
+      expect(find.text('Episode 250'), findsNothing);
+    });
+
+    testWidgets('a group that fits gets no range row', (tester) async {
+      await open(tester, detailWith(100));
+
+      expect(find.text('1–100'), findsNothing);
+      expect(find.text('Episode 1'), findsWidgets);
+      expect(find.text('Episode 100'), findsWidgets);
+    });
+  });
 }
 
 class _MemoryLibraryStore implements LibraryStore {

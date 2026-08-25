@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,8 +36,14 @@ class DetailPageV2 extends StatefulWidget {
 }
 
 class _DetailPageV2State extends State<DetailPageV2> {
+  /// How many episodes one range chip covers. A long-running series is
+  /// unscrollable in one list — One Piece is past 1175 — and every episode
+  /// tile is built eagerly, so the chips bound the work as well as the scroll.
+  static const int _episodesPerRange = 100;
+
   Future<MediaDetailV2>? _detail;
   String? _selectedGroupId;
+  int? _selectedRangeIndex;
   bool _descriptionExpanded = false;
 
   @override
@@ -357,6 +365,14 @@ class _DetailPageV2State extends State<DetailPageV2> {
     builder: (context, state) {
       final selectedGroup = _selectedGroup(detail, groups, state);
       if (selectedGroup == null) return const SizedBox.shrink();
+      final rangeCount =
+          (selectedGroup.episodes.length / _episodesPerRange).ceil();
+      final rangeIndex = _rangeIndexFor(detail, selectedGroup, state, rangeCount);
+      final rangeStart = rangeIndex * _episodesPerRange;
+      final rangeEnd = math.min(
+        rangeStart + _episodesPerRange,
+        selectedGroup.episodes.length,
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -380,14 +396,33 @@ class _DetailPageV2State extends State<DetailPageV2> {
                           ),
                         ),
                     ],
-                    onChanged: (value) =>
-                        setState(() => _selectedGroupId = value),
+                    onChanged: (value) => setState(() {
+                      _selectedGroupId = value;
+                      // Another season's ranges are its own; keeping the index
+                      // would land on an arbitrary hundred of it.
+                      _selectedRangeIndex = null;
+                    }),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          for (final entry in selectedGroup.episodes.indexed)
+          if (rangeCount > 1) ...[
+            _EpisodeRangeChips(
+              labels: [
+                for (var index = 0; index < rangeCount; index++)
+                  _rangeLabel(selectedGroup.episodes, index),
+              ],
+              selected: rangeIndex,
+              onSelected: (index) =>
+                  setState(() => _selectedRangeIndex = index),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          for (final entry in selectedGroup.episodes
+              .sublist(rangeStart, rangeEnd)
+              .indexed
+              .map((entry) => (entry.$1 + rangeStart, entry.$2)))
             _EpisodeTile(
               episode: entry.$2,
               progress: _progressFraction(state.recordFor(entry.$2.ref)),
@@ -420,6 +455,28 @@ class _DetailPageV2State extends State<DetailPageV2> {
         ? null
         : _resumedEpisode(detail.episodeGuide!, detail.item.ref, library);
     return resumed?.group ?? groups.last;
+  }
+
+  /// The range the list opens on: the one holding whatever Play would start,
+  /// so resuming episode 900 does not begin with a scroll from episode 1.
+  int _rangeIndexFor(
+    MediaDetailV2 detail,
+    EpisodeGroup group,
+    LibraryState library,
+    int rangeCount,
+  ) {
+    final selected = _selectedRangeIndex;
+    if (selected != null && selected < rangeCount) return selected;
+    final target = _primaryEpisode(detail, library);
+    if (target == null || target.group.id != group.id) return 0;
+    return (target.index ~/ _episodesPerRange).clamp(0, rangeCount - 1);
+  }
+
+  String _rangeLabel(List<EpisodeSummary> episodes, int index) {
+    final start = index * _episodesPerRange;
+    final end = math.min(start + _episodesPerRange, episodes.length) - 1;
+    // Positions, not indices: a group need not start numbering at one.
+    return '${episodes[start].position}–${episodes[end].position}';
   }
 
   Future<void> _openTrailer(BuildContext context, MediaTrailer trailer) async {
@@ -953,6 +1010,55 @@ class _CreditAvatar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Range picker for a group too long to scroll — "1–100", "101–200", …
+class _EpisodeRangeChips extends StatelessWidget {
+  const _EpisodeRangeChips({
+    required this.labels,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> labels;
+
+  final int selected;
+
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (index, label) in labels.indexed)
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.xs),
+            child: ChoiceChip(
+              label: Text(
+                label,
+                style: AppTypography.titleSm.copyWith(
+                  color: index == selected
+                      ? AppColors.surfaceDark
+                      : AppColors.onDark,
+                ),
+              ),
+              selected: index == selected,
+              onSelected: (_) => onSelected(index),
+              showCheckmark: false,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              backgroundColor: AppColors.surfaceDarkElevated,
+              selectedColor: AppColors.onDark,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _EpisodeTile extends StatelessWidget {
