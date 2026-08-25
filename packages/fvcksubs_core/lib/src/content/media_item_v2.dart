@@ -218,14 +218,32 @@ sealed class MediaItemV2 extends Equatable {
         _rejectUnknown(json, _baseKeys, 'channel item');
         return ChannelItemV2._fromCommon(common);
       case MediaKindV2.episode:
-        _rejectUnknown(json, {..._baseKeys, 'episode'}, 'episode item');
+        _rejectUnknown(json, {
+          ..._baseKeys,
+          'episode',
+          'availableAt',
+        }, 'episode item');
         final episode = json['episode'];
         if (episode is! Map) {
           throw const FormatException('episode item requires episode data');
         }
+        final availableAt = json['availableAt'];
+        DateTime? parsedAvailableAt;
+        if (availableAt != null) {
+          parsedAvailableAt = availableAt is String
+              ? DateTime.tryParse(availableAt)
+              : null;
+          if (parsedAvailableAt == null ||
+              !(availableAt as String).toUpperCase().endsWith('Z')) {
+            throw const FormatException(
+              'item.availableAt must be an ISO-8601 UTC timestamp',
+            );
+          }
+        }
         return EpisodeItemV2._fromCommon(
           common,
           EpisodeIdentity.fromJson(episode.cast<String, Object?>()),
+          parsedAvailableAt,
         );
       case MediaKindV2.event:
         _rejectUnknown(json, {
@@ -369,10 +387,14 @@ final class EpisodeItemV2 extends MediaItemV2 {
     super.releaseYear,
     super.rating,
     super.artwork,
+    this.availableAt,
   });
 
-  EpisodeItemV2._fromCommon(_CommonItemFields value, this.episode)
-    : super(
+  EpisodeItemV2._fromCommon(
+    _CommonItemFields value,
+    this.episode,
+    this.availableAt,
+  ) : super(
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
@@ -384,6 +406,14 @@ final class EpisodeItemV2 extends MediaItemV2 {
   /// Parent and position used for navigation and resume.
   final EpisodeIdentity episode;
 
+  /// When this episode first became available, from the episode guide.
+  ///
+  /// Carried on the item rather than left in the guide because the stream
+  /// role matches on it: a provider indexing a long-running series by
+  /// broadcast date has no other way to tell one cour's episode 1 from
+  /// another's, and it cannot re-read the guide from inside `sources`.
+  final DateTime? availableAt;
+
   @override
   /// The `episode` discriminator.
   MediaKindV2 get kind => MediaKindV2.episode;
@@ -392,10 +422,12 @@ final class EpisodeItemV2 extends MediaItemV2 {
   Map<String, Object?> toJson() => {
     ..._baseJson(),
     'episode': episode.toJson(),
+    if (availableAt != null)
+      'availableAt': availableAt!.toUtc().toIso8601String(),
   };
 
   @override
-  List<Object?> get props => [...super.props, episode];
+  List<Object?> get props => [...super.props, episode, availableAt];
 }
 
 /// Continuously available channel.

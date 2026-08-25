@@ -93,6 +93,7 @@ NextEpisodeV2? nextEpisodeOfV2(
         groupId: nextGroup.id,
         position: episode.position,
       ),
+      availableAt: episode.availableAt,
     ),
     seriesTitle: current.subtitle ?? current.title,
     groupTitle: nextGroup.title,

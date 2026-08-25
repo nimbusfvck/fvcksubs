@@ -36,6 +36,46 @@ void main() {
     expect(currentEpisodeContextLabel(episode, null), 'Episode 3');
   });
 
+  test('the next episode keeps the air date the guide gave it', () {
+    // Playing on from one episode to the next must not drop what the stream
+    // role matches on: a provider that indexes by broadcast date would stop
+    // finding sources partway through a binge.
+    final guide = EpisodeGuide(
+      groups: [
+        EpisodeGroup(
+          id: 'opaque-group-2',
+          title: 'Season 2',
+          episodes: [
+            const EpisodeSummary(
+              ref: episodeRef,
+              title: 'Episode title',
+              position: 3,
+            ),
+            EpisodeSummary(
+              ref: const MediaRef(
+                extensionId: 'test',
+                providerId: 'test.provider',
+                id: 'episode-2',
+              ),
+              title: 'Next title',
+              position: 4,
+              availableAt: DateTime.utc(2026, 8, 22),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final next = nextEpisodeOfV2(
+      episode,
+      guide,
+      now: DateTime.utc(2026, 8, 25),
+    );
+
+    expect(next, isNotNull);
+    expect(next!.item.availableAt, DateTime.utc(2026, 8, 22));
+  });
+
   test('series title falls back to episode title when subtitle is absent', () {
     const item = EpisodeItemV2(
       ref: episodeRef,

@@ -70,6 +70,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         groupId: group.id,
         position: episode.position,
       ),
+      availableAt: episode.availableAt,
     );
   }
 
