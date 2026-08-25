@@ -165,7 +165,7 @@ Every argument and every result below is plain JSON.
 | Role | Host sends | Extension returns |
 |---|---|---|
 | `catalog` | `{ providerId, catalogId, category?, page?, filters?, subCategory? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
-| `search` | `{ query, page? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
+| `search` | `{ query, page?, category? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
 | `meta` | `{ ref: { extensionId, providerId, id } }` | `{ item, description?, genres?, runtimeMinutes?, certification?, cast?, seasons? }` |
 | `sources` | `{ item, enabledProviders?: [providerId, …] }` | `{ sources: [ { id, label, provider? }, … ] }` |
 | `resolve` | `{ sourceId }` | `{ url, headers?, format?, drm?, audioUrl?, label?, subtitles? }` |

@@ -2,6 +2,10 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import 'catalog_binding.dart';
 
+/// Home's "everything" chip. Never offered as a search scope: Search has its
+/// own unscoped chip, so listing it here would render two of them.
+const _allCategory = 'all';
+
 /// The set of installed extensions, and the routing over them.
 ///
 /// The app never talks to an extension directly — it asks the registry, which
@@ -322,8 +326,67 @@ class ExtensionRegistry {
     return _extensions[index];
   }
 
+  /// Categories a search can be scoped to, across enabled extensions and
+  /// providers, de-duplicated, first-seen order. These become the scope chips
+  /// on Search, alongside the unscoped one the app adds itself.
+  ///
+  /// Derived from what each search-capable provider declares, so a new scope
+  /// — music, once something serves it — appears by installing an extension,
+  /// with no app release. `all` never appears: it is Home's "everything"
+  /// chip, and an unscoped search already means that here.
+  List<String> get searchCategories {
+    final seen = <String>{};
+    final ordered = <String>[];
+    for (final extension in _extensions) {
+      if (!isExtensionEnabled(extension.manifest.id)) continue;
+      if (extension.manifest.contentRating.isHiddenWhenNsfwDisabled(showNsfw)) {
+        continue;
+      }
+      for (final provider in extension.manifest.providers) {
+        if (!isProviderEnabled(provider.id)) continue;
+        if (!provider.roles.contains(ProviderRole.search)) continue;
+        for (final category in _searchScopesOf(extension, provider)) {
+          if (seen.add(category)) ordered.add(category);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  /// What [provider] can be asked to search, gated the same way its shelves
+  /// are: a mature catalog hidden from Home does not put its category on the
+  /// Search chips either. A declared [ProviderDecl.searchCategories] wins,
+  /// since a search-only provider has no catalog to derive from.
+  List<String> _searchScopesOf(
+    ContentExtension extension,
+    ProviderDecl provider,
+  ) {
+    final declared = provider.searchCategories.isNotEmpty
+        ? provider.searchCategories
+        : [
+            for (final catalog in provider.catalogs)
+              if (isCatalogAllowed(
+                CatalogBinding(
+                  extension: extension,
+                  providerId: provider.id,
+                  catalog: catalog,
+                ),
+              ))
+                ...catalog.categories,
+          ];
+    return [
+      for (final category in declared)
+        if (category.toLowerCase() != _allCategory) category,
+    ];
+  }
+
   /// Free-text search, fanned out to every installed extension that declares
   /// [ProviderRole.search], merged into one list.
+  ///
+  /// [category] narrows the fan-out to the extensions that declare they can
+  /// search that scope, and travels down so an extension routes its own
+  /// internal providers by it. Null searches everything, which is what the
+  /// unscoped chip means and what the app did before scopes existed.
   ///
   /// Content-agnostic search results are merged from every enabled extension.
   /// Tolerant of a single provider failing (network error, provider down) —
@@ -332,14 +395,16 @@ class ExtensionRegistry {
   /// providers: each provider's [CatalogPage.nextPage] would need its own
   /// cursor tracked independently, which isn't worth the complexity while
   /// only one search-capable extension exists.
-  Future<List<VersionedMediaItem>> search(String query) async {
+  Future<List<VersionedMediaItem>> search(String query, {String? category}) async {
     final providers = <ContentExtension>[
       for (final extension in _extensions)
         if (isExtensionEnabled(extension.manifest.id) &&
             extension.manifest.providers.any(
               (p) =>
                   isProviderEnabled(p.id) &&
-                  p.roles.contains(ProviderRole.search),
+                  p.roles.contains(ProviderRole.search) &&
+                  (category == null ||
+                      _searchScopesOf(extension, p).contains(category)),
             ))
           extension,
     ];
@@ -351,7 +416,8 @@ class ExtensionRegistry {
           )) {
             return <VersionedMediaItem>[];
           }
-          return (await extension.search(query)).items.toList();
+          return (await extension.search(query, category: category)).items
+              .toList();
         } catch (_) {
           return <VersionedMediaItem>[];
         }

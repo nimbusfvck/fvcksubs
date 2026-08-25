@@ -6,6 +6,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../app_scope.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
+import '../home/category_chips.dart';
 import '../theme/tokens.dart';
 
 class SearchPage extends StatefulWidget {
@@ -16,9 +17,14 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
+  /// The chip standing for "no scope". Not a category any extension declares
+  /// — the registry leaves `all` out precisely so this one can mean it.
+  static const String _unscoped = 'all';
+
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   String _query = '';
+  String? _scope;
   Future<List<VersionedMediaItem>>? _results;
 
   @override
@@ -38,10 +44,33 @@ class _SearchPageState extends State<SearchPage> {
     }
     _debounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) return;
-      setState(() {
-        _results = AppScope.of(context).registry.search(trimmed);
-      });
+      _runSearch();
     });
+  }
+
+  void _runSearch() {
+    if (_query.isEmpty) {
+      setState(() => _results = null);
+      return;
+    }
+    final registry = AppScope.of(context).registry;
+    // A scope whose extension was switched off since it was picked is no
+    // scope at all; searching for it would return nothing at all.
+    final scope = _scope != null && registry.searchCategories.contains(_scope)
+        ? _scope
+        : null;
+    setState(() {
+      _results = registry.search(_query, category: scope);
+    });
+  }
+
+  void _selectScope(String? scope) {
+    if (scope == _scope) return;
+    setState(() => _scope = scope);
+    // Tapping a chip is a decision, not typing: run it now rather than
+    // waiting out a debounce meant to swallow keystrokes.
+    _debounce?.cancel();
+    _runSearch();
   }
 
   void _clear() {
@@ -54,31 +83,54 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.surfaceDark,
-    appBar: AppBar(
+  Widget build(BuildContext context) {
+    final scopes = [
+      _unscoped,
+      ...AppScope.of(context).registry.searchCategories,
+    ];
+    return Scaffold(
       backgroundColor: AppColors.surfaceDark,
-      foregroundColor: AppColors.onDark,
-      titleSpacing: 0,
-      title: Padding(
-        padding: const EdgeInsets.only(right: AppSpacing.md),
-        child: SearchField(
-          controller: _controller,
-          onChanged: _onChanged,
-          onClear: _clear,
-          autofocus: true,
+      appBar: AppBar(
+        backgroundColor: AppColors.surfaceDark,
+        foregroundColor: AppColors.onDark,
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.md),
+          child: SearchField(
+            controller: _controller,
+            onChanged: _onChanged,
+            onClear: _clear,
+            autofocus: true,
+          ),
         ),
       ),
-    ),
-    body: _query.isEmpty
-        ? const _Prompt()
-        : _Results(
-            future: _results,
-            onTap: (item) => openVersionedItem(context, item),
-            onTapWithHero: (item, heroTag) =>
-                openVersionedItem(context, item, heroTag: heroTag),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // One scope is no choice: with nothing installed that declares a
+          // searchable category, the row would be a single dead chip.
+          if (scopes.length > 1)
+            CategoryChips(
+              key: const Key('search-scope-chips'),
+              categories: scopes,
+              selected: _scope ?? _unscoped,
+              onSelected: (scope) =>
+                  _selectScope(scope == _unscoped ? null : scope),
+            ),
+          Expanded(
+            child: _query.isEmpty
+                ? const _Prompt()
+                : _Results(
+                    future: _results,
+                    onTap: (item) => openVersionedItem(context, item),
+                    onTapWithHero: (item, heroTag) =>
+                        openVersionedItem(context, item, heroTag: heroTag),
+                  ),
           ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class SearchField extends StatelessWidget {

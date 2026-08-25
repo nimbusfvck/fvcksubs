@@ -101,8 +101,16 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<VersionedCatalogPage> search(String query, {String? page}) async {
-    final decoded = await _call('search', {'query': query, 'page': ?page});
+  Future<VersionedCatalogPage> search(
+    String query, {
+    String? page,
+    String? category,
+  }) async {
+    final decoded = await _call('search', {
+      'query': query,
+      'page': ?page,
+      'category': ?category,
+    });
     return VersionedCatalogPage.fromProtocolJson(
       decoded,
       apiVersion: _manifest.apiVersion,
