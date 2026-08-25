@@ -49,15 +49,23 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   }
 
   @override
-  List<AppAudioTrack> get audioTracks => [
-    for (final track in _controller.betterPlayerAsmsAudioTracks ?? const [])
-      _audioTrack(track),
-  ];
+  List<AppAudioTrack> get audioTracks {
+    final occurrences = <String, int>{};
+    return [
+      for (final (index, track)
+          in (_controller.betterPlayerAsmsAudioTracks ?? const []).indexed)
+        _audioTrack(track, index, occurrences),
+    ];
+  }
 
   @override
   AppAudioTrack? get activeAudio {
     final track = _controller.betterPlayerAsmsAudioTrack;
-    return track == null ? null : _audioTrack(track);
+    if (track == null) return null;
+    for (final audio in audioTracks) {
+      if (identical(audio.platformTrack, track)) return audio;
+    }
+    return null;
   }
 
   @override
@@ -121,12 +129,26 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   @override
   Future<void> toggleFullScreen() async => _controller.toggleFullScreen();
 
-  AppAudioTrack _audioTrack(BetterPlayerAsmsAudioTrack track) => AppAudioTrack(
-    id: '${track.id ?? track.label ?? track.language ?? 'audio'}',
-    label: track.label ?? track.language ?? 'Audio',
-    language: track.language,
-    platformTrack: track,
-  );
+  AppAudioTrack _audioTrack(
+    BetterPlayerAsmsAudioTrack track,
+    int index,
+    Map<String, int> occurrences,
+  ) {
+    final base = audioTrackBaseId(
+      id: track.id?.toString(),
+      label: track.label,
+      language: track.language,
+      details: null,
+    );
+    final occurrence = occurrences[base] ?? 0;
+    occurrences[base] = occurrence + 1;
+    return AppAudioTrack(
+      id: uniqueAudioTrackId(base: base, occurrence: occurrence, index: index),
+      label: audioTrackLabel(label: track.label, language: track.language),
+      language: track.language,
+      platformTrack: track,
+    );
+  }
 
   void syncValue() {
     final next = _controller.videoPlayerController?.value;

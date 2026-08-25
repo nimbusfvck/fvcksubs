@@ -37,6 +37,7 @@ class FakeExtension extends ContentExtension {
     this.metaDetail,
     this.searchable = false,
     this.searchResults = const [],
+    this.searchResultsByCategory = const {},
     String? name,
     String? providerName,
     String? catalogName,
@@ -127,6 +128,16 @@ class FakeExtension extends ContentExtension {
   /// Whether this extension declares the `search` role.
   final bool searchable;
 
+  /// Results per search scope, for asserting that a scoped search reaches the
+  /// right provider. Falls back to [searchResults] when the scope has no
+  /// entry, which is what an unscoped search gets.
+  final Map<String?, List<MediaItemV2>> searchResultsByCategory;
+
+  /// Scopes [search] was called with, in order — null for an unscoped call.
+  /// Empty means this extension was never asked, which is the assertion when
+  /// a scope should have filtered it out entirely.
+  final List<String?> searchCategories = [];
+
   /// Items [search] returns for any non-empty query.
   final List<MediaItemV2> searchResults;
 
@@ -156,8 +167,14 @@ class FakeExtension extends ContentExtension {
   }
 
   @override
-  Future<VersionedCatalogPage> search(String query, {String? page}) async =>
-      _page(searchResults);
+  Future<VersionedCatalogPage> search(
+    String query, {
+    String? page,
+    String? category,
+  }) async {
+    searchCategories.add(category);
+    return _page(searchResultsByCategory[category] ?? searchResults);
+  }
 
   VersionedCatalogPage _page(List<MediaItemV2> values) => VersionedCatalogPage(
     sections: [
@@ -375,6 +392,8 @@ class RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
     Key? key,
   }) {
     played = stream;
@@ -450,12 +469,54 @@ class FakeSubtitlePreferenceStore implements SubtitlePreferenceStore {
   FakeSubtitlePreferenceStore({String? initial}) : saved = initial;
 
   String? saved;
+  SubtitleAppearancePreferences appearanceSaved =
+      const SubtitleAppearancePreferences();
+
+  final Map<String, SubtitleTrack> externalSelections = {};
+  final Map<String, List<SubtitleTrack>> externalTracks = {};
 
   @override
   Future<String?> load() async => saved;
 
   @override
   Future<void> save(String? languageCode) async => saved = languageCode;
+
+  @override
+  Future<SubtitleAppearancePreferences> loadAppearance() async =>
+      appearanceSaved;
+
+  @override
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {
+    appearanceSaved = appearance;
+  }
+
+  @override
+  Future<Map<String, SubtitleTrack>> loadExternalSelections() async =>
+      Map.of(externalSelections);
+
+  @override
+  Future<void> saveExternalSelection(MediaRef ref, SubtitleTrack? track) async {
+    final key = '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+    if (track == null) {
+      externalSelections.remove(key);
+    } else {
+      externalSelections[key] = track;
+    }
+  }
+
+  @override
+  Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async => {
+    for (final entry in externalTracks.entries) entry.key: List.of(entry.value),
+  };
+
+  @override
+  Future<void> saveExternalTracks(
+    MediaRef ref,
+    List<SubtitleTrack> tracks,
+  ) async {
+    final key = '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+    externalTracks[key] = List.of(tracks);
+  }
 }
 
 class FakeSourcePriorityStore implements SourcePriorityStore {

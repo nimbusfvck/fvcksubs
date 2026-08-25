@@ -3,37 +3,59 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Keeps screen-wakelock requests ordered while one or more players are alive.
 class PlayerWakelockLease {
-  PlayerWakelockLease._(this._id);
+  PlayerWakelockLease._(this._id, this._owner);
 
-  static final Set<int> _activeIds = <int>{};
-  static Future<void> _pending = Future<void>.value();
-  static int _nextId = 0;
+  static final PlayerWakelockCoordinator _defaultCoordinator =
+      PlayerWakelockCoordinator(
+        (enable) => WakelockPlus.toggle(enable: enable),
+      );
 
   final int _id;
+  final PlayerWakelockCoordinator _owner;
   bool _released = false;
 
-  static PlayerWakelockLease acquire() {
-    final lease = PlayerWakelockLease._(++_nextId);
-    _activeIds.add(lease._id);
-    _queueSync();
-    return lease;
-  }
+  static PlayerWakelockLease acquire() => _defaultCoordinator.acquire();
 
   void refresh() {
-    if (!_released && _activeIds.contains(_id)) _queueSync();
+    if (!_released) _owner.refresh(_id);
   }
 
   void release() {
     if (_released) return;
     _released = true;
-    _activeIds.remove(_id);
+    _owner.release(_id);
+  }
+}
+
+/// Testable coordinator for the process-wide wakelock state.
+class PlayerWakelockCoordinator {
+  PlayerWakelockCoordinator(this._toggle);
+
+  final Future<void> Function(bool enable) _toggle;
+  final Set<int> _activeIds = <int>{};
+  Future<void> _pending = Future<void>.value();
+  int _nextId = 0;
+
+  PlayerWakelockLease acquire() {
+    final lease = PlayerWakelockLease._(++_nextId, this);
+    _activeIds.add(lease._id);
+    _queueSync();
+    return lease;
+  }
+
+  void refresh(int id) {
+    if (_activeIds.contains(id)) _queueSync();
+  }
+
+  void release(int id) {
+    _activeIds.remove(id);
     _queueSync();
   }
 
-  static void _queueSync() {
+  void _queueSync() {
     _pending = _pending.then((_) async {
       try {
-        await WakelockPlus.toggle(enable: _activeIds.isNotEmpty);
+        await _toggle(_activeIds.isNotEmpty);
       } catch (error) {
         if (kDebugMode) {
           debugPrint('[PlayerWakelock] toggle failed: $error');

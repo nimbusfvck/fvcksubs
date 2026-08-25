@@ -15,12 +15,16 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
     required this.tracks,
     required this.current,
     required this.filterTracks,
+    this.initialExternalTracks = const [],
+    this.onExternalTracksFetched,
   });
 
   final PlaybackMedia media;
   final List<SubtitleTrack> tracks;
   final SubtitleTrack? current;
   final List<SubtitleTrack> Function(List<SubtitleTrack> tracks) filterTracks;
+  final List<SubtitleTrack> initialExternalTracks;
+  final void Function(List<SubtitleTrack> tracks)? onExternalTracksFetched;
 
   @override
   State<PlayerSubtitlePickerSheet> createState() =>
@@ -33,6 +37,12 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   _SubtitleGroup? _expanded;
   List<SubtitleTrack> _externalTracks = const [];
   _ExternalFetchState _externalState = _ExternalFetchState.idle;
+
+  @override
+  void initState() {
+    super.initState();
+    _externalTracks = subtitlesForPicker(widget.initialExternalTracks);
+  }
 
   List<_SubtitleGroup> get _groups {
     final merged = subtitlesForPicker([...widget.tracks, ..._externalTracks]);
@@ -52,16 +62,29 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     final fetched = await registry.externalSubtitles(widget.media.item);
     if (!mounted) return;
     final visibleTracks = widget.filterTracks(fetched);
+    final current = widget.current;
+    final currentIsExternal =
+        current != null &&
+        !widget.tracks.any((track) => track.url == current.url);
+    final merged = subtitlesForPicker([
+      ..._externalTracks,
+      if (currentIsExternal) current,
+      ...visibleTracks,
+    ]);
+    widget.onExternalTracksFetched?.call(merged);
     setState(() {
-      _externalTracks = visibleTracks;
-      _externalState = visibleTracks.isEmpty
+      _externalTracks = merged;
+      _externalState = merged.isEmpty
           ? _ExternalFetchState.foundNone
           : _ExternalFetchState.idle;
     });
   }
 
   PlayerSubtitleSelection _sourceFor(SubtitleTrack track) =>
-      PlayerSubtitleSelection.track(track);
+      PlayerSubtitleSelection.track(
+        track,
+        isExternal: !widget.tracks.any((item) => item.url == track.url),
+      );
 
   PlayerSubtitleSelection _offSource() => const PlayerSubtitleSelection.off();
 

@@ -76,6 +76,28 @@ void main() {
     expect(star?.style?.color, AppColors.ratingAccent);
   });
 
+  testWidgets('video without artwork shows the shared placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: VideoItemV2(ref: ref, title: 'Text-only video'),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.movie_outlined), findsOneWidget);
+    expect(find.text('Text-only video'), findsOneWidget);
+  });
+
   testWidgets('event renders schedule and participants', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -122,7 +144,11 @@ void main() {
               item: EventItemV2(
                 ref: ref,
                 title: 'Single-sided broadcast',
-                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                schedule: Schedule(
+                  startsAt: DateTime.utc(2026, 8, 20),
+                  state: ScheduleState.scheduled,
+                  label: '20 Aug 21:00',
+                ),
                 artwork: const Artwork(
                   landscape: ImageRef('https://cdn.example/event.jpg'),
                 ),
@@ -136,6 +162,8 @@ void main() {
 
     expect(find.byType(CachedNetworkImage), findsOneWidget);
     expect(find.text('Single-sided broadcast'), findsOneWidget);
+    expect(find.text('20 Aug 21:00'), findsOneWidget);
+    expect(find.text('UPCOMING'), findsOneWidget);
   });
 
   testWidgets('single participant logo uses generated event artwork', (

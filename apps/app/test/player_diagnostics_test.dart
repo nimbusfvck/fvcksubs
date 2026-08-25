@@ -66,5 +66,91 @@ void main() {
         isFalse,
       );
     });
+
+    test('a failed external subtitle is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:subtitles.shegu.st',
+          playbackStarted: false,
+          subtitleUrl: 'https://subtitles.shegu.st/episode.vtt',
+        ),
+        isFalse,
+      );
+    });
+
+    test('an external file error for another host remains fatal', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:video.example/episode.m3u8',
+          playbackStarted: false,
+          subtitleUrl: 'https://subtitles.shegu.st/episode.vtt',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a failed external audio track is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:audio.example/track.aac',
+          playbackStarted: false,
+          audioUrl: 'https://audio.example/track.aac',
+        ),
+        isFalse,
+      );
+    });
+
+    test('a known hardware warning is not a video failure', () {
+      expect(
+        isFatalPlayerError(
+          'decoder warning: no hardware device',
+          playbackStarted: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('generic codec and format failures are fatal before playback', () {
+      expect(
+        isFatalPlayerError(
+          'Failed to recognize file format.',
+          playbackStarted: false,
+        ),
+        isTrue,
+      );
+      expect(
+        isFatalPlayerError('Could not open codec.', playbackStarted: false),
+        isTrue,
+      );
+    });
+
+    test('same-host audio failure is ignored only when its path matches', () {
+      expect(
+        isFatalPlayerError(
+          'Can not open external file https:media.example/audio.aac',
+          playbackStarted: false,
+          audioUrl: 'https://media.example/audio.aac',
+        ),
+        isFalse,
+      );
+      expect(
+        isFatalPlayerError(
+          'HTTP 403 https:media.example/video.m3u8',
+          playbackStarted: false,
+          audioUrl: 'https://media.example/audio.m3u8',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a pre-start error tied to the video remains fatal', () {
+      expect(
+        isFatalPlayerError(
+          'Could not open https:video.example/main.m3u8',
+          playbackStarted: false,
+        ),
+        isTrue,
+      );
+    });
   });
 }

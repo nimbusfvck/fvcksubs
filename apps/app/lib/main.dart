@@ -74,10 +74,12 @@ Future<void> main() async {
     initial: await pluginStore.load(),
   );
 
-  const subtitleStore = SharedPreferencesSubtitlePreferenceStore();
+  final subtitleStore = SharedPreferencesSubtitlePreferenceStore();
   final subtitlePreferenceController = SubtitlePreferenceController(
     store: subtitleStore,
     initial: await subtitleStore.load(),
+    initialAppearance: await subtitleStore.loadAppearance(),
+    initialExternalSelections: await subtitleStore.loadExternalSelections(),
   );
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
@@ -114,6 +116,17 @@ Future<void> main() async {
   // A saved repository is checked in the background so installed cards can
   // show update status without making the user open Addons first.
   unawaited(installerController.refresh(silent: true));
+  unawaited(
+    _restoreExternalSubtitleTracks(subtitleStore, subtitlePreferenceController),
+  );
+}
+
+Future<void> _restoreExternalSubtitleTracks(
+  SharedPreferencesSubtitlePreferenceStore store,
+  SubtitlePreferenceController controller,
+) async {
+  final tracks = await store.loadExternalTracks();
+  controller.restoreExternalTracks(tracks);
 }
 
 Future<void> loadInstalledExtensions(

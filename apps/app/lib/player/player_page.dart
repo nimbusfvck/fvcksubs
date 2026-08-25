@@ -63,6 +63,7 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late int _currentIndex;
   late List<ResolvedSource> _resolvedSources;
+  Future<List<ResolvedSource>>? _refetch;
   late final NextEpisodeV2? _nextEpisode;
   bool _showUpNext = false;
   bool _upNextPaused = false;
@@ -70,6 +71,7 @@ class _PlayerPageState extends State<PlayerPage> {
   LibraryController? _library;
   Timer? _progressTimer;
   ValueListenable<AppPlayerValue>? _videoValue;
+  AppPlayerController? _trackedPositionController;
   bool _hasResumed = false;
   Duration? _lastPosition;
   Duration? _lastDuration;
@@ -137,10 +139,42 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  /// Discovery again, on request, merged into what is already playing.
+  ///
+  /// One in-flight refetch at a time, and the guard lives here rather than in
+  /// the sheet because closing and reopening the picker builds a fresh sheet:
+  /// a sheet-local flag would let every reopen start another fan-out. That
+  /// matters more than it looks — the extension runs on a single QuickJS
+  /// event loop, so concurrent fan-outs compete with the resolves feeding
+  /// playback instead of finishing any sooner.
+  Future<List<ResolvedSource>> _refetchSources() =>
+      _refetch ??= _runRefetch().whenComplete(() => _refetch = null);
+
+  Future<List<ResolvedSource>> _runRefetch() async {
+    final scope = AppScope.of(context);
+    final found = await refetchPlayableSources(scope, widget.media);
+    if (!mounted || found.isEmpty) return _resolvedSources;
+
+    // Merge, never replace: the source being watched keeps playing and keeps
+    // its place, exactly as it does for sources that settle late.
+    final playingId = _current.source.id;
+    final merged = mergeResolvedSources(_resolvedSources, found);
+    scope.sourceCache.store(widget.media.ref, merged);
+    scope.sourceCache.promote(widget.media.ref, playingId);
+    setState(() {
+      _resolvedSources = merged;
+      _currentIndex = merged.indexWhere(
+        (source) => source.source.id == playingId,
+      );
+      if (_currentIndex < 0) _currentIndex = 0;
+    });
+    return merged;
+  }
+
   @override
   void dispose() {
     _progressTimer?.cancel();
-    _videoValue?.removeListener(_onVideoValueChanged);
+    _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
     _reportProgress();
     final landscape = _landscape == true;
@@ -154,13 +188,25 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _trackPosition(AppPlayerController controller) {
     final next = controller.value;
-    if (identical(next, _videoValue)) return;
-    _videoValue?.removeListener(_onVideoValueChanged);
+    if (identical(next, _videoValue) &&
+        identical(controller, _trackedPositionController)) {
+      return;
+    }
+    _detachPositionListener();
+    _trackedPositionController = controller;
     _videoValue = next..addListener(_onVideoValueChanged);
     _onVideoValueChanged();
   }
 
+  void _detachPositionListener() {
+    _videoValue?.removeListener(_onVideoValueChanged);
+    _videoValue = null;
+    _trackedPositionController = null;
+  }
+
   void _onVideoValueChanged() {
+    final controller = _trackedPositionController;
+    if (controller == null || !identical(controller, _controller)) return;
     final value = _videoValue?.value;
     if (value == null || !value.initialized) return;
     _sourceStarted = true;
@@ -174,10 +220,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (position != null) {
       _pendingSwitchPosition = null;
       _lastPosition = position;
-      final controller = _controller;
-      if (controller != null) {
-        unawaited(controller.seekTo(position));
-      }
+      unawaited(controller.seekTo(position));
     }
     if (!_hasResumed) {
       _hasResumed = true;
@@ -263,7 +306,10 @@ class _PlayerPageState extends State<PlayerPage> {
         );
       }
       if (!mounted || attempt != _playbackAttempt) return;
+      final position = _isLive ? null : _positionForSourceSwitch();
+      _detachPositionListener();
       setState(() {
+        _pendingSwitchPosition = position;
         _resolvedSources[_currentIndex] = ResolvedSource(
           source: _current.source,
           stream: stream,
@@ -412,11 +458,13 @@ class _PlayerPageState extends State<PlayerPage> {
       return;
     }
     final picked = _resolvedSources[index];
+    final position = _isLive ? null : _positionForSourceSwitch();
+    _detachPositionListener();
     _failedSourceIds.remove(picked.source.id);
     unawaited(_eventSubscription?.cancel());
     _eventSubscription = null;
     setState(() {
-      _pendingSwitchPosition = _isLive ? null : _lastPosition;
+      _pendingSwitchPosition = position;
       _currentIndex = index;
       _playbackAttempt++;
       _playbackError = null;
@@ -431,6 +479,12 @@ class _PlayerPageState extends State<PlayerPage> {
     AppScope.of(
       context,
     ).sourceCache.promote(widget.media.ref, picked.source.id);
+  }
+
+  Duration? _positionForSourceSwitch() {
+    final value = _controller?.value.value;
+    if (value != null && value.initialized) return value.position;
+    return _lastPosition;
   }
 
   Future<void> _changeSource() async {
@@ -452,6 +506,7 @@ class _PlayerPageState extends State<PlayerPage> {
           resolvedSources: _resolvedSources,
           current: _current,
           providerNames: providerNames,
+          onRefresh: _refetchSources,
         );
       },
     );
@@ -474,6 +529,7 @@ class _PlayerPageState extends State<PlayerPage> {
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
         isLive: _isLive,
+        episodeGuide: widget.episodeGuide,
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _showNextEpisode,
@@ -495,6 +551,12 @@ class _PlayerPageState extends State<PlayerPage> {
         preferredSubtitleLanguage: AppScope.of(
           context,
         ).subtitlePreferenceController.languageCode,
+        subtitleAppearance: AppScope.of(
+          context,
+        ).subtitlePreferenceController.appearance,
+        preferredExternalSubtitle: AppScope.of(context)
+            .subtitlePreferenceController
+            .rememberedExternalSubtitle(widget.media.ref),
         onControllerCreated: (value) {
           _controller = value as AppPlayerController?;
           if (_controller != null) {
@@ -589,6 +651,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         ? _changeSource
                         : null,
                     onBack: () => _dismiss(_controller),
+                    onHide: () => setState(() => _playbackError = null),
                   ),
                 ),
             ],

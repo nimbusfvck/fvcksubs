@@ -26,29 +26,117 @@ String redactPlaybackLogText(Object? value) {
   });
 }
 
+/// Returns whether an mpv error belongs to the currently requested subtitle.
+///
+/// mpv reports a failed external subtitle fetch on the same error stream as
+/// playback failures. Match the track URL, including its path, and require a
+/// subtitle-shaped failure so a same-host video-open failure stays fatal.
+bool isExternalSubtitleError(
+  Object? error, {
+  String? subtitleUrl,
+  String? videoUrl,
+}) {
+  final text = (error?.toString() ?? '').toLowerCase();
+  final subtitleMatches =
+      _errorMentionsUrl(error, subtitleUrl, requirePath: true) ||
+      (_differentHosts(subtitleUrl, videoUrl) &&
+          _errorMentionsUrl(error, subtitleUrl));
+  return subtitleMatches &&
+      _hasAny(text, const [
+        'subtitle',
+        'caption',
+        '.vtt',
+        '.srt',
+        '.ass',
+        '.ssa',
+        '.webvtt',
+      ]);
+}
+
+/// Returns whether an mpv error belongs to the separate audio rendition.
+///
+/// Audio and video URLs commonly share a host. A host-only match is therefore
+/// not enough to suppress a playback error; the error must identify the audio
+/// URL path and look like an audio-track failure.
+bool isExternalAudioError(Object? error, {String? audioUrl}) {
+  final text = (error?.toString() ?? '').toLowerCase();
+  return _errorMentionsUrl(error, audioUrl, requirePath: true) &&
+      _hasAny(text, const [
+        'audio',
+        '.aac',
+        '.m4a',
+        '.mp3',
+        '.opus',
+        '.ac3',
+        '.ec3',
+      ]);
+}
+
 /// Whether a libmpv error line should tear playback down.
 ///
-/// MediaKit's `Player.stream.error` does not report "playback failed" — it
-/// forwards mpv *log lines* whose level happens to be `error`, from the
-/// `file`, `ffmpeg`, `vd`, `ad`, `cplayer`, and `stream` prefixes. mpv logs
-/// those for transient conditions it recovers from on its own, so treating
-/// every one as fatal replaces working video with a failure screen.
-///
-/// Two things make a line non-fatal:
-///
-/// * **Audio device failures cost sound, not playback.** mpv says
-///   `Could not open/initialize audio device -> no sound.` and keeps
-///   decoding video; the iOS Simulator produces this on every launch.
-/// * **Frames already flowing prove the source works.** After playback has
-///   started, a later error line is a warning about a hiccup, not a verdict
-///   on the source. This mirrors the app's own rule that a failure before
-///   playback initializes may fall through to the next source, while after
-///   it starts nothing auto-advances and retry stays in the user's hands.
-///
-/// A genuine open failure still arrives as a thrown error from `Player.open`,
-/// which is reported regardless of this classification.
-bool isFatalPlayerError(Object? error, {required bool playbackStarted}) {
+/// MediaKit's `Player.stream.error` forwards mpv log lines from several
+/// subsystems, not only video playback. Known device warnings are non-fatal;
+/// unknown errors before the first frame are fatal so codec, format, HTTP, and
+/// source-open failures can trigger fallback or the error view.
+bool isFatalPlayerError(
+  Object? error, {
+  required bool playbackStarted,
+  String? subtitleUrl,
+  String? audioUrl,
+  String? videoUrl,
+}) {
+  if (isExternalSubtitleError(
+        error,
+        subtitleUrl: subtitleUrl,
+        videoUrl: videoUrl,
+      ) ||
+      isExternalAudioError(error, audioUrl: audioUrl)) {
+    return false;
+  }
   final text = (error?.toString() ?? '').toLowerCase();
-  if (text.contains('audio device')) return false;
-  return !playbackStarted;
+  if (_isKnownNonFatalWarning(text)) return false;
+  if (playbackStarted) return false;
+
+  // Before the first frame, an unknown error is a failed playback attempt.
+  // This deliberately does not require the video URL: mpv often emits only
+  // generic messages such as "failed to recognize file format".
+  return true;
+}
+
+bool _isKnownNonFatalWarning(String text) =>
+    _hasAny(text, const [
+      'audio device',
+      'no hardware device',
+      'hardware device',
+      'audio output',
+    ]) &&
+    !_hasAny(text, const [
+      'could not open codec',
+      'failed to recognize file format',
+      'failed to open',
+      'cannot open',
+      'can not open',
+    ]);
+
+bool _hasAny(String text, List<String> needles) => needles.any(text.contains);
+
+bool _errorMentionsUrl(
+  Object? error,
+  String? rawUrl, {
+  bool requirePath = false,
+}) {
+  final uri = Uri.tryParse(rawUrl ?? '');
+  final host = uri?.host.toLowerCase();
+  if (host == null || host.isEmpty) return false;
+  final text = (error?.toString() ?? '').toLowerCase();
+  if (!text.contains(host)) return false;
+  if (!requirePath) return true;
+  final path = uri?.path.toLowerCase();
+  return path != null && path.length > 1 && text.contains(path);
+}
+
+bool _differentHosts(String? firstUrl, String? secondUrl) {
+  final first = Uri.tryParse(firstUrl ?? '')?.host.toLowerCase();
+  final second = Uri.tryParse(secondUrl ?? '')?.host.toLowerCase();
+  return first != null && first.isNotEmpty && first != second;
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../../app_scope.dart';
 import '../../detail/episode_target_v2.dart';
 import '../../library/library_controller.dart';
@@ -38,6 +39,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
     required this.isLive,
+    this.episodeGuide,
     this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
@@ -58,6 +60,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
   final bool isLive;
+  final EpisodeGuide? episodeGuide;
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
   final VoidCallback onNearEnd;
@@ -80,7 +83,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Timer? _hideTimer;
   double? _dragValueMs;
   String? _activeSubtitleLabel;
-  String? _activeAudioLabel;
   String? _activeQualityLabel;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
@@ -102,6 +104,20 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       !_isReady(_videoValue?.value) || _showBufferingIndicator;
 
   ResolvedSource get _current => widget.resolvedSources[widget.currentIndex];
+
+  String get _overlayTitle {
+    final item = widget.media.item;
+    return item is EpisodeItemV2
+        ? episodeSeriesTitle(item)
+        : widget.media.title;
+  }
+
+  String? get _overlaySubtitle {
+    final item = widget.media.item;
+    return item is EpisodeItemV2
+        ? currentEpisodeContextLabel(item, widget.episodeGuide)
+        : null;
+  }
 
   @override
   void initState() {
@@ -326,9 +342,12 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (widget.isLive) return;
     _hideTimer?.cancel();
     final currentSub = widget.controller?.activeSubtitle;
-    final tracks = AppScope.of(
+    final subtitlePreference = AppScope.of(
       context,
-    ).subtitlePreferenceController.tracksForPicker(_current.stream.subtitles);
+    ).subtitlePreferenceController;
+    final tracks = subtitlePreference.tracksForPicker(
+      _current.stream.subtitles,
+    );
     final picked = await showModalBottomSheet<PlayerSubtitleSelection>(
       context: context,
       isScrollControlled: true,
@@ -340,14 +359,22 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         media: widget.media,
         tracks: tracks,
         current: currentSub,
-        filterTracks: AppScope.of(
-          context,
-        ).subtitlePreferenceController.tracksForPicker,
+        filterTracks: subtitlePreference.tracksForPicker,
+        initialExternalTracks: subtitlePreference.rememberedExternalSubtitles(
+          widget.media.ref,
+        ),
+        onExternalTracksFetched: (tracks) => subtitlePreference
+            .rememberExternalSubtitles(widget.media.ref, tracks),
       ),
     );
     if (!mounted) return;
     if (picked != null) {
       unawaited(widget.controller?.setSubtitle(picked.track));
+      AppScope.of(context).subtitlePreferenceController.rememberSubtitle(
+        widget.media.ref,
+        track: picked.track,
+        external: picked.isExternal,
+      );
       final isOff = picked.track == null;
       setState(() {
         _activeSubtitleLabel = isOff
@@ -398,8 +425,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (!mounted) return;
     if (picked != null) {
       await widget.controller?.setAudioTrack(picked);
-      if (!mounted) return;
-      setState(() => _activeAudioLabel = picked.label);
     }
     _revealControls();
   }
@@ -425,8 +450,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
                   width: 280,
                   child: PlayerUpNextCard(
                     seriesTitle: widget.upNextV2!.seriesTitle,
-                    subtitle:
-                        '${widget.upNextV2!.groupTitle} E${widget.upNextV2!.episode}',
+                    subtitle: nextEpisodeContextLabel(widget.upNextV2!),
                     countdown: _upNextCountdown,
                     paused: widget.upNextPaused,
                     onPlayNext: widget.onPlayNext,
@@ -438,7 +462,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
           );
     final audioTracks = widget.controller?.audioTracks ?? const [];
     return PlayerControlsOverlayView(
-      title: widget.media.title,
+      title: _overlayTitle,
+      subtitle: _overlaySubtitle,
       favoriteAction: PlayerFavoriteButton(media: widget.media),
       controlsVisible: _controlsVisible,
       isLive: widget.isLive,
@@ -448,8 +473,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
           ? null
           : _current.source.label,
       activeSubtitleLabel: _activeSubtitleLabel,
-      activeAudioLabel:
-          _activeAudioLabel ?? widget.controller?.activeAudio?.label,
       activeQualityLabel: _activeQualityLabel,
       position: position,
       duration: duration,

@@ -10,6 +10,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({
     super.key,
     required this.title,
+    this.subtitle,
     required this.favoriteAction,
     required this.controlsVisible,
     required this.isLive,
@@ -17,7 +18,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.isBuffering,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
-    this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -46,6 +46,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Media title shown in the top bar.
   final String title;
 
+  /// Optional secondary line shown below the media title.
+  final String? subtitle;
+
   /// Favorite control rendered in the top bar.
   final Widget favoriteAction;
 
@@ -66,9 +69,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Active subtitle label shown in the subtitle control.
   final String? activeSubtitleLabel;
-
-  /// Active audio-track label shown in the audio control.
-  final String? activeAudioLabel;
 
   /// Active quality label shown in the quality control.
   final String? activeQualityLabel;
@@ -148,6 +148,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
       children: [
         _PlayerTopControls(
           title: title,
+          subtitle: subtitle,
           favoriteAction: favoriteAction,
           visible: controlsVisible,
           onBack: onBack,
@@ -168,7 +169,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
           isLive: isLive,
           sourceLabel: sourceLabel,
           activeSubtitleLabel: activeSubtitleLabel,
-          activeAudioLabel: activeAudioLabel,
           activeQualityLabel: activeQualityLabel,
           position: position,
           duration: duration,
@@ -194,6 +194,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
 class _PlayerTopControls extends StatelessWidget {
   const _PlayerTopControls({
     required this.title,
+    required this.subtitle,
     required this.favoriteAction,
     required this.visible,
     required this.onBack,
@@ -203,6 +204,7 @@ class _PlayerTopControls extends StatelessWidget {
   });
 
   final String title;
+  final String? subtitle;
   final Widget favoriteAction;
   final bool visible;
   final VoidCallback onBack;
@@ -238,25 +240,54 @@ class _PlayerTopControls extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    color: Colors.white,
-                    iconSize: 22,
-                    tooltip: 'Back',
-                    onPressed: onBack,
+                  Transform.translate(
+                    offset: const Offset(-AppSpacing.xs, 0),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      color: Colors.white,
+                      iconSize: 22,
+                      tooltip: 'Back',
+                      onPressed: onBack,
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.titleMd.copyWith(
-                        color: Colors.white,
-                        shadows: [
-                          const Shadow(color: Colors.black87, blurRadius: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleMd.copyWith(
+                            color: Colors.white,
+                            shadows: [
+                              const Shadow(
+                                color: Colors.black87,
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (subtitle case final value?) ...[
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySm.copyWith(
+                              color: Colors.white70,
+                              shadows: [
+                                const Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                   favoriteAction,
@@ -360,7 +391,6 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.isLive,
     required this.sourceLabel,
     required this.activeSubtitleLabel,
-    required this.activeAudioLabel,
     required this.activeQualityLabel,
     required this.position,
     required this.duration,
@@ -382,7 +412,6 @@ class _PlayerBottomControls extends StatelessWidget {
   final bool isLive;
   final String? sourceLabel;
   final String? activeSubtitleLabel;
-  final String? activeAudioLabel;
   final String? activeQualityLabel;
   final Duration position;
   final Duration duration;
@@ -511,30 +540,15 @@ class _PlayerBottomControls extends StatelessWidget {
                           if (onOpenAudioPicker != null)
                             GestureDetector(
                               onTap: onOpenAudioPicker,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: AppSpacing.xs,
                                   vertical: AppSpacing.xxs,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.audiotrack_rounded,
-                                      color: Colors.white,
-                                      size: 26,
-                                    ),
-                                    if (activeAudioLabel != null) ...[
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        activeAudioLabel!,
-                                        style: AppTypography.caption.copyWith(
-                                          color: AppColors.brandAccent,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                                child: Icon(
+                                  Icons.audiotrack_rounded,
+                                  color: Colors.white,
+                                  size: 26,
                                 ),
                               ),
                             ),

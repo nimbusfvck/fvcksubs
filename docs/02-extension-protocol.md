@@ -33,7 +33,7 @@ different upstream services.
 | `meta` | `meta({ ref })` | one item's detail | Synopsis, cast, seasons/episodes. |
 | `stream` | `sources({ item, enabledProviders })` | a list of source descriptors | **Cheap** discovery. |
 | | `resolve({ sourceId })` | one playable stream | **Expensive**, short-lived. |
-| `search` | `search({ query, page })` | a page of items | Free-text search. |
+| `search` | `search({ query, page, category })` | a page of items | Free-text search, optionally scoped to one category. |
 | `subtitles` | `subtitles({ item })` | a list of subtitle tracks | Lookup independent of any source. |
 
 A role the manifest does not declare is **never invoked**. The host checks the manifest
@@ -76,6 +76,7 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
     {
       "id": "example.browse",
       "roles": ["catalog", "meta", "search"],
+      "searchCategories": ["live"],
       "catalogs": [
         {
           "id": "main",
@@ -104,9 +105,25 @@ An extension is two files: `manifest.json` and `bundle.js`. The manifest is the 
 | `entry` | Names the bundle file. The loader reads this — it knows nothing extension-specific. |
 | `categories` | The union of what the catalogs declare. These become the shell's top-level chips. |
 | `providers[].name` | Optional user-facing provider name. Keep `id` stable for routing and saved settings; use `name` when the upstream identity should not be displayed. |
+| `providers[].searchCategories` | Optional. The categories a scoped search may route to this provider. Omit it when the provider also serves catalogs: the host derives the list from them. Declare it for a **search-only** provider, which has no catalog to derive from. |
 | `permissions.hosts` | **Enforced on every network call**, and shown to the user before install. Not documentation. A bare `*` entry opts out of the allowlist entirely and is surfaced to the user as unrestricted access. |
 | `description`, `author`, `iconUrl` | Optional and additive, so older manifests still parse and older builds ignore what they do not know. `author` is asserted by the manifest about itself and verified by nothing — it is a label. |
 | `contentRating` | Optional `general`, `mature`, or `unknown` audience label. It is the default for the extension's catalogs and is self-declared, not a security guarantee. |
+
+### Search scopes
+
+Search is unscoped by default and fans out to every extension declaring the `search` role.
+The user can narrow it to one category, and the host then asks **only** the extensions
+whose searchable categories include it, passing that category down as `category`.
+
+The scope chips are not configured anywhere — they are the union of what installed
+extensions declare, exactly as Home's category chips are. Serving a new vertical is
+therefore an install, not an app release. `all` is never a scope: it is Home's
+"everything" chip, and an unscoped search already means that.
+
+An extension that fans out internally routes on `category`, and **must** treat its absence
+as the unscoped search it always performed — an older host sends no such field, and a
+bundle that mistakes absence for "no provider selected" goes silent on it.
 
 ### The manifest is not read from the bundle
 

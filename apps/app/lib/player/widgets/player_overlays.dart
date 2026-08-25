@@ -10,6 +10,7 @@ class PlayerPlaybackErrorOverlay extends StatelessWidget {
     required this.onRetry,
     required this.onChangeSource,
     required this.onBack,
+    required this.onHide,
   });
 
   final String message;
@@ -17,6 +18,7 @@ class PlayerPlaybackErrorOverlay extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback? onChangeSource;
   final VoidCallback onBack;
+  final VoidCallback onHide;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
@@ -33,6 +35,17 @@ class PlayerPlaybackErrorOverlay extends StatelessWidget {
               iconSize: 22,
               tooltip: 'Back',
               onPressed: onBack,
+            ),
+          ),
+          Positioned(
+            top: AppSpacing.xxs,
+            right: AppSpacing.xs,
+            child: IconButton(
+              icon: const Icon(Icons.close_rounded),
+              color: Colors.white,
+              iconSize: 24,
+              tooltip: 'Hide error',
+              onPressed: onHide,
             ),
           ),
           Center(

@@ -14,6 +14,25 @@ class NextEpisodeV2 {
   final int episode;
 }
 
+String episodeSeriesTitle(EpisodeItemV2 item) => item.subtitle ?? item.title;
+
+String episodeContextLabel({String? groupTitle, required int episode}) =>
+    groupTitle == null ? 'Episode $episode' : '$groupTitle · Episode $episode';
+
+String currentEpisodeContextLabel(EpisodeItemV2 item, EpisodeGuide? guide) {
+  final groupTitle = guide?.groups
+      .where((group) => group.id == item.episode.groupId)
+      .map((group) => group.title)
+      .firstOrNull;
+  return episodeContextLabel(
+    groupTitle: groupTitle,
+    episode: item.episode.position,
+  );
+}
+
+String nextEpisodeContextLabel(NextEpisodeV2 next) =>
+    episodeContextLabel(groupTitle: next.groupTitle, episode: next.episode);
+
 NextEpisodeV2? nextEpisodeOfV2(
   EpisodeItemV2 current,
   EpisodeGuide guide, {
@@ -74,6 +93,7 @@ NextEpisodeV2? nextEpisodeOfV2(
         groupId: nextGroup.id,
         position: episode.position,
       ),
+      availableAt: episode.availableAt,
     ),
     seriesTitle: current.subtitle ?? current.title,
     groupTitle: nextGroup.title,

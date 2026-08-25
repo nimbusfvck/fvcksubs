@@ -65,39 +65,16 @@ Color _separated(Color home, Color away) {
   return canLighten ? lighter : darker;
 }
 
-enum BannerPattern {
-  sunburst,
-
-  chevrons,
-
-  stripes,
-
-  halftone,
-
-  arcs,
-
-  confetti,
-
-  bubbles;
-
-  static BannerPattern forKey(String? key) => key == null
-      ? BannerPattern.sunburst
-      : BannerPattern.values[_stableHash(key) % BannerPattern.values.length];
-}
-
 class GeneratedBanner extends StatelessWidget {
   const GeneratedBanner({
     super.key,
     required this.participants,
     this.status = ScheduleState.unknown,
-    this.patternKey,
   });
 
   final List<Participant> participants;
 
   final ScheduleState status;
-
-  final String? patternKey;
 
   @visibleForTesting
   static (Color, Color) fillsFor(List<Participant> participants) {
@@ -121,7 +98,6 @@ class GeneratedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (homeColor, awayColor) = fillsFor(participants);
-    final pattern = BannerPattern.forKey(patternKey);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -132,11 +108,7 @@ class GeneratedBanner extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             CustomPaint(
-              painter: _BannerArtwork(
-                home: homeColor,
-                away: awayColor,
-                pattern: pattern,
-              ),
+              painter: _BannerArtwork(home: homeColor, away: awayColor),
             ),
             Row(
               children: [
@@ -303,21 +275,21 @@ class _LiveIdentity extends StatelessWidget {
     if (imageUrls.isEmpty) return const SizedBox.shrink();
 
     final count = imageUrls.length;
-    final widthPerTile = availableWidth / (count * 1.25 + 0.6);
-    final tileSize = math.min(math.min(scale * 0.3, widthPerTile), 128.0);
-    const angles = [-0.07, 0.05, -0.035];
+    final widthPerLogo = availableWidth / (count + 0.8);
+    final logoSizeFactor = count == 2 ? 0.38 : 0.32;
+    final logoSize = math.min(
+      math.min(scale * logoSizeFactor, widthPerLogo),
+      172.0,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 0; index < imageUrls.length; index++)
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: tileSize * 0.045),
-            child: _LiveIdentityTile(
-              imageUrl: imageUrls[index],
-              fallbackIcon: Icons.shield_outlined,
-              size: tileSize,
-              angle: angles[index],
-            ),
+          _LiveIdentityTile(
+            imageUrl: imageUrls[index],
+            fallbackIcon: Icons.shield_outlined,
+            size: logoSize,
+            index: index,
           ),
       ],
     );
@@ -329,39 +301,25 @@ class _LiveIdentityTile extends StatelessWidget {
     required this.imageUrl,
     required this.fallbackIcon,
     required this.size,
-    required this.angle,
+    required this.index,
   });
 
   final String? imageUrl;
   final IconData fallbackIcon;
   final double size;
-  final double angle;
+  final int index;
 
   @override
-  Widget build(BuildContext context) => Transform.rotate(
-    angle: angle,
-    child: Container(
-      width: size,
-      height: size,
-      padding: EdgeInsets.all(size * 0.14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark.withValues(alpha: 0.38),
-        borderRadius: BorderRadius.circular(size * 0.26),
-        border: Border.all(color: AppColors.onDark.withValues(alpha: 0.16)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.surfaceDark.withValues(alpha: 0.24),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: _Crest(
-        imageUrl: imageUrl,
-        size: size * 0.72,
-        fallbackIcon: fallbackIcon,
-        showFallbackWhileLoading: true,
-      ),
+  Widget build(BuildContext context) => SizedBox(
+    key: ValueKey('live-identity-logo-$index'),
+    width: size,
+    height: size,
+    child: _Crest(
+      imageUrl: imageUrl,
+      size: size,
+      fallbackIcon: fallbackIcon,
+      fallbackIconScale: 0.58,
+      showFallbackWhileLoading: true,
     ),
   );
 }
@@ -499,12 +457,14 @@ class _Crest extends StatelessWidget {
     required this.imageUrl,
     required this.size,
     this.fallbackIcon = Icons.shield_outlined,
+    this.fallbackIconScale = 0.8,
     this.showFallbackWhileLoading = false,
   });
 
   final String? imageUrl;
   final double size;
   final IconData fallbackIcon;
+  final double fallbackIconScale;
   final bool showFallbackWhileLoading;
 
   @override
@@ -512,58 +472,61 @@ class _Crest extends StatelessWidget {
     width: size,
     height: size,
     child: imageUrl == null
-        ? _CrestFallback(size: size, icon: fallbackIcon)
+        ? _CrestFallback(
+            size: size,
+            icon: fallbackIcon,
+            iconScale: fallbackIconScale,
+          )
         : CachedNetworkImage(
             imageUrl: imageUrl!,
             fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
             fadeInDuration: Duration.zero,
             placeholder: (context, url) => showFallbackWhileLoading
-                ? _CrestFallback(size: size, icon: fallbackIcon)
+                ? _CrestFallback(
+                    size: size,
+                    icon: fallbackIcon,
+                    iconScale: fallbackIconScale,
+                  )
                 : const SizedBox.shrink(),
-            errorWidget: (context, url, error) =>
-                _CrestFallback(size: size, icon: fallbackIcon),
+            errorWidget: (context, url, error) => _CrestFallback(
+              size: size,
+              icon: fallbackIcon,
+              iconScale: fallbackIconScale,
+            ),
           ),
   );
 }
 
 class _CrestFallback extends StatelessWidget {
-  const _CrestFallback({required this.size, required this.icon});
+  const _CrestFallback({
+    required this.size,
+    required this.icon,
+    this.iconScale = 0.8,
+  });
 
   final double size;
   final IconData icon;
+  final double iconScale;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Icon(
       icon,
-      size: size * 0.8,
+      size: size * iconScale,
       color: AppColors.onDark.withValues(alpha: 0.55),
     ),
   );
 }
 
 class _BannerArtwork extends CustomPainter {
-  const _BannerArtwork({
-    required this.home,
-    required this.away,
-    required this.pattern,
-  });
+  const _BannerArtwork({required this.home, required this.away});
 
   final Color home;
   final Color away;
-  final BannerPattern pattern;
-
-  static final Paint _ink = Paint()
-    ..color = Colors.white.withValues(alpha: 0.075);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-
-    final splitX = size.width / 2;
-    final left = Path()..addRect(Rect.fromLTRB(0, 0, splitX, size.height));
-    final right = Path()
-      ..addRect(Rect.fromLTRB(splitX, 0, size.width, size.height));
     final rect = Offset.zero & size;
     canvas.drawRect(
       rect,
@@ -574,196 +537,9 @@ class _BannerArtwork extends CustomPainter {
           colors: [home, away],
         ).createShader(rect),
     );
-
-    _paintPattern(canvas, size, left, center, -1);
-    _paintPattern(canvas, size, right, center, 1);
-  }
-
-  void _paintPattern(
-    Canvas canvas,
-    Size size,
-    Path region,
-    Offset center,
-    int direction,
-  ) {
-    canvas
-      ..save()
-      ..clipPath(region);
-    switch (pattern) {
-      case BannerPattern.sunburst:
-        _sunburst(canvas, size, center);
-      case BannerPattern.chevrons:
-        _chevrons(canvas, size, center, direction);
-      case BannerPattern.stripes:
-        _stripes(canvas, size, direction);
-      case BannerPattern.halftone:
-        _halftone(canvas, size, center);
-      case BannerPattern.arcs:
-        _arcs(canvas, size, center);
-      case BannerPattern.confetti:
-        _confetti(canvas, size, direction);
-      case BannerPattern.bubbles:
-        _bubbles(canvas, size, direction);
-    }
-    canvas.restore();
-  }
-
-  void _sunburst(Canvas canvas, Size size, Offset center) {
-    const wedges = 18;
-    final radius = size.width + size.height;
-
-    for (var i = 0; i < wedges; i += 2) {
-      final from = i * 2 * math.pi / wedges;
-      final to = (i + 1) * 2 * math.pi / wedges;
-      canvas.drawPath(
-        Path()
-          ..moveTo(center.dx, center.dy)
-          ..lineTo(
-            center.dx + radius * math.cos(from),
-            center.dy + radius * math.sin(from),
-          )
-          ..lineTo(
-            center.dx + radius * math.cos(to),
-            center.dy + radius * math.sin(to),
-          )
-          ..close(),
-        _ink,
-      );
-    }
-  }
-
-  void _chevrons(Canvas canvas, Size size, Offset center, int direction) {
-    final paint = Paint()
-      ..color = _ink.color
-      ..strokeWidth = size.height * 0.055
-      ..strokeJoin = StrokeJoin.miter
-      ..style = PaintingStyle.stroke;
-    final step = size.height * 0.24;
-    final reach = size.height * 0.34;
-
-    for (var i = 1; i <= 5; i++) {
-      final tip = center.dx + direction * i * step;
-      canvas.drawPath(
-        Path()
-          ..moveTo(tip - direction * reach, center.dy - size.height * 0.6)
-          ..lineTo(tip, center.dy)
-          ..lineTo(tip - direction * reach, center.dy + size.height * 0.6),
-        paint,
-      );
-    }
-  }
-
-  void _stripes(Canvas canvas, Size size, int direction) {
-    final paint = Paint()
-      ..color = _ink.color
-      ..strokeWidth = size.height * 0.07
-      ..style = PaintingStyle.stroke;
-    final gap = size.height * 0.19;
-
-    for (var i = 1; i <= 7; i++) {
-      final offset = direction * i * gap;
-      canvas.drawLine(
-        Offset(size.width / 2 + offset, 0),
-        Offset(size.width / 2 + offset, size.height),
-        paint,
-      );
-    }
-  }
-
-  void _halftone(Canvas canvas, Size size, Offset center) {
-    final spacing = size.height * 0.15;
-    final maxDistance = size.width / 2 + size.height / 2;
-
-    for (var y = spacing / 2; y < size.height; y += spacing) {
-      for (var x = spacing / 2; x < size.width; x += spacing) {
-        final distance = (Offset(x, y) - center).distance;
-        final scale = (1 - distance / maxDistance).clamp(0.25, 1.0);
-        canvas.drawCircle(Offset(x, y), spacing * 0.22 * scale, _ink);
-      }
-    }
-  }
-
-  void _arcs(Canvas canvas, Size size, Offset center) {
-    final paint = Paint()
-      ..color = _ink.color
-      ..strokeWidth = size.height * 0.06
-      ..style = PaintingStyle.stroke;
-    final step = size.height * 0.2;
-    final limit = size.width / 2 + size.height / 2;
-
-    for (var radius = step; radius < limit; radius += step) {
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  void _confetti(Canvas canvas, Size size, int direction) {
-    final paint = Paint()
-      ..color = AppColors.onDark.withValues(alpha: 0.13)
-      ..style = PaintingStyle.fill;
-    final length = size.height * 0.16;
-    final width = size.height * 0.045;
-    const pieces = [
-      (0.13, 0.18, -0.42),
-      (0.34, 0.34, 0.28),
-      (0.17, 0.58, 0.72),
-      (0.45, 0.76, -0.2),
-      (0.72, 0.2, 0.58),
-      (0.88, 0.46, -0.62),
-      (0.67, 0.86, 0.36),
-    ];
-    for (final (xFactor, yFactor, angle) in pieces) {
-      final x = size.width * xFactor + direction * size.width * 0.08;
-      final y = size.height * yFactor;
-      canvas
-        ..save()
-        ..translate(x, y)
-        ..rotate(angle)
-        ..drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(center: Offset.zero, width: length, height: width),
-            Radius.circular(width),
-          ),
-          paint,
-        )
-        ..restore();
-    }
-  }
-
-  void _bubbles(Canvas canvas, Size size, int direction) {
-    final outline = Paint()
-      ..color = AppColors.onDark.withValues(alpha: 0.14)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.height * 0.025;
-    final dot = Paint()
-      ..color = AppColors.onDark.withValues(alpha: 0.11)
-      ..style = PaintingStyle.fill;
-    const bubbles = [
-      (0.16, 0.22, 0.11),
-      (0.4, 0.44, 0.18),
-      (0.2, 0.78, 0.08),
-      (0.7, 0.2, 0.16),
-      (0.86, 0.56, 0.1),
-      (0.6, 0.82, 0.2),
-    ];
-    for (final (xFactor, yFactor, radiusFactor) in bubbles) {
-      final center = Offset(
-        size.width * xFactor + direction * size.width * 0.06,
-        size.height * yFactor,
-      );
-      final radius = size.height * radiusFactor;
-      canvas
-        ..drawCircle(center, radius, outline)
-        ..drawCircle(
-          center + Offset(radius * 0.35, -radius * 0.35),
-          radius * 0.16,
-          dot,
-        );
-    }
   }
 
   @override
   bool shouldRepaint(covariant _BannerArtwork oldDelegate) =>
-      oldDelegate.home != home ||
-      oldDelegate.away != away ||
-      oldDelegate.pattern != pattern;
+      oldDelegate.home != home || oldDelegate.away != away;
 }

@@ -5,6 +5,17 @@ import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/sheets/player_selection_sheets.dart';
 
 void main() {
+  testWidgets('series overlay shows series title and episode context', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _overlay(title: 'Example Series', subtitle: 'Season 2 · Episode 3'),
+    );
+
+    expect(find.text('Example Series'), findsOneWidget);
+    expect(find.text('Season 2 · Episode 3'), findsOneWidget);
+  });
+
   testWidgets(
     'live controls hide VOD seeking controls and keep source switching',
     (tester) async {
@@ -209,10 +220,58 @@ void main() {
     );
 
     expect(find.text('English'), findsOneWidget);
-    expect(find.text('Audio 2'), findsOneWidget);
+    expect(find.text('Indonesia'), findsOneWidget);
     expect(find.text('id'), findsOneWidget);
 
-    await tester.tap(find.text('Audio 2'));
+    await tester.tap(find.text('Indonesia'));
     expect(find.byIcon(Icons.check), findsOneWidget);
   });
+
+  test('unnamed audio tracks receive distinct ids and picker labels', () {
+    const first = AppAudioTrack(id: 'audio', label: 'Audio');
+    const second = AppAudioTrack(id: 'audio', label: 'Audio');
+
+    expect(uniqueAudioTrackId(base: 'audio', occurrence: 0, index: 0), 'audio');
+    expect(
+      uniqueAudioTrackId(base: 'audio', occurrence: 1, index: 1),
+      'audio-1',
+    );
+    expect(audioTrackPickerLabel(first, 0), 'Audio 1');
+    expect(audioTrackPickerLabel(second, 1), 'Audio 2');
+  });
 }
+
+Widget _overlay({required String title, String? subtitle}) => MaterialApp(
+  home: Scaffold(
+    body: PlayerControlsOverlayView(
+      title: title,
+      subtitle: subtitle,
+      favoriteAction: const SizedBox.shrink(),
+      controlsVisible: true,
+      isLive: false,
+      isPlaying: true,
+      isBuffering: false,
+      sourceLabel: null,
+      activeSubtitleLabel: null,
+      activeQualityLabel: null,
+      position: Duration.zero,
+      duration: const Duration(minutes: 1),
+      timelineExtent: const Duration(minutes: 1),
+      bufferedExtent: Duration.zero,
+      atLiveEdge: false,
+      dragValueMs: null,
+      onBackgroundTap: () {},
+      onBack: () {},
+      onToggleFullScreen: null,
+      onSkip: (_) {},
+      onTogglePlayPause: () {},
+      onChangeSource: () {},
+      onPlayNext: null,
+      onOpenSubtitlePicker: () {},
+      onOpenQualityPicker: () {},
+      onTimelineChangeStart: (_) {},
+      onTimelineChanged: (_) {},
+      onTimelineChangeEnd: (_) {},
+    ),
+  ),
+);

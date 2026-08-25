@@ -128,6 +128,51 @@ void main() {
     );
   });
 
+  test('an episode carries the air date the guide gave it', () {
+    // The stream role matches long-running series on this: the guide is not
+    // reachable from inside sources(), so the date has to ride the item.
+    final item = EpisodeItemV2(
+      ref: ref,
+      title: 'Episode 5',
+      subtitle: 'A Series',
+      episode: const EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'example',
+          providerId: 'example.catalog',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 5,
+      ),
+      availableAt: DateTime.utc(2026, 8, 22, 16, 10),
+    );
+
+    final decoded = MediaItemV2.fromJson(item.toJson()) as EpisodeItemV2;
+    expect(decoded, item);
+    expect(decoded.availableAt, DateTime.utc(2026, 8, 22, 16, 10));
+    expect(item.toJson()['availableAt'], '2026-08-22T16:10:00.000Z');
+  });
+
+  test('an episode air date must be a UTC timestamp', () {
+    Object? decode(Object? availableAt) => MediaItemV2.fromJson({
+      'ref': ref.toJson(),
+      'kind': 'episode',
+      'title': 'Episode 5',
+      'episode': {
+        'parentRef': ref.toJson(),
+        'groupId': 'season:1',
+        'position': 5,
+      },
+      'availableAt': availableAt,
+    });
+
+    // A local-offset timestamp would land on the wrong day for anyone east
+    // or west of the extension that wrote it.
+    expect(() => decode('2026-08-22T16:10:00+07:00'), throwsFormatException);
+    expect(() => decode('not a date'), throwsFormatException);
+    expect((decode(null) as EpisodeItemV2).availableAt, isNull);
+  });
+
   test('artwork rejects relative URLs and empty objects', () {
     expect(() => Artwork.fromJson(const {}), throwsFormatException);
     expect(

@@ -1,4 +1,33 @@
+import 'dart:convert';
+
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class SubtitleAppearancePreferences {
+  const SubtitleAppearancePreferences({
+    this.fontSize = 24,
+    this.textColorValue = 0xffffffff,
+    this.backgroundColorValue = 0xaa000000,
+    this.outline = false,
+  });
+
+  final double fontSize;
+  final int textColorValue;
+  final int backgroundColorValue;
+  final bool outline;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SubtitleAppearancePreferences &&
+      other.fontSize == fontSize &&
+      other.textColorValue == textColorValue &&
+      other.backgroundColorValue == backgroundColorValue &&
+      other.outline == outline;
+
+  @override
+  int get hashCode =>
+      Object.hash(fontSize, textColorValue, backgroundColorValue, outline);
+}
 
 /// The subtitle language the viewer wants, as a primary language subtag
 /// (`"id"`, `"en"`), or `null` for no preference.
@@ -19,15 +48,50 @@ abstract class SubtitlePreferenceStore {
 
   /// Saves [languageCode], or clears the preference when `null`.
   Future<void> save(String? languageCode);
+
+  /// Loads the global subtitle appearance preferences.
+  Future<SubtitleAppearancePreferences> loadAppearance() async =>
+      const SubtitleAppearancePreferences();
+
+  /// Persists the global subtitle appearance preferences.
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {}
+
+  /// Loads the last explicitly selected external subtitle per media item.
+  Future<Map<String, SubtitleTrack>> loadExternalSelections() async => {};
+
+  /// Persists or clears an explicit external subtitle selection.
+  Future<void> saveExternalSelection(
+    MediaRef ref,
+    SubtitleTrack? track,
+  ) async {}
+
+  /// Loads all external subtitle tracks fetched for each media item.
+  Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async => {};
+
+  /// Persists the external subtitle tracks fetched for [ref].
+  Future<void> saveExternalTracks(
+    MediaRef ref,
+    List<SubtitleTrack> tracks,
+  ) async {}
 }
 
 /// [SubtitlePreferenceStore] backed by `shared_preferences`.
 class SharedPreferencesSubtitlePreferenceStore
     implements SubtitlePreferenceStore {
   /// Creates the store.
-  const SharedPreferencesSubtitlePreferenceStore();
+  SharedPreferencesSubtitlePreferenceStore();
 
   static const String _key = 'playback.subtitleLanguage';
+  static const String _fontSizeKey = 'playback.subtitleFontSize';
+  static const String _textColorKey = 'playback.subtitleTextColor';
+  static const String _backgroundColorKey = 'playback.subtitleBackgroundColor';
+  static const String _outlineKey = 'playback.subtitleOutline';
+  static const String _externalKey = 'playback.externalSubtitleSelections';
+  static const String _externalTracksKey = 'playback.externalSubtitleTracks';
+  /// Maximum number of media entries retained in the external-track cache.
+  static const int maxPersistedExternalTrackEntries = 10;
+
+  Map<String, List<SubtitleTrack>>? _externalTracksCache;
 
   @override
   Future<String?> load() async {
@@ -45,6 +109,169 @@ class SharedPreferencesSubtitlePreferenceStore
     }
     await prefs.setString(_key, languageCode);
   }
+
+  @override
+  Future<SubtitleAppearancePreferences> loadAppearance() async {
+    final prefs = await SharedPreferences.getInstance();
+    final fontSize = prefs.getDouble(_fontSizeKey);
+    return SubtitleAppearancePreferences(
+      fontSize: fontSize != null && fontSize >= 12 && fontSize <= 48
+          ? fontSize
+          : const SubtitleAppearancePreferences().fontSize,
+      textColorValue:
+          prefs.getInt(_textColorKey) ??
+          const SubtitleAppearancePreferences().textColorValue,
+      backgroundColorValue:
+          prefs.getInt(_backgroundColorKey) ??
+          const SubtitleAppearancePreferences().backgroundColorValue,
+      outline:
+          prefs.getBool(_outlineKey) ??
+          const SubtitleAppearancePreferences().outline,
+    );
+  }
+
+  @override
+  Future<void> saveAppearance(SubtitleAppearancePreferences appearance) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_fontSizeKey, appearance.fontSize);
+    await prefs.setInt(_textColorKey, appearance.textColorValue);
+    await prefs.setInt(_backgroundColorKey, appearance.backgroundColorValue);
+    await prefs.setBool(_outlineKey, appearance.outline);
+  }
+
+  @override
+  Future<Map<String, SubtitleTrack>> loadExternalSelections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_externalKey);
+    if (raw == null || raw.isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(raw) as Map;
+      return {
+        for (final entry in decoded.entries)
+          entry.key as String: SubtitleTrack.fromJson(
+            (entry.value as Map).cast<String, Object?>(),
+          ),
+      };
+    } on FormatException {
+      return {};
+    } on TypeError {
+      return {};
+    }
+  }
+
+  @override
+  Future<void> saveExternalSelection(MediaRef ref, SubtitleTrack? track) async {
+    final prefs = await SharedPreferences.getInstance();
+    final selections = await loadExternalSelections();
+    final key = _mediaKey(ref);
+    if (track == null) {
+      selections.remove(key);
+    } else {
+      selections[key] = track;
+    }
+    await prefs.setString(
+      _externalKey,
+      jsonEncode({
+        for (final entry in selections.entries) entry.key: entry.value.toJson(),
+      }),
+    );
+  }
+
+  @override
+  Future<Map<String, List<SubtitleTrack>>> loadExternalTracks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final records = await _externalTrackRecords(prefs);
+    return _copyExternalTrackRecords(records);
+  }
+
+  @override
+  Future<void> saveExternalTracks(
+    MediaRef ref,
+    List<SubtitleTrack> tracks,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final records = await _externalTrackRecords(prefs);
+    final key = _mediaKey(ref);
+    if (tracks.isEmpty) {
+      records.remove(key);
+    } else {
+      records.remove(key);
+      records[key] = _dedupeTracks(tracks);
+    }
+    _evictExternalTrackRecords(records);
+    await _persistExternalTrackRecords(prefs, records);
+  }
+
+  Future<Map<String, List<SubtitleTrack>>> _externalTrackRecords(
+    SharedPreferences prefs,
+  ) async {
+    final cached = _externalTracksCache;
+    if (cached != null) return cached;
+
+    final raw = prefs.getString(_externalTracksKey);
+    if (raw == null || raw.isEmpty) {
+      _externalTracksCache = {};
+      return _externalTracksCache!;
+    }
+
+    Map<String, List<SubtitleTrack>> decodedRecords;
+    try {
+      final decoded = jsonDecode(raw) as Map;
+      decodedRecords = {
+        for (final entry in decoded.entries)
+          entry.key as String: [
+            for (final value in (entry.value as List))
+              SubtitleTrack.fromJson((value as Map).cast<String, Object?>()),
+          ],
+      };
+    } on FormatException {
+      decodedRecords = {};
+    } on TypeError {
+      decodedRecords = {};
+    }
+    _externalTracksCache = decodedRecords;
+    if (_evictExternalTrackRecords(decodedRecords)) {
+      await _persistExternalTrackRecords(prefs, decodedRecords);
+    }
+    return decodedRecords;
+  }
+
+  bool _evictExternalTrackRecords(Map<String, List<SubtitleTrack>> records) {
+    final count = records.length - maxPersistedExternalTrackEntries;
+    if (count <= 0) return false;
+    final oldest = records.keys.take(count).toList();
+    for (final key in oldest) {
+      records.remove(key);
+    }
+    return true;
+  }
+
+  Future<void> _persistExternalTrackRecords(
+    SharedPreferences prefs,
+    Map<String, List<SubtitleTrack>> records,
+  ) => prefs.setString(
+    _externalTracksKey,
+    jsonEncode({
+      for (final entry in records.entries)
+        entry.key: [for (final track in entry.value) track.toJson()],
+    }),
+  );
+
+  static List<SubtitleTrack> _dedupeTracks(List<SubtitleTrack> tracks) {
+    final seen = <String>{};
+    return [
+      for (final track in tracks)
+        if (seen.add(track.url)) track,
+    ];
+  }
+
+  static Map<String, List<SubtitleTrack>> _copyExternalTrackRecords(
+    Map<String, List<SubtitleTrack>> records,
+  ) => {for (final entry in records.entries) entry.key: List.of(entry.value)};
+
+  static String _mediaKey(MediaRef ref) =>
+      '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
 }
 
 /// Persists the preferred order of stable stream-provider ids.

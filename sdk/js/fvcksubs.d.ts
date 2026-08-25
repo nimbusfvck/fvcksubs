@@ -331,10 +331,18 @@ interface FvcksubsSdk {
   /**
    * Registers a search provider. Pages from all search providers are merged,
    * and their cursors are preserved by the SDK.
+   *
+   * `args.category` is the scope the user picked, when they picked one. It is
+   * absent for an unscoped search — which is also what an older host sends, so
+   * absence must mean "search everything", never "not selected".
    */
   defineSearch(definition: {
     providerId: string;
-    search(args: { query: string; page?: string }): CatalogPage | Promise<CatalogPage>;
+    search(args: {
+      query: string;
+      page?: string;
+      category?: string;
+    }): CatalogPage | Promise<CatalogPage>;
   }): void;
   /** Registers a fallback subtitle provider. Results are merged by the SDK. */
   defineSubtitles(definition: {

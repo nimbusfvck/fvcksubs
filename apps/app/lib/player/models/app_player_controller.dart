@@ -64,21 +64,95 @@ class AppAudioTrack {
     required this.id,
     required this.label,
     this.language,
+    this.details,
     this.platformTrack,
   });
 
   final String id;
   final String label;
   final String? language;
+  final String? details;
   final Object? platformTrack;
 }
 
-class PlayerSubtitleSelection {
-  const PlayerSubtitleSelection.off() : track = null;
+String audioTrackLabel({
+  required String? label,
+  required String? language,
+  String? details,
+}) {
+  final named = label?.trim();
+  if (named != null && named.isNotEmpty && named.toLowerCase() != 'audio') {
+    return named;
+  }
 
-  const PlayerSubtitleSelection.track(this.track);
+  final normalizedLanguage = language?.trim();
+  if (normalizedLanguage != null && normalizedLanguage.isNotEmpty) {
+    final primary = normalizedLanguage
+        .split(RegExp('[-_]'))
+        .first
+        .toLowerCase();
+    return switch (primary) {
+      'id' => 'Indonesia',
+      'en' => 'English',
+      'ja' => 'Japanese',
+      'ko' => 'Korean',
+      'zh' => 'Chinese',
+      'ar' => 'Arabic',
+      'es' => 'Spanish',
+      'fr' => 'French',
+      'de' => 'German',
+      'pt' => 'Portuguese',
+      'ru' => 'Russian',
+      'und' => details?.trim().isNotEmpty == true ? details!.trim() : 'Audio',
+      _ => normalizedLanguage,
+    };
+  }
+
+  final technical = details?.trim();
+  return technical == null || technical.isEmpty ? 'Audio' : technical;
+}
+
+String audioTrackBaseId({
+  required String? id,
+  required String? label,
+  required String? language,
+  required String? details,
+}) {
+  final candidates = [id, language, details, label];
+  for (final candidate in candidates) {
+    final value = candidate?.trim();
+    if (value != null &&
+        value.isNotEmpty &&
+        value.toLowerCase() != 'audio' &&
+        value.toLowerCase() != 'unknown') {
+      return value;
+    }
+  }
+  return 'audio';
+}
+
+String uniqueAudioTrackId({
+  required String base,
+  required int occurrence,
+  required int index,
+}) => occurrence == 0 ? base : '$base-$index';
+
+String audioTrackPickerLabel(AppAudioTrack track, int index) {
+  final label = audioTrackLabel(
+    label: track.label,
+    language: track.language,
+    details: track.details,
+  );
+  return label.toLowerCase() == 'audio' ? 'Audio ${index + 1}' : label;
+}
+
+class PlayerSubtitleSelection {
+  const PlayerSubtitleSelection.off() : track = null, isExternal = false;
+
+  const PlayerSubtitleSelection.track(this.track, {this.isExternal = false});
 
   final SubtitleTrack? track;
+  final bool isExternal;
 }
 
 /// Controls whether the video keeps its source ratio or fills the viewport.

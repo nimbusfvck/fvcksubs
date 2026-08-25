@@ -17,21 +17,58 @@ List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
   return byHeight.values.toList()..sort((a, b) => b.height.compareTo(a.height));
 }
 
-class PlayerSourcePickerSheet extends StatelessWidget {
+const double _refreshControlSize = 40;
+
+class PlayerSourcePickerSheet extends StatefulWidget {
   const PlayerSourcePickerSheet({
     super.key,
     required this.resolvedSources,
     required this.current,
     this.providerNames = const {},
+    this.onRefresh,
   });
 
   final List<ResolvedSource> resolvedSources;
   final ResolvedSource current;
   final Map<String, String> providerNames;
 
+  /// Runs discovery again and returns the merged list, or null to hide the
+  /// control. Discovery covers every provider on one shared budget, so a
+  /// provider that was slow when playback started contributes nothing and
+  /// gets no second chance on its own — this is how the user asks for one.
+  final Future<List<ResolvedSource>> Function()? onRefresh;
+
+  @override
+  State<PlayerSourcePickerSheet> createState() =>
+      _PlayerSourcePickerSheetState();
+}
+
+class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
+  late List<ResolvedSource> _sources = widget.resolvedSources;
+  bool _refreshing = false;
+
+  Future<void> _refresh() async {
+    final onRefresh = widget.onRefresh;
+    // The page holds the real guard; this one keeps the control from looking
+    // tappable while its own request is still out.
+    if (onRefresh == null || _refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final merged = await onRefresh();
+      if (mounted) setState(() => _sources = merged);
+    } catch (_) {
+      // Discovery is already failure-tolerant and answers with an empty list,
+      // so reaching here means something unexpected. Keep the list that is
+      // playing and hand the control back rather than taking the sheet down.
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   Map<String, List<ResolvedSource>> _groupedSources() {
+    final providerNames = widget.providerNames;
     final groups = <String, List<ResolvedSource>>{};
-    for (final source in resolvedSources) {
+    for (final source in _sources) {
       final providerId = source.source.providerId;
       final providerName =
           providerNames[providerId] ??
@@ -64,9 +101,47 @@ class PlayerSourcePickerSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text(
-              'Video Sources',
-              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                children: [
+                  // Balances the control so the title stays optically centred.
+                  const SizedBox(width: _refreshControlSize),
+                  Expanded(
+                    child: Text(
+                      'Video Sources',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.titleMd.copyWith(
+                        color: AppColors.onDark,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: _refreshControlSize,
+                    height: _refreshControlSize,
+                    child: widget.onRefresh == null
+                        ? null
+                        : _refreshing
+                        ? const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.onDarkSoft,
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.refresh),
+                            color: AppColors.onDark,
+                            iconSize: 20,
+                            tooltip: 'Look for more sources',
+                            onPressed: _refresh,
+                          ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Flexible(
@@ -97,7 +172,7 @@ class PlayerSourcePickerSheet extends StatelessWidget {
                           ),
                         ),
                         subtitle: _subtitleSummary(item),
-                        trailing: item.source.id == current.source.id
+                        trailing: item.source.id == widget.current.source.id
                             ? const Icon(
                                 Icons.check,
                                 color: AppColors.brandAccent,
@@ -239,9 +314,7 @@ class PlayerAudioPickerSheet extends StatelessWidget {
                   for (final (index, track) in tracks.indexed)
                     ListTile(
                       title: Text(
-                        track.label == 'Audio'
-                            ? 'Audio ${index + 1}'
-                            : track.label,
+                        audioTrackPickerLabel(track, index),
                         style: AppTypography.bodyMd.copyWith(
                           color: AppColors.onDark,
                         ),

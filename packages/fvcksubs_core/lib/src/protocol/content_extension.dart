@@ -52,8 +52,18 @@ abstract class ContentExtension {
       throw UnsupportedError('${manifest.id} does not resolve streams');
 
   /// Free-text search. Fills [ProviderRole.search].
-  Future<VersionedCatalogPage> search(String query, {String? page}) =>
-      throw UnsupportedError('${manifest.id} does not provide search');
+  ///
+  /// [category] is the scope the user picked on Search — one of the
+  /// categories the extension's providers declare (`"anime"`, `"movie"`),
+  /// or null for an unscoped search. An extension that fans out internally
+  /// routes on it: the same query means different upstreams for anime and
+  /// for film. Null must keep behaving as it did before the scope existed,
+  /// since an older host sends nothing.
+  Future<VersionedCatalogPage> search(
+    String query, {
+    String? page,
+    String? category,
+  }) => throw UnsupportedError('${manifest.id} does not provide search');
 
   /// Looks up subtitles for [item] independently of any resolved source.
   /// Fills [ProviderRole.subtitles].

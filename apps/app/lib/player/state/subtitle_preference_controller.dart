@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
@@ -28,14 +28,79 @@ bool isSupportedSubtitleTrack(SubtitleTrack track) =>
     );
 
 class SubtitlePreferenceController extends ChangeNotifier {
-  SubtitlePreferenceController({required this.store, String? initial})
-    : _languageCode = initial;
+  SubtitlePreferenceController({
+    required this.store,
+    String? initial,
+    SubtitleAppearancePreferences? initialAppearance,
+    Map<String, SubtitleTrack>? initialExternalSelections,
+    Map<String, List<SubtitleTrack>>? initialExternalTracks,
+  }) : _languageCode = initial,
+       _appearance = SubtitleAppearance.fromStorage(initialAppearance),
+       _externalSelections = {...?initialExternalSelections},
+       _externalTracks = {...?initialExternalTracks};
 
   final SubtitlePreferenceStore store;
 
   String? _languageCode;
+  SubtitleAppearance _appearance;
+  final Map<String, SubtitleTrack> _externalSelections;
+  final Map<String, List<SubtitleTrack>> _externalTracks;
 
   String? get languageCode => _languageCode;
+
+  SubtitleAppearance get appearance => _appearance;
+
+  void setAppearance(SubtitleAppearance appearance) {
+    if (_appearance == appearance) return;
+    _appearance = appearance;
+    unawaited(store.saveAppearance(appearance.toStorage()));
+    notifyListeners();
+  }
+
+  void resetAppearance() => setAppearance(const SubtitleAppearance());
+
+  SubtitleTrack? rememberedExternalSubtitle(MediaRef ref) =>
+      _externalSelections[_mediaKey(ref)];
+
+  List<SubtitleTrack> rememberedExternalSubtitles(MediaRef ref) =>
+      List.unmodifiable(_externalTracks[_mediaKey(ref)] ?? const []);
+
+  void rememberExternalSubtitles(MediaRef ref, List<SubtitleTrack> tracks) {
+    if (tracks.isEmpty) return;
+    final key = _mediaKey(ref);
+    final merged = _mergeTracks([...?_externalTracks[key], ...tracks]);
+    _externalTracks[key] = merged;
+    unawaited(store.saveExternalTracks(ref, merged));
+    notifyListeners();
+  }
+
+  void restoreExternalTracks(Map<String, List<SubtitleTrack>> tracks) {
+    if (tracks.isEmpty) return;
+    for (final entry in tracks.entries) {
+      _externalTracks[entry.key] = _mergeTracks([
+        ...?_externalTracks[entry.key],
+        ...entry.value,
+      ]);
+    }
+    notifyListeners();
+  }
+
+  void rememberSubtitle(
+    MediaRef ref, {
+    required SubtitleTrack? track,
+    required bool external,
+  }) {
+    final key = _mediaKey(ref);
+    final next = external && track != null ? track : null;
+    if (next == null) {
+      if (_externalSelections.remove(key) == null) return;
+    } else {
+      if (_externalSelections[key] == next) return;
+      _externalSelections[key] = next;
+    }
+    unawaited(store.saveExternalSelection(ref, next));
+    notifyListeners();
+  }
 
   void select(String? languageCode) {
     if (_languageCode == languageCode) return;
@@ -57,4 +122,89 @@ class SubtitlePreferenceController extends ChangeNotifier {
       _languageCode == null
       ? tracks
       : tracks.where(isSupportedSubtitleTrack).toList();
+
+  static String _mediaKey(MediaRef ref) =>
+      '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+
+  static List<SubtitleTrack> _mergeTracks(List<SubtitleTrack> tracks) {
+    final seen = <String>{};
+    return [
+      for (final track in tracks)
+        if (seen.add(track.url)) track,
+    ];
+  }
+}
+
+class SubtitleAppearance {
+  const SubtitleAppearance({
+    this.fontSize = 24,
+    this.textColor = Colors.white,
+    this.backgroundColor = const Color(0xaa000000),
+    this.outline = false,
+  });
+
+  factory SubtitleAppearance.fromStorage(
+    SubtitleAppearancePreferences? value,
+  ) => value == null
+      ? const SubtitleAppearance()
+      : SubtitleAppearance(
+          fontSize: value.fontSize,
+          textColor: Color(value.textColorValue),
+          backgroundColor: Color(value.backgroundColorValue),
+          outline: value.outline,
+        );
+
+  final double fontSize;
+  final Color textColor;
+  final Color backgroundColor;
+  final bool outline;
+
+  SubtitleAppearance copyWith({
+    double? fontSize,
+    Color? textColor,
+    Color? backgroundColor,
+    bool? outline,
+  }) => SubtitleAppearance(
+    fontSize: fontSize ?? this.fontSize,
+    textColor: textColor ?? this.textColor,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    outline: outline ?? this.outline,
+  );
+
+  SubtitleAppearancePreferences toStorage() => SubtitleAppearancePreferences(
+    fontSize: fontSize,
+    textColorValue: textColor.toARGB32(),
+    backgroundColorValue: backgroundColor.toARGB32(),
+    outline: outline,
+  );
+
+  TextStyle get textStyle => TextStyle(
+    height: 1.4,
+    fontSize: fontSize,
+    letterSpacing: 0,
+    wordSpacing: 0,
+    color: textColor,
+    fontWeight: FontWeight.normal,
+    backgroundColor: backgroundColor,
+    shadows: outline
+        ? const [
+            Shadow(offset: Offset(1, 0), color: Colors.black),
+            Shadow(offset: Offset(-1, 0), color: Colors.black),
+            Shadow(offset: Offset(0, 1), color: Colors.black),
+            Shadow(offset: Offset(0, -1), color: Colors.black),
+          ]
+        : null,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SubtitleAppearance &&
+      other.fontSize == fontSize &&
+      other.textColor == textColor &&
+      other.backgroundColor == backgroundColor &&
+      other.outline == outline;
+
+  @override
+  int get hashCode =>
+      Object.hash(fontSize, textColor, backgroundColor, outline);
 }

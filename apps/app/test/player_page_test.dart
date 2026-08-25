@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -41,7 +42,7 @@ void main() {
   testWidgets('switching source recreates playback with the selected stream', (
     tester,
   ) async {
-    final player = RecordingPlayer();
+    final player = _PositionRecordingPlayer();
     final first = _resolvedSource('first', 'Source A');
     final second = _resolvedSource('second', 'Source B');
 
@@ -72,6 +73,7 @@ void main() {
 
     expect(player.played, second.stream);
     expect(player.buildCount, greaterThan(initialBuilds));
+    expect(player.controllers[1].lastSeekPosition, const Duration(minutes: 25));
     expect(find.text('Source B'), findsOneWidget);
   });
 
@@ -115,6 +117,89 @@ void main() {
       findsNothing,
     );
   });
+
+  // First play resolves nothing from cache: the player opens on the first
+  // source that lands and the slower providers arrive afterwards on
+  // `pendingSources`. Kora consistently settles about a second after Cricfy,
+  // so if that stream never reaches the picker, its sources never show up.
+  testWidgets('sources arriving after the player opens reach the picker', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    final first = _resolvedSource('cricfy-1', 'Server 3');
+    final later = _resolvedSource('kora-1', 'Bein Sport 1');
+    final controller = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'live-1',
+            ),
+            title: 'Match',
+          ),
+          resolvedSources: [first],
+          pendingSources: controller.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    controller.add(later);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Server 3'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Bein Sport 1'),
+      findsOneWidget,
+      reason: 'a source that settled after the player opened must be listed',
+    );
+    await controller.close();
+  });
+
+  // The same stream, but the event is emitted before anyone subscribes —
+  // exactly what happens while the first source is still being awaited,
+  // before the player route has been built at all.
+  testWidgets('sources emitted before the page subscribes are not lost', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    final first = _resolvedSource('cricfy-1', 'Server 3');
+    final later = _resolvedSource('kora-1', 'Bein Sport 1');
+    final controller = StreamController<ResolvedSource>();
+    controller.add(later);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'live-1',
+            ),
+            title: 'Match',
+          ),
+          resolvedSources: [first],
+          pendingSources: controller.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Server 3'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bein Sport 1'), findsOneWidget);
+    await controller.close();
+  });
 }
 
 ResolvedSource _resolvedSource(String id, String label) => ResolvedSource(
@@ -142,6 +227,8 @@ class _FailingPlayer extends RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
     Key? key,
   }) {
     final widget = super.build(
@@ -152,6 +239,8 @@ class _FailingPlayer extends RecordingPlayer {
       onPlaybackReady: onPlaybackReady,
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredExternalSubtitle: preferredExternalSubtitle,
+      subtitleAppearance: subtitleAppearance,
       key: key,
     );
     if (controllers.isEmpty) {
@@ -163,12 +252,69 @@ class _FailingPlayer extends RecordingPlayer {
   }
 }
 
+class _PositionRecordingPlayer extends RecordingPlayer {
+  final List<_FakePlayerController> controllers = [];
+  String? _lastUrl;
+
+  @override
+  Widget build(
+    BuildContext context,
+    PlayableStream stream, {
+    required bool isLive,
+    void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
+    Widget Function(
+      BuildContext context,
+      Object? controller,
+      void Function(bool visibility) onVisibilityChanged,
+    )?
+    customControlsBuilder,
+    String? preferredSubtitleLanguage,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
+    Key? key,
+  }) {
+    final widget = super.build(
+      context,
+      stream,
+      isLive: isLive,
+      onControllerCreated: onControllerCreated,
+      onPlaybackReady: onPlaybackReady,
+      customControlsBuilder: customControlsBuilder,
+      preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredExternalSubtitle: preferredExternalSubtitle,
+      subtitleAppearance: subtitleAppearance,
+      key: key,
+    );
+    if (_lastUrl == stream.url) return widget;
+    _lastUrl = stream.url;
+    final controller = _FakePlayerController(
+      initialValue: controllers.isEmpty
+          ? const AppPlayerValue(
+              initialized: true,
+              position: Duration(minutes: 25),
+              duration: Duration(hours: 1),
+            )
+          : const AppPlayerValue(
+              initialized: true,
+              duration: Duration(hours: 1),
+            ),
+    );
+    controllers.add(controller);
+    onControllerCreated?.call(controller);
+    onPlaybackReady?.call(controller);
+    return widget;
+  }
+}
+
 class _FakePlayerController implements AppPlayerController {
-  final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
-    const AppPlayerValue(),
-  );
+  _FakePlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
+    : _value = ValueNotifier(initialValue);
+
+  final ValueNotifier<AppPlayerValue> _value;
   final StreamController<AppPlayerEvent> _events =
       StreamController<AppPlayerEvent>.broadcast(sync: true);
+  Duration? lastSeekPosition;
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
@@ -207,7 +353,7 @@ class _FakePlayerController implements AppPlayerController {
   Future<void> pause() async {}
 
   @override
-  Future<void> seekTo(Duration position) async {}
+  Future<void> seekTo(Duration position) async => lastSeekPosition = position;
 
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {}

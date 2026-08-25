@@ -178,6 +178,7 @@ class ProviderDecl extends Equatable {
     required this.roles,
     this.name,
     this.catalogs = const [],
+    this.searchCategories = const [],
   });
 
   /// Builds a [ProviderDecl] from decoded JSON.
@@ -190,6 +191,7 @@ class ProviderDecl extends Equatable {
     catalogs: ((json['catalogs'] as List?) ?? const [])
         .map((c) => CatalogDecl.fromJson(c as Map<String, Object?>))
         .toList(),
+    searchCategories: stringList(json['searchCategories']),
   );
 
   /// Provider id (`"cricfy.events"`).
@@ -204,6 +206,16 @@ class ProviderDecl extends Equatable {
   /// Catalogs this provider exposes (empty unless it fills [ProviderRole.catalog]).
   final List<CatalogDecl> catalogs;
 
+  /// Categories this provider can search, for the scope chips on Search.
+  ///
+  /// Usually left empty: a provider that also serves catalogs searches what
+  /// they cover, and the host derives the list from [catalogs]. Declare it
+  /// when the two differ — most obviously for a search-only provider, which
+  /// has no catalog to derive from and would otherwise be reachable only
+  /// from the unscoped chip.
+  final List<String> searchCategories;
+
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -211,10 +223,11 @@ class ProviderDecl extends Equatable {
     if (name != null) 'name': name,
     if (catalogs.isNotEmpty)
       'catalogs': catalogs.map((c) => c.toJson()).toList(),
+    if (searchCategories.isNotEmpty) 'searchCategories': searchCategories,
   };
 
   @override
-  List<Object?> get props => [id, roles, name, catalogs];
+  List<Object?> get props => [id, roles, name, catalogs, searchCategories];
 }
 
 /// What an extension is allowed to do. Enforced by the host, not documentation.

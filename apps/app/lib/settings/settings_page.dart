@@ -38,6 +38,8 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
             const SizedBox(height: AppSpacing.md),
+            _SubtitleAppearanceEntry(controller: controller),
+            const SizedBox(height: AppSpacing.md),
             BlocBuilder<NsfwController, NsfwState>(
               bloc: nsfwController,
               builder: (context, state) => _NsfwPreference(
@@ -343,6 +345,237 @@ class _SubtitlePreference extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+class _SubtitleAppearanceEntry extends StatelessWidget {
+  const _SubtitleAppearanceEntry({required this.controller});
+
+  final SubtitlePreferenceController controller;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceDarkElevated,
+    borderRadius: AppRadius.lg,
+    clipBehavior: Clip.antiAlias,
+    child: ListTile(
+      leading: const Icon(Icons.text_fields_outlined),
+      title: const Text('Subtitle appearance'),
+      subtitle: const Text('Change text size, colors, and outline.'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SubtitleAppearancePage(controller: controller),
+        ),
+      ),
+    ),
+  );
+}
+
+class SubtitleAppearancePage extends StatelessWidget {
+  const SubtitleAppearancePage({super.key, required this.controller});
+
+  final SubtitlePreferenceController controller;
+
+  static const _textColors = <(String, Color)>[
+    ('White', Colors.white),
+    ('Yellow', Color(0xffffeb3b)),
+    ('Cyan', Color(0xff80deea)),
+    ('Green', Color(0xffb9f6ca)),
+    ('Pink', Color(0xffff80ab)),
+  ];
+
+  static const _backgroundColors = <(String, Color)>[
+    ('Transparent', Colors.transparent),
+    ('Black', Color(0xaa000000)),
+    ('Dark', Color(0xdd151515)),
+    ('Blue', Color(0xdd10243d)),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Subtitle appearance'),
+      actions: [
+        TextButton(
+          onPressed: controller.resetAppearance,
+          child: const Text('Reset'),
+        ),
+      ],
+    ),
+    body: ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final appearance = controller.appearance;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.xxl,
+          ),
+          children: [
+            _SubtitlePreview(appearance: appearance),
+            const SizedBox(height: AppSpacing.lg),
+            _SubtitleSettingCard(
+              title: 'Text size',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${appearance.fontSize.round()} px',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  ),
+                  Slider(
+                    min: 12,
+                    max: 48,
+                    divisions: 18,
+                    value: appearance.fontSize,
+                    label: '${appearance.fontSize.round()} px',
+                    onChanged: (value) => controller.setAppearance(
+                      appearance.copyWith(fontSize: value),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _SubtitleSettingCard(
+              title: 'Text color',
+              child: _SubtitleColorChoices(
+                choices: _textColors,
+                selected: appearance.textColor,
+                onSelected: (color) => controller.setAppearance(
+                  appearance.copyWith(textColor: color),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _SubtitleSettingCard(
+              title: 'Background color',
+              child: _SubtitleColorChoices(
+                choices: _backgroundColors,
+                selected: appearance.backgroundColor,
+                onSelected: (color) => controller.setAppearance(
+                  appearance.copyWith(backgroundColor: color),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Material(
+              color: AppColors.surfaceDarkElevated,
+              borderRadius: AppRadius.lg,
+              child: SwitchListTile(
+                value: appearance.outline,
+                onChanged: (value) => controller.setAppearance(
+                  appearance.copyWith(outline: value),
+                ),
+                title: const Text('Text outline'),
+                subtitle: const Text(
+                  'Add a dark outline to keep subtitles readable.',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _SubtitlePreview extends StatelessWidget {
+  const _SubtitlePreview({required this.appearance});
+
+  final SubtitleAppearance appearance;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 150),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceDarkHighest,
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppColors.surfaceDarkHighest, AppColors.surfaceDark],
+      ),
+      borderRadius: AppRadius.lg,
+    ),
+    alignment: Alignment.bottomCenter,
+    padding: const EdgeInsets.all(AppSpacing.md),
+    child: Text('Contoh subtitle', style: appearance.textStyle),
+  );
+}
+
+class _SubtitleSettingCard extends StatelessWidget {
+  const _SubtitleSettingCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceDarkElevated,
+    borderRadius: AppRadius.lg,
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          child,
+        ],
+      ),
+    ),
+  );
+}
+
+class _SubtitleColorChoices extends StatelessWidget {
+  const _SubtitleColorChoices({
+    required this.choices,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<(String, Color)> choices;
+  final Color selected;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.xs,
+    runSpacing: AppSpacing.xs,
+    children: [
+      for (final (label, color) in choices)
+        ChoiceChip(
+          label: Text(label),
+          avatar: _ColorSwatch(color: color),
+          selected: color == selected,
+          onSelected: (_) => onSelected(color),
+        ),
+    ],
+  );
+}
+
+class _ColorSwatch extends StatelessWidget {
+  const _ColorSwatch({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 16,
+    height: 16,
+    decoration: BoxDecoration(
+      color: color,
+      shape: BoxShape.circle,
+      border: Border.all(color: AppColors.outlineDark),
     ),
   );
 }

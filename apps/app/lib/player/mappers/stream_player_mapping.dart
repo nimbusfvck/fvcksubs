@@ -7,6 +7,7 @@ BetterPlayerDataSource betterPlayerDataSource(
   PlayableStream stream, {
   required bool isLive,
   String? preferredSubtitleLanguage,
+  SubtitleTrack? preferredExternalSubtitle,
   bool preview = false,
 }) => BetterPlayerDataSource(
   BetterPlayerDataSourceType.network,
@@ -17,7 +18,11 @@ BetterPlayerDataSource betterPlayerDataSource(
   drmConfiguration: _drm(stream),
   subtitles: isLive
       ? null
-      : _subtitles(stream.subtitles, preferredSubtitleLanguage),
+      : _subtitles(
+          stream.subtitles,
+          preferredLanguage: preferredSubtitleLanguage,
+          preferredExternalSubtitle: preferredExternalSubtitle,
+        ),
   // Keep signed and header-authenticated streams on the native network path.
   cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
   bufferingConfiguration: preview
@@ -37,24 +42,27 @@ BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
 };
 
 List<BetterPlayerSubtitlesSource>? _subtitles(
-  List<SubtitleTrack> tracks,
+  List<SubtitleTrack> tracks, {
   String? preferredLanguage,
-) {
-  final sorted = subtitlesForPicker(tracks);
+  SubtitleTrack? preferredExternalSubtitle,
+}) {
+  final sorted = subtitlesForPicker([?preferredExternalSubtitle, ...tracks]);
   if (sorted.isEmpty) return null;
 
-  final preferred = preferredSubtitleSource(tracks, preferredLanguage);
+  final BetterPlayerSubtitlesSource? preferred =
+      preferredExternalSubtitle == null
+      ? preferredSubtitleSource(tracks, preferredLanguage)
+      : subtitleSourceFor(preferredExternalSubtitle);
 
   return [
-    for (var i = 0; i < sorted.length; i++)
+    for (final track in sorted)
       subtitleSourceFor(
-        sorted[i],
-        selectedByDefault: preferred?.urls?.first == sorted[i].url,
+        track,
+        selectedByDefault: preferred?.urls?.first == track.url,
       ),
   ];
 }
 
-/// Returns the matching stream-provided subtitle track, if the user has one.
 BetterPlayerSubtitlesSource? preferredSubtitleSource(
   List<SubtitleTrack> tracks,
   String? preferredLanguage,
@@ -106,8 +114,10 @@ String _primary(String lang) {
       : lang.substring(0, dash).toLowerCase();
 }
 
-String _subtitleLabel(SubtitleTrack track) =>
-    subtitleLanguageLabel(track.language);
+String _subtitleLabel(SubtitleTrack track) {
+  final custom = track.label.trim();
+  return custom.isEmpty ? subtitleLanguageLabel(track.language) : custom;
+}
 
 /// Returns the compact label used for the active subtitle control.
 String subtitleIndicatorLabel(String? sourceName) {
