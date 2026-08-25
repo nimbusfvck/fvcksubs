@@ -13,6 +13,8 @@ import '../search/search_page.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 import 'catalog_grid_section.dart';
+import 'catalog_group_shelf.dart';
+import 'catalog_grouping.dart';
 import 'catalog_shelf.dart';
 import 'category_chips.dart';
 import 'continue_watching_shelf.dart';
@@ -157,6 +159,7 @@ class _HomePageState extends State<HomePage> {
       for (final binding in registry.catalogsFor(selected))
         if (binding.extensionId == pluginId) binding,
     ];
+    final groups = groupHomeCatalogs(bindings);
     return BlocBuilder<FeaturedController, FeaturedState>(
       bloc: _featuredController,
       builder: (context, featured) {
@@ -261,25 +264,35 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, i) {
+                        final group = groups[i];
                         final key = ValueKey(
-                          '$_generation/$selected/${bindings[i].extensionId}/'
-                          '${bindings[i].extension.manifest.version}/'
-                          '${bindings[i].catalog.id}',
+                          '$_generation/$selected/${group.options.map((option) => '${option.binding.extensionId}/'
+                              '${option.binding.extension.manifest.version}/'
+                              '${option.binding.catalog.id}').join('|')}',
                         );
-                        if (bindings[i].catalog.expanded) {
+                        if (group.options.length > 1) {
+                          return CatalogGroupShelf(
+                            key: key,
+                            group: group,
+                            category: selected,
+                            scrollController: _scrollController,
+                          );
+                        }
+                        final binding = group.options.single.binding;
+                        if (binding.catalog.expanded) {
                           return CatalogGridSection(
                             key: key,
-                            binding: bindings[i],
+                            binding: binding,
                             category: selected,
                             scrollController: _scrollController,
                           );
                         }
                         return CatalogShelf(
                           key: key,
-                          binding: bindings[i],
+                          binding: binding,
                           category: selected,
                         );
-                      }, childCount: bindings.length),
+                      }, childCount: groups.length),
                     ),
                   ),
               ],

@@ -24,6 +24,7 @@ class FakeExtension extends ContentExtension {
     this.filterKeys = const [],
     this.items = const [],
     this.sectionTitle,
+    this.catalogSections = const [],
     this.itemsByCategory = const {},
     this.pages = const {},
     this.subCategories = const [],
@@ -46,6 +47,7 @@ class FakeExtension extends ContentExtension {
     String version = '1.0.0',
     this.contentRating = ContentRating.unknown,
     ContentRating? catalogContentRating,
+    this.catalogs = const [],
   }) : _manifest = Manifest.parse({
          'apiVersion': 2,
          'id': id,
@@ -65,19 +67,21 @@ class FakeExtension extends ContentExtension {
              // One catalog listing every category it serves — the shape the
              // protocol expects, with the taxonomy inside the catalog rather
              // than a near-duplicate catalog per category.
-             'catalogs': [
-               {
-                 'id': 'catalog',
-                 'name': catalogName ?? name ?? id,
-                 'categories': categories,
-                 'kind': 'liveEvent',
-                 'display': display.name,
-                 if (expanded) 'expanded': expanded,
-                 if (filterKeys.isNotEmpty) 'filters': filterKeys,
-                 if (catalogContentRating != null)
-                   'contentRating': catalogContentRating.name,
-               },
-             ],
+             'catalogs': catalogs.isEmpty
+                 ? [
+                     {
+                       'id': 'catalog',
+                       'name': catalogName ?? name ?? id,
+                       'categories': categories,
+                       'kind': 'liveEvent',
+                       'display': display.name,
+                       if (expanded) 'expanded': expanded,
+                       if (filterKeys.isNotEmpty) 'filters': filterKeys,
+                       if (catalogContentRating != null)
+                         'contentRating': catalogContentRating.name,
+                     },
+                   ]
+                 : [for (final catalog in catalogs) catalog.toJson()],
            },
          ],
          'permissions': {'hosts': <String>[]},
@@ -88,6 +92,10 @@ class FakeExtension extends ContentExtension {
   final ContentRating contentRating;
   final CatalogDisplay display;
 
+  /// Optional catalog declarations for Home tests that need more than the
+  /// usual one-catalog-per-extension shape.
+  final List<FakeCatalog> catalogs;
+
   /// Whether the catalog declares `expanded: true` — shown in full on Home
   /// (`CatalogGridSection`) instead of a capped preview behind "See more".
   final bool expanded;
@@ -97,6 +105,10 @@ class FakeExtension extends ContentExtension {
   final List<MediaItemV2> items;
 
   final String? sectionTitle;
+
+  /// Explicit response sections for Home tests that exercise section-level
+  /// grouping inside one catalog.
+  final List<CatalogSectionV2> catalogSections;
 
   /// Cursor-keyed catalog pages, for exercising pagination: `pages[null]` is
   /// the first page, `pages['cursor']` is what a matching `nextPage` yields.
@@ -160,6 +172,12 @@ class FakeExtension extends ContentExtension {
     if (pages.isNotEmpty) {
       return pages[query.page] ?? const VersionedCatalogPage(sections: []);
     }
+    if (catalogs.isNotEmpty) {
+      final catalog = catalogs.firstWhere(
+        (value) => value.id == query.catalogId,
+      );
+      return _page(catalog.items);
+    }
     if (query.subCategory != null) {
       return _page(itemsBySubCategory[query.subCategory] ?? const []);
     }
@@ -177,13 +195,17 @@ class FakeExtension extends ContentExtension {
   }
 
   VersionedCatalogPage _page(List<MediaItemV2> values) => VersionedCatalogPage(
-    sections: [
-      CatalogSectionV2(
-        id: 'main',
-        title: sectionTitle,
-        items: [for (final item in values) VersionedMediaItem(item: item)],
-      ),
-    ],
+    sections: catalogSections.isNotEmpty
+        ? catalogSections
+        : [
+            CatalogSectionV2(
+              id: 'main',
+              title: sectionTitle,
+              items: [
+                for (final item in values) VersionedMediaItem(item: item),
+              ],
+            ),
+          ],
     subCategories: subCategories,
   );
 
@@ -245,6 +267,33 @@ class FakeExtension extends ContentExtension {
   @override
   Future<MediaDetailV2> meta(MediaRef ref) async =>
       metaDetail ?? (throw UnsupportedError('$id does not provide meta'));
+}
+
+class FakeCatalog {
+  const FakeCatalog({
+    required this.id,
+    required this.name,
+    required this.categories,
+    required this.items,
+    this.display = CatalogDisplay.row,
+    this.expanded = false,
+  });
+
+  final String id;
+  final String name;
+  final List<String> categories;
+  final List<MediaItemV2> items;
+  final CatalogDisplay display;
+  final bool expanded;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'categories': categories,
+    'kind': 'video',
+    'display': display.name,
+    if (expanded) 'expanded': expanded,
+  };
 }
 
 /// An extension whose sources each resolve to their own subtitle set — what

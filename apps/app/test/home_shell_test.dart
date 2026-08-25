@@ -205,6 +205,167 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('groups service catalogs and switches the visible shelf', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'streaming',
+        categories: ['movie'],
+        catalogs: [
+          FakeCatalog(
+            id: 'apple',
+            name: 'Movies on Apple TV',
+            categories: ['movie'],
+            items: [fakeItem(id: 'apple-movie', title: 'Apple movie')],
+          ),
+          FakeCatalog(
+            id: 'netflix',
+            name: 'Movies on Netflix',
+            categories: ['movie'],
+            items: [fakeItem(id: 'netflix-movie', title: 'Netflix movie')],
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const HomeShell(), registry: registry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('Apple TV'), findsOneWidget);
+    expect(find.text('Netflix'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Apple movie'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Netflix movie'),
+      ),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byType(CustomScrollView).first,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Change service').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Netflix'), findsOneWidget);
+    await tester.tap(find.text('Netflix'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Apple movie'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Netflix movie'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('groups service sections inside the all catalog', (tester) async {
+    final extension = FakeExtension(
+      id: 'all-sections',
+      categories: ['all'],
+      catalogSections: [
+        CatalogSectionV2(
+          id: 'movies-apple',
+          title: 'Movies on Apple TV',
+          items: [
+            VersionedMediaItem(
+              item: fakeItem(
+                id: 'apple-movie',
+                title: 'Apple movie',
+                poster: const ImageRef('https://image.example/apple.jpg'),
+              ),
+            ),
+          ],
+        ),
+        CatalogSectionV2(
+          id: 'movies-netflix',
+          title: 'Movies on Netflix',
+          items: [
+            VersionedMediaItem(
+              item: fakeItem(
+                id: 'netflix-movie',
+                title: 'Netflix movie',
+                poster: const ImageRef('https://image.example/netflix.jpg'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: ExtensionRegistry([extension]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('Apple TV'), findsOneWidget);
+    expect(find.text('Netflix'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Apple movie'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Netflix movie'),
+      ),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byType(CustomScrollView).first,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Change service').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Netflix'), findsOneWidget);
+    await tester.tap(find.text('Netflix'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Apple movie'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-catalog-content')),
+        matching: find.text('Netflix movie'),
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 class _TestLibraryStore implements LibraryStore {

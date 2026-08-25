@@ -12,17 +12,24 @@ import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/empty_state.dart';
 import 'catalog_shimmer.dart';
+import 'catalog_grouping.dart';
+import 'grouped_header.dart';
 
 class CatalogShelf extends StatefulWidget {
   const CatalogShelf({
     super.key,
     required this.binding,
     required this.category,
+    this.showCatalogHeader = true,
   });
 
   final CatalogBinding binding;
 
   final String category;
+
+  /// Hides the fallback catalog title when a parent renders a group header.
+  /// Explicit response section titles remain visible.
+  final bool showCatalogHeader;
 
   static const int previewLimit = 6;
 
@@ -174,7 +181,7 @@ class _CatalogShelfState extends State<CatalogShelf> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Header(title: title),
+            if (widget.showCatalogHeader) _Header(title: title),
             const EmptyState(
               title: 'Nothing here right now.',
               icon: Icons.movie_filter_outlined,
@@ -187,24 +194,47 @@ class _CatalogShelfState extends State<CatalogShelf> {
         for (final subCategory in page!.subCategories)
           subCategory.name: subCategory.id,
       };
+      final sections = [
+        for (final section in page.sections)
+          if (section.items.isNotEmpty) section,
+      ];
+      final groups = groupHomeSections(sections);
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final section in page.sections)
-            if (section.items.isNotEmpty)
+          for (final group in groups)
+            if (group.options.length > 1)
+              _SectionGroup(
+                key: ValueKey(
+                  'section-group:${group.options.map((option) => option.section.id).join('|')}',
+                ),
+                group: group,
+                display: widget.binding.catalog.display,
+                idsByName: idsByName,
+                onTap: _open,
+                onTapWithHero: _openWithHero,
+                onSeeMore: (section) => _openCatalog(
+                  subCategory: section.title == null
+                      ? null
+                      : idsByName[section.title],
+                  title: section.title,
+                ),
+              )
+            else
               _Section(
-                section: section,
+                section: group.options.single.section,
                 display: widget.binding.catalog.display,
                 fallbackTitle: widget.binding.catalog.name,
-                subCategoryId: section.title == null
+                showCatalogHeader: widget.showCatalogHeader,
+                subCategoryId: group.options.single.section.title == null
                     ? null
-                    : idsByName[section.title],
+                    : idsByName[group.options.single.section.title],
                 onTap: _open,
                 onTapWithHero: _openWithHero,
                 onSeeMore: (subCategory) => _openCatalog(
                   subCategory: subCategory,
-                  title: section.title,
+                  title: group.options.single.section.title,
                 ),
               ),
         ],
@@ -228,6 +258,8 @@ class _Section extends StatelessWidget {
     required this.section,
     required this.display,
     required this.fallbackTitle,
+    required this.showCatalogHeader,
+    this.showHeader = true,
     required this.subCategoryId,
     required this.onTap,
     required this.onTapWithHero,
@@ -238,6 +270,8 @@ class _Section extends StatelessWidget {
   final CatalogDisplay display;
 
   final String fallbackTitle;
+  final bool showCatalogHeader;
+  final bool showHeader;
 
   final String? subCategoryId;
   final ValueChanged<VersionedMediaItem> onTap;
@@ -255,10 +289,11 @@ class _Section extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Header(
-          title: section.title ?? fallbackTitle,
-          onSeeMore: hasMore ? () => onSeeMore(subCategoryId) : null,
-        ),
+        if (showHeader && (section.title != null || showCatalogHeader))
+          _Header(
+            title: section.title ?? fallbackTitle,
+            onSeeMore: hasMore ? () => onSeeMore(subCategoryId) : null,
+          ),
         switch (display) {
           CatalogDisplay.row => _Carousel(
             items: preview,
@@ -279,6 +314,70 @@ class _Section extends StatelessWidget {
             columns: 1,
           ),
         },
+      ],
+    );
+  }
+}
+
+class _SectionGroup extends StatefulWidget {
+  const _SectionGroup({
+    super.key,
+    required this.group,
+    required this.display,
+    required this.idsByName,
+    required this.onTap,
+    required this.onTapWithHero,
+    required this.onSeeMore,
+  });
+
+  final HomeSectionGroup group;
+  final CatalogDisplay display;
+  final Map<String, String> idsByName;
+  final ValueChanged<VersionedMediaItem> onTap;
+  final void Function(VersionedMediaItem, Object) onTapWithHero;
+  final ValueChanged<CatalogSectionV2> onSeeMore;
+
+  @override
+  State<_SectionGroup> createState() => _SectionGroupState();
+}
+
+class _SectionGroupState extends State<_SectionGroup> {
+  int _selectedIndex = 0;
+
+  HomeSectionOption get _selected => widget.group.options[_selectedIndex];
+
+  @override
+  Widget build(BuildContext context) {
+    final section = _selected.section;
+    final limit = CatalogShelf.previewLimitFor(widget.display);
+    final hasMore = section.items.length > limit;
+    final preview = hasMore
+        ? section.items.take(limit).toList()
+        : section.items;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GroupedHeader(
+          title: widget.group.title,
+          options: [for (final option in widget.group.options) option.label],
+          selectedIndex: _selectedIndex,
+          onSelected: (index) => setState(() => _selectedIndex = index),
+          onSeeMore: hasMore ? () => widget.onSeeMore(section) : null,
+        ),
+        _Section(
+          section: CatalogSectionV2(id: section.id, items: preview),
+          display: widget.display,
+          fallbackTitle: widget.group.title,
+          showCatalogHeader: false,
+          showHeader: false,
+          subCategoryId: section.title == null
+              ? null
+              : widget.idsByName[section.title],
+          onTap: widget.onTap,
+          onTapWithHero: widget.onTapWithHero,
+          onSeeMore: (_) => widget.onSeeMore(section),
+        ),
       ],
     );
   }

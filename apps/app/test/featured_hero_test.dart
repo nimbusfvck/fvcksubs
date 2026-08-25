@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
+import 'package:fvcksubs_app/player/widgets/stream_player.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -238,6 +239,77 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Second event'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('refreshing index zero disposes the previous trailer preview', (
+    tester,
+  ) async {
+    const movie = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie'),
+        title: 'Movie',
+        artwork: Artwork(portrait: ImageRef('https://image.example/movie.jpg')),
+      ),
+    );
+    final live = VersionedMediaItem(
+      item: EventItemV2(
+        ref: const MediaRef(
+          extensionId: 'fake',
+          providerId: 'fake.p',
+          id: 'live',
+        ),
+        title: 'Live event',
+        schedule: Schedule(
+          startsAt: DateTime.utc(2026, 8, 26),
+          state: ScheduleState.live,
+        ),
+      ),
+    );
+    final extension = FakeExtension(
+      metaDetail: MediaDetailV2(
+        item: movie.item,
+        trailers: const [
+          MediaTrailer(
+            title: 'Trailer',
+            url: 'https://video.example/trailer.mp4',
+            mimeType: 'video/mp4',
+          ),
+        ],
+      ),
+    );
+    final registry = ExtensionRegistry([extension]);
+    final player = RecordingPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [movie]),
+        ),
+        registry: registry,
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(BetterPlayerView), findsOneWidget);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [live]),
+        ),
+        registry: registry,
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(BetterPlayerView), findsNothing);
+    expect(find.byKey(const Key('featured-title-text')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

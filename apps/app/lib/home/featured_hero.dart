@@ -144,11 +144,15 @@ class _FeaturedHeroState extends State<FeaturedHero> {
             controller: _pageController,
             itemCount: widget.items.length,
             onPageChanged: (value) => setState(() => _page = value),
-            itemBuilder: (context, index) => _FeaturedSlide(
-              item: widget.items[index],
-              active: index == _page,
-              scrolling: _scrolling,
-            ),
+            itemBuilder: (context, index) {
+              final item = widget.items[index];
+              return _FeaturedSlide(
+                key: ValueKey(item.item.ref),
+                item: item,
+                active: index == _page,
+                scrolling: _scrolling,
+              );
+            },
           ),
         ),
         if (widget.items.length > 1)
@@ -232,6 +236,7 @@ class _FeaturedPageIndicator extends StatelessWidget {
 
 class _FeaturedSlide extends StatefulWidget {
   const _FeaturedSlide({
+    super.key,
     required this.item,
     required this.active,
     required this.scrolling,
@@ -284,11 +289,17 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
   @override
   Widget build(BuildContext context) => FutureBuilder<MediaDetailV2>(
     future: _detail,
-    builder: (context, snapshot) => _buildSlide(
-      !widget.active || snapshot.data == null
-          ? null
-          : _autoplayTrailer(snapshot.data!),
-    ),
+    builder: (context, snapshot) {
+      // FutureBuilder retains the previous snapshot while a new detail future
+      // is waiting. Never let that old detail keep a trailer playing for the
+      // item that now occupies this page position.
+      final detail = snapshot.connectionState == ConnectionState.done
+          ? snapshot.data
+          : null;
+      return _buildSlide(
+        !widget.active || detail == null ? null : _autoplayTrailer(detail),
+      );
+    },
   );
 
   Widget _buildSlide(MediaTrailer? preview) {

@@ -18,6 +18,7 @@ class CatalogGridSection extends StatefulWidget {
     required this.binding,
     required this.category,
     required this.scrollController,
+    this.showCatalogTitle = true,
   });
 
   final CatalogBinding binding;
@@ -25,6 +26,8 @@ class CatalogGridSection extends StatefulWidget {
   final String category;
 
   final ScrollController scrollController;
+
+  final bool showCatalogTitle;
 
   @override
   State<CatalogGridSection> createState() => _CatalogGridSectionState();
@@ -215,18 +218,19 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.xs,
+          if (widget.showCatalogTitle)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.xs,
+              ),
+              child: Text(
+                widget.binding.catalog.name,
+                style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+              ),
             ),
-            child: Text(
-              widget.binding.catalog.name,
-              style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
-            ),
-          ),
           const EmptyState(
             title: 'Nothing here right now.',
             icon: Icons.movie_filter_outlined,

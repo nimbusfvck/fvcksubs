@@ -115,7 +115,10 @@ events are removed. Items without portrait or landscape artwork are left out bec
 hero is artwork-led, except events and channels: those receive deterministic full-bleed
 artwork from their opaque identity, participant colors, and participant logos. The same
 generator is used when a supplied live artwork URL fails. Equal candidates use a stable
-daily tie-break so their order does not change during a session.
+daily tie-break so their order does not change during a session. When a refresh changes the
+item occupying a hero page, the page remains at that position but the slide is keyed by the
+item's opaque reference; any previous trailer preview is disposed instead of continuing
+against the new item.
 
 Play resolves the selected item immediately, Favorite writes to the app library, and
 Info follows the normal detail-or-play navigation rule.
@@ -141,7 +144,13 @@ series, and lets the viewer mark an item as watched to remove it from the shelf 
 its history. Unavailable extensions are omitted.
 
 Catalog sections with no items are omitted from Home. A loading or failed catalog remains visible
-so the user can distinguish a temporary problem from an empty section.
+so the user can distinguish a temporary problem from an empty section. When multiple catalogs or
+response sections use the same `content on service` name shape — for example, `Movies on Netflix`
+and `Movies on Hulu` — Home groups them under the shared content title and shows a service
+selector. A grouped response section stays at the position of its first matching section, while
+only the selected list is rendered. Separate catalogs remain independently cached and their
+full-catalog actions still open the original catalog. A lone catalog or section, or one without
+that name shape, keeps its declared title and existing shelf behavior.
 
 Home uses a pinned app bar with the featured hero in its expanded area, followed by a separate
 pinned category header. The hero collapses normally; no snap animation is used.
