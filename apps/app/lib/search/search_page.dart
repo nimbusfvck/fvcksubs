@@ -10,7 +10,12 @@ import '../home/category_chips.dart';
 import '../theme/tokens.dart';
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.initialScope});
+
+  /// Scope to open on — normally the category the user was browsing. Ignored
+  /// when nothing installed can search it, so arriving from a category with no
+  /// searchable counterpart (`live`, `sport`) still starts unscoped.
+  final String? initialScope;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -26,6 +31,12 @@ class _SearchPageState extends State<SearchPage> {
   String _query = '';
   String? _scope;
   Future<List<VersionedMediaItem>>? _results;
+
+  @override
+  void initState() {
+    super.initState();
+    _scope = widget.initialScope;
+  }
 
   @override
   void dispose() {
@@ -88,6 +99,7 @@ class _SearchPageState extends State<SearchPage> {
       _unscoped,
       ...AppScope.of(context).registry.searchCategories,
     ];
+    final selected = scopes.contains(_scope) ? _scope! : _unscoped;
     return Scaffold(
       backgroundColor: AppColors.surfaceDark,
       appBar: AppBar(
@@ -113,7 +125,7 @@ class _SearchPageState extends State<SearchPage> {
             CategoryChips(
               key: const Key('search-scope-chips'),
               categories: scopes,
-              selected: _scope ?? _unscoped,
+              selected: selected,
               onSelected: (scope) =>
                   _selectScope(scope == _unscoped ? null : scope),
             ),

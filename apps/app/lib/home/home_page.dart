@@ -220,7 +220,9 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.search),
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => const SearchPage(),
+                          // Searching from the anime chip means searching
+                          // anime: carry the browsing scope across.
+                          builder: (_) => SearchPage(initialScope: selected),
                         ),
                       ),
                     ),

@@ -34,6 +34,29 @@ void main() {
     expect(find.byType(SearchPage), findsOneWidget);
   });
 
+  testWidgets('search opened from a category starts in that scope', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        categories: ['anime'],
+        items: [fakeItem(title: 'Browse Item')],
+        searchable: true,
+        searchResults: [fakeItem(id: 's1', title: 'Search Hit')],
+      ),
+    ]);
+
+    await tester.pumpWidget(wrapApp(child: const HomePage(), registry: registry));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.search));
+    await tester.pumpAndSettle();
+
+    final chip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'Anime'),
+    );
+    expect(chip.selected, isTrue);
+  });
+
   testWidgets('typing runs a search once the keystrokes stop', (tester) async {
     await tester.pumpWidget(
       wrapApp(child: const SearchPage(), registry: searchable()),
@@ -186,6 +209,39 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('From Movies'), findsOneWidget);
+    });
+
+    testWidgets('opens on the scope the caller was browsing', (tester) async {
+      await tester.pumpWidget(
+        wrapApp(
+          child: const SearchPage(initialScope: 'movie'),
+          registry: twoCategories(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await type(tester);
+
+      expect(find.text('From Movies'), findsOneWidget);
+      expect(find.text('From Live'), findsNothing);
+      expect(movies.searchCategories, ['movie']);
+    });
+
+    testWidgets('ignores a scope nothing can search', (tester) async {
+      // Home has chips that no search provider serves — `live`, `sport`.
+      // Arriving from one of those starts unscoped rather than showing a
+      // selected chip that is not in the row.
+      await tester.pumpWidget(
+        wrapApp(
+          child: const SearchPage(initialScope: 'sport'),
+          registry: twoCategories(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await type(tester);
+
+      expect(find.text('From Movies'), findsOneWidget);
+      expect(find.text('From Live'), findsOneWidget);
+      expect(live.searchCategories, [null]);
     });
 
     testWidgets('no scope row when nothing declares a searchable category', (
