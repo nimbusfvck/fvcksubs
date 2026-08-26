@@ -18,8 +18,8 @@ import '../sheets/player_selection_sheets.dart';
 import '../sheets/subtitle_picker_sheet.dart';
 import '../widgets/player_overlays.dart';
 
-const Duration _upNextTriggerRemaining = Duration(minutes: 2);
-const Duration _upNextCountdown = Duration(seconds: 8);
+const Duration _upNextTriggerRemaining = Duration(seconds: 90);
+const Duration _upNextCountdown = Duration(seconds: 10);
 const Duration _bufferingIndicatorDelay = Duration(milliseconds: 700);
 const Duration _bufferingProgressTolerance = Duration(milliseconds: 250);
 

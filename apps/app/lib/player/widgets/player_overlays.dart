@@ -253,18 +253,15 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.countdown)
-      ..addStatusListener(_onStatusChanged)
-      ..forward();
+      ..addStatusListener(_onStatusChanged);
+    if (!widget.paused) _controller.forward();
   }
 
   @override
   void didUpdateWidget(covariant PlayerUpNextCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.paused == oldWidget.paused) return;
     if (widget.paused) {
       _controller.stop();
-    } else {
-      _controller.forward();
     }
   }
 
@@ -283,12 +280,7 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
     color: Colors.transparent,
     child: Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.sm,
-        widget.paused ? AppSpacing.xxs : AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: AppColors.surfaceDark.withValues(alpha: 0.95),
         borderRadius: AppRadius.sm,
@@ -296,22 +288,36 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
       ),
       child: Column(
         children: [
-          if (widget.paused)
-            Align(
-              alignment: Alignment.topLeft,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: widget.onCancel,
-                child: const Padding(
-                  padding: EdgeInsets.all(2),
-                  child: Icon(
+          Row(
+            children: [
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: IconButton(
+                  tooltip: 'Close next episode',
+                  padding: EdgeInsets.zero,
+                  onPressed: widget.onCancel,
+                  icon: const Icon(
                     Icons.close_rounded,
-                    size: 16,
+                    size: 18,
                     color: AppColors.onDarkSoft,
                   ),
                 ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.xxs),
+              Expanded(
+                child: Text(
+                  widget.seriesTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onDark,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -320,16 +326,6 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.seriesTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyMd.copyWith(
-                        color: AppColors.onDark,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
                     Text(
                       widget.subtitle,
                       maxLines: 1,
