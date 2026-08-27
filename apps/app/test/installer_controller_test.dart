@@ -283,7 +283,10 @@ void main() {
       await t.controller.setRepoUrl('$baseUrl/repo.json');
       await t.controller.refresh();
 
-      await t.controller.install(t.controller.listings.single.entry);
+      expect(
+        await t.controller.install(t.controller.listings.single.entry),
+        isTrue,
+      );
 
       expect(t.controller.error, isNull);
       expect(
@@ -315,7 +318,10 @@ void main() {
         final t = build();
         await t.controller.setRepoUrl('$baseUrl/repo.json');
         await t.controller.refresh();
-        await t.controller.install(t.controller.listings.single.entry);
+        expect(
+          await t.controller.install(t.controller.listings.single.entry),
+          isTrue,
+        );
 
         repoVersion = '2.0.0';
         await t.controller.refresh();
@@ -434,7 +440,10 @@ void main() {
         final t = build(consent: false);
         await t.controller.setRepoUrl('$baseUrl/repo.json');
         await t.controller.refresh();
-        await t.controller.install(t.controller.listings.single.entry);
+        expect(
+          await t.controller.install(t.controller.listings.single.entry),
+          isFalse,
+        );
 
         expect(t.registry.installed.map((m) => m.id), ['builtin']);
         expect(t.store.saved, isEmpty);

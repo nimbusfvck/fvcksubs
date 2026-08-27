@@ -192,7 +192,9 @@ separate future library model rather than a variant of watch history.
 
 Per-extension switches, per-provider sub-switches, the Add dialog with its extension index
 field, a separate selection dialog for repository entries, installed-extension release details,
-manual update checks, update status, and the permission consent sheet. Update consent shows the
+manual update checks, update status, and the permission consent sheet. The selection dialog stays
+open for multiple installs; after the first successful install, the underlying URL dialog is
+dismissed so closing the selection dialog returns directly to Addons. Update consent shows the
 latest release note and only adds an expandable network-access section when new hosts are
 requested, so the prompt stays short while relevant permission details remain available.
 

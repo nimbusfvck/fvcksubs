@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
 import '../addons/installer_controller.dart';
@@ -98,23 +98,14 @@ class _HomePageState extends State<HomePage> {
     unawaited(_featuredController.load());
   }
 
-  Future<void> _refresh(List<CatalogBinding> bindings, String category) async {
-    final scope = AppScope.of(context);
-    await Future.wait([
-      for (final binding in bindings)
-        scope.catalogCache
-            .fetchCatalog(
-              scope.registry,
-              binding,
-              category: category,
-              refresh: true,
-            )
-            .then<void>((_) {}, onError: (_, _) {}),
-    ]);
-    // The selected category was refreshed above. Loading the feature feed from
-    // cache keeps that result while avoiding a second request for the same
-    // catalog.
-    await _featuredController.load();
+  Future<void> _refresh() async {
+    // Force-refreshes every category's catalogs, not just the selected one —
+    // the Featured hero draws live/upcoming events from all of them, so a
+    // category the viewer isn't looking at (e.g. "live") would otherwise keep
+    // serving a stale session cache indefinitely and never surface a newly
+    // live event. The selected category's shelves are covered by the same
+    // pass, so `_generation` can bump straight off this cache once it lands.
+    await _featuredController.load(refresh: true);
     if (!mounted) return;
     setState(() => _generation++);
   }
@@ -174,7 +165,7 @@ class _HomePageState extends State<HomePage> {
                   .toDouble();
         return Scaffold(
           body: RefreshIndicator(
-            onRefresh: () => _refresh(bindings, selected),
+            onRefresh: _refresh,
             child: CustomScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
@@ -218,6 +209,12 @@ class _HomePageState extends State<HomePage> {
                   titleSpacing: AppSpacing.md,
                   title: const _HomeLogoTitle(),
                   actions: [
+                    if (defaultTargetPlatform == TargetPlatform.macOS)
+                      IconButton(
+                        tooltip: 'Refresh',
+                        icon: const Icon(Icons.refresh),
+                        onPressed: _refresh,
+                      ),
                     IconButton(
                       tooltip: 'Search',
                       icon: const Icon(Icons.search),

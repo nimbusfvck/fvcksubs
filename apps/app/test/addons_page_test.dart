@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
@@ -7,6 +9,29 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
+
+class _TestExtensionInstaller extends ExtensionInstaller {
+  _TestExtensionInstaller(this.repo);
+
+  final ExtensionRepo repo;
+
+  @override
+  Future<ExtensionRepo> fetchRepo(String repoUrl) async => repo;
+
+  @override
+  Future<InstalledExtension> download(ExtensionRepoEntry entry) async {
+    final manifest = FakeExtension(
+      id: entry.id,
+      version: entry.version,
+    ).manifest;
+    return InstalledExtension(
+      id: entry.id,
+      version: entry.version,
+      manifestJson: jsonEncode(manifest.toJson()),
+      bundleJs: '',
+    );
+  }
+}
 
 void main() {
   testWidgets('lists an installed extension with its name and categories', (
@@ -324,6 +349,56 @@ void main() {
       expect(find.text('Extension repo'), findsNothing);
       expect(find.text('fake'), findsOneWidget);
     });
+
+    testWidgets(
+      'successful install removes the URL dialog but keeps available open',
+      (tester) async {
+        final repo = ExtensionRepo([_repoEntry('first'), _repoEntry('second')]);
+        final registry = ExtensionRegistry([]);
+        final controller = InstallerController(
+          registry: registry,
+          installer: _TestExtensionInstaller(repo),
+          installedStore: FakeInstalledExtensionStore(),
+          repoStore: FakeRepoStore(),
+          repoUrl: 'repo://test',
+          loadExtension: (manifest, source) =>
+              FakeExtension(id: manifest.id, version: manifest.version),
+          requestConsent: (_) async => true,
+        );
+
+        await tester.pumpWidget(
+          wrapApp(
+            child: const AddonsPage(),
+            registry: registry,
+            installerController: controller,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Check'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add extension'), findsOneWidget);
+        expect(find.text('Available extensions'), findsOneWidget);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Install').first);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add extension'), findsNothing);
+        expect(find.text('Available extensions'), findsOneWidget);
+        expect(find.text('first installed successfully.'), findsOneWidget);
+        expect(find.text('second'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Install'), findsOneWidget);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Install'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Available extensions'), findsOneWidget);
+        expect(find.text('second installed successfully.'), findsOneWidget);
+      },
+    );
   });
 
   testWidgets('an extension tile keeps details out of the compact card', (
@@ -403,3 +478,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+ExtensionRepoEntry _repoEntry(String id) => ExtensionRepoEntry(
+  id: id,
+  name: id,
+  version: '1.0.0',
+  manifestUrl: 'repo://$id/manifest.json',
+  bundleUrl: 'repo://$id/bundle.js',
+  bundleSha256: '',
+);

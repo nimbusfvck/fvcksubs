@@ -218,13 +218,17 @@ class InstallerController extends Cubit<InstallerState> {
     return {...granted, ...wanted}.toList();
   }
 
-  Future<void> install(ExtensionRepoEntry entry) async {
+  /// Installs [entry] and reports whether the install completed successfully.
+  ///
+  /// A declined consent request is not an error, so it returns `false` without
+  /// changing the controller error state.
+  Future<bool> install(ExtensionRepoEntry entry) async {
     emit(state.copyWith(busy: true, clearError: true));
 
     ContentExtension? loaded;
     try {
       final consented = await _consentFor(entry);
-      if (consented == null) return;
+      if (consented == null) return false;
 
       final downloaded = await installer.download(entry);
       final manifest = Manifest.parse(
@@ -249,8 +253,10 @@ class InstallerController extends Cubit<InstallerState> {
       if (replaced is JsExtension) replaced.dispose();
 
       await refresh();
+      return true;
     } catch (e) {
       emit(state.copyWith(error: 'Install failed: $e'));
+      return false;
     } finally {
       if (loaded is JsExtension) loaded.dispose();
       emit(state.copyWith(busy: false));

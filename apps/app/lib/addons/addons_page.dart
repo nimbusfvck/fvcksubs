@@ -107,9 +107,20 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
     await widget.controller.setRepoUrl(_urlField.text);
     await widget.controller.refresh();
     if (!mounted || widget.controller.listings.isEmpty) return;
+    final inputRoute = ModalRoute.of(context);
+    final navigator = Navigator.of(context);
     await showDialog<void>(
       context: context,
-      builder: (_) => _ExtensionSelectionDialog(controller: widget.controller),
+      builder: (_) => _ExtensionSelectionDialog(
+        controller: widget.controller,
+        onInstallSucceeded: () {
+          // Keep the available-extensions dialog open, but remove the URL
+          // dialog underneath it after the first successful install.
+          if (inputRoute != null && inputRoute.isActive) {
+            navigator.removeRoute(inputRoute);
+          }
+        },
+      ),
     );
   }
 
@@ -191,10 +202,22 @@ class _AddExtensionDialogState extends State<_AddExtensionDialog> {
   }
 }
 
-class _ExtensionSelectionDialog extends StatelessWidget {
-  const _ExtensionSelectionDialog({required this.controller});
+class _ExtensionSelectionDialog extends StatefulWidget {
+  const _ExtensionSelectionDialog({
+    required this.controller,
+    required this.onInstallSucceeded,
+  });
 
   final InstallerController controller;
+  final VoidCallback onInstallSucceeded;
+
+  @override
+  State<_ExtensionSelectionDialog> createState() =>
+      _ExtensionSelectionDialogState();
+}
+
+class _ExtensionSelectionDialogState extends State<_ExtensionSelectionDialog> {
+  String? _successMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -205,9 +228,9 @@ class _ExtensionSelectionDialog extends StatelessWidget {
       content: SizedBox(
         width: dialogWidth,
         child: BlocBuilder<InstallerController, InstallerState>(
-          bloc: controller,
+          bloc: widget.controller,
           builder: (context, _) {
-            final listings = controller.installableListings;
+            final listings = widget.controller.installableListings;
             return ConstrainedBox(
               constraints: BoxConstraints(maxHeight: screenSize.height * 0.68),
               child: SingleChildScrollView(
@@ -220,20 +243,42 @@ class _ExtensionSelectionDialog extends StatelessWidget {
                         color: AppColors.onDarkSoft,
                       ),
                     ),
-                    if (controller.busy) ...[
+                    if (_successMessage != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline,
+                            color: AppColors.success,
+                            size: 18,
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              _successMessage!,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (widget.controller.busy) ...[
                       const SizedBox(height: AppSpacing.sm),
                       const LinearProgressIndicator(),
                     ],
-                    if (controller.error != null) ...[
+                    if (widget.controller.error != null) ...[
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        controller.error!,
+                        widget.controller.error!,
                         style: AppTypography.bodySm.copyWith(
                           color: AppColors.liveAccent,
                         ),
                       ),
                     ],
-                    if (!controller.busy && listings.isEmpty) ...[
+                    if (!widget.controller.busy && listings.isEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
                       Text(
                         'All extensions from this repository are installed.',
@@ -244,7 +289,19 @@ class _ExtensionSelectionDialog extends StatelessWidget {
                     ],
                     for (final listing in listings) ...[
                       const SizedBox(height: AppSpacing.sm),
-                      _ListingRow(listing: listing, controller: controller),
+                      _ListingRow(
+                        listing: listing,
+                        controller: widget.controller,
+                        onInstallSucceeded: () {
+                          if (mounted) {
+                            setState(
+                              () => _successMessage =
+                                  '${listing.entry.name} installed successfully.',
+                            );
+                          }
+                          widget.onInstallSucceeded();
+                        },
+                      ),
                     ],
                   ],
                 ),
@@ -264,10 +321,15 @@ class _ExtensionSelectionDialog extends StatelessWidget {
 }
 
 class _ListingRow extends StatelessWidget {
-  const _ListingRow({required this.listing, required this.controller});
+  const _ListingRow({
+    required this.listing,
+    required this.controller,
+    required this.onInstallSucceeded,
+  });
 
   final RepoListing listing;
   final InstallerController controller;
+  final VoidCallback onInstallSucceeded;
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +376,12 @@ class _ListingRow extends StatelessWidget {
       ],
     );
     final action = FilledButton(
-      onPressed: controller.busy ? null : () => controller.install(entry),
+      onPressed: controller.busy
+          ? null
+          : () async {
+              final installed = await controller.install(entry);
+              if (installed) onInstallSucceeded();
+            },
       child: const Text('Install'),
     );
     return Container(

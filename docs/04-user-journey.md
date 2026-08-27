@@ -91,6 +91,10 @@ sequenceDiagram
 
 Install behavior:
 
+- The selection dialog remains the install workspace when a repository offers more than one
+  extension. After the first successful install, the URL dialog underneath it is dismissed,
+  while the selection dialog stays open so the user can install another entry. Closing that
+  dialog returns directly to Addons.
 - **The prompt happens before the download.** Everything the user needs in order to decide
   is readable from the index alone, which is why the index repeats the hosts the manifest
   will declare.

@@ -221,3 +221,56 @@ keytool -genkeypair -v -keystore upload-keystore.jks \
   -alias fvcksubs-upload -keyalg RSA -keysize 2048 -validity 10000
 base64 -i upload-keystore.jks | pbcopy
 ```
+
+To keep a Personal Team app usable past its seven-day profile window, install the local
+`launchd` watcher:
+
+```bash
+tool/setup_ios_weekly.sh
+```
+
+The setup command lists connected devices and asks which one should be used. Pass
+`--device <device-udid>` to skip the menu in a non-interactive environment or to pin a
+specific device.
+
+It starts when the user session loads, polls for the trusted iPhone, and runs
+`tool/build_install_ios.sh` when the latest profile has 24 hours or less remaining. The Mac
+must be awake and the iPhone connected over USB when the install is attempted. Add `--run-now`
+to start the watcher immediately. Remove it with `tool/setup_ios_weekly.sh --remove`. The job's
+output and errors are written to
+`/tmp/fvcksubs-ios-weekly.log` and `/tmp/fvcksubs-ios-weekly.error.log`.
+
+The same workflow is also available directly through the local CLI:
+
+```bash
+tool/ios_local_cli.sh devices
+tool/ios_local_cli.sh status
+tool/ios_local_cli.sh install
+tool/ios_local_cli.sh watch
+```
+
+`status` shows the latest IPA profile expiry, countdown, device connection, and last recorded
+install. `install` builds and installs immediately. `watch` stays running in the terminal and
+performs the same automatic renewal check as the `launchd` job. Neither watcher can act while
+the Mac is powered off; once macOS starts the watcher again, it catches up when the iPhone is
+connected.
+
+### Local iOS build and install
+
+`tool/build_install_ios.sh` builds a Release IPA and installs it on one connected iPhone
+through Xcode's `devicectl`. The target device must be paired with the Mac and registered in
+the selected development or Ad Hoc provisioning profile. When no UDID is supplied, the script
+shows the same device picker. It extracts the signed `.app` from the IPA because `devicectl`
+installs an app bundle.
+
+Run it from the workspace root:
+
+```bash
+tool/build_install_ios.sh
+```
+
+Use `--export-method ad-hoc` for a paid Apple Developer account with an Ad Hoc profile. The
+default `development` method is useful for a development-signed device. `--skip-tests` is
+available for a faster local iteration, but the default runs the app test suite first. The
+script uses a Unix timestamp as the build number so a successful install is newer than the
+previous local build.
