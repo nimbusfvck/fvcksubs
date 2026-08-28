@@ -41,8 +41,7 @@ class _HomeShellState extends State<HomeShell> {
       builder: (context, _) => _body,
     );
 
-    final width = MediaQuery.sizeOf(context).width;
-    final useRail = scope.deviceClass.isTv || width >= AppBreakpoints.railWidth;
+    final useRail = scope.deviceClass.isTv || !AppBreakpoints.isPhone(context);
 
     if (useRail) {
       return Scaffold(

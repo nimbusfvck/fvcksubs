@@ -14,8 +14,11 @@ import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
+import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
+import '../widgets/centered_content.dart';
+import '../widgets/clickable.dart';
 import '../widgets/shimmer_placeholder.dart';
 import 'open_versioned_item.dart';
 
@@ -40,6 +43,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
   /// unscrollable in one list — One Piece is past 1175 — and every episode
   /// tile is built eagerly, so the chips bound the work as well as the scroll.
   static const int _episodesPerRange = 100;
+
+  /// Cap on the Play/Remind Me + favorite action row's width once the page
+  /// is wide enough for a rail — full-bleed is a thumb-friendly mobile
+  /// pattern, but the same row stretched across a centered desktop-width
+  /// column looks like an error state. Locked to [AppBreakpoints.railWidth],
+  /// not resized as the window keeps growing past it.
+  static const double _primaryActionsMaxWidth = AppBreakpoints.railWidth;
 
   Future<MediaDetailV2>? _detail;
   String? _selectedGroupId;
@@ -215,7 +225,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: _Header(detail: detail, heroTag: widget.heroTag),
+          child: CenteredContent(
+            child: _Header(detail: detail, heroTag: widget.heroTag),
+          ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
@@ -224,155 +236,192 @@ class _DetailPageV2State extends State<DetailPageV2> {
             AppSpacing.md,
             AppSpacing.md,
           ),
-          sliver: SliverList.list(
-            children: [
-              if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
-              if (detail.tags.isNotEmpty) const SizedBox(height: AppSpacing.md),
-              Row(
+          sliver: SliverToBoxAdapter(
+            child: CenteredContent(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: BlocBuilder<LibraryController, LibraryState>(
-                        bloc: libraryController,
-                        builder: (context, state) {
-                          if (item.isUpcoming) {
-                            return _RemindMeButton(
-                              active: state.isReminded(item.ref),
-                              onPressed: () =>
-                                  libraryController.toggleReminder(item),
-                            );
-                          }
-                          final target = _primaryEpisode(detail, state);
-                          final primaryTarget = _primaryTarget(detail, target);
-                          return _PrimaryPlayButton(
-                            onPressed: primaryTarget == null
-                                ? null
-                                : () => playItemV2(
-                                    context,
-                                    primaryTarget,
-                                    episodeGuide: guide,
-                                    contentRating: widget.contentRating,
-                                    returnToDetail: true,
-                                  ),
-                            label: _playLabel(
-                              detail,
-                              target,
-                              state.recordFor(item.ref)?.progress,
+                  if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
+                  if (detail.tags.isNotEmpty)
+                    const SizedBox(height: AppSpacing.md),
+                  _primaryActionRow(
+                    detail: detail,
+                    item: item,
+                    guide: guide,
+                    libraryController: libraryController,
+                  ),
+                  if (item.isUpcoming && item.releaseDate != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  if (detail.description case final description?) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      description,
+                      maxLines: _descriptionExpanded ? null : 4,
+                      overflow: _descriptionExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: AppTypography.bodyMd.copyWith(
+                        color: AppColors.onDark,
+                        height: 1.5,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(
+                        () => _descriptionExpanded = !_descriptionExpanded,
+                      ),
+                      child: Text(
+                        _descriptionExpanded ? 'Show less' : 'Show more',
+                      ),
+                    ),
+                  ],
+                  if (trailers.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    const _SectionTitle('Trailers'),
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      height: 192,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: trailers.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(width: AppSpacing.sm),
+                        itemBuilder: (context, index) {
+                          final trailer = trailers[index];
+                          return _TrailerCard(
+                            trailer: trailer,
+                            onTap: () => _openTrailer(context, trailer),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                  if (detail.facts.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    _Facts(values: detail.facts),
+                  ],
+                  if (detail.credits.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    const _SectionTitle('Credits'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _Credits(values: detail.credits),
+                  ],
+                  _episodesSection(
+                    detail: detail,
+                    guide: guide,
+                    groups: groups,
+                    libraryController: libraryController,
+                  ),
+                  if (detail.recommendations.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    const _SectionTitle('You Might Also Like'),
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      height: 248 + Clickable.ringBleed * 2,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: detail.recommendations.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(width: AppSpacing.sm),
+                        itemBuilder: (context, index) {
+                          final recommendation = detail.recommendations[index];
+                          final heroTag = Object();
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: Clickable.ringBleed,
+                            ),
+                            child: SizedBox(
+                              width: 152,
+                              child: MediaCardV2(
+                                item: recommendation,
+                                heroTag: heroTag,
+                                onTap: () => openVersionedItem(
+                                  context,
+                                  VersionedMediaItem(item: recommendation),
+                                  heroTag: heroTag,
+                                  contentRating: widget.contentRating,
+                                ),
+                              ),
                             ),
                           );
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _FavoriteAction(item: item),
+                  ],
                 ],
               ),
-              if (item.isUpcoming && item.releaseDate != null) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              if (detail.description case final description?) ...[
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  description,
-                  maxLines: _descriptionExpanded ? null : 4,
-                  overflow: _descriptionExpanded
-                      ? TextOverflow.visible
-                      : TextOverflow.ellipsis,
-                  style: AppTypography.bodyMd.copyWith(
-                    color: AppColors.onDark,
-                    height: 1.5,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => setState(
-                    () => _descriptionExpanded = !_descriptionExpanded,
-                  ),
-                  child: Text(_descriptionExpanded ? 'Show less' : 'Show more'),
-                ),
-              ],
-              if (trailers.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle('Trailers'),
-                const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  height: 192,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: trailers.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (context, index) {
-                      final trailer = trailers[index];
-                      return _TrailerCard(
-                        trailer: trailer,
-                        onTap: () => _openTrailer(context, trailer),
-                      );
-                    },
-                  ),
-                ),
-              ],
-              if (detail.facts.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                _Facts(values: detail.facts),
-              ],
-              if (detail.credits.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle('Credits'),
-                const SizedBox(height: AppSpacing.sm),
-                _Credits(values: detail.credits),
-              ],
-              _episodesSection(
-                detail: detail,
-                guide: guide,
-                groups: groups,
-                libraryController: libraryController,
-              ),
-              if (detail.recommendations.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                const _SectionTitle('You Might Also Like'),
-                const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  height: 248,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: detail.recommendations.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (context, index) {
-                      final recommendation = detail.recommendations[index];
-                      final heroTag = Object();
-                      return SizedBox(
-                        width: 152,
-                        child: MediaCardV2(
-                          item: recommendation,
-                          heroTag: heroTag,
-                          onTap: () => openVersionedItem(
-                            context,
-                            VersionedMediaItem(item: recommendation),
-                            heroTag: heroTag,
-                            contentRating: widget.contentRating,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _primaryActionRow({
+    required MediaDetailV2 detail,
+    required MediaItemV2 item,
+    required EpisodeGuide? guide,
+    required LibraryController libraryController,
+  }) {
+    final row = Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: _primaryAction(
+              detail: detail,
+              item: item,
+              guide: guide,
+              libraryController: libraryController,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        _FavoriteAction(item: item),
+      ],
+    );
+    return AppBreakpoints.isPhone(context)
+        ? row
+        : SizedBox(width: _primaryActionsMaxWidth, child: row);
+  }
+
+  Widget _primaryAction({
+    required MediaDetailV2 detail,
+    required MediaItemV2 item,
+    required EpisodeGuide? guide,
+    required LibraryController libraryController,
+  }) => BlocBuilder<LibraryController, LibraryState>(
+    bloc: libraryController,
+    builder: (context, state) {
+      if (item.isUpcoming) {
+        return _RemindMeButton(
+          active: state.isReminded(item.ref),
+          onPressed: () => libraryController.toggleReminder(item),
+        );
+      }
+      final target = _primaryEpisode(detail, state);
+      final primaryTarget = _primaryTarget(detail, target);
+      return _PrimaryPlayButton(
+        onPressed: primaryTarget == null
+            ? null
+            : () => playItemV2(
+                context,
+                primaryTarget,
+                episodeGuide: guide,
+                contentRating: widget.contentRating,
+                returnToDetail: true,
+              ),
+        label: _playLabel(detail, target, state.recordFor(item.ref)?.progress),
+      );
+    },
+  );
 
   Widget _episodesSection({
     required MediaDetailV2 detail,
@@ -384,9 +433,14 @@ class _DetailPageV2State extends State<DetailPageV2> {
     builder: (context, state) {
       final selectedGroup = _selectedGroup(detail, groups, state);
       if (selectedGroup == null) return const SizedBox.shrink();
-      final rangeCount =
-          (selectedGroup.episodes.length / _episodesPerRange).ceil();
-      final rangeIndex = _rangeIndexFor(detail, selectedGroup, state, rangeCount);
+      final rangeCount = (selectedGroup.episodes.length / _episodesPerRange)
+          .ceil();
+      final rangeIndex = _rangeIndexFor(
+        detail,
+        selectedGroup,
+        state,
+        rangeCount,
+      );
       final rangeStart = rangeIndex * _episodesPerRange;
       final rangeEnd = math.min(
         rangeStart + _episodesPerRange,
@@ -438,10 +492,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          for (final entry in selectedGroup.episodes
-              .sublist(rangeStart, rangeEnd)
-              .indexed
-              .map((entry) => (entry.$1 + rangeStart, entry.$2)))
+          for (final entry
+              in selectedGroup.episodes
+                  .sublist(rangeStart, rangeEnd)
+                  .indexed
+                  .map((entry) => (entry.$1 + rangeStart, entry.$2)))
             _EpisodeTile(
               episode: entry.$2,
               progress: _progressFraction(state.recordFor(entry.$2.ref)),
@@ -719,9 +774,11 @@ class _LoadingDetail extends StatelessWidget {
   Widget build(BuildContext context) => CustomScrollView(
     slivers: [
       SliverToBoxAdapter(
-        child: _Header(
-          detail: MediaDetailV2(item: item),
-          heroTag: heroTag,
+        child: CenteredContent(
+          child: _Header(
+            detail: MediaDetailV2(item: item),
+            heroTag: heroTag,
+          ),
         ),
       ),
       const SliverPadding(
@@ -731,7 +788,9 @@ class _LoadingDetail extends StatelessWidget {
           AppSpacing.md,
           AppSpacing.md,
         ),
-        sliver: SliverToBoxAdapter(child: _DetailLoadingBody()),
+        sliver: SliverToBoxAdapter(
+          child: CenteredContent(child: _DetailLoadingBody()),
+        ),
       ),
     ],
   );
