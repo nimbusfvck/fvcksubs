@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/widgets/media_kit_player.dart';
 import 'package:fvcksubs_app/player/widgets/player_subtitle_style.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 void main() {
   test('deferred subtitle retries after a failed first attempt', () {
@@ -40,5 +41,75 @@ void main() {
       playerSubtitleTextStyle.backgroundColor,
       playerSubtitleBackgroundColor,
     );
+  });
+
+  group('preferred subtitle track', () {
+    const indonesian = SubtitleTrack(
+      language: 'Indonesian',
+      url: 'https://subs.example/id.srt',
+    );
+    const english = SubtitleTrack(
+      language: 'en',
+      url: 'https://subs.example/en.srt',
+    );
+
+    test('matches a track the upstream named, not just a bare subtag', () {
+      // VidEasy sends the display label, MovieBox the legacy "in" tag; both
+      // are the language the viewer asked for.
+      for (final language in const ['Indonesian', 'in', 'ind', 'id-ID']) {
+        final track = SubtitleTrack(
+          language: language,
+          url: 'https://subs.example/$language.srt',
+        );
+        expect(
+          preferredSubtitleTrack(
+            tracks: [english, track],
+            isLive: false,
+            preferredLanguage: 'id',
+          ),
+          track,
+          reason: 'language "$language" should match the "id" preference',
+        );
+      }
+    });
+
+    test('an explicit external pick outranks the source own track', () {
+      const external = SubtitleTrack(
+        language: 'id',
+        url: 'https://shegu.example/id.srt',
+      );
+      expect(
+        preferredSubtitleTrack(
+          tracks: const [indonesian],
+          isLive: false,
+          preferredLanguage: 'id',
+          preferredExternal: external,
+        ),
+        external,
+      );
+    });
+
+    test('no preference, no match, and live streams select nothing', () {
+      expect(
+        preferredSubtitleTrack(tracks: const [indonesian], isLive: false),
+        isNull,
+      );
+      expect(
+        preferredSubtitleTrack(
+          tracks: const [english],
+          isLive: false,
+          preferredLanguage: 'id',
+        ),
+        isNull,
+      );
+      expect(
+        preferredSubtitleTrack(
+          tracks: const [indonesian],
+          isLive: true,
+          preferredLanguage: 'id',
+        ),
+        isNull,
+      );
+    });
   });
 }

@@ -41,6 +41,10 @@ Future<void> _playMedia(
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
 
+  // Kicked off before source discovery so it overlaps with the resolve the
+  // viewer is already waiting through, instead of adding to it.
+  final externalSubtitles = _prefetchExternalSubtitles(scope, item);
+
   // Live providers commonly sign URLs for a short window. Reusing a
   // resolved live stream after an extension update can hand AVPlayer an old
   // URL even though source discovery itself is still valid.
@@ -54,15 +58,18 @@ Future<void> _playMedia(
       )
       .toList();
   if (enabledCached != null && enabledCached.isNotEmpty) {
-    _openPlayer(
-      navigator,
-      scope,
-      item,
-      enabledCached,
-      replaceCurrent,
-      contentRating: contentRating,
-      episodeGuide: episodeGuide,
-      returnToDetail: returnToDetail,
+    unawaited(
+      _openPlayer(
+        navigator,
+        scope,
+        item,
+        enabledCached,
+        replaceCurrent,
+        contentRating: contentRating,
+        episodeGuide: episodeGuide,
+        externalSubtitles: externalSubtitles,
+        returnToDetail: returnToDetail,
+      ),
     );
     if (scope.sourceCache.isStale(item.ref)) {
       unawaited(_revalidate(scope, item));
@@ -88,16 +95,19 @@ Future<void> _playMedia(
     if (fast.isNotEmpty) {
       scope.sourceCache.store(item.ref, fast);
       final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
-      _openPlayer(
-        navigator,
-        scope,
-        item,
-        fast,
-        replaceCurrent,
-        contentRating: contentRating,
-        episodeGuide: episodeGuide,
-        pendingSources: pendingSources,
-        returnToDetail: returnToDetail,
+      unawaited(
+        _openPlayer(
+          navigator,
+          scope,
+          item,
+          fast,
+          replaceCurrent,
+          contentRating: contentRating,
+          episodeGuide: episodeGuide,
+          pendingSources: pendingSources,
+          externalSubtitles: externalSubtitles,
+          returnToDetail: returnToDetail,
+        ),
       );
       return;
     }
@@ -119,16 +129,19 @@ Future<void> _playMedia(
 
   final first = result.first!;
   scope.sourceCache.store(item.ref, [first]);
-  _openPlayer(
-    navigator,
-    scope,
-    item,
-    [first],
-    replaceCurrent,
-    contentRating: contentRating,
-    episodeGuide: episodeGuide,
-    pendingSources: result.second,
-    returnToDetail: returnToDetail,
+  unawaited(
+    _openPlayer(
+      navigator,
+      scope,
+      item,
+      [first],
+      replaceCurrent,
+      contentRating: contentRating,
+      episodeGuide: episodeGuide,
+      pendingSources: result.second,
+      externalSubtitles: externalSubtitles,
+      returnToDetail: returnToDetail,
+    ),
   );
 }
 
@@ -196,6 +209,7 @@ Future<List<ResolvedSource>?> _revalidate(
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
+const _externalSubtitleGrace = Duration(seconds: 1);
 const _sourceDiscoveryTimeout = Duration(seconds: 20);
 const _sourceResolveTimeout = Duration(seconds: 20);
 
@@ -214,7 +228,7 @@ Future<List<ResolvedSource>> _playableSourcesWithRetry(
   return _playableSources(scope, item, progress);
 }
 
-void _openPlayer(
+Future<void> _openPlayer(
   NavigatorState navigator,
   AppScope scope,
   PlaybackMedia item,
@@ -223,8 +237,18 @@ void _openPlayer(
   required ContentRating contentRating,
   EpisodeGuide? episodeGuide,
   Stream<ResolvedSource>? pendingSources,
+  Future<void>? externalSubtitles,
   bool returnToDetail = false,
-}) {
+}) async {
+  // Started alongside source resolution, so by now it has almost always
+  // landed. The grace is for when it has not: playback opens without it
+  // rather than waiting on a subtitle the viewer may not even need.
+  if (externalSubtitles != null) {
+    await Future.any([
+      externalSubtitles,
+      Future<void>.delayed(_externalSubtitleGrace),
+    ]);
+  }
   final resolved = _preferredFirst(
     sources,
     scope.sourcePriorityController,
@@ -342,6 +366,55 @@ _resolveFirstPlayable(
   ]);
   return (first: subtitleMatch ?? first, second: all);
 }
+
+/// Looks up external subtitles for [item] while its sources resolve.
+///
+/// External subtitles belong to the *title*, not to a source, so this is one
+/// lookup per item — and it runs here rather than inside a provider's
+/// `resolve()`, which is where Nimora used to do it: a stream must never wait
+/// on a subtitle addon to hand it back, and a source that is handed somebody
+/// else's subtitles also stops being distinguishable from one that carries
+/// its own, which is exactly what [_preferredFirst] ranks on.
+///
+/// Nothing is selected from the result here. A source's own tracks are timed
+/// against that source's encode and still win; this only makes sure something
+/// in the viewer's language exists for when no source carries one.
+Future<void> _prefetchExternalSubtitles(
+  AppScope scope,
+  PlaybackMedia item,
+) async {
+  final preference = scope.subtitlePreferenceController;
+  if (!needsExternalSubtitleLookup(preference, item)) return;
+
+  try {
+    final tracks = await scope.registry.externalSubtitles(item.item);
+    preference.rememberExternalSubtitles(
+      item.ref,
+      tracks.where(isSupportedSubtitleTrack).toList(),
+    );
+  } catch (error) {
+    // Playback is waiting on this future. A failed subtitle lookup has to
+    // resolve like an empty one, never as an error that reaches the open.
+    _debugSourceLog(
+      'external_subtitles_error error=${redactPlaybackLogText(error)}',
+    );
+  }
+}
+
+/// Whether [item] is worth an external-subtitle lookup before playback.
+///
+/// Nothing to look up when the viewer wants no particular language, and
+/// nothing worth looking up for a live stream — a channel's tracks are its
+/// own and there is no title to key an addon by. A lookup that already
+/// produced the language for this item is not repeated: the tracks are kept
+/// per item, so a re-play uses what the first play found.
+bool needsExternalSubtitleLookup(
+  SubtitlePreferenceController preference,
+  PlaybackMedia item,
+) =>
+    preference.languageCode != null &&
+    !item.isLive &&
+    !preference.isSatisfiedBy(preference.rememberedExternalSubtitles(item.ref));
 
 Future<List<StreamSource>> _loadSources(
   AppScope scope,

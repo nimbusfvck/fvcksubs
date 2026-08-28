@@ -542,6 +542,23 @@ class _PlayerPageState extends State<PlayerPage> {
         }),
       );
 
+  /// The external track to hand the player for the current source.
+  ///
+  /// An explicit pick for this item always wins — the viewer chose it. Failing
+  /// that, an external track only stands in when the source itself carries
+  /// nothing in the preferred language: a source's own subtitles are timed
+  /// against its own encode, so they are the better match wherever they exist.
+  /// Recomputed per source, because switching source changes the answer.
+  SubtitleTrack? _externalSubtitle(BuildContext context) {
+    final preference = AppScope.of(context).subtitlePreferenceController;
+    final explicit = preference.rememberedExternalSubtitle(widget.media.ref);
+    if (explicit != null) return explicit;
+    if (_isLive || preference.isSatisfiedBy(_current.stream.subtitles)) {
+      return null;
+    }
+    return preference.preferredExternalMatch(widget.media.ref);
+  }
+
   Widget _buildPlayer(BuildContext context) =>
       AppScope.of(context).playerBuilder(
         context,
@@ -554,9 +571,7 @@ class _PlayerPageState extends State<PlayerPage> {
         subtitleAppearance: AppScope.of(
           context,
         ).subtitlePreferenceController.appearance,
-        preferredExternalSubtitle: AppScope.of(context)
-            .subtitlePreferenceController
-            .rememberedExternalSubtitle(widget.media.ref),
+        preferredExternalSubtitle: _externalSubtitle(context),
         onControllerCreated: (value) {
           _controller = value as AppPlayerController?;
           if (_controller != null) {

@@ -200,13 +200,75 @@ void main() {
     expect(find.text('Bein Sport 1'), findsOneWidget);
     await controller.close();
   });
+
+  testWidgets('an external track stands in only where the source has none', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    const ref = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'movie-1',
+    );
+    const external = SubtitleTrack(
+      language: 'id',
+      url: 'https://shegu.example/id.srt',
+    );
+    // The upstream's own spelling, not a bare subtag — the source still
+    // counts as carrying the viewer's language.
+    final withSubs = _resolvedSource(
+      'second',
+      'Source B',
+      subtitles: const [
+        SubtitleTrack(
+          language: 'Indonesian',
+          url: 'https://stream.example/second.srt',
+        ),
+      ],
+    );
+    final withoutSubs = _resolvedSource('first', 'Source A');
+
+    final preference = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+      initial: 'id',
+    );
+    preference.rememberExternalSubtitles(ref, const [external]);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(ref: ref, title: 'Movie'),
+          resolvedSources: [withoutSubs, withSubs],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+        subtitlePreferenceController: preference,
+      ),
+    );
+    await tester.pump();
+
+    expect(player.playedPreferredExternalSubtitle, external);
+
+    await tester.tap(find.text('Source A'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Source B').last);
+    await tester.pumpAndSettle();
+
+    expect(player.played, withSubs.stream);
+    expect(player.playedPreferredExternalSubtitle, isNull);
+  });
 }
 
-ResolvedSource _resolvedSource(String id, String label) => ResolvedSource(
+ResolvedSource _resolvedSource(
+  String id,
+  String label, {
+  List<SubtitleTrack> subtitles = const [],
+}) => ResolvedSource(
   source: StreamSource(id: id, label: label),
   stream: PlayableStream(
     url: 'https://stream.example/$id.m3u8',
     format: StreamFormat.hls,
+    subtitles: subtitles,
   ),
 );
 

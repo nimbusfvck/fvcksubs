@@ -10,14 +10,34 @@ const supportedSubtitleLanguages =
       ('en', 'English', 'Prefer English subtitles when available.'),
     ];
 
+/// Aliases the supported languages are known by upstream.
+///
+/// Providers pass the upstream's own language string through untouched, and
+/// it arrives in every shape: MovieBox sends `lan` (`"in"`, the legacy ISO
+/// 639-1 tag for Indonesian) or falls back to `lanName` (`"Indonesian"`),
+/// VidEasy sends the display label (`"Indonesian - Forced"`), Shegu sends a
+/// clean `"id"`. All of them have to key to the same language.
+const _subtitleLanguageAliases = <String, String>{
+  'in': 'id',
+  'ind': 'id',
+  'indonesia': 'id',
+  'indonesian': 'id',
+  'bahasa': 'id',
+  'eng': 'en',
+  'english': 'en',
+};
+
+/// Reduces a subtitle language string to a primary subtag (`"id"`, `"en"`).
+///
+/// Splits on the qualifier separators a label can carry — `pt-BR`,
+/// `Indonesian SDH`, `English (Forced)` — so a track is keyed by its
+/// language and not by the release detail appended to it.
 String subtitleLanguageKey(String value) {
   final normalized = value.trim().toLowerCase();
-  final primary = normalized.split(RegExp('[-_]')).first;
-  return switch (primary) {
-    'indonesia' || 'indonesian' => 'id',
-    'english' => 'en',
-    _ => primary,
-  };
+  final whole = _subtitleLanguageAliases[normalized];
+  if (whole != null) return whole;
+  final primary = normalized.split(RegExp(r'[-_\s(]')).first;
+  return _subtitleLanguageAliases[primary] ?? primary;
 }
 
 bool isSupportedSubtitleTrack(SubtitleTrack track) =>
@@ -116,6 +136,18 @@ class SubtitlePreferenceController extends ChangeNotifier {
       (track) =>
           subtitleLanguageKey(track.language) == subtitleLanguageKey(wanted),
     );
+  }
+
+  /// The external track already looked up for [ref] in the preferred
+  /// language, or `null` when none was found or no preference is set.
+  SubtitleTrack? preferredExternalMatch(MediaRef ref) {
+    final wanted = _languageCode;
+    if (wanted == null) return null;
+    final key = subtitleLanguageKey(wanted);
+    for (final track in _externalTracks[_mediaKey(ref)] ?? const []) {
+      if (subtitleLanguageKey(track.language) == key) return track;
+    }
+    return null;
   }
 
   List<SubtitleTrack> tracksForPicker(List<SubtitleTrack> tracks) =>

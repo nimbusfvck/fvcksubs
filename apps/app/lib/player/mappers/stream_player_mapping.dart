@@ -146,7 +146,10 @@ String subtitleIndicatorLabel(String? sourceName) {
 
 String subtitleLanguageLabel(String languageCode) {
   final lang = languageCode.toLowerCase();
-  final entry = _kLangMap[lang] ?? _kLangMap[_primary(lang)];
+  final entry =
+      _kLangMap[lang] ??
+      _kLangMap[_primary(lang)] ??
+      _kLangMap[subtitleLanguageKey(lang)];
   if (entry == null) return languageCode.toUpperCase();
   final (flag, name) = entry;
   final region = lang.contains('-')

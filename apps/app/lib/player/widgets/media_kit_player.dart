@@ -19,6 +19,33 @@ bool shouldApplyDeferredSubtitle({
   required int currentRevision,
 }) => mounted && expectedRevision == currentRevision;
 
+/// The track to select once the stream opens, or `null` to leave whatever
+/// libmpv picked for itself.
+///
+/// An explicit external pick always wins — the viewer chose it for this item.
+/// Otherwise the source's own tracks are matched on
+/// [subtitleLanguageKey], never on the raw string: a track carries whatever
+/// the upstream called the language ("Indonesian", "in", "English (Forced)"),
+/// while the preference is stored as a bare subtag, so comparing the two
+/// directly misses the track that is actually there.
+///
+/// Live streams are left alone; their tracks are the channel's own.
+@visibleForTesting
+SubtitleTrack? preferredSubtitleTrack({
+  required List<SubtitleTrack> tracks,
+  required bool isLive,
+  String? preferredLanguage,
+  SubtitleTrack? preferredExternal,
+}) {
+  if (preferredExternal != null) return preferredExternal;
+  if (preferredLanguage == null || isLive) return null;
+  final wanted = subtitleLanguageKey(preferredLanguage);
+  for (final track in tracks) {
+    if (subtitleLanguageKey(track.language) == wanted) return track;
+  }
+  return null;
+}
+
 /// libmpv-backed player, used on macOS and iOS.
 ///
 /// iOS is here rather than on BetterPlayer because AVPlayer trusts a
@@ -150,17 +177,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     }
   }
 
-  SubtitleTrack? _preferredSubtitle() {
-    final preferredExternal = widget.preferredExternalSubtitle;
-    if (preferredExternal != null) return preferredExternal;
-
-    final preferred = widget.preferredSubtitleLanguage;
-    if (preferred == null || widget.isLive) return null;
-    return widget.stream.subtitles.cast<SubtitleTrack?>().firstWhere(
-      (item) => item?.language.toLowerCase() == preferred.toLowerCase(),
-      orElse: () => null,
-    );
-  }
+  SubtitleTrack? _preferredSubtitle() => preferredSubtitleTrack(
+    tracks: widget.stream.subtitles,
+    isLive: widget.isLive,
+    preferredLanguage: widget.preferredSubtitleLanguage,
+    preferredExternal: widget.preferredExternalSubtitle,
+  );
 
   Future<void> _applyPreferredSubtitle(
     SubtitleTrack track, {

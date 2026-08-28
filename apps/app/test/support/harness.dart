@@ -423,6 +423,11 @@ class RecordingPlayer {
   /// preference.
   String? playedPreferredSubtitleLanguage;
 
+  /// The `preferredExternalSubtitle` the most recent build was called with —
+  /// lets a test assert an external track only stands in for a source that
+  /// carries nothing in the preferred language.
+  SubtitleTrack? playedPreferredExternalSubtitle;
+
   // [key] is accepted (real callers, `PlayerPage` in particular, rely on it
   // to force better_player's controller to be recreated on a source switch)
   // but not used for the returned widget's own identity — this fake has no
@@ -448,6 +453,7 @@ class RecordingPlayer {
     played = stream;
     playedIsLive = isLive;
     playedPreferredSubtitleLanguage = preferredSubtitleLanguage;
+    playedPreferredExternalSubtitle = preferredExternalSubtitle;
     buildCount++;
     if (customControlsBuilder != null) {
       return Stack(
