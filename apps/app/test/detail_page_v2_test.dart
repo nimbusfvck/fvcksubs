@@ -35,6 +35,41 @@ void main() {
     },
   );
 
+  testWidgets(
+    'an unreleased movie shows Remind Me instead of Play, with its release date',
+    (tester) async {
+      final item = VideoItemV2(
+        ref: const MediaRef(
+          extensionId: 'fake',
+          providerId: 'fake.p',
+          id: 'unreleased-movie',
+        ),
+        title: 'Unreleased Movie',
+        releaseDate: DateTime.utc(2099, 1, 15),
+      );
+      final library = LibraryController(store: _MemoryLibraryStore());
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: DetailPageV2(item: item),
+          registry: ExtensionRegistry([FakeExtension()]),
+          libraryController: library,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(FilledButton, 'Play'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Remind Me'), findsOneWidget);
+      expect(find.textContaining('Releases'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Remind Me'));
+      await tester.pumpAndSettle();
+
+      expect(library.isReminded(item.ref), isTrue);
+      expect(find.widgetWithText(FilledButton, 'Reminder Set'), findsOneWidget);
+    },
+  );
+
   testWidgets('selects the season containing the latest watched episode', (
     tester,
   ) async {

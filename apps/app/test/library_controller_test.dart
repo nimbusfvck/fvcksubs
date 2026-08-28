@@ -25,6 +25,21 @@ void main() {
     expect(controller.state.records, isEmpty);
   });
 
+  test('toggleReminder emits and persists the updated records', () async {
+    final store = _MemoryLibraryStoreV2();
+    final controller = LibraryController(store: store);
+
+    controller.toggleReminder(item());
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.isReminded(item().ref), isTrue);
+    expect(store.records.values.single.reminder, isTrue);
+
+    controller.toggleReminder(item());
+    expect(controller.isReminded(item().ref), isFalse);
+    expect(controller.state.records, isEmpty);
+  });
+
   test('watching preserves progress when no new position is provided', () {
     final controller = LibraryController(
       store: _MemoryLibraryStoreV2(),

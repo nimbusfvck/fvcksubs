@@ -12,6 +12,7 @@ import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
+import '../widgets/centered_content.dart';
 import 'catalog_grid_section.dart';
 import 'catalog_group_shelf.dart';
 import 'catalog_grouping.dart';
@@ -189,13 +190,15 @@ class _HomePageState extends State<HomePage> {
                                 ((constraints.maxHeight - minHeight) / range)
                                     .clamp(0.0, 1.0)
                                     .toDouble();
-                            return IgnorePointer(
-                              ignoring: progress < 0.5,
-                              child: Opacity(
-                                opacity: progress,
-                                child: featured.items.isEmpty
-                                    ? const FeaturedHeroPlaceholder()
-                                    : FeaturedHero(items: featured.items),
+                            return CenteredContent(
+                              child: IgnorePointer(
+                                ignoring: progress < 0.5,
+                                child: Opacity(
+                                  opacity: progress,
+                                  child: featured.items.isEmpty
+                                      ? const FeaturedHeroPlaceholder()
+                                      : FeaturedHero(items: featured.items),
+                                ),
                               ),
                             );
                           },
@@ -245,9 +248,11 @@ class _HomePageState extends State<HomePage> {
                 ),
                 if (selected.toLowerCase() == 'all')
                   SliverToBoxAdapter(
-                    child: ContinueWatchingShelf(
-                      controller: scope.libraryController,
-                      registry: registry,
+                    child: CenteredContent(
+                      child: ContinueWatchingShelf(
+                        controller: scope.libraryController,
+                        registry: registry,
+                      ),
                     ),
                   ),
                 if (bindings.isEmpty)
@@ -268,26 +273,32 @@ class _HomePageState extends State<HomePage> {
                               '${option.binding.catalog.id}').join('|')}',
                         );
                         if (group.options.length > 1) {
-                          return CatalogGroupShelf(
-                            key: key,
-                            group: group,
-                            category: selected,
-                            scrollController: _scrollController,
+                          return CenteredContent(
+                            child: CatalogGroupShelf(
+                              key: key,
+                              group: group,
+                              category: selected,
+                              scrollController: _scrollController,
+                            ),
                           );
                         }
                         final binding = group.options.single.binding;
                         if (binding.catalog.expanded) {
-                          return CatalogGridSection(
+                          return CenteredContent(
+                            child: CatalogGridSection(
+                              key: key,
+                              binding: binding,
+                              category: selected,
+                              scrollController: _scrollController,
+                            ),
+                          );
+                        }
+                        return CenteredContent(
+                          child: CatalogShelf(
                             key: key,
                             binding: binding,
                             category: selected,
-                            scrollController: _scrollController,
-                          );
-                        }
-                        return CatalogShelf(
-                          key: key,
-                          binding: binding,
-                          category: selected,
+                          ),
                         );
                       }, childCount: groups.length),
                     ),
@@ -346,10 +357,12 @@ class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
     elevation: overlapsContent ? 2 : 0,
     child: SizedBox(
       height: 48,
-      child: CategoryChips(
-        categories: categories,
-        selected: selected,
-        onSelected: onSelected,
+      child: CenteredContent(
+        child: CategoryChips(
+          categories: categories,
+          selected: selected,
+          onSelected: onSelected,
+        ),
       ),
     ),
   );

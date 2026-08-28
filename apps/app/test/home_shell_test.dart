@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
+import 'package:fvcksubs_app/shell/app_nav_rail.dart';
 import 'package:fvcksubs_app/shell/home_shell.dart';
 import 'package:fvcksubs_app/widgets/app_page_bar.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -143,8 +144,50 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(AppNavRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('a wide handheld window gets a rail instead of a bottom bar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: ExtensionRegistry([FakeExtension()]),
+        deviceClass: DeviceClass.handheld,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(AppNavRail), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('a narrow handheld window keeps the bottom bar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: ExtensionRegistry([FakeExtension()]),
+        deviceClass: DeviceClass.handheld,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(AppNavRail), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
   });
 
   testWidgets('Continue Watching hides mature records when NSFW is off', (

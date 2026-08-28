@@ -10,6 +10,7 @@ import '../detail/open_versioned_item.dart';
 import '../catalog/artwork_placeholder.dart';
 import '../library/library_controller.dart';
 import '../theme/tokens.dart';
+import '../widgets/clickable.dart';
 
 class ContinueWatchingShelf extends StatelessWidget {
   const ContinueWatchingShelf({
@@ -56,18 +57,23 @@ class ContinueWatchingShelf extends StatelessWidget {
             ),
           ),
           SizedBox(
-            height: 174,
+            height: 174 + Clickable.ringBleed * 2,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               itemCount: records.length,
               separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
-              itemBuilder: (context, index) => SizedBox(
-                width: 280,
-                child: _ContinueCard(
-                  record: records[index],
-                  onMarkAsWatched: () =>
-                      controller.markAsWatched(records[index].item),
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: Clickable.ringBleed,
+                ),
+                child: SizedBox(
+                  width: 280,
+                  child: _ContinueCard(
+                    record: records[index],
+                    onMarkAsWatched: () =>
+                        controller.markAsWatched(records[index].item),
+                  ),
                 ),
               ),
             ),
@@ -124,92 +130,89 @@ class _ContinueCard extends StatelessWidget {
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
     final progress = _progress;
     final contextLabel = _context;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _open(context),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (image != null)
-              CachedNetworkImage(
-                imageUrl: image.url,
-                fit: BoxFit.cover,
-                placeholder: (_, _) =>
-                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
-                errorWidget: (_, _, _) =>
-                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
-              )
-            else
-              const ArtworkPlaceholder(icon: Icons.movie_outlined),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black87],
-                ),
+    return Clickable(
+      onTap: () => _open(context),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (image != null)
+            CachedNetworkImage(
+              imageUrl: image.url,
+              fit: BoxFit.cover,
+              placeholder: (_, _) =>
+                  const ArtworkPlaceholder(icon: Icons.movie_outlined),
+              errorWidget: (_, _, _) =>
+                  const ArtworkPlaceholder(icon: Icons.movie_outlined),
+            )
+          else
+            const ArtworkPlaceholder(icon: Icons.movie_outlined),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black87],
               ),
             ),
-            Positioned(
-              top: AppSpacing.xs,
-              right: AppSpacing.xs,
-              child: Material(
-                color: Colors.black54,
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: 'Mark as watched',
-                  onPressed: onMarkAsWatched,
-                  icon: const Icon(Icons.check_rounded),
-                  color: Colors.white,
-                  iconSize: 20,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 44,
-                    height: 44,
-                  ),
-                  padding: EdgeInsets.zero,
+          ),
+          Positioned(
+            top: AppSpacing.xs,
+            right: AppSpacing.xs,
+            child: Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Mark as watched',
+                onPressed: onMarkAsWatched,
+                icon: const Icon(Icons.check_rounded),
+                color: Colors.white,
+                iconSize: 20,
+                constraints: const BoxConstraints.tightFor(
+                  width: 44,
+                  height: 44,
                 ),
+                padding: EdgeInsets.zero,
               ),
             ),
-            Positioned(
-              left: AppSpacing.sm,
-              right: AppSpacing.sm,
-              bottom: AppSpacing.sm,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          ),
+          Positioned(
+            left: AppSpacing.sm,
+            right: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleSm.copyWith(color: Colors.white),
+                ),
+                if (contextLabel != null)
                   Text(
-                    _title,
+                    contextLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.titleSm.copyWith(color: Colors.white),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
                   ),
-                  if (contextLabel != null)
-                    Text(
-                      contextLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.onDarkSoft,
-                      ),
+                if (progress != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  ClipRRect(
+                    borderRadius: AppRadius.pill,
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0, 1),
+                      minHeight: 4,
+                      color: AppColors.brandAccent,
+                      backgroundColor: Colors.white24,
                     ),
-                  if (progress != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    ClipRRect(
-                      borderRadius: AppRadius.pill,
-                      child: LinearProgressIndicator(
-                        value: progress.clamp(0, 1),
-                        minHeight: 4,
-                        color: AppColors.brandAccent,
-                        backgroundColor: Colors.white24,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

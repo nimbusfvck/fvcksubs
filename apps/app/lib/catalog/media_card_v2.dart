@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
+import '../utils/date_formatters.dart';
 import '../utils/media_item_metadata.dart';
+import '../widgets/clickable.dart';
 import 'artwork_placeholder.dart';
 import 'generated_banner.dart';
 import 'media_hero.dart';
@@ -27,10 +29,8 @@ class MediaCardV2 extends StatelessWidget {
   final Object? heroTag;
 
   @override
-  Widget build(BuildContext context) => Card(
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(onTap: onTap, child: _content()),
-  );
+  Widget build(BuildContext context) =>
+      Clickable(onTap: onTap, child: _content());
 
   Widget _content() {
     final value = item;
@@ -78,18 +78,25 @@ class _Poster extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        child: Hero(
-          tag: heroTag,
-          child: CachedNetworkImage(
-            imageUrl: image.url,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            fadeInDuration: Duration.zero,
-            placeholder: (_, _) =>
-                ArtworkPlaceholder(icon: _placeholderIcon(item)),
-            errorWidget: (_, _, _) =>
-                ArtworkPlaceholder(icon: _placeholderIcon(item)),
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Hero(
+              tag: heroTag,
+              child: CachedNetworkImage(
+                imageUrl: image.url,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                fadeInDuration: Duration.zero,
+                placeholder: (_, _) =>
+                    ArtworkPlaceholder(icon: _placeholderIcon(item)),
+                errorWidget: (_, _, _) =>
+                    ArtworkPlaceholder(icon: _placeholderIcon(item)),
+              ),
+            ),
+            if (item.releaseDate case final releaseDate? when item.isUpcoming)
+              _ReleaseDateBadge(releaseDate: releaseDate),
+          ],
         ),
       ),
       _CardFooter(item: item, showSubtitle: showSubtitle),
@@ -204,11 +211,46 @@ class _Summary extends StatelessWidget {
         : Icons.movie_outlined;
     return Column(
       children: [
-        Expanded(child: ArtworkPlaceholder(icon: icon)),
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ArtworkPlaceholder(icon: icon),
+              if (item.releaseDate case final releaseDate? when item.isUpcoming)
+                _ReleaseDateBadge(releaseDate: releaseDate),
+            ],
+          ),
+        ),
         _CardFooter(item: item, showSubtitle: showSubtitle),
       ],
     );
   }
+}
+
+class _ReleaseDateBadge extends StatelessWidget {
+  const _ReleaseDateBadge({required this.releaseDate});
+
+  final DateTime releaseDate;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: AppSpacing.xs,
+    left: AppSpacing.xs,
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.7),
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text(
+        formatShortReleaseDate(releaseDate.toLocal()),
+        style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+      ),
+    ),
+  );
 }
 
 class _CardFooter extends StatelessWidget {

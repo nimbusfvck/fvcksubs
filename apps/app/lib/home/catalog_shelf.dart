@@ -10,6 +10,7 @@ import '../catalog/media_card_v2.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/clickable.dart';
 import '../widgets/empty_state.dart';
 import 'catalog_shimmer.dart';
 import 'catalog_grouping.dart';
@@ -441,7 +442,7 @@ class _Carousel extends StatelessWidget {
     final height = posterMode ? 260.0 : 172.0;
 
     return SizedBox(
-      height: height,
+      height: height + Clickable.ringBleed * 2,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -450,12 +451,15 @@ class _Carousel extends StatelessWidget {
         itemBuilder: (context, i) {
           final item = items[i];
           final heroTag = Object();
-          return SizedBox(
-            width: itemWidth,
-            child: MediaCardV2(
-              item: item.item,
-              heroTag: heroTag,
-              onTap: () => onTapWithHero(item, heroTag),
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: Clickable.ringBleed),
+            child: SizedBox(
+              width: itemWidth,
+              child: MediaCardV2(
+                item: item.item,
+                heroTag: heroTag,
+                onTap: () => onTapWithHero(item, heroTag),
+              ),
             ),
           );
         },

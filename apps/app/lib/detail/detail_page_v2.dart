@@ -236,6 +236,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
                       child: BlocBuilder<LibraryController, LibraryState>(
                         bloc: libraryController,
                         builder: (context, state) {
+                          if (item.isUpcoming) {
+                            return _RemindMeButton(
+                              active: state.isReminded(item.ref),
+                              onPressed: () =>
+                                  libraryController.toggleReminder(item),
+                            );
+                          }
                           final target = _primaryEpisode(detail, state);
                           final primaryTarget = _primaryTarget(detail, target);
                           return _PrimaryPlayButton(
@@ -262,6 +269,15 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   _FavoriteAction(item: item),
                 ],
               ),
+              if (item.isUpcoming && item.releaseDate != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               if (detail.description case final description?) ...[
                 const SizedBox(height: AppSpacing.lg),
@@ -519,6 +535,28 @@ class _PrimaryPlayButton extends StatelessWidget {
     onPressed: onPressed,
     icon: const Icon(Icons.play_arrow_rounded, size: 28),
     label: Text(label),
+    style: FilledButton.styleFrom(
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
+    ),
+  );
+}
+
+class _RemindMeButton extends StatelessWidget {
+  const _RemindMeButton({required this.active, required this.onPressed});
+
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+    onPressed: onPressed,
+    icon: Icon(
+      active
+          ? Icons.notifications_active_rounded
+          : Icons.notifications_none_rounded,
+      size: 24,
+    ),
+    label: Text(active ? 'Reminder Set' : 'Remind Me'),
     style: FilledButton.styleFrom(
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
     ),

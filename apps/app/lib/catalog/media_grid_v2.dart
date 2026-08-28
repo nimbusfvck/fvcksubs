@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
+import '../widgets/clickable.dart';
 import 'media_card_v2.dart';
 import 'catalog_section_header.dart';
 
@@ -56,7 +57,10 @@ class MediaGridV2 extends StatelessWidget {
         final items = _items;
         return GridView.builder(
           controller: scrollable ? controller : null,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: Clickable.ringBleed,
+          ),
           shrinkWrap: !scrollable,
           physics: scrollable ? null : const NeverScrollableScrollPhysics(),
           gridDelegate: _delegate(constraints.maxWidth),
@@ -86,7 +90,10 @@ class MediaGridV2 extends StatelessWidget {
                 child: CatalogSectionHeader(label: section.title!),
               ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: Clickable.ringBleed,
+              ),
               sliver: SliverGrid(
                 gridDelegate: _delegate(constraints.maxWidth),
                 delegate: SliverChildBuilderDelegate((_, index) {

@@ -15,3 +15,7 @@ const List<String> _months = [
 
 String formatReleaseDate(DateTime date) =>
     '${_months[date.month - 1]} ${date.day}, ${date.year}';
+
+/// Compact form for tight spaces, such as a badge overlaid on a poster.
+String formatShortReleaseDate(DateTime date) =>
+    '${_months[date.month - 1]} ${date.day}';

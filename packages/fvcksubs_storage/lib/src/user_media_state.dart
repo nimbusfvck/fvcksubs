@@ -8,6 +8,7 @@ class UserMediaState extends Equatable {
     required this.item,
     this.contentRating = ContentRating.unknown,
     this.favorite = false,
+    this.reminder = false,
     this.progress,
     this.duration,
     this.lastWatched,
@@ -41,6 +42,10 @@ class UserMediaState extends Equatable {
     if (favorite != null && favorite is! bool) {
       throw const FormatException('library favorite must be a boolean');
     }
+    final reminder = json['reminder'];
+    if (reminder != null && reminder is! bool) {
+      throw const FormatException('library reminder must be a boolean');
+    }
     return UserMediaState(
       item: MediaItemV2.fromJson(item.cast<String, Object?>()),
       contentRating: ContentRating.values.firstWhere(
@@ -48,6 +53,7 @@ class UserMediaState extends Equatable {
         orElse: () => ContentRating.unknown,
       ),
       favorite: favorite as bool? ?? false,
+      reminder: reminder as bool? ?? false,
       progress: progress == null
           ? null
           : Duration(milliseconds: (progress as num).toInt()),
@@ -74,6 +80,9 @@ class UserMediaState extends Equatable {
   /// Whether the item is in the user's favorites.
   final bool favorite;
 
+  /// Whether the user asked to be reminded once this item releases.
+  final bool reminder;
+
   /// Last playback position, when known.
   final Duration? progress;
 
@@ -95,6 +104,7 @@ class UserMediaState extends Equatable {
     MediaItemV2? item,
     ContentRating? contentRating,
     bool? favorite,
+    bool? reminder,
     Object? progress = _unset,
     Object? duration = _unset,
     Object? lastWatched = _unset,
@@ -102,6 +112,7 @@ class UserMediaState extends Equatable {
     item: item ?? this.item,
     contentRating: contentRating ?? this.contentRating,
     favorite: favorite ?? this.favorite,
+    reminder: reminder ?? this.reminder,
     progress: identical(progress, _unset)
         ? this.progress
         : progress as Duration?,
@@ -121,6 +132,7 @@ class UserMediaState extends Equatable {
     if (contentRating != ContentRating.unknown)
       'contentRating': contentRating.name,
     'favorite': favorite,
+    'reminder': reminder,
     if (progress != null) 'progressMs': progress!.inMilliseconds,
     if (duration != null) 'durationMs': duration!.inMilliseconds,
     if (lastWatched != null)
@@ -132,6 +144,7 @@ class UserMediaState extends Equatable {
     item,
     contentRating,
     favorite,
+    reminder,
     progress,
     duration,
     lastWatched,

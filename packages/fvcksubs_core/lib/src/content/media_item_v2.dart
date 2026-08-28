@@ -199,6 +199,7 @@ sealed class MediaItemV2 extends Equatable {
     required this.title,
     this.subtitle,
     this.releaseYear,
+    this.releaseDate,
     this.rating,
     this.artwork,
   });
@@ -282,6 +283,10 @@ sealed class MediaItemV2 extends Equatable {
   /// Calendar year in which this item was first released.
   final int? releaseYear;
 
+  /// When this item first becomes (or became) available, from the
+  /// extension. A future value marks it as not yet released.
+  final DateTime? releaseDate;
+
   /// Extension-supplied audience or editorial rating.
   final double? rating;
 
@@ -291,12 +296,18 @@ sealed class MediaItemV2 extends Equatable {
   /// This item's strict variant.
   MediaKindV2 get kind;
 
+  /// Whether [releaseDate] is known and still in the future.
+  bool get isUpcoming =>
+      releaseDate != null && releaseDate!.isAfter(DateTime.now().toUtc());
+
   Map<String, Object?> _baseJson() => {
     'ref': ref.toJson(),
     'kind': kind.name,
     'title': title,
     if (subtitle != null) 'subtitle': subtitle,
     if (releaseYear != null) 'releaseYear': releaseYear,
+    if (releaseDate != null)
+      'releaseDate': releaseDate!.toUtc().toIso8601String(),
     if (rating != null) 'rating': rating,
     if (artwork != null) 'artwork': artwork!.toJson(),
   };
@@ -311,6 +322,7 @@ sealed class MediaItemV2 extends Equatable {
     title,
     subtitle,
     releaseYear,
+    releaseDate,
     rating,
     artwork,
   ];
@@ -324,6 +336,7 @@ final class VideoItemV2 extends MediaItemV2 {
     required super.title,
     super.subtitle,
     super.releaseYear,
+    super.releaseDate,
     super.rating,
     super.artwork,
   });
@@ -334,6 +347,7 @@ final class VideoItemV2 extends MediaItemV2 {
         title: value.title,
         subtitle: value.subtitle,
         releaseYear: value.releaseYear,
+        releaseDate: value.releaseDate,
         rating: value.rating,
         artwork: value.artwork,
       );
@@ -354,6 +368,7 @@ final class SeriesItemV2 extends MediaItemV2 {
     required super.title,
     super.subtitle,
     super.releaseYear,
+    super.releaseDate,
     super.rating,
     super.artwork,
   });
@@ -364,6 +379,7 @@ final class SeriesItemV2 extends MediaItemV2 {
         title: value.title,
         subtitle: value.subtitle,
         releaseYear: value.releaseYear,
+        releaseDate: value.releaseDate,
         rating: value.rating,
         artwork: value.artwork,
       );
@@ -385,6 +401,7 @@ final class EpisodeItemV2 extends MediaItemV2 {
     required this.episode,
     super.subtitle,
     super.releaseYear,
+    super.releaseDate,
     super.rating,
     super.artwork,
     this.availableAt,
@@ -399,6 +416,7 @@ final class EpisodeItemV2 extends MediaItemV2 {
         title: value.title,
         subtitle: value.subtitle,
         releaseYear: value.releaseYear,
+        releaseDate: value.releaseDate,
         rating: value.rating,
         artwork: value.artwork,
       );
@@ -438,6 +456,7 @@ final class ChannelItemV2 extends MediaItemV2 {
     required super.title,
     super.subtitle,
     super.releaseYear,
+    super.releaseDate,
     super.rating,
     super.artwork,
   });
@@ -448,6 +467,7 @@ final class ChannelItemV2 extends MediaItemV2 {
         title: value.title,
         subtitle: value.subtitle,
         releaseYear: value.releaseYear,
+        releaseDate: value.releaseDate,
         rating: value.rating,
         artwork: value.artwork,
       );
@@ -469,6 +489,7 @@ final class EventItemV2 extends MediaItemV2 {
     required this.schedule,
     super.subtitle,
     super.releaseYear,
+    super.releaseDate,
     super.rating,
     super.artwork,
     this.participants = const [],
@@ -483,6 +504,7 @@ final class EventItemV2 extends MediaItemV2 {
          title: value.title,
          subtitle: value.subtitle,
          releaseYear: value.releaseYear,
+         releaseDate: value.releaseDate,
          rating: value.rating,
          artwork: value.artwork,
        );
@@ -515,6 +537,7 @@ const _baseKeys = {
   'title',
   'subtitle',
   'releaseYear',
+  'releaseDate',
   'rating',
   'artwork',
 };
@@ -525,6 +548,7 @@ final class _CommonItemFields {
     required this.title,
     this.subtitle,
     this.releaseYear,
+    this.releaseDate,
     this.rating,
     this.artwork,
   });
@@ -534,6 +558,7 @@ final class _CommonItemFields {
     final title = json['title'];
     final subtitle = json['subtitle'];
     final releaseYear = json['releaseYear'];
+    final releaseDate = json['releaseDate'];
     final rating = json['rating'];
     final artwork = json['artwork'];
     if (ref is! Map) throw const FormatException('item.ref must be an object');
@@ -548,6 +573,18 @@ final class _CommonItemFields {
         'item.releaseYear must be a positive integer',
       );
     }
+    DateTime? parsedReleaseDate;
+    if (releaseDate != null) {
+      parsedReleaseDate = releaseDate is String
+          ? DateTime.tryParse(releaseDate)
+          : null;
+      if (parsedReleaseDate == null ||
+          !(releaseDate as String).toUpperCase().endsWith('Z')) {
+        throw const FormatException(
+          'item.releaseDate must be an ISO-8601 UTC timestamp',
+        );
+      }
+    }
     if (rating != null && (rating is! num || !rating.isFinite || rating < 0)) {
       throw const FormatException('item.rating must be a non-negative number');
     }
@@ -559,6 +596,7 @@ final class _CommonItemFields {
       title: title,
       subtitle: subtitle as String?,
       releaseYear: releaseYear as int?,
+      releaseDate: parsedReleaseDate,
       rating: (rating as num?)?.toDouble(),
       artwork: artwork == null
           ? null
@@ -570,6 +608,7 @@ final class _CommonItemFields {
   final String title;
   final String? subtitle;
   final int? releaseYear;
+  final DateTime? releaseDate;
   final double? rating;
   final Artwork? artwork;
 }

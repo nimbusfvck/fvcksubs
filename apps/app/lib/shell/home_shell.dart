@@ -7,7 +7,10 @@ import '../app_scope.dart';
 import '../home/home_page.dart';
 import '../library/library_page.dart';
 import '../settings/settings_page.dart';
+import '../theme/breakpoints.dart';
+import '../theme/tokens.dart';
 import 'app_destination.dart';
+import 'app_nav_rail.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -38,24 +41,19 @@ class _HomeShellState extends State<HomeShell> {
       builder: (context, _) => _body,
     );
 
-    if (scope.deviceClass.isTv) {
+    final width = MediaQuery.sizeOf(context).width;
+    final useRail = scope.deviceClass.isTv || width >= AppBreakpoints.railWidth;
+
+    if (useRail) {
       return Scaffold(
         body: Row(
           children: [
-            NavigationRail(
-              selectedIndex: index,
-              onDestinationSelected: _select,
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                for (final destination in AppDestination.values)
-                  NavigationRailDestination(
-                    icon: Icon(destination.icon),
-                    selectedIcon: Icon(destination.selectedIcon),
-                    label: Text(destination.label),
-                  ),
-              ],
+            AppNavRail(selectedIndex: index, onDestinationSelected: _select),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: AppColors.hairlineDark,
             ),
-            const VerticalDivider(width: 1),
             Expanded(child: body),
           ],
         ),

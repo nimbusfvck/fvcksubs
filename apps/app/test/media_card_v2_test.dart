@@ -40,6 +40,31 @@ void main() {
     expect(find.byType(Hero), findsOneWidget);
   });
 
+  testWidgets('an unreleased movie shows its release date over the poster', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: VideoItemV2(
+                ref: ref,
+                title: 'Future movie',
+                releaseDate: DateTime.utc(2099, 1, 15),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Jan 15'), findsOneWidget);
+  });
+
   testWidgets('rounds a rating in the card metadata', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

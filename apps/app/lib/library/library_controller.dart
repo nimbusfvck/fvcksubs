@@ -17,6 +17,8 @@ class LibraryState {
 
   bool isFavorite(MediaRef ref) => recordFor(ref)?.favorite ?? false;
 
+  bool isReminded(MediaRef ref) => recordFor(ref)?.reminder ?? false;
+
   List<UserMediaState> get favorites =>
       records.values.where((record) => record.favorite).toList()
         ..sort((a, b) => a.item.title.compareTo(b.item.title));
@@ -81,6 +83,8 @@ class LibraryController extends Cubit<LibraryState> {
 
   bool isFavorite(MediaRef ref) => state.isFavorite(ref);
 
+  bool isReminded(MediaRef ref) => state.isReminded(ref);
+
   List<UserMediaState> get favorites => state.favorites;
 
   List<UserMediaState> get continueWatching => state.continueWatching;
@@ -93,6 +97,16 @@ class LibraryController extends Cubit<LibraryState> {
       (existing ?? UserMediaState(item: item)).copyWith(
         item: item,
         favorite: !(existing?.favorite ?? false),
+      ),
+    );
+  }
+
+  void toggleReminder(MediaItemV2 item) {
+    final existing = recordFor(item.ref);
+    _upsert(
+      (existing ?? UserMediaState(item: item)).copyWith(
+        item: item,
+        reminder: !(existing?.reminder ?? false),
       ),
     );
   }
@@ -127,7 +141,7 @@ class LibraryController extends Cubit<LibraryState> {
 
   void _upsert(UserMediaState record) {
     final records = Map<String, UserMediaState>.of(state.records);
-    if (!record.favorite && record.lastWatched == null) {
+    if (!record.favorite && !record.reminder && record.lastWatched == null) {
       records.remove(record.key);
     } else {
       records[record.key] = record;
