@@ -28,4 +28,8 @@ class CatalogBinding {
   /// Effective audience classification, with the manifest as the default.
   ContentRating get contentRating =>
       catalog.contentRating ?? extension.manifest.contentRating;
+
+  /// Whether this is a preview feed (Shorts) catalog rather than an ordinary
+  /// Home browse shelf.
+  bool get isPreviewSurface => catalog.surface == CatalogSurface.preview;
 }

@@ -14,6 +14,7 @@
   const streams = [];
   const searches = [];
   const subtitles = [];
+  const previews = [];
 
   function requiredString(value, name) {
     if (typeof value !== 'string' || value.trim().length === 0) {
@@ -184,6 +185,29 @@
     subtitles.push({ providerId, subtitles: lookup });
   }
 
+  /**
+   * Registers a just-in-time preview handler for a provider ID (e.g. a
+   * Shorts feed card). Unlike the other `define*` calls, this is the one
+   * that installs `globalThis.__extension.preview` — and only on first use.
+   * An extension that never calls `definePreview` leaves that function
+   * entirely absent, so the host's optional-method probe treats it exactly
+   * like a bundle built before preview existed, rather than a registered
+   * dispatcher with zero providers behind it.
+   *
+   * @param {object} definition Preview registration.
+   */
+  function definePreview(definition) {
+    const providerId = requiredString(definition && definition.providerId, 'preview.providerId');
+    const preview = requiredFunction(definition && definition.preview, 'preview.preview');
+    unique(previews, (entry) => entry.providerId === providerId, `preview provider ${providerId}`);
+    previews.push({ providerId, preview });
+    globalThis.__extension.preview = async (args) => {
+      const provider = previews.find((entry) => entry.providerId === args.item.ref.providerId);
+      if (!provider) throw new Error(`No preview provider registered for ${args.item.ref.providerId}`);
+      return listResult(await provider.preview(args.item), 'sources', 'preview');
+    };
+  }
+
   function pageState(cursor) {
     if (cursor === undefined || cursor === null || cursor === '') return {};
     try {
@@ -295,6 +319,7 @@
     defineStream,
     defineSearch,
     defineSubtitles,
+    definePreview,
     sourceId,
     sourcePayload,
   });

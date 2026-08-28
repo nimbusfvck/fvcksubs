@@ -184,6 +184,34 @@ class JsExtension extends ContentExtension {
     ];
   }
 
+  /// Resolves a just-in-time preview for [item].
+  ///
+  /// Optional: most bundles never define `__extension.preview`. This checks
+  /// for it before calling, rather than letting an absent method surface as
+  /// a JS eval error, so an older bundle throws the same [UnsupportedError]
+  /// the [ContentExtension] default would.
+  @override
+  Future<PreviewResponse> preview(MediaItemV2 item) =>
+      _previewFromJson(item.toJson());
+
+  Future<PreviewResponse> _previewFromJson(Map<String, Object?> item) async {
+    if (!_hasMethod('preview')) {
+      throw UnsupportedError('${_manifest.id} does not provide previews');
+    }
+    final decoded = await _call('preview', {'item': item});
+    final list = decoded['sources'];
+    if (list is! List) {
+      throw JsExtensionException(
+        '${_manifest.id}.preview did not return a "sources" list',
+      );
+    }
+    return PreviewResponse.fromJson(decoded);
+  }
+
+  /// Whether the bundle installed `__extension.<role>` as a function.
+  bool _hasMethod(String role) =>
+      _engine.eval('typeof globalThis.__extension.$role') == '"function"';
+
   /// Calls `__extension.<role>(<args>)` and decodes its JSON result.
   ///
   /// Arguments go in as a JSON literal rather than through a string the

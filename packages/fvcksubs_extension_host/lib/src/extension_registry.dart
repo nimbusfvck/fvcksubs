@@ -251,6 +251,33 @@ class ExtensionRegistry {
     return bindings;
   }
 
+  /// Every preview-surface catalog (Shorts feed sources), across enabled
+  /// extensions and providers.
+  ///
+  /// Mirrors [catalogsFor]'s enabled/provider/NSFW gating, but matches on
+  /// [CatalogBinding.isPreviewSurface] instead of a category — a preview
+  /// catalog declares no [CatalogDecl.categories] of its own, so it would
+  /// never appear from a category-based lookup.
+  List<CatalogBinding> previewCatalogs() {
+    final bindings = <CatalogBinding>[];
+    for (final extension in _extensions) {
+      if (!isExtensionEnabled(extension.manifest.id)) continue;
+      for (final provider in extension.manifest.providers) {
+        if (!isProviderEnabled(provider.id)) continue;
+        for (final catalog in provider.catalogs) {
+          if (catalog.surface != CatalogSurface.preview) continue;
+          final binding = CatalogBinding(
+            extension: extension,
+            providerId: provider.id,
+            catalog: catalog,
+          );
+          if (isCatalogAllowed(binding)) bindings.add(binding);
+        }
+      }
+    }
+    return bindings;
+  }
+
   /// The extensions serving [category], in install order.
   ///
   /// What the app's plugin picker lists: two extensions can cover the same
@@ -484,6 +511,26 @@ class ExtensionRegistry {
       return await extension.externalSubtitles(item);
     } catch (_) {
       return const [];
+    }
+  }
+
+  /// Resolves a just-in-time preview for [item], from the extension that
+  /// owns it.
+  ///
+  /// Empty (never a throw) when the owning extension is switched off or
+  /// doesn't implement preview at all — mirrors [sources] and
+  /// [externalSubtitles]'s guard for the same reason: the Shorts workflow
+  /// skips an item with no usable preview rather than surfacing an error for
+  /// what is, for most extensions, simply an unimplemented optional role.
+  Future<PreviewResponse> preview(MediaRef ref, MediaItemV2 item) async {
+    final extension = extensionById(ref.extensionId);
+    if (!isExtensionEnabled(extension.manifest.id)) {
+      return const PreviewResponse();
+    }
+    try {
+      return await extension.preview(item);
+    } on UnsupportedError {
+      return const PreviewResponse();
     }
   }
 

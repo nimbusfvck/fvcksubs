@@ -1,6 +1,7 @@
 import '../content/media_detail_v2.dart';
 import '../content/media_item_v2.dart';
 import '../content/media_ref.dart';
+import '../content/preview_source.dart';
 import '../content/stream.dart';
 import 'catalog.dart';
 import 'catalog_v2.dart';
@@ -75,4 +76,13 @@ abstract class ContentExtension {
   /// guaranteed to be possible.
   Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) =>
       throw UnsupportedError('${manifest.id} does not provide subtitles');
+
+  /// Resolves a just-in-time preview for [item] (e.g. a Shorts card).
+  ///
+  /// Optional: most extensions never implement this. Preview and full
+  /// playback are separate workflows — a returned source is never a
+  /// substitute for [sources]/[resolve], and the response must not be
+  /// persisted since a direct source's URL may be short-lived.
+  Future<PreviewResponse> preview(MediaItemV2 item) =>
+      throw UnsupportedError('${manifest.id} does not provide previews');
 }

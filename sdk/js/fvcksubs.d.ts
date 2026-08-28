@@ -283,6 +283,37 @@ interface PlayableStream {
   subtitles?: SubtitleTrack[];
 }
 
+interface EmbeddedPreviewSource {
+  /** Opaque source ID. */
+  id: string;
+  type: 'embedded';
+  /**
+   * Embed provider (e.g. `'youtube'`). A provider the app doesn't have an
+   * adapter for is still accepted here — the SDK does not validate this
+   * against a known list — but the app will skip it at render time.
+   */
+  provider: string;
+  /** Provider-scoped media ID (a YouTube video ID, for `'youtube'`). */
+  mediaId: string;
+}
+interface DirectPreviewSource {
+  /** Opaque source ID. */
+  id: string;
+  type: 'direct';
+  /** Directly playable stream. */
+  stream: PlayableStream;
+}
+/** One preview candidate, in the extension's preferred order. */
+type PreviewSource = EmbeddedPreviewSource | DirectPreviewSource;
+interface PreviewResult {
+  /**
+   * Candidate sources, in preferred order. Empty means no usable preview
+   * was found for this item. Never persisted by the app — resolve every
+   * time playback is about to start.
+   */
+  sources: PreviewSource[];
+}
+
 interface SourcesArgs {
   /** Item for which the app needs playable source choices. */
   item: MediaItem;
@@ -348,6 +379,17 @@ interface FvcksubsSdk {
   defineSubtitles(definition: {
     providerId: string;
     subtitles(args: { item: MediaItem }): SubtitlesResult | Promise<SubtitlesResult>;
+  }): void;
+  /**
+   * Registers a just-in-time preview provider (e.g. for a Shorts feed card).
+   *
+   * Entirely optional — call it only when this extension actually produces
+   * previews. Preview and full playback are separate workflows: a returned
+   * source is never a substitute for `defineStream`'s `sources`/`resolve`.
+   */
+  definePreview(definition: {
+    providerId: string;
+    preview(item: MediaItem): PreviewResult | Promise<PreviewResult>;
   }): void;
   /**
    * Creates an opaque, restart-safe source ID containing a JSON payload.

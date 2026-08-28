@@ -57,6 +57,22 @@ enum CatalogDisplay {
   list,
 }
 
+/// What a catalog is for — a Home browse shelf, or a preview feed (Shorts).
+///
+/// Additive to protocol version 2: an older host that has never heard of
+/// [preview] should still load the manifest and simply not surface the
+/// catalog anywhere, which is exactly what the tolerant [browse] default
+/// gives it on decode.
+enum CatalogSurface {
+  /// An ordinary Home/Discover browse shelf. The default.
+  browse,
+
+  /// A preview feed (e.g. Shorts) rather than a browse shelf. Carries no
+  /// [CatalogDecl.categories] of its own, so an app that predates this
+  /// surface never renders it as a Home chip.
+  preview,
+}
+
 /// One catalog a provider exposes — the **root** of everything that provider
 /// serves, not a slice of a taxonomy.
 ///
@@ -86,6 +102,7 @@ class CatalogDecl extends Equatable {
     this.filters = const [],
     this.expanded = false,
     this.contentRating,
+    this.surface = CatalogSurface.browse,
   });
 
   /// Builds a [CatalogDecl] from decoded JSON.
@@ -113,6 +130,11 @@ class CatalogDecl extends Equatable {
             orElse: ContentRating.unknown,
           )
         : null,
+    surface: enumByName(
+      CatalogSurface.values,
+      json['surface'],
+      orElse: CatalogSurface.browse,
+    ),
   );
 
   /// Catalog id, unique within its provider.
@@ -147,6 +169,11 @@ class CatalogDecl extends Equatable {
   /// supplies the catalog default.
   final ContentRating? contentRating;
 
+  /// What this catalog is for — a Home browse shelf, or a preview feed.
+  /// [CatalogSurface.browse] by default, so every catalog declared before
+  /// this field existed keeps browsing exactly as it did.
+  final CatalogSurface surface;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -156,6 +183,7 @@ class CatalogDecl extends Equatable {
     if (filters.isNotEmpty) 'filters': filters,
     if (expanded) 'expanded': expanded,
     if (contentRating != null) 'contentRating': contentRating!.name,
+    if (surface != CatalogSurface.browse) 'surface': surface.name,
   };
 
   @override
@@ -167,6 +195,7 @@ class CatalogDecl extends Equatable {
     filters,
     expanded,
     contentRating,
+    surface,
   ];
 }
 
