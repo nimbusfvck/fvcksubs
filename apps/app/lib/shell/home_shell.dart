@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../addons/addons_controller.dart';
-import '../addons/addons_page.dart';
 import '../app_scope.dart';
 import '../home/home_page.dart';
 import '../library/library_page.dart';
 import '../settings/settings_page.dart';
+import '../shorts/shorts_page.dart';
 import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import 'app_destination.dart';
@@ -25,7 +25,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget get _body => switch (_destination) {
     AppDestination.home => const HomePage(),
     AppDestination.library => const LibraryPage(),
-    AppDestination.addons => const AddonsPage(),
+    AppDestination.shorts => const ShortsPage(),
     AppDestination.settings => const SettingsPage(),
   };
 
@@ -62,7 +62,10 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       // Home owns an edge-to-edge hero so its artwork and gradients continue
       // behind the status bar. Other destinations keep the shared safe inset.
-      body: _destination == AppDestination.home ? body : SafeArea(child: body),
+      body:
+          _destination == AppDestination.home || _destination == AppDestination.shorts
+          ? body
+          : SafeArea(child: body),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: _select,

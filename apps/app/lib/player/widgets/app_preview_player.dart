@@ -8,6 +8,13 @@ import '../models/app_player_controller.dart';
 import '../youtube/youtube_preview_resolver.dart';
 import 'platform_player_builder.dart';
 
+/// Whether this app has an adapter for [provider]. Shared by
+/// [AppPreviewPlayer]'s own resolution and by `ShortsController`, which
+/// pre-filters a [PreviewResponse] to the first source this returns true
+/// for before ever constructing a player — a single source of truth for
+/// "which embed providers this app can actually play."
+bool isSupportedPreviewProvider(String provider) => provider == 'youtube';
+
 /// Renders one already-resolved [PlayableStream] as a preview: muted/looping
 /// as requested, no transport controls, no subtitle/quality wiring — the
 /// concerns full playback needs and previews don't.
@@ -119,7 +126,7 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
         // would trip its "called during build" assertion.
         _resolvedStream = stream;
       case EmbeddedPreviewSource(:final provider, :final mediaId):
-        if (provider != 'youtube') {
+        if (!isSupportedPreviewProvider(provider)) {
           widget.onError?.call(
             UnsupportedError('Unsupported preview provider "$provider"'),
           );

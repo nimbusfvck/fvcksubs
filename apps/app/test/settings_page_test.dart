@@ -48,6 +48,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // The new Addons entry at the top of Settings pushes this tile below
+    // the test viewport's fold.
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Subtitle appearance'));
     await tester.pumpAndSettle();
 

@@ -41,6 +41,7 @@ class FakeExtension extends ContentExtension {
     this.resolved,
     this.resolveFailsFor = const {},
     this.metaDetail,
+    this.previewFor = const {},
     this.searchable = false,
     this.searchResults = const [],
     this.searchResultsByCategory = const {},
@@ -272,6 +273,26 @@ class FakeExtension extends ContentExtension {
   @override
   Future<MediaDetailV2> meta(MediaRef ref) async =>
       metaDetail ?? (throw UnsupportedError('$id does not provide meta'));
+
+  /// What [preview] returns per item id; an id with no entry leaves it
+  /// throwing, matching the protocol default for extensions that don't
+  /// implement the role.
+  final Map<String, PreviewResponse> previewFor;
+
+  /// How many times [preview] has been called, keyed by item id — lets a
+  /// test assert lazy/idempotent resolution (called once per item, not once
+  /// up front for the whole feed).
+  final Map<String, int> previewCalls = {};
+
+  @override
+  Future<PreviewResponse> preview(MediaItemV2 item) async {
+    previewCalls.update(item.ref.id, (count) => count + 1, ifAbsent: () => 1);
+    final response = previewFor[item.ref.id];
+    if (response == null) {
+      throw UnsupportedError('$id does not provide previews');
+    }
+    return response;
+  }
 }
 
 class FakeCatalog {
@@ -282,6 +303,7 @@ class FakeCatalog {
     required this.items,
     this.display = CatalogDisplay.row,
     this.expanded = false,
+    this.surface = CatalogSurface.browse,
   });
 
   final String id;
@@ -291,6 +313,9 @@ class FakeCatalog {
   final CatalogDisplay display;
   final bool expanded;
 
+  /// Browse (the default, a Home shelf) or preview (a Shorts feed source).
+  final CatalogSurface surface;
+
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
@@ -298,6 +323,7 @@ class FakeCatalog {
     'kind': 'video',
     'display': display.name,
     if (expanded) 'expanded': expanded,
+    if (surface != CatalogSurface.browse) 'surface': surface.name,
   };
 }
 

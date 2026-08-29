@@ -14,6 +14,7 @@ import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
+import '../player/workflow/primary_episode_target.dart';
 import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
@@ -72,113 +73,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
     }
   }
 
-  EpisodeItemV2 _episodeItem(
-    MediaItemV2 parent,
-    EpisodeGroup group,
-    int index,
-  ) {
-    final episode = group.episodes[index];
-    return EpisodeItemV2(
-      ref: episode.ref,
-      title: episode.title,
-      subtitle: parent.title,
-      artwork: episode.artwork ?? parent.artwork,
-      episode: EpisodeIdentity(
-        parentRef: parent.ref,
-        groupId: group.id,
-        position: episode.position,
-      ),
-      availableAt: episode.availableAt,
-    );
-  }
-
-  ({EpisodeGroup group, int index, bool resuming})? _primaryEpisode(
-    MediaDetailV2 detail,
-    LibraryState library,
-  ) {
-    final guide = detail.episodeGuide;
-    final target = guide?.defaultEpisodeRef;
-    if (guide == null || guide.groups.isEmpty) return null;
-    final resumed = _resumedEpisode(guide, detail.item.ref, library);
-    if (resumed != null) return resumed;
-    if (target != null) {
-      for (final group in guide.groups) {
-        final index = group.episodes.indexWhere(
-          (episode) => episode.ref == target,
-        );
-        if (index >= 0 && _isAvailable(group.episodes[index])) {
-          return (group: group, index: index, resuming: false);
-        }
-      }
-    }
-    for (final group in guide.groups.reversed) {
-      for (final entry in group.episodes.indexed.toList().reversed) {
-        if (_isAvailable(entry.$2)) {
-          return (group: group, index: entry.$1, resuming: false);
-        }
-      }
-    }
-    return null;
-  }
-
-  ({EpisodeGroup group, int index, bool resuming})? _resumedEpisode(
-    EpisodeGuide guide,
-    MediaRef parentRef,
-    LibraryState library,
-  ) {
-    final watchedEpisodes =
-        library.records.values
-            .where(
-              (record) =>
-                  record.progress != null &&
-                  record.progress! > Duration.zero &&
-                  record.item is EpisodeItemV2 &&
-                  (record.item as EpisodeItemV2).episode.parentRef == parentRef,
-            )
-            .toList()
-          ..sort(
-            (a, b) => (b.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0))
-                .compareTo(
-                  a.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0),
-                ),
-          );
-    for (final record in watchedEpisodes) {
-      for (final group in guide.groups) {
-        final index = group.episodes.indexWhere(
-          (candidate) => candidate.ref == record.item.ref,
-        );
-        if (index >= 0 && _isAvailable(group.episodes[index])) {
-          return (group: group, index: index, resuming: true);
-        }
-      }
-    }
-    return null;
-  }
-
-  bool _hasEpisodes(MediaDetailV2 detail) =>
-      detail.episodeGuide?.groups.any((group) => group.episodes.isNotEmpty) ??
-      false;
-
-  bool _isAvailable(EpisodeSummary episode) {
-    final availableAt = episode.availableAt;
-    return availableAt == null || !availableAt.isAfter(DateTime.now().toUtc());
-  }
-
-  MediaItemV2? _primaryTarget(
-    MediaDetailV2 detail,
-    ({EpisodeGroup group, int index, bool resuming})? target,
-  ) {
-    if (target == null) return _hasEpisodes(detail) ? null : detail.item;
-    return _episodeItem(detail.item, target.group, target.index);
-  }
-
   String _playLabel(
     MediaDetailV2 detail,
-    ({EpisodeGroup group, int index, bool resuming})? target,
+    PrimaryEpisodeTarget? target,
     Duration? movieProgress,
   ) {
     if (target == null) {
-      if (_hasEpisodes(detail)) return 'Coming soon';
+      if (hasEpisodes(detail.episodeGuide)) return 'Coming soon';
       return (movieProgress ?? Duration.zero) > Duration.zero
           ? 'Continue Watching'
           : 'Play';
@@ -406,8 +307,8 @@ class _DetailPageV2State extends State<DetailPageV2> {
           onPressed: () => libraryController.toggleReminder(item),
         );
       }
-      final target = _primaryEpisode(detail, state);
-      final primaryTarget = _primaryTarget(detail, target);
+      final target = primaryEpisodeTarget(detail.episodeGuide, detail.item.ref, state);
+      final primaryTarget = primaryPlaybackTarget(detail, target);
       return _PrimaryPlayButton(
         onPressed: primaryTarget == null
             ? null
@@ -502,7 +403,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
               progress: _progressFraction(state.recordFor(entry.$2.ref)),
               onTap: () => playItemV2(
                 context,
-                _episodeItem(detail.item, selectedGroup, entry.$1),
+                episodeItemFrom(detail.item, selectedGroup, entry.$1),
                 episodeGuide: guide,
                 contentRating: widget.contentRating,
                 returnToDetail: true,
@@ -527,7 +428,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
     }
     final resumed = detail.episodeGuide == null
         ? null
-        : _resumedEpisode(detail.episodeGuide!, detail.item.ref, library);
+        : resumedEpisodeTarget(detail.episodeGuide!, detail.item.ref, library);
     return resumed?.group ?? groups.last;
   }
 
@@ -541,7 +442,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
   ) {
     final selected = _selectedRangeIndex;
     if (selected != null && selected < rangeCount) return selected;
-    final target = _primaryEpisode(detail, library);
+    final target = primaryEpisodeTarget(detail.episodeGuide, detail.item.ref, library);
     if (target == null || target.group.id != group.id) return 0;
     return (target.index ~/ _episodesPerRange).clamp(0, rangeCount - 1);
   }

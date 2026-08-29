@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
+import '../addons/addons_page.dart';
+import '../addons/installer_controller.dart';
 import '../app_scope.dart';
 import '../player/state/source_priority_controller.dart';
 import '../player/state/subtitle_preference_controller.dart';
@@ -34,6 +36,8 @@ class SettingsPage extends StatelessWidget {
               style: AppTypography.bodyMd.copyWith(color: AppColors.onDarkSoft),
             ),
             const SizedBox(height: AppSpacing.lg),
+            const _AddonsEntry(),
+            const SizedBox(height: AppSpacing.md),
             const _SourcePriorityEntry(),
             const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
@@ -128,6 +132,43 @@ class _NsfwPreference extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       controller.setShowNsfw(true);
     }
+  }
+}
+
+class _AddonsEntry extends StatelessWidget {
+  const _AddonsEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    return BlocBuilder<InstallerController, InstallerState>(
+      bloc: scope.installerController,
+      builder: (context, _) {
+        final installed = scope.registry.installed;
+        final hasUpdate = installed.any(
+          (manifest) => scope.installerController.listingFor(manifest.id)?.isUpdate ?? false,
+        );
+        return Material(
+          color: AppColors.surfaceDarkElevated,
+          borderRadius: AppRadius.lg,
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Addons'),
+            subtitle: Text(
+              installed.isEmpty
+                  ? 'No extensions installed.'
+                  : '${installed.length} ${installed.length == 1 ? 'extension' : 'extensions'}'
+                        '${hasUpdate ? ' · update available' : ''}',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AddonsPage()),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

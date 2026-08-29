@@ -5,7 +5,7 @@ enum AppDestination {
 
   library('Library', Icons.bookmark_border, Icons.bookmark),
 
-  addons('Addons', Icons.extension_outlined, Icons.extension),
+  shorts('Shorts', Icons.play_circle_outline, Icons.play_circle),
 
   settings('Settings', Icons.settings_outlined, Icons.settings);
 

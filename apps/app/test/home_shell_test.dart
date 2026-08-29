@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
+import 'package:fvcksubs_app/addons/addons_page.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/app_nav_rail.dart';
@@ -31,7 +32,7 @@ void main() {
 
       expect(find.widgetWithText(NavigationBar, 'Home'), findsOneWidget);
       expect(find.widgetWithText(NavigationBar, 'Library'), findsOneWidget);
-      expect(find.widgetWithText(NavigationBar, 'Addons'), findsOneWidget);
+      expect(find.widgetWithText(NavigationBar, 'Shorts'), findsOneWidget);
       expect(find.widgetWithText(NavigationBar, 'Settings'), findsOneWidget);
       // Search is not a destination — it opens from Home as its own screen.
       expect(find.widgetWithText(NavigationBar, 'Search'), findsNothing);
@@ -57,9 +58,11 @@ void main() {
     expect(find.text('No favorites yet'), findsOneWidget);
     expect(find.widgetWithText(AppPageBar, 'Library'), findsOneWidget);
 
-    await tester.tap(find.text('Addons'));
+    await tester.tap(find.text('Shorts'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(AppPageBar, 'Addons'), findsOneWidget);
+    // No preview catalog on this fake registry, so Shorts reaches its empty
+    // state — enough to prove the destination actually swapped in.
+    expect(find.text('No previews are available right now.'), findsOneWidget);
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
@@ -110,12 +113,17 @@ void main() {
         findsOneWidget,
       );
 
-      // Not find.widgetWithText(NavigationBar, ...): that resolves to the
-      // whole bar and taps its bounding-box center, which only happens to
-      // land on the right destination for items near the middle.
+      // Addons is reachable from Settings now, not a bottom-nav destination
+      // itself — not find.widgetWithText(NavigationBar, ...): that resolves
+      // to the whole bar and taps its bounding-box center, which only
+      // happens to land on the right destination for items near the middle.
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Addons'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(Switch).first);
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.byType(AddonsPage))).pop();
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Home'));
