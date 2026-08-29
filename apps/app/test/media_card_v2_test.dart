@@ -189,6 +189,9 @@ void main() {
 
     expect(find.byType(GeneratedBanner), findsOneWidget);
     expect(find.byType(CachedNetworkImage), findsOneWidget);
+    expect(find.text('SIDE A'), findsOneWidget);
+    expect(find.text('VS'), findsOneWidget);
+    expect(find.text('SIDE B'), findsOneWidget);
   });
 
   testWidgets('single-sided event renders its landscape artwork', (

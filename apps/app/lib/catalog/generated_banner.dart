@@ -107,45 +107,68 @@ class GeneratedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (homeColor, awayColor) = fillsFor(participants, branding: branding);
+    final (homeColor, _) = fillsFor(participants, branding: branding);
+    final background = Color.lerp(AppColors.surfaceDark, homeColor, 0.62)!;
+    final accent =
+        _parseHex(branding?.secondaryColor) ?? _complementaryAccent(homeColor);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = constraints.maxHeight;
-        final crestSize = math.min(height * 0.5, 60.0);
+        final compact = height < 128;
+        final crestSize = math.min(height * (compact ? 0.22 : 0.25), 44.0);
 
         return Stack(
           fit: StackFit.expand,
           children: [
-            CustomPaint(
-              painter: _BannerArtwork(home: homeColor, away: awayColor),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: _Crest(
-                      imageUrl: participants[0].logo?.url,
-                      size: crestSize,
+            CustomPaint(painter: _BannerArtwork(background: background)),
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: compact ? 0 : crestSize * 0.62),
+                    FractionallySizedBox(
+                      widthFactor: 0.72,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _BannerTeam(
+                              participant: participants[0],
+                              size: crestSize,
+                              showName: !compact,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: _BannerTeam(
+                              participant: participants[1],
+                              size: crestSize,
+                              showName: !compact,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                SizedBox(width: height * 0.2),
-                Expanded(
-                  child: Center(
-                    child: _Crest(
-                      imageUrl: participants[1].logo?.url,
-                      size: crestSize,
+                    const Spacer(),
+                    _BannerMatchup(
+                      home: participants[0].name,
+                      away: participants[1].name,
+                      accent: accent,
+                      compact: compact,
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
             if (branding?.logo case final logo?)
               Positioned(
                 top: AppSpacing.xs,
                 right: AppSpacing.xs,
-                child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.8),
+                child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.9),
               ),
             if (status == ScheduleState.live)
               const Positioned(
@@ -164,6 +187,126 @@ class GeneratedBanner extends StatelessWidget {
       },
     );
   }
+}
+
+Color _complementaryAccent(Color color) {
+  final hsl = HSLColor.fromColor(color);
+  return HSLColor.fromAHSL(
+    1,
+    (hsl.hue + 150) % 360,
+    math.max(hsl.saturation, 0.72),
+    0.58,
+  ).toColor();
+}
+
+class _BannerTeam extends StatelessWidget {
+  const _BannerTeam({
+    required this.participant,
+    required this.size,
+    required this.showName,
+  });
+
+  final Participant participant;
+  final double size;
+  final bool showName;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _Crest(imageUrl: participant.logo?.url, size: size),
+      if (showName) ...[
+        const SizedBox(height: 2),
+        Text(
+          participant.name.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.caption.copyWith(
+            color: AppColors.onDark,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _BannerMatchup extends StatelessWidget {
+  const _BannerMatchup({
+    required this.home,
+    required this.away,
+    required this.accent,
+    required this.compact,
+  });
+
+  final String home;
+  final String away;
+  final Color accent;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = compact ? AppTypography.titleSm : AppTypography.displaySm;
+    if (compact) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: _BannerName(home, style)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+            child: Text(
+              'VS',
+              style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
+            ),
+          ),
+          Expanded(child: _BannerName(away, style)),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BannerName(home, style),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'VS',
+              style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(child: _BannerName(away, style)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BannerName extends StatelessWidget {
+  const _BannerName(this.value, this.style);
+
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: FittedBox(
+      alignment: Alignment.centerLeft,
+      fit: BoxFit.scaleDown,
+      child: Text(
+        value.toUpperCase(),
+        maxLines: 1,
+        style: style.copyWith(
+          color: AppColors.onDark,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.7,
+        ),
+      ),
+    ),
+  );
 }
 
 /// Full-bleed fallback artwork for a live channel or scheduled event.
@@ -569,26 +712,17 @@ class _CrestFallback extends StatelessWidget {
 }
 
 class _BannerArtwork extends CustomPainter {
-  const _BannerArtwork({required this.home, required this.away});
+  const _BannerArtwork({required this.background});
 
-  final Color home;
-  final Color away;
+  final Color background;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [home, away],
-        ).createShader(rect),
-    );
+    canvas.drawRect(rect, Paint()..color = background);
   }
 
   @override
   bool shouldRepaint(covariant _BannerArtwork oldDelegate) =>
-      oldDelegate.home != home || oldDelegate.away != away;
+      oldDelegate.background != background;
 }
