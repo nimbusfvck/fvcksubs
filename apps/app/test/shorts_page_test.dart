@@ -215,6 +215,32 @@ void main() {
     expect(backdrop().imageFilter.toString(), contains('30.0, 30.0'));
   });
 
+  testWidgets('a finished preview advances to the next item instead of '
+      'looping', (
+    tester,
+  ) async {
+    final previewPlayer = RecordingPreviewPlayer();
+    final registry = ExtensionRegistry([
+      _extension(
+        items: [_item('one'), _item('two')],
+        previewFor: {'one': _directSourceResponse, 'two': _directSourceResponse},
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('one'), findsOneWidget);
+
+    previewPlayer.emitCompleted();
+    await tester.pumpAndSettle();
+
+    expect(find.text('two'), findsOneWidget);
+    expect(find.text('one'), findsNothing);
+  });
+
   testWidgets('the fit button toggles between letterboxed and full-screen', (
     tester,
   ) async {

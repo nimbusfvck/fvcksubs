@@ -107,11 +107,19 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
     }
   }
 
-  /// The current item has no usable preview — skip past it lazily rather
-  /// than showing a dead card. A last item with no usable preview is left
-  /// as-is (artwork only); there is nothing further to skip to.
-  void _advancePastUnusable(int index, int itemCount) {
+  /// Advances past [index] — either because its preview turned out to have
+  /// no usable source (skip past a dead card lazily rather than showing
+  /// one) or because its preview finished playing (the player doesn't
+  /// loop, so completion means "move on," not "replay"). A last item is
+  /// left as-is either way; there is nothing further to advance to.
+  void _advanceToNext(int index, int itemCount) {
     if (index != _currentIndex || index + 1 >= itemCount) return;
+    // The Bloc-listener call site already has a frame in flight, but a
+    // native player event (onCompleted/onError) fires from outside any
+    // build — addPostFrameCallback alone only piggybacks on a frame that's
+    // already scheduled, so nothing would ever trigger it. scheduleFrame
+    // ensures one actually happens.
+    WidgetsBinding.instance.scheduleFrame();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_pageController.hasClients) return;
       unawaited(
@@ -152,7 +160,7 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
         final index = _currentIndex.clamp(0, state.items.length - 1);
         final current = state.items[index].item;
         if (state.previewFor(current.ref).status == PreviewStatus.unusable) {
-          _advancePastUnusable(index, state.items.length);
+          _advanceToNext(index, state.items.length);
         }
       },
       builder: (context, state) {
@@ -206,7 +214,8 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
           onToggleMute: _toggleMute,
           onToggleFit: _toggleFit,
           onReady: () {},
-          onError: (_) => _advancePastUnusable(index, state.items.length),
+          onCompleted: () => _advanceToNext(index, state.items.length),
+          onError: (_) => _advanceToNext(index, state.items.length),
           onWatch: () => _watch(item, state.detailFor(item.ref)),
         );
       },

@@ -81,6 +81,7 @@ class AppPreviewPlayer extends StatefulWidget {
     required this.playing,
     this.fit = BoxFit.contain,
     this.onReady,
+    this.onCompleted,
     this.onError,
     this.youtubeResolver = resolveYoutubePreviewStream,
   });
@@ -101,6 +102,12 @@ class AppPreviewPlayer extends StatefulWidget {
 
   /// Called once the native player reports it's ready to show frames.
   final void Function()? onReady;
+
+  /// Called when the stream reaches its end. This player never loops —
+  /// unlike a decorative background preview, a Shorts item's preview is a
+  /// trailer that can run well past a native short clip's length, so the
+  /// caller advancing to the next item reads better than looping it.
+  final void Function()? onCompleted;
 
   /// Called when resolution fails, an unsupported embed provider is given,
   /// or the native player reports a fatal error. The Shorts workflow skips
@@ -179,8 +186,11 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
     _controller = controller as AppPlayerController?;
     _eventsSubscription = _controller?.events.listen((event) {
       if (!mounted) return;
-      if (event.type == AppPlayerEventType.error) {
-        widget.onError?.call(event.error ?? StateError('Playback failed'));
+      switch (event.type) {
+        case AppPlayerEventType.error:
+          widget.onError?.call(event.error ?? StateError('Playback failed'));
+        case AppPlayerEventType.completed:
+          widget.onCompleted?.call();
       }
     });
   }
@@ -201,7 +211,7 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
       context,
       stream,
       muted: widget.muted,
-      looping: true,
+      looping: false,
       playing: widget.playing,
       fit: widget.fit,
       onControllerCreated: _onControllerCreated,

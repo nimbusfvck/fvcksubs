@@ -512,6 +512,10 @@ class FakeAppPlayerController implements AppPlayerController {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
   }
 
+  void emitCompleted() {
+    _events.add(const AppPlayerEvent(AppPlayerEventType.completed));
+  }
+
   bool get hasListener => _events.hasListener;
 
   /// The most recent mode passed to [setFit] — lets a test assert a fit
@@ -626,6 +630,8 @@ class RecordingPreviewPlayer {
   }
 
   void emitError(Object error) => controller?.emitError(error);
+
+  void emitCompleted() => controller?.emitCompleted();
 }
 
 /// In-memory [AddonSettingsStore] — no real `shared_preferences` plugin in a

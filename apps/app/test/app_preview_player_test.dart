@@ -51,7 +51,9 @@ void main() {
     expect(find.byKey(const Key('fake-preview-player')), findsOneWidget);
     expect(previewPlayer.played, _directSource.stream);
     expect(previewPlayer.playedMuted, isTrue);
-    expect(previewPlayer.playedLooping, isTrue);
+    // Never loops — a Shorts preview is a trailer, not a native short clip;
+    // reaching the end should advance to the next item, not replay.
+    expect(previewPlayer.playedLooping, isFalse);
     expect(previewPlayer.playedPlaying, isTrue);
   });
 
@@ -223,6 +225,33 @@ void main() {
     await tester.pump();
 
     expect(reportedError, isA<StateError>());
+  });
+
+  testWidgets('a native-controller completed event reaches onCompleted', (
+    tester,
+  ) async {
+    final previewPlayer = RecordingPreviewPlayer();
+    var completedCalls = 0;
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: AppPreviewPlayer(
+          source: _directSource,
+          muted: true,
+          playing: true,
+          youtubeResolver: _neverCalledResolver,
+          onCompleted: () => completedCalls++,
+        ),
+        registry: ExtensionRegistry([]),
+        previewPlayer: previewPlayer,
+      ),
+    );
+    await tester.pump();
+
+    previewPlayer.emitCompleted();
+    await tester.pump();
+
+    expect(completedCalls, 1);
   });
 
   testWidgets('disposal cancels the controller event subscription', (

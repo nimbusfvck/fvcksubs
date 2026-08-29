@@ -35,6 +35,7 @@ class ShortsFeedCard extends StatefulWidget {
     required this.onToggleMute,
     required this.onToggleFit,
     required this.onReady,
+    required this.onCompleted,
     required this.onError,
     required this.onWatch,
   });
@@ -55,6 +56,10 @@ class ShortsFeedCard extends StatefulWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onToggleFit;
   final VoidCallback onReady;
+
+  /// The preview reached its end — never happens on its own since the
+  /// player doesn't loop; the caller advances to the next item.
+  final VoidCallback onCompleted;
   final void Function(Object error) onError;
   final VoidCallback onWatch;
 
@@ -193,6 +198,7 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
               playing: effectivePlaying,
               fit: boxFit,
               onReady: widget.onReady,
+              onCompleted: widget.onCompleted,
               onError: widget.onError,
             ),
           const DecoratedBox(
