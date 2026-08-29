@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app_scope.dart';
 import '../catalog/artwork_placeholder.dart';
+import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
@@ -248,6 +249,16 @@ class _DetailPageV2State extends State<DetailPageV2> {
                                   VersionedMediaItem(item: recommendation),
                                   heroTag: heroTag,
                                   contentRating: widget.contentRating,
+                                ),
+                                onLongPress: () => showMediaCardActions(
+                                  context,
+                                  recommendation,
+                                  onViewDetails: () => openDetails(
+                                    context,
+                                    recommendation,
+                                    heroTag: heroTag,
+                                    contentRating: widget.contentRating,
+                                  ),
                                 ),
                               ),
                             ),

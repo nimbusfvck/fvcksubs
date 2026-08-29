@@ -5,6 +5,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import '../app_scope.dart';
+import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
@@ -160,6 +161,11 @@ class _RecordCard extends StatelessWidget {
                 ),
               ),
             ),
+      onLongPress: () => showMediaCardActions(
+        context,
+        record.item,
+        onViewDetails: () => openDetails(context, record.item),
+      ),
     ),
   );
 }

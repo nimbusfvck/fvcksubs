@@ -3,6 +3,8 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
 import '../widgets/clickable.dart';
+import '../detail/open_versioned_item.dart';
+import 'media_card_actions.dart';
 import 'media_card_v2.dart';
 import 'catalog_section_header.dart';
 
@@ -67,7 +69,7 @@ class MediaGridV2 extends StatelessWidget {
           physics: scrollable ? null : const NeverScrollableScrollPhysics(),
           gridDelegate: _delegate(constraints.maxWidth),
           itemCount: items.length,
-          itemBuilder: (_, index) {
+          itemBuilder: (context, index) {
             final envelope = items[index];
             final heroTag = Object();
             return MediaCardV2(
@@ -76,6 +78,11 @@ class MediaGridV2 extends StatelessWidget {
               onTap: () => onTapWithHero == null
                   ? onTap(envelope)
                   : onTapWithHero!(envelope, heroTag),
+              onLongPress: () => showMediaCardActions(
+                context,
+                envelope.item,
+                onViewDetails: () => openDetails(context, envelope.item),
+              ),
             );
           },
         );
@@ -98,7 +105,7 @@ class MediaGridV2 extends StatelessWidget {
               ),
               sliver: SliverGrid(
                 gridDelegate: _delegate(constraints.maxWidth),
-                delegate: SliverChildBuilderDelegate((_, index) {
+                delegate: SliverChildBuilderDelegate((context, index) {
                   final envelope = section.items[index];
                   final heroTag = Object();
                   return MediaCardV2(
@@ -107,6 +114,12 @@ class MediaGridV2 extends StatelessWidget {
                     onTap: () => onTapWithHero == null
                         ? onTap(envelope)
                         : onTapWithHero!(envelope, heroTag),
+                    onLongPress: () => showMediaCardActions(
+                      context,
+                      envelope.item,
+                      onViewDetails: () =>
+                          openDetails(context, envelope.item),
+                    ),
                     showSubtitle: section.title == null,
                   );
                 }, childCount: section.items.length),

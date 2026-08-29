@@ -8,6 +8,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import '../detail/detail_page_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../catalog/artwork_placeholder.dart';
+import '../catalog/media_card_actions.dart';
 import '../library/library_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/clickable.dart';
@@ -73,6 +74,12 @@ class ContinueWatchingShelf extends StatelessWidget {
                     record: records[index],
                     onMarkAsWatched: () =>
                         controller.markAsWatched(records[index].item),
+                    onLongPress: () => showMediaCardActions(
+                      context,
+                      records[index].item,
+                      onViewDetails: () =>
+                          openDetails(context, records[index].item),
+                    ),
                   ),
                 ),
               ),
@@ -85,10 +92,15 @@ class ContinueWatchingShelf extends StatelessWidget {
 }
 
 class _ContinueCard extends StatelessWidget {
-  const _ContinueCard({required this.record, required this.onMarkAsWatched});
+  const _ContinueCard({
+    required this.record,
+    required this.onMarkAsWatched,
+    required this.onLongPress,
+  });
 
   final UserMediaState record;
   final VoidCallback onMarkAsWatched;
+  final VoidCallback onLongPress;
 
   double? get _progress {
     final duration = record.duration;
@@ -132,6 +144,7 @@ class _ContinueCard extends StatelessWidget {
     final contextLabel = _context;
     return Clickable(
       onTap: () => _open(context),
+      onLongPress: onLongPress,
       child: Stack(
         fit: StackFit.expand,
         children: [

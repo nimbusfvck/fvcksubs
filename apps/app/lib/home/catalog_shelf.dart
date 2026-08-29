@@ -6,6 +6,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
 import '../catalog/catalog_screen.dart';
+import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
@@ -461,6 +462,11 @@ class _Carousel extends StatelessWidget {
                 item: item.item,
                 heroTag: heroTag,
                 onTap: () => onTapWithHero(item, heroTag),
+                onLongPress: () => showMediaCardActions(
+                  context,
+                  item.item,
+                  onViewDetails: () => openDetails(context, item.item),
+                ),
               ),
             ),
           );

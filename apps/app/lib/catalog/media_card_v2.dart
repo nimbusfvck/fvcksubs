@@ -21,12 +21,14 @@ class MediaCardV2 extends StatelessWidget {
     super.key,
     required this.item,
     required this.onTap,
+    this.onLongPress,
     this.showSubtitle = true,
     this.heroTag,
   });
 
   final MediaItemV2 item;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool showSubtitle;
 
   /// Optional route-specific tag used when the same item appears more than once.
@@ -34,7 +36,7 @@ class MediaCardV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Clickable(onTap: onTap, child: _content());
+      Clickable(onTap: onTap, onLongPress: onLongPress, child: _content());
 
   Widget _content() {
     final value = item;

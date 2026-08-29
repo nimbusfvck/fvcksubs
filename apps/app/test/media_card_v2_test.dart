@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:fvcksubs_app/catalog/media_card_actions.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
+
+import 'support/harness.dart';
 
 void main() {
   const ref = MediaRef(
@@ -38,6 +44,57 @@ void main() {
     expect(find.text('Standalone video'), findsOneWidget);
     expect(find.text('LIVE'), findsNothing);
     expect(find.byType(Hero), findsOneWidget);
+  });
+
+  testWidgets('long press opens the favorite action without tapping', (
+    tester,
+  ) async {
+    const item = VideoItemV2(ref: ref, title: 'Long-press video');
+    final library = LibraryController(store: _MemoryLibraryStore());
+    var tapped = false;
+    var detailsOpened = false;
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        libraryController: library,
+        child: Builder(
+          builder: (context) => SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: item,
+              onTap: () => tapped = true,
+              onLongPress: () => showMediaCardActions(
+                context,
+                item,
+                onViewDetails: () => detailsOpened = true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.longPress(find.byType(MediaCardV2));
+    await tester.pumpAndSettle();
+
+    expect(tapped, isFalse);
+    expect(find.text('Add to favorites'), findsOneWidget);
+
+    await tester.tap(find.text('Add to favorites'));
+    await tester.pumpAndSettle();
+
+    expect(library.isFavorite(item.ref), isTrue);
+
+    await tester.longPress(find.byType(MediaCardV2));
+    await tester.pumpAndSettle();
+    expect(find.text('View details'), findsOneWidget);
+
+    await tester.tap(find.text('View details'));
+    await tester.pumpAndSettle();
+
+    expect(detailsOpened, isTrue);
   });
 
   testWidgets('an unreleased movie shows its release date over the poster', (
@@ -352,3 +409,13 @@ void main() {
 }
 
 void _noop() {}
+
+class _MemoryLibraryStore implements LibraryStore {
+  Map<String, UserMediaState> records = {};
+
+  @override
+  Future<Map<String, UserMediaState>> load() async => records;
+
+  @override
+  Future<void> save(Map<String, UserMediaState> next) async => records = next;
+}

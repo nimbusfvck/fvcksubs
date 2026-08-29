@@ -11,6 +11,7 @@ class Clickable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.focusNode,
     this.autofocus = false,
     this.canRequestFocus = true,
@@ -23,6 +24,7 @@ class Clickable extends StatefulWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final FocusNode? focusNode;
   final bool autofocus;
   final bool canRequestFocus;
@@ -71,7 +73,7 @@ class _ClickableState extends State<Clickable> {
 
   @override
   Widget build(BuildContext context) {
-    final isEnabled = widget.onTap != null;
+    final isEnabled = widget.onTap != null || widget.onLongPress != null;
     final showRing = isEnabled && (_hovered || _focused);
     final radius = widget.borderRadius ?? AppRadius.lg;
 
@@ -96,6 +98,7 @@ class _ClickableState extends State<Clickable> {
           color: widget.color,
           child: InkWell(
             onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
             focusNode: widget.focusNode,
             autofocus: widget.autofocus,
             canRequestFocus: widget.canRequestFocus,
