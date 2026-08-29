@@ -19,7 +19,13 @@ import 'widgets/shorts_feed_card.dart';
 /// existing playback route via [watchShortsItem]; nothing here substitutes
 /// for it.
 class ShortsPage extends StatefulWidget {
-  const ShortsPage({super.key});
+  const ShortsPage({super.key, this.onImmersiveChanged});
+
+  /// Called with `true` once the viewer switches to the full/cover fit
+  /// mode, `false` when they switch back — lets the shell (bottom nav bar)
+  /// go edge-to-edge behind the video only while it's actually filling the
+  /// screen.
+  final ValueChanged<bool>? onImmersiveChanged;
 
   @override
   State<ShortsPage> createState() => _ShortsPageState();
@@ -120,7 +126,10 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
 
   void _toggleMute() => setState(() => _muted = !_muted);
 
-  void _toggleFit() => setState(() => _fitMode = _fitMode.toggled);
+  void _toggleFit() {
+    setState(() => _fitMode = _fitMode.toggled);
+    widget.onImmersiveChanged?.call(_fitMode == PlayerFitMode.cover);
+  }
 
   Future<void> _watch(MediaItemV2 item, MediaDetailV2? detail) async {
     try {

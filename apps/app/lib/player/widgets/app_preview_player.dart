@@ -55,6 +55,9 @@ Widget defaultPreviewNativePlayerBuilder(
   looping: looping,
   playing: playing,
   preview: true,
+  // Unlike a decorative auto-loop preview, this player *is* the thing the
+  // viewer is actively watching — keep the screen on while it plays.
+  wakelock: true,
   fit: fit,
   onControllerCreated: onControllerCreated,
   onPlaybackReady: onPlaybackReady,

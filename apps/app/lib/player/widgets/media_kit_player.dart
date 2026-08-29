@@ -67,6 +67,7 @@ class MediaKitPlayerView extends StatefulWidget {
     this.looping = false,
     this.playing = true,
     this.preview = false,
+    this.wakelock,
     this.fit = BoxFit.contain,
   });
 
@@ -87,9 +88,15 @@ class MediaKitPlayerView extends StatefulWidget {
   /// Controls playback without destroying the native player.
   final bool playing;
 
-  /// Skips wakelock and app-lifecycle handling for a short embedded preview
-  /// that isn't the app's primary playback surface.
+  /// Uses a small buffer and skips disk caching for a short embedded
+  /// preview.
   final bool preview;
+
+  /// Whether to keep the screen awake while this player exists. Defaults to
+  /// `!preview` — a decorative auto-loop preview doesn't hold the screen on,
+  /// but a caller whose preview *is* the primary thing being watched (e.g.
+  /// Shorts) can opt in explicitly.
+  final bool? wakelock;
 
   /// Initial fill mode. [BoxFit.cover] and anything else besides
   /// [BoxFit.contain] map to [PlayerFitMode.cover].
@@ -115,7 +122,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     _fitMode = widget.fit == BoxFit.contain
         ? PlayerFitMode.contain
         : PlayerFitMode.cover;
-    if (!widget.preview) {
+    if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.addObserver(this);
       _wakelock = PlayerWakelockLease.acquire();
       _wakelockRefreshTimer = Timer.periodic(
@@ -262,7 +269,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   @override
   void dispose() {
     _wakelockRefreshTimer?.cancel();
-    if (!widget.preview) {
+    if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.removeObserver(this);
       _wakelock?.release();
     }

@@ -222,22 +222,40 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
             ),
           ),
           Positioned(
-            left: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: AppSpacing.md,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(child: _InfoOverlay(item: widget.item, detail: widget.detail)),
-                const SizedBox(width: AppSpacing.sm),
-                _ActionRail(
-                  item: widget.item,
-                  detail: widget.detail,
-                  muted: widget.muted,
-                  onWatch: widget.onWatch,
-                  onToggleMute: widget.onToggleMute,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            // In the shell's edge-to-edge/cover fit mode the bottom nav bar
+            // floats over the video rather than reserving its own space
+            // (HomeShell's `extendBody`), which is reported back here as
+            // extra unsafe bottom inset — SafeArea keeps this row above it
+            // without needing to know the nav bar's height itself. Outside
+            // that mode the inset is zero and this is just the usual
+            // padding.
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.md,
                 ),
-              ],
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(child: _InfoOverlay(item: widget.item, detail: widget.detail)),
+                    const SizedBox(width: AppSpacing.sm),
+                    _ActionRail(
+                      item: widget.item,
+                      detail: widget.detail,
+                      muted: widget.muted,
+                      onWatch: widget.onWatch,
+                      onToggleMute: widget.onToggleMute,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

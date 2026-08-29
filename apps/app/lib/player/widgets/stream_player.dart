@@ -81,6 +81,7 @@ Widget mobilePlayerBuilder(
   bool looping = false,
   bool playing = true,
   bool preview = false,
+  bool? wakelock,
   BoxFit fit = BoxFit.contain,
   Key? key,
 }) => BetterPlayerView(
@@ -97,6 +98,7 @@ Widget mobilePlayerBuilder(
   looping: looping,
   playing: playing,
   preview: preview,
+  wakelock: wakelock,
   fit: fit,
 );
 
@@ -117,6 +119,7 @@ class BetterPlayerView extends StatefulWidget {
     this.fit = BoxFit.contain,
     this.playing = true,
     this.preview = false,
+    this.wakelock,
   });
 
   final PlayableStream stream;
@@ -157,6 +160,12 @@ class BetterPlayerView extends StatefulWidget {
 
   /// Uses a small buffer and skips disk caching for short embedded previews.
   final bool preview;
+
+  /// Whether to keep the screen awake while this player exists. Defaults to
+  /// `!preview` — a decorative auto-loop preview doesn't hold the screen on,
+  /// but a caller whose preview *is* the primary thing being watched (e.g.
+  /// Shorts) can opt in explicitly.
+  final bool? wakelock;
 
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
@@ -202,7 +211,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
   @override
   void initState() {
     super.initState();
-    if (!widget.preview) {
+    if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.addObserver(this);
       _wakelock = PlayerWakelockLease.acquire();
       _wakelockRefreshTimer = Timer.periodic(
@@ -295,7 +304,7 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
     _liveHeartbeatTimer?.cancel();
     _bufferingDiagnosticTimer?.cancel();
     _wakelockRefreshTimer?.cancel();
-    if (!widget.preview) {
+    if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.removeObserver(this);
       _wakelock?.release();
     }

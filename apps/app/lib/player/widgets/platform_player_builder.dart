@@ -31,6 +31,7 @@ Widget platformPlayerBuilder(
   bool looping = false,
   bool playing = true,
   bool preview = false,
+  bool? wakelock,
   BoxFit fit = BoxFit.contain,
   Key? key,
 }) =>
@@ -49,6 +50,7 @@ Widget platformPlayerBuilder(
         looping: looping,
         playing: playing,
         preview: preview,
+        wakelock: wakelock,
         fit: fit,
       )
     : mobilePlayerBuilder(
@@ -65,6 +67,7 @@ Widget platformPlayerBuilder(
         looping: looping,
         playing: playing,
         preview: preview,
+        wakelock: wakelock,
         fit: fit,
         key: key,
       );

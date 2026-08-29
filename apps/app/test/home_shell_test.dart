@@ -69,6 +69,68 @@ void main() {
     expect(find.widgetWithText(AppPageBar, 'Settings'), findsOneWidget);
   });
 
+  testWidgets(
+    'Shorts full-screen fit extends the nav bar over the video, and '
+    'switching away resets it',
+    (tester) async {
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          catalogs: [
+            FakeCatalog(
+              id: 'previews',
+              name: 'Previews',
+              categories: const [],
+              items: [fakeItem(id: 'one', title: 'one')],
+              surface: CatalogSurface.preview,
+            ),
+          ],
+          previewFor: {
+            'one': const PreviewResponse(
+              sources: [
+                DirectPreviewSource(
+                  id: 'd1',
+                  stream: PlayableStream(url: 'https://cdn.example.com/1.mp4'),
+                ),
+              ],
+            ),
+          },
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        wrapApp(child: const HomeShell(), registry: registry),
+      );
+      await tester.tap(find.text('Shorts'));
+      await tester.pump();
+      await tester.pump();
+
+      Scaffold shellScaffold() => tester
+          .widgetList<Scaffold>(find.byType(Scaffold))
+          .firstWhere((s) => s.bottomNavigationBar != null);
+      NavigationBar navBar() => tester.widget<NavigationBar>(find.byType(NavigationBar));
+
+      expect(shellScaffold().extendBody, isFalse);
+      expect(navBar().backgroundColor, isNull);
+
+      await tester.tap(find.byTooltip('Fit screen'));
+      await tester.pump();
+
+      expect(shellScaffold().extendBody, isTrue);
+      expect(navBar().backgroundColor, isNotNull);
+
+      // Leaving Shorts drops the immersive state even though the fit
+      // toggle itself is session-local to the (now discarded) page.
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Shorts'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(shellScaffold().extendBody, isFalse);
+      expect(navBar().backgroundColor, isNull);
+    },
+  );
+
   testWidgets('settings is a real destination', (tester) async {
     await tester.pumpWidget(
       wrapApp(child: const HomeShell(), registry: ExtensionRegistry([])),

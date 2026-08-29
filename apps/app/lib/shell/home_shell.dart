@@ -22,15 +22,25 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   AppDestination _destination = AppDestination.home;
 
+  // Session-only, mirrors ShortsPage's own fit-mode state: starts false and
+  // resets on every destination switch, since re-entering Shorts always
+  // starts back at the letterboxed fit (see ShortsPage's `_fitMode`).
+  bool _shortsImmersive = false;
+
   Widget get _body => switch (_destination) {
     AppDestination.home => const HomePage(),
     AppDestination.library => const LibraryPage(),
-    AppDestination.shorts => const ShortsPage(),
+    AppDestination.shorts => ShortsPage(
+      onImmersiveChanged: (immersive) =>
+          setState(() => _shortsImmersive = immersive),
+    ),
     AppDestination.settings => const SettingsPage(),
   };
 
-  void _select(int index) =>
-      setState(() => _destination = AppDestination.values[index]);
+  void _select(int index) => setState(() {
+    _destination = AppDestination.values[index];
+    _shortsImmersive = false;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +69,9 @@ class _HomeShellState extends State<HomeShell> {
       );
     }
 
+    final immersiveShorts =
+        _destination == AppDestination.shorts && _shortsImmersive;
+
     return Scaffold(
       // Home owns an edge-to-edge hero so its artwork and gradients continue
       // behind the status bar. Other destinations keep the shared safe inset.
@@ -66,9 +79,14 @@ class _HomeShellState extends State<HomeShell> {
           _destination == AppDestination.home || _destination == AppDestination.shorts
           ? body
           : SafeArea(child: body),
+      // Only Shorts' own full/cover fit mode asks the video to run behind
+      // the nav bar too — every other destination keeps it opaque and
+      // reserved, as before.
+      extendBody: immersiveShorts,
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: _select,
+        backgroundColor: immersiveShorts ? Colors.black.withValues(alpha: 0.35) : null,
         destinations: [
           for (final destination in AppDestination.values)
             NavigationDestination(
