@@ -514,6 +514,11 @@ class FakeAppPlayerController implements AppPlayerController {
 
   bool get hasListener => _events.hasListener;
 
+  /// The most recent mode passed to [setFit] — lets a test assert a fit
+  /// toggle reached the live controller, not just the widget's initial
+  /// construction.
+  PlayerFitMode? lastFit;
+
   @override
   ValueListenable<AppPlayerValue> get value => _value;
 
@@ -557,7 +562,7 @@ class FakeAppPlayerController implements AppPlayerController {
   Future<void> setAudioTrack(AppAudioTrack track) async {}
 
   @override
-  Future<void> setFit(PlayerFitMode mode) async {}
+  Future<void> setFit(PlayerFitMode mode) async => lastFit = mode;
 
   @override
   Future<void> setViewportAspectRatio(double ratio) async {}
@@ -572,7 +577,12 @@ class FakeAppPlayerController implements AppPlayerController {
 /// A [PreviewNativePlayerBuilder] fake that records the stream/flags it was
 /// given and renders a marker, so a test can assert preview playback started
 /// without a native player. [controller] is a fresh [FakeAppPlayerController]
-/// per build — use it to simulate a native playback error via [emitError].
+/// the first time a given caller [BuildContext] (i.e. Element — the real
+/// native views' `initState` runs once per Element too) invokes [build];
+/// later rebuilds of that same Element — e.g. a fit-only prop change — reuse
+/// it, matching how a real native player widget keeps its adapter alive
+/// across such an update instead of recreating it. A genuinely different
+/// Element (a different page's card) still gets its own controller.
 class RecordingPreviewPlayer {
   PlayableStream? played;
   bool? playedMuted;
@@ -581,6 +591,7 @@ class RecordingPreviewPlayer {
   BoxFit? playedFit;
   int buildCount = 0;
   FakeAppPlayerController? controller;
+  BuildContext? _controllerContext;
 
   Widget build(
     BuildContext context,
@@ -599,8 +610,11 @@ class RecordingPreviewPlayer {
     playedPlaying = playing;
     playedFit = fit;
     buildCount++;
-    controller = FakeAppPlayerController();
-    onControllerCreated?.call(controller);
+    if (controller == null || _controllerContext != context) {
+      controller = FakeAppPlayerController();
+      _controllerContext = context;
+      onControllerCreated?.call(controller);
+    }
     return const SizedBox(key: Key('fake-preview-player'), height: 100);
   }
 

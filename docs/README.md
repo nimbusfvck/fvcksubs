@@ -32,6 +32,7 @@ Browse or search → Select content → Select source → Resolve → Play
 | 10 | [Hardcode Audit](10-hardcode-audit.md) | Values that must move to protocol data, configuration, or shared policy |
 | 12 | [App Engineering Guidelines](12-app-engineering-guidelines.md) | Feature ownership, Cubit, dependency injection, errors, comments, and tests |
 | 13 | [Issue Fix Workflow](13-issue-fix-workflow.md) | Evidence-led root-cause investigation, implementation, validation, and handoff |
+| 14 | [Shorts Preview Feed Plan](14-shorts-preview-feed-plan.md) | Backward-compatible preview contracts, player adapters, Shorts UX, and delivery order |
 
 Extension authors can use the dependency-free [JavaScript SDK](../sdk/js/README.md)
 for provider registration, role dispatch, restart-safe source ids, and editor

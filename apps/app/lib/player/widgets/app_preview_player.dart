@@ -15,6 +15,9 @@ import 'platform_player_builder.dart';
 /// "which embed providers this app can actually play."
 bool isSupportedPreviewProvider(String provider) => provider == 'youtube';
 
+PlayerFitMode _playerFitModeOf(BoxFit fit) =>
+    fit == BoxFit.cover ? PlayerFitMode.cover : PlayerFitMode.contain;
+
 /// Renders one already-resolved [PlayableStream] as a preview: muted/looping
 /// as requested, no transport controls, no subtitle/quality wiring — the
 /// concerns full playback needs and previews don't.
@@ -108,6 +111,7 @@ class AppPreviewPlayer extends StatefulWidget {
 class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
   PlayableStream? _resolvedStream;
   StreamSubscription<AppPlayerEvent>? _eventsSubscription;
+  AppPlayerController? _controller;
 
   @override
   void initState() {
@@ -121,6 +125,17 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
     if (oldWidget.source != widget.source) {
       _resolvedStream = null;
       _resolve();
+      return;
+    }
+    // The native player widgets only read `fit` once, at construction —
+    // same `source` means the same underlying player instance survives
+    // this update (see the `ValueKey(source.id)` callers key it by), so a
+    // fit change has to go through the live controller's own setFit,
+    // exactly like the main player's own fit button does. Without this, a
+    // toggle silently no-ops until a *different* source (a fresh player)
+    // happens to pick up the new value at its own construction.
+    if (oldWidget.fit != widget.fit) {
+      unawaited(_controller?.setFit(_playerFitModeOf(widget.fit)));
     }
   }
 
@@ -155,9 +170,8 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
 
   void _onControllerCreated(Object? controller) {
     unawaited(_eventsSubscription?.cancel());
-    _eventsSubscription = (controller as AppPlayerController?)?.events.listen((
-      event,
-    ) {
+    _controller = controller as AppPlayerController?;
+    _eventsSubscription = _controller?.events.listen((event) {
       if (!mounted) return;
       if (event.type == AppPlayerEventType.error) {
         widget.onError?.call(event.error ?? StateError('Playback failed'));

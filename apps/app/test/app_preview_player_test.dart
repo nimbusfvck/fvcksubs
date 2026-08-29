@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -114,6 +115,44 @@ void main() {
     expect(previewPlayer.playedMuted, isFalse);
     expect(previewPlayer.playedPlaying, isFalse);
   });
+
+  testWidgets(
+    'a fit change on the same source reaches the live controller, not just '
+    'the next build',
+    (tester) async {
+      final previewPlayer = RecordingPreviewPlayer();
+
+      Future<void> pumpWith(BoxFit fit) => tester.pumpWidget(
+        wrapApp(
+          child: AppPreviewPlayer(
+            source: _directSource,
+            muted: true,
+            playing: true,
+            fit: fit,
+            youtubeResolver: _neverCalledResolver,
+          ),
+          registry: ExtensionRegistry([]),
+          previewPlayer: previewPlayer,
+        ),
+      );
+
+      await pumpWith(BoxFit.contain);
+      await tester.pump();
+      // The real native player widgets only read `fit` once, at
+      // construction — a same-source update has to reach the *live*
+      // controller's own setFit, the same mechanism the main player's fit
+      // button already uses, not just flow through as a rebuilt prop.
+      expect(previewPlayer.controller!.lastFit, isNull);
+
+      await pumpWith(BoxFit.cover);
+      await tester.pump();
+      expect(previewPlayer.controller!.lastFit, PlayerFitMode.cover);
+
+      await pumpWith(BoxFit.contain);
+      await tester.pump();
+      expect(previewPlayer.controller!.lastFit, PlayerFitMode.contain);
+    },
+  );
 
   testWidgets('an unsupported embed provider calls onError, no network call', (
     tester,
