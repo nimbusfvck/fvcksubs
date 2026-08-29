@@ -156,6 +156,41 @@ void main() {
     expect(find.text('LIVE'), findsOneWidget);
   });
 
+  testWidgets('event branding reaches the generated match banner', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Branded match',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                participants: const [
+                  Participant(name: 'Side A'),
+                  Participant(name: 'Side B'),
+                ],
+                branding: const EventBranding(
+                  logo: ImageRef('https://cdn.example/league.svg'),
+                  primaryColor: '#37003C',
+                  secondaryColor: '#00FF87',
+                ),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(GeneratedBanner), findsOneWidget);
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
+  });
+
   testWidgets('single-sided event renders its landscape artwork', (
     tester,
   ) async {

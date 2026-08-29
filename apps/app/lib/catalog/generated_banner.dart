@@ -70,14 +70,20 @@ class GeneratedBanner extends StatelessWidget {
     super.key,
     required this.participants,
     this.status = ScheduleState.unknown,
+    this.branding,
   });
 
   final List<Participant> participants;
 
   final ScheduleState status;
 
+  final EventBranding? branding;
+
   @visibleForTesting
-  static (Color, Color) fillsFor(List<Participant> participants) {
+  static (Color, Color) fillsFor(
+    List<Participant> participants, {
+    EventBranding? branding,
+  }) {
     final home = participants[0];
     final away = participants[1];
     final homeIndex = _paletteIndex(home.name);
@@ -87,17 +93,21 @@ class GeneratedBanner extends StatelessWidget {
     }
 
     final homeFill = _legibleFill(
-      _parseHex(home.color) ?? _bannerPalette[homeIndex],
+      _parseHex(branding?.primaryColor) ??
+          _parseHex(home.color) ??
+          _bannerPalette[homeIndex],
     );
     final awayFill = _legibleFill(
-      _parseHex(away.color) ?? _bannerPalette[awayIndex],
+      _parseHex(branding?.secondaryColor) ??
+          _parseHex(away.color) ??
+          _bannerPalette[awayIndex],
     );
     return (homeFill, _separated(homeFill, awayFill));
   }
 
   @override
   Widget build(BuildContext context) {
-    final (homeColor, awayColor) = fillsFor(participants);
+    final (homeColor, awayColor) = fillsFor(participants, branding: branding);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -131,6 +141,12 @@ class GeneratedBanner extends StatelessWidget {
                 ),
               ],
             ),
+            if (branding?.logo case final logo?)
+              Positioned(
+                top: AppSpacing.xs,
+                right: AppSpacing.xs,
+                child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.8),
+              ),
             if (status == ScheduleState.live)
               const Positioned(
                 left: AppSpacing.xs,
@@ -161,19 +177,23 @@ class GeneratedLiveArtwork extends StatelessWidget {
     required this.seed,
     this.participants = const [],
     this.logo,
+    this.branding,
   });
 
   final String seed;
   final List<Participant> participants;
   final ImageRef? logo;
 
+  final EventBranding? branding;
+
   @visibleForTesting
   static (Color, Color) fillsFor(
     String seed, {
     List<Participant> participants = const [],
+    EventBranding? branding,
   }) {
     if (participants.length >= 2) {
-      return GeneratedBanner.fillsFor(participants);
+      return GeneratedBanner.fillsFor(participants, branding: branding);
     }
 
     final participant = participants.isEmpty ? null : participants.first;
@@ -185,15 +205,23 @@ class GeneratedLiveArtwork extends StatelessWidget {
     }
 
     final primary = _legibleFill(
-      _parseHex(participant?.color) ?? _bannerPalette[primaryIndex],
+      _parseHex(branding?.primaryColor) ??
+          _parseHex(participant?.color) ??
+          _bannerPalette[primaryIndex],
     );
-    final secondary = _legibleFill(_bannerPalette[secondaryIndex]);
+    final secondary = _legibleFill(
+      _parseHex(branding?.secondaryColor) ?? _bannerPalette[secondaryIndex],
+    );
     return (primary, _separated(primary, secondary));
   }
 
   @override
   Widget build(BuildContext context) {
-    final (primary, secondary) = fillsFor(seed, participants: participants);
+    final (primary, secondary) = fillsFor(
+      seed,
+      participants: participants,
+      branding: branding,
+    );
     final motif = _LiveArtworkMotif.forKey(seed);
 
     return ExcludeSemantics(
@@ -495,6 +523,27 @@ class _Crest extends StatelessWidget {
               iconScale: fallbackIconScale,
             ),
           ),
+  );
+}
+
+class _BrandLogo extends StatelessWidget {
+  const _BrandLogo({required this.imageUrl, required this.height});
+
+  final String imageUrl;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: height,
+    width: height * 2.2,
+    child: CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      fadeInDuration: Duration.zero,
+      placeholder: (_, _) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => const SizedBox.shrink(),
+    ),
   );
 }
 

@@ -55,6 +55,16 @@ interface Schedule {
   /** Optional short display text supplied verbatim by the extension. */
   label?: string;
 }
+
+interface EventBranding {
+  /** Competition, tournament, or organizer mark. */
+  logo?: ImageRef;
+  /** Primary background color as `#RRGGBB`. */
+  primaryColor?: string;
+  /** Secondary background color as `#RRGGBB`. */
+  secondaryColor?: string;
+}
+
 interface Participant {
   /** Full name shown on event cards and used for source matching. */
   name: string;
@@ -109,6 +119,8 @@ interface EventItem extends MediaBase {
   schedule: Schedule;
   /** Optional participants in display order. */
   participants?: Participant[];
+  /** Optional competition, tournament, or organizer branding. */
+  branding?: EventBranding;
 }
 
 type MediaItem = VideoItem | SeriesItem | EpisodeItem | ChannelItem | EventItem;

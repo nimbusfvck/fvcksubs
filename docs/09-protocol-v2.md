@@ -60,11 +60,14 @@ interface EventItem extends MediaBase {
   kind: 'event';
   schedule: Schedule;
   participants?: Participant[];
+  branding?: EventBranding;
 }
 ```
 
 `video` describes a standalone playable work without assuming a film. `event`
 describes scheduled content without assuming a particular competition.
+`branding` is optional display data for a competition, tournament, or organizer;
+it does not change event matching or playback behavior.
 
 `subtitle` is extension-authored descriptive text. `releaseYear` and `rating`
 are optional structured values; the shell composes their card and detail
@@ -84,6 +87,12 @@ interface Schedule {
   startsAt: string;
   state?: 'scheduled' | 'live' | 'ended' | 'unknown';
   label?: string;
+}
+
+interface EventBranding {
+  logo?: ImageRef;
+  primaryColor?: string;
+  secondaryColor?: string;
 }
 ```
 
@@ -204,6 +213,10 @@ The host rejects:
 - provider IDs not declared by the manifest;
 - incompatible DRM fields;
 - numbers outside their declared range.
+
+`EventItem.branding` is an optional additive field. Existing extensions that do
+not send it remain valid. An extension that sends it requires a host build that
+understands the field because item decoding remains strict.
 
 SDK registration performs the same structural checks before a value reaches
 the Dart decoder. Error messages include the role and field path.

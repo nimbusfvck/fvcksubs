@@ -62,6 +62,42 @@ void main() {
     expect(item.schedule.startsAt, DateTime.utc(2026, 8, 19, 12, 30));
   });
 
+  test('event branding round-trips with a logo and competition colors', () {
+    final item = EventItemV2(
+      ref: ref,
+      title: 'Branded event',
+      schedule: Schedule(startsAt: DateTime.utc(2026, 8, 19, 12, 30)),
+      branding: EventBranding(
+        logo: ImageRef('https://cdn.example/competition.svg'),
+        primaryColor: '#37003C',
+        secondaryColor: '#00FF87',
+      ),
+    );
+
+    expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('event branding validates colors and requires useful data', () {
+    final base = {
+      'ref': ref.toJson(),
+      'kind': 'event',
+      'title': 'Invalid branding',
+      'schedule': {'startsAt': '2026-08-19T12:30:00Z'},
+    };
+
+    expect(
+      () => MediaItemV2.fromJson({
+        ...base,
+        'branding': {'primaryColor': 'purple'},
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => MediaItemV2.fromJson({...base, 'branding': {}}),
+      throwsFormatException,
+    );
+  });
+
   test('video rejects event-only fields', () {
     expect(
       () => MediaItemV2.fromJson({

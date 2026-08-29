@@ -114,7 +114,12 @@ class _Match extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(child: GeneratedBanner(participants: item.participants)),
+      Expanded(
+        child: GeneratedBanner(
+          participants: item.participants,
+          branding: item.branding,
+        ),
+      ),
       _CardFooter(item: item, showSubtitle: showSubtitle),
     ],
   );
@@ -149,6 +154,7 @@ class _SingleEventArtwork extends StatelessWidget {
             seed: _eventArtworkSeed(item),
             participants: item.participants,
             logo: item.artwork?.logo,
+            branding: item.branding,
           )
         : CachedNetworkImage(
             imageUrl: landscape.url,

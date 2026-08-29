@@ -216,9 +216,10 @@ flowchart TD
 
 The shell renders **what an item carries**, not what its kind implies. A two-sided fixture
 with no artwork still reads as a real card rather than an empty rectangle, because a banner
-is synthesized from the participants — using colours an extension supplies when it has them,
-and a deterministic fallback when it does not. A malformed colour degrades to that fallback
-rather than throwing.
+is synthesized from the event's optional branding and participants — using competition colours
+when supplied, then participant colours when available,
+and a deterministic fallback when it does not. Participant colours that cannot be parsed
+degrade to that fallback; malformed branding is rejected at the protocol boundary.
 
 Scores are carried in the model but **not rendered** — a product decision, reversible
 without any protocol change.

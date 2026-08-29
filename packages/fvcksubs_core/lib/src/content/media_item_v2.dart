@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../json_util.dart';
+import 'event_branding.dart';
 import 'image_ref.dart';
 import 'media_ref.dart';
 import 'participant.dart';
@@ -251,6 +252,7 @@ sealed class MediaItemV2 extends Equatable {
           ..._baseKeys,
           'schedule',
           'participants',
+          'branding',
         }, 'event item');
         final schedule = json['schedule'];
         if (schedule is! Map) {
@@ -260,6 +262,10 @@ sealed class MediaItemV2 extends Equatable {
         if (participants != null && participants is! List) {
           throw const FormatException('event participants must be a list');
         }
+        final branding = json['branding'];
+        if (branding != null && branding is! Map) {
+          throw const FormatException('event branding must be an object');
+        }
         return EventItemV2._fromCommon(
           common,
           schedule: Schedule.fromJson(schedule.cast<String, Object?>()),
@@ -267,6 +273,11 @@ sealed class MediaItemV2 extends Equatable {
             for (final entry in (participants as List?) ?? const [])
               Participant.fromJson((entry as Map).cast<String, Object?>()),
           ],
+          branding: branding == null
+              ? null
+              : EventBranding.fromJson(
+                  (branding as Map).cast<String, Object?>(),
+                ),
         );
     }
   }
@@ -493,12 +504,14 @@ final class EventItemV2 extends MediaItemV2 {
     super.rating,
     super.artwork,
     this.participants = const [],
+    this.branding,
   });
 
   EventItemV2._fromCommon(
     _CommonItemFields value, {
     required this.schedule,
     required this.participants,
+    required this.branding,
   }) : super(
          ref: value.ref,
          title: value.title,
@@ -515,6 +528,9 @@ final class EventItemV2 extends MediaItemV2 {
   /// Optional event participants.
   final List<Participant> participants;
 
+  /// Optional competition, tournament, or organizer branding.
+  final EventBranding? branding;
+
   @override
   /// The `event` discriminator.
   MediaKindV2 get kind => MediaKindV2.event;
@@ -525,10 +541,11 @@ final class EventItemV2 extends MediaItemV2 {
     'schedule': schedule.toJson(),
     if (participants.isNotEmpty)
       'participants': participants.map((value) => value.toJson()).toList(),
+    if (branding != null) 'branding': branding!.toJson(),
   };
 
   @override
-  List<Object?> get props => [...super.props, schedule, participants];
+  List<Object?> get props => [...super.props, schedule, participants, branding];
 }
 
 const _baseKeys = {

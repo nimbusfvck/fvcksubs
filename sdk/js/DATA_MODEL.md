@@ -30,9 +30,11 @@ changes.
 | `subtitle` | no | Secondary card text and the fallback description on a detail page. Examples include a year, competition, or episode name. |
 | `artwork` | no | Shape-specific images. `portrait` is used by narrow cards, `landscape` by wide cards and detail headers, and `logo` for an optional title mark. |
 
-Only `event` accepts `schedule` and `participants`. Its schedule requires a
-UTC `startsAt`; `state` controls lifecycle indicators and `label` is optional
-display text. Only `episode` accepts `episode`, containing its `parentRef`,
+Only `event` accepts `schedule`, `participants`, and optional `branding`. Its
+schedule requires a UTC `startsAt`; `state` controls lifecycle indicators and
+`label` is optional display text. Branding can provide a competition,
+tournament, or organizer logo plus `#RRGGBB` primary and secondary colors for
+generated event artwork. Only `episode` accepts `episode`, containing its `parentRef`,
 opaque `groupId`, and one-based `position`. Fields from another kind are
 rejected instead of ignored.
 
@@ -50,6 +52,17 @@ rejected instead of ignored.
 | `logo` | no | Participant logo on event cards. |
 | `color` | no | CSS color used when the app generates fallback event artwork. |
 | `score` | no | Display-only score. Keep it a string so values such as `145/4` remain intact. |
+
+### `EventBranding`
+
+| Field | Required | Where the app uses it |
+|---|---:|---|
+| `logo` | no | Competition, tournament, or organizer mark on generated event artwork. |
+| `primaryColor` | no | Primary generated event-artwork color as `#RRGGBB`. |
+| `secondaryColor` | no | Secondary generated event-artwork color as `#RRGGBB`. |
+
+At least one branding field must be present when `branding` is supplied. The
+field is optional so existing event payloads remain valid.
 
 ### `CatalogQuery` and `CatalogPage`
 

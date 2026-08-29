@@ -372,10 +372,11 @@ MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
 }
 
 Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
-  EventItemV2(:final participants) => GeneratedLiveArtwork(
+  EventItemV2(:final participants, :final branding) => GeneratedLiveArtwork(
     seed: _artworkSeed(item),
     participants: participants,
     logo: item.artwork?.logo,
+    branding: branding,
   ),
   ChannelItemV2() => GeneratedLiveArtwork(
     seed: _artworkSeed(item),

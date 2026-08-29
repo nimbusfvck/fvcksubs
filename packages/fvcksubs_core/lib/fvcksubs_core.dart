@@ -5,6 +5,7 @@
 library;
 
 export 'src/content/image_ref.dart';
+export 'src/content/event_branding.dart';
 export 'src/content/media_detail_v2.dart';
 export 'src/content/media_item_v2.dart';
 export 'src/content/media_item_version_adapter.dart';
