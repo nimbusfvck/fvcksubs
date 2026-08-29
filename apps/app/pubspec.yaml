@@ -32,8 +32,21 @@ dependencies:
   path_provider: ^2.1.5
   sembast: ^3.8.5+1
   url_launcher: ^6.3.2
+  # Resolves a YouTube video id into short-lived media streams for the Shorts
+  # preview feature. Pinned to an unmerged fork commit (not the mutable
+  # branch): the upstream pub.dev release fails bot-detection reliably on
+  # every client except a spoofed visionOS one, which this fork adds. See
+  # docs/14-shorts-preview-feed-plan.md for the probe results that led here.
+  youtube_explode_dart:
+    git:
+      url: https://github.com/its-ashutosh-pathak/youtube_explode_dart.git
+      ref: edad2760cc7998bcc18013dc9880c052ad32598f
 
 dev_dependencies:
+  # Test-only: youtube_preview_resolver_test builds StreamInfo fixtures whose
+  # codec field is a http_parser MediaType, otherwise only a transitive dep
+  # of youtube_explode_dart.
+  http_parser: ^4.0.0
   # Test-only: installer_controller_test builds a repo.json whose declared
   # bundle hash has to match what ExtensionInstaller computes.
   crypto: ^3.0.7

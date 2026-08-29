@@ -13,6 +13,7 @@ import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
+import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
 import 'shell/home_shell.dart';
 import 'shell/system_ui_visibility.dart';
@@ -36,6 +37,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.nsfwController,
     this.navigatorKey,
     this.playerBuilder = defaultPlayerBuilder,
+    this.previewPlayerBuilder = defaultPreviewNativePlayerBuilder,
   });
 
   final ExtensionRegistry registry;
@@ -66,11 +68,14 @@ class FvcksubsApp extends StatelessWidget {
 
   final PlayerBuilder playerBuilder;
 
+  final PreviewNativePlayerBuilder previewPlayerBuilder;
+
   @override
   Widget build(BuildContext context) => AppScope(
     registry: registry,
     deviceClass: deviceClass,
     playerBuilder: playerBuilder,
+    previewPlayerBuilder: previewPlayerBuilder,
     addonsController: addonsController,
     installerController: installerController,
     libraryController: libraryController,

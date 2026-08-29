@@ -63,6 +63,11 @@ class MediaKitPlayerView extends StatefulWidget {
     this.preferredSubtitleLanguage,
     this.preferredExternalSubtitle,
     this.subtitleAppearance,
+    this.muted = false,
+    this.looping = false,
+    this.playing = true,
+    this.preview = false,
+    this.fit = BoxFit.contain,
   });
 
   final PlayableStream stream;
@@ -72,6 +77,24 @@ class MediaKitPlayerView extends StatefulWidget {
   final String? preferredSubtitleLanguage;
   final SubtitleTrack? preferredExternalSubtitle;
   final SubtitleAppearance? subtitleAppearance;
+
+  /// Starts playback without audio, useful for autoplay previews.
+  final bool muted;
+
+  /// Repeats the stream instead of stopping at its end.
+  final bool looping;
+
+  /// Controls playback without destroying the native player.
+  final bool playing;
+
+  /// Skips wakelock and app-lifecycle handling for a short embedded preview
+  /// that isn't the app's primary playback surface.
+  final bool preview;
+
+  /// Initial fill mode. [BoxFit.cover] and anything else besides
+  /// [BoxFit.contain] map to [PlayerFitMode.cover].
+  final BoxFit fit;
+
   @override
   State<MediaKitPlayerView> createState() => _MediaKitPlayerViewState();
 }
@@ -82,19 +105,24 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   late final VideoController _video;
   late final _MediaKitControllerAdapter _adapter;
   final GlobalKey<VideoState> _videoKey = GlobalKey();
-  PlayerFitMode _fitMode = PlayerFitMode.contain;
+  late PlayerFitMode _fitMode;
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _wakelock = PlayerWakelockLease.acquire();
-    _wakelockRefreshTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _wakelock?.refresh(),
-    );
+    _fitMode = widget.fit == BoxFit.contain
+        ? PlayerFitMode.contain
+        : PlayerFitMode.cover;
+    if (!widget.preview) {
+      WidgetsBinding.instance.addObserver(this);
+      _wakelock = PlayerWakelockLease.acquire();
+      _wakelockRefreshTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _wakelock?.refresh(),
+      );
+    }
     mk.MediaKit.ensureInitialized();
     _player = mk.Player();
     _video = VideoController(_player);
@@ -117,7 +145,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     try {
       await _player.open(
         mk.Media(widget.stream.url, httpHeaders: widget.stream.headers),
+        play: widget.playing,
       );
+      if (widget.muted) await _player.setVolume(0);
+      if (widget.looping) {
+        await _player.setPlaylistMode(mk.PlaylistMode.single);
+      }
     } catch (error) {
       _adapter.reportError(error);
       return;
@@ -216,10 +249,23 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   }
 
   @override
+  void didUpdateWidget(covariant MediaKitPlayerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playing != widget.playing) {
+      unawaited(widget.playing ? _player.play() : _player.pause());
+    }
+    if (oldWidget.muted != widget.muted) {
+      unawaited(_player.setVolume(widget.muted ? 0 : 100));
+    }
+  }
+
+  @override
   void dispose() {
     _wakelockRefreshTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    _wakelock?.release();
+    if (!widget.preview) {
+      WidgetsBinding.instance.removeObserver(this);
+      _wakelock?.release();
+    }
     _adapter.dispose();
     unawaited(_player.dispose());
     super.dispose();

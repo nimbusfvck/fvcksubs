@@ -77,6 +77,11 @@ Widget mobilePlayerBuilder(
   String? preferredSubtitleLanguage,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
+  bool muted = false,
+  bool looping = false,
+  bool playing = true,
+  bool preview = false,
+  BoxFit fit = BoxFit.contain,
   Key? key,
 }) => BetterPlayerView(
   key: key,
@@ -88,6 +93,11 @@ Widget mobilePlayerBuilder(
   preferredSubtitleLanguage: preferredSubtitleLanguage,
   preferredExternalSubtitle: preferredExternalSubtitle,
   subtitleAppearance: subtitleAppearance,
+  muted: muted,
+  looping: looping,
+  playing: playing,
+  preview: preview,
+  fit: fit,
 );
 
 class BetterPlayerView extends StatefulWidget {

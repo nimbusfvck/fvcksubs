@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
@@ -5,7 +8,9 @@ import 'package:fvcksubs_app/addons/installer_controller.dart';
 import 'package:fvcksubs_app/app_scope.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
+import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
+import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
@@ -467,6 +472,112 @@ class RecordingPlayer {
   }
 }
 
+/// A minimal [AppPlayerController] fake — just enough surface to construct
+/// one and emit an [AppPlayerEventType.error] on demand.
+class FakeAppPlayerController implements AppPlayerController {
+  FakeAppPlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
+    : _value = ValueNotifier(initialValue);
+
+  final ValueNotifier<AppPlayerValue> _value;
+  final StreamController<AppPlayerEvent> _events =
+      StreamController<AppPlayerEvent>.broadcast(sync: true);
+
+  void emitError(Object error) {
+    _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
+  }
+
+  bool get hasListener => _events.hasListener;
+
+  @override
+  ValueListenable<AppPlayerValue> get value => _value;
+
+  @override
+  Stream<AppPlayerEvent> get events => _events.stream;
+
+  @override
+  List<AppQualityTrack> get qualityTracks => const [];
+
+  @override
+  AppQualityTrack? get activeQuality => null;
+
+  @override
+  List<AppAudioTrack> get audioTracks => const [];
+
+  @override
+  AppAudioTrack? get activeAudio => null;
+
+  @override
+  SubtitleTrack? get activeSubtitle => null;
+
+  @override
+  bool get isFullScreen => false;
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> seekTo(Duration position) async {}
+
+  @override
+  Future<void> setSubtitle(SubtitleTrack? track) async {}
+
+  @override
+  Future<void> setQuality(AppQualityTrack? track) async {}
+
+  @override
+  Future<void> setAudioTrack(AppAudioTrack track) async {}
+
+  @override
+  Future<void> setFit(PlayerFitMode mode) async {}
+
+  @override
+  Future<void> setViewportAspectRatio(double ratio) async {}
+
+  @override
+  Future<void> toggleFullScreen() async {}
+
+  @override
+  Future<void> exitFullScreen() async {}
+}
+
+/// A [PreviewNativePlayerBuilder] fake that records the stream/flags it was
+/// given and renders a marker, so a test can assert preview playback started
+/// without a native player. [controller] is a fresh [FakeAppPlayerController]
+/// per build — use it to simulate a native playback error via [emitError].
+class RecordingPreviewPlayer {
+  PlayableStream? played;
+  bool? playedMuted;
+  bool? playedLooping;
+  bool? playedPlaying;
+  int buildCount = 0;
+  FakeAppPlayerController? controller;
+
+  Widget build(
+    BuildContext context,
+    PlayableStream stream, {
+    required bool muted,
+    required bool looping,
+    required bool playing,
+    Key? key,
+    void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
+  }) {
+    played = stream;
+    playedMuted = muted;
+    playedLooping = looping;
+    playedPlaying = playing;
+    buildCount++;
+    controller = FakeAppPlayerController();
+    onControllerCreated?.call(controller);
+    return const SizedBox(key: Key('fake-preview-player'), height: 100);
+  }
+
+  void emitError(Object error) => controller?.emitError(error);
+}
+
 /// In-memory [AddonSettingsStore] — no real `shared_preferences` plugin in a
 /// widget test.
 class FakeAddonSettingsStore implements AddonSettingsStore {
@@ -638,6 +749,7 @@ Widget wrapApp({
   required ExtensionRegistry registry,
   DeviceClass deviceClass = DeviceClass.handheld,
   RecordingPlayer? player,
+  RecordingPreviewPlayer? previewPlayer,
   AddonsController? addonsController,
   InstallerController? installerController,
   LibraryController? libraryController,
@@ -652,6 +764,7 @@ Widget wrapApp({
   registry: registry,
   deviceClass: deviceClass,
   playerBuilder: (player ?? RecordingPlayer()).build,
+  previewPlayerBuilder: (previewPlayer ?? RecordingPreviewPlayer()).build,
   addonsController:
       addonsController ??
       AddonsController(registry: registry, store: FakeAddonSettingsStore()),

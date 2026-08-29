@@ -11,6 +11,7 @@ import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
+import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
 import 'settings/nsfw_controller.dart';
 
@@ -20,6 +21,7 @@ class AppScope extends InheritedWidget {
     required this.registry,
     required this.deviceClass,
     required this.playerBuilder,
+    required this.previewPlayerBuilder,
     required this.addonsController,
     required this.installerController,
     required this.libraryController,
@@ -38,6 +40,8 @@ class AppScope extends InheritedWidget {
   final DeviceClass deviceClass;
 
   final PlayerBuilder playerBuilder;
+
+  final PreviewNativePlayerBuilder previewPlayerBuilder;
 
   final AddonsController addonsController;
 
@@ -70,6 +74,7 @@ class AppScope extends InheritedWidget {
       registry != oldWidget.registry ||
       deviceClass != oldWidget.deviceClass ||
       playerBuilder != oldWidget.playerBuilder ||
+      previewPlayerBuilder != oldWidget.previewPlayerBuilder ||
       addonsController != oldWidget.addonsController ||
       installerController != oldWidget.installerController ||
       libraryController != oldWidget.libraryController ||
