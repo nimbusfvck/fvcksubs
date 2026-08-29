@@ -15,49 +15,61 @@ const _resolution = VideoResolution(1280, 720);
 const _framerate = Framerate(30);
 final _codec = MediaType('video', 'mp4');
 
-HlsMuxedStreamInfo _hlsMuxed(String tagUrl) => HlsMuxedStreamInfo(
+HlsMuxedStreamInfo _hlsMuxed(
+  String tagUrl, {
+  VideoResolution resolution = _resolution,
+  int tag = 1,
+}) => HlsMuxedStreamInfo(
   _id,
-  1,
+  tag,
   Uri.parse(tagUrl),
   StreamContainer.m3u8,
   _size,
   _bitrate,
   'mp4a.40.2',
   'avc1',
-  '720p',
+  '${resolution.height}p',
   VideoQuality.high720,
-  _resolution,
+  resolution,
   _framerate,
   MediaType('application', 'vnd.apple.mpegurl'),
 );
 
-MuxedStreamInfo _muxed(String url) => MuxedStreamInfo(
+MuxedStreamInfo _muxed(
+  String url, {
+  VideoResolution resolution = _resolution,
+  int tag = 2,
+}) => MuxedStreamInfo(
   _id,
-  2,
+  tag,
   Uri.parse(url),
   _mp4,
   _size,
   _bitrate,
   'mp4a.40.2',
   'avc1',
-  '360p',
+  '${resolution.height}p',
   VideoQuality.medium360,
-  _resolution,
+  resolution,
   _framerate,
   _codec,
 );
 
-VideoOnlyStreamInfo _videoOnly(String url) => VideoOnlyStreamInfo(
+VideoOnlyStreamInfo _videoOnly(
+  String url, {
+  VideoResolution resolution = _resolution,
+  int tag = 3,
+}) => VideoOnlyStreamInfo(
   _id,
-  3,
+  tag,
   Uri.parse(url),
   _mp4,
   _size,
   _bitrate,
   'avc1',
-  '1080p',
+  '${resolution.height}p',
   VideoQuality.high1080,
-  _resolution,
+  resolution,
   _framerate,
   const [],
   _codec,
@@ -92,6 +104,37 @@ void main() {
     expect(stream.format, StreamFormat.hls);
     expect(stream.audioUrl, isNull);
   });
+
+  test(
+    'among several HLS qualities, picks the highest at or under 480p — '
+    'a Shorts card is a small tile, not a full-screen player',
+    () {
+      final manifest = StreamManifest([
+        _hlsMuxed('https://example.com/1080p.m3u8', tag: 1, resolution: const VideoResolution(1920, 1080)),
+        _hlsMuxed('https://example.com/480p.m3u8', tag: 2, resolution: const VideoResolution(854, 480)),
+        _hlsMuxed('https://example.com/360p.m3u8', tag: 3, resolution: const VideoResolution(640, 360)),
+      ]);
+
+      final stream = selectPreviewStream(manifest, videoId: _videoId);
+
+      expect(stream.url, 'https://example.com/480p.m3u8');
+    },
+  );
+
+  test(
+    'falls back to the lowest available quality when nothing is at or '
+    'under 480p',
+    () {
+      final manifest = StreamManifest([
+        _hlsMuxed('https://example.com/1080p.m3u8', tag: 1, resolution: const VideoResolution(1920, 1080)),
+        _hlsMuxed('https://example.com/720p.m3u8', tag: 2, resolution: const VideoResolution(1280, 720)),
+      ]);
+
+      final stream = selectPreviewStream(manifest, videoId: _videoId);
+
+      expect(stream.url, 'https://example.com/720p.m3u8');
+    },
+  );
 
   test('a muxed MP4 wins when no HLS muxed stream exists', () {
     final manifest = StreamManifest([

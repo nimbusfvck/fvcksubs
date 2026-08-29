@@ -32,6 +32,19 @@ Future<PlayableStream> resolveYoutubePreviewStream(String videoId) async {
   }
 }
 
+/// A Shorts card is a small vertical tile, not a full-screen player — no
+/// need to pull a 1080p/4K stream for it. Caps at 480p, the highest quality
+/// still at or under that; a video with nothing that low falls back to
+/// whatever its smallest available quality is, rather than the highest.
+const _maxPreviewHeight = 480;
+
+T _lightestFittingQuality<T extends VideoStreamInfo>(List<T> streams) {
+  final byQuality = streams.toList()
+    ..sort((a, b) => a.videoResolution.compareTo(b.videoResolution));
+  final withinCap = byQuality.where((s) => s.videoResolution.height <= _maxPreviewHeight);
+  return withinCap.isNotEmpty ? withinCap.last : byQuality.first;
+}
+
 /// Picks the preview stream from an already-resolved [manifest]. Pulled out
 /// of [resolveYoutubePreviewStream] so the tier order (HLS muxed > muxed MP4
 /// > separate video+audio) is testable without a network call.
@@ -43,21 +56,21 @@ PlayableStream selectPreviewStream(
   final hlsMuxed = manifest.hls.whereType<HlsMuxedStreamInfo>().toList();
   if (hlsMuxed.isNotEmpty) {
     return PlayableStream(
-      url: hlsMuxed.bestQuality.url.toString(),
+      url: _lightestFittingQuality(hlsMuxed).url.toString(),
       format: StreamFormat.hls,
     );
   }
 
   if (manifest.muxed.isNotEmpty) {
     return PlayableStream(
-      url: manifest.muxed.bestQuality.url.toString(),
+      url: _lightestFittingQuality(manifest.muxed).url.toString(),
       format: StreamFormat.other,
     );
   }
 
   if (manifest.videoOnly.isNotEmpty && manifest.audioOnly.isNotEmpty) {
     return PlayableStream(
-      url: manifest.videoOnly.bestQuality.url.toString(),
+      url: _lightestFittingQuality(manifest.videoOnly).url.toString(),
       audioUrl: manifest.audioOnly.withHighestBitrate().url.toString(),
       format: StreamFormat.other,
     );
