@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -135,22 +136,39 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
     final artwork = widget.item.artwork?.portrait ?? widget.item.artwork?.landscape;
     final effectivePlaying = widget.playing && !_paused;
     final boxFit = widget.fit == PlayerFitMode.cover ? BoxFit.cover : BoxFit.contain;
+    final isPlayerActive = widget.previewResolution.status == PreviewStatus.usable && source != null;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // A blurred, zoomed backdrop so a contain-fit letterbox (bars, or
+          // the player's now-transparent fill) shows something other than
+          // flat black behind the video — the sharp copy below is only the
+          // loading placeholder, not this.
           if (artwork != null)
-            CachedNetworkImage(
-              imageUrl: artwork.url,
-              fit: boxFit,
-              fadeInDuration: Duration.zero,
-              placeholder: (_, _) => const ArtworkPlaceholder(),
-              errorWidget: (_, _, _) => const ArtworkPlaceholder(),
-            )
-          else
-            const ArtworkPlaceholder(),
-          if (widget.previewResolution.status == PreviewStatus.usable && source != null)
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              child: CachedNetworkImage(
+                imageUrl: artwork.url,
+                fit: BoxFit.cover,
+                fadeInDuration: Duration.zero,
+                color: Colors.black.withValues(alpha: 0.45),
+                colorBlendMode: BlendMode.darken,
+              ),
+            ),
+          if (!isPlayerActive)
+            if (artwork != null)
+              CachedNetworkImage(
+                imageUrl: artwork.url,
+                fit: boxFit,
+                fadeInDuration: Duration.zero,
+                placeholder: (_, _) => const ArtworkPlaceholder(),
+                errorWidget: (_, _, _) => const ArtworkPlaceholder(),
+              )
+            else
+              const ArtworkPlaceholder(),
+          if (isPlayerActive)
             AppPreviewPlayer(
               key: ValueKey(source.id),
               source: source,

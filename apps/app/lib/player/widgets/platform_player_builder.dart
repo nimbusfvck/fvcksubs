@@ -32,6 +32,7 @@ Widget platformPlayerBuilder(
   bool playing = true,
   bool preview = false,
   bool? wakelock,
+  bool transparentBackground = false,
   BoxFit fit = BoxFit.contain,
   Key? key,
 }) =>
@@ -51,6 +52,7 @@ Widget platformPlayerBuilder(
         playing: playing,
         preview: preview,
         wakelock: wakelock,
+        transparentBackground: transparentBackground,
         fit: fit,
       )
     : mobilePlayerBuilder(
@@ -68,6 +70,7 @@ Widget platformPlayerBuilder(
         playing: playing,
         preview: preview,
         wakelock: wakelock,
+        transparentBackground: transparentBackground,
         fit: fit,
         key: key,
       );

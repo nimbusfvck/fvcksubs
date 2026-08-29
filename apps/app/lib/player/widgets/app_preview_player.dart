@@ -58,6 +58,9 @@ Widget defaultPreviewNativePlayerBuilder(
   // Unlike a decorative auto-loop preview, this player *is* the thing the
   // viewer is actively watching — keep the screen on while it plays.
   wakelock: true,
+  // Lets the caller's own blurred backdrop show through a contain-fit
+  // letterbox instead of opaque black bars.
+  transparentBackground: true,
   fit: fit,
   onControllerCreated: onControllerCreated,
   onPlaybackReady: onPlaybackReady,

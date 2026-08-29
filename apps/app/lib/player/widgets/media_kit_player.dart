@@ -68,6 +68,7 @@ class MediaKitPlayerView extends StatefulWidget {
     this.playing = true,
     this.preview = false,
     this.wakelock,
+    this.transparentBackground = false,
     this.fit = BoxFit.contain,
   });
 
@@ -97,6 +98,11 @@ class MediaKitPlayerView extends StatefulWidget {
   /// but a caller whose preview *is* the primary thing being watched (e.g.
   /// Shorts) can opt in explicitly.
   final bool? wakelock;
+
+  /// Lets a `fit: contain` letterbox show whatever is painted behind this
+  /// widget instead of opaque black bars — for a caller that layers its own
+  /// backdrop underneath (e.g. Shorts' blurred poster).
+  final bool transparentBackground;
 
   /// Initial fill mode. [BoxFit.cover] and anything else besides
   /// [BoxFit.contain] map to [PlayerFitMode.cover].
@@ -288,6 +294,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     key: _videoKey,
     controller: _video,
     fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
+    fill: widget.transparentBackground ? Colors.transparent : const Color(0xFF000000),
     subtitleViewConfiguration: SubtitleViewConfiguration(
       style: widget.subtitleAppearance?.textStyle ?? playerSubtitleTextStyle,
     ),

@@ -82,6 +82,7 @@ Widget mobilePlayerBuilder(
   bool playing = true,
   bool preview = false,
   bool? wakelock,
+  bool transparentBackground = false,
   BoxFit fit = BoxFit.contain,
   Key? key,
 }) => BetterPlayerView(
@@ -99,6 +100,7 @@ Widget mobilePlayerBuilder(
   playing: playing,
   preview: preview,
   wakelock: wakelock,
+  transparentBackground: transparentBackground,
   fit: fit,
 );
 
@@ -120,6 +122,7 @@ class BetterPlayerView extends StatefulWidget {
     this.playing = true,
     this.preview = false,
     this.wakelock,
+    this.transparentBackground = false,
   });
 
   final PlayableStream stream;
@@ -166,6 +169,11 @@ class BetterPlayerView extends StatefulWidget {
   /// but a caller whose preview *is* the primary thing being watched (e.g.
   /// Shorts) can opt in explicitly.
   final bool? wakelock;
+
+  /// Lets a `fit: contain` letterbox show whatever is painted behind this
+  /// widget instead of opaque black bars — for a caller that layers its own
+  /// backdrop underneath (e.g. Shorts' blurred poster).
+  final bool transparentBackground;
 
   @override
   State<BetterPlayerView> createState() => _BetterPlayerViewState();
@@ -254,6 +262,11 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
                       onVisibilityChanged,
                     )
               : null,
+          // This also happens to be the background behind the whole
+          // AspectRatio box, i.e. the letterbox bars — not just a controls
+          // chrome color. Controls aren't shown here (no
+          // customControlsBuilder), so repurposing it is safe.
+          backgroundColor: widget.transparentBackground ? Colors.transparent : Colors.black,
         ),
       ),
     );
