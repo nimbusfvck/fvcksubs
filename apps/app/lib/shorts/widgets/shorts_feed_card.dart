@@ -70,12 +70,6 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
   IconData _flashIcon = Icons.pause_rounded;
   int _flashGeneration = 0;
 
-  /// The source id the native player last reported itself ready for — the
-  /// backdrop only blurs in once a frame is genuinely on screen, not just
-  /// because playback was requested (still buffering shouldn't blur), and
-  /// stays blurred through an ordinary pause/resume on the same source.
-  String? _readySourceId;
-
   static const _flashHold = Duration(milliseconds: 350);
 
   @override
@@ -136,12 +130,6 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
     setState(() => _paused = false);
   }
 
-  void _handleReady() {
-    final id = widget.previewResolution.source?.id;
-    if (id != null) setState(() => _readySourceId = id);
-    widget.onReady();
-  }
-
   @override
   Widget build(BuildContext context) {
     final source = widget.previewResolution.source;
@@ -149,7 +137,6 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
     final effectivePlaying = widget.playing && !_paused;
     final boxFit = widget.fit == PlayerFitMode.cover ? BoxFit.cover : BoxFit.contain;
     final isPlayerActive = widget.previewResolution.status == PreviewStatus.usable && source != null;
-    final isReady = isPlayerActive && source.id == _readySourceId;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -158,12 +145,22 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
           // A blurred, zoomed backdrop so a contain-fit letterbox (bars, or
           // the player's now-transparent fill) shows something other than
           // flat black behind the video — the sharp copy below is only the
-          // loading placeholder, not this. Blurs in once a frame is
-          // genuinely on screen, not the instant playback is requested.
+          // loading placeholder, not this. Builds up gradually from the
+          // moment this card becomes the active page — not gated behind
+          // the player actually being ready — so the motion is visible
+          // over the whole load rather than a snap once it's done. Keyed
+          // to `widget.playing`, not the viewer's own pause/resume, so
+          // tapping to pause doesn't make it flicker back out.
           if (artwork != null)
             TweenAnimationBuilder<double>(
-              tween: Tween<double>(end: isReady ? 30 : 0),
-              duration: const Duration(milliseconds: 500),
+              // An explicit `begin` matters here: this card's first build
+              // already has `widget.playing == true` (it's already the
+              // active page by the time it's constructed), and
+              // TweenAnimationBuilder skips the animation on its first
+              // build when `begin` is left null — it would otherwise just
+              // appear already blurred with no visible transition at all.
+              tween: Tween<double>(begin: 0, end: widget.playing ? 30 : 0),
+              duration: const Duration(milliseconds: 2000),
               curve: Curves.easeOut,
               builder: (context, sigma, child) => ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
@@ -195,7 +192,7 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
               muted: widget.muted,
               playing: effectivePlaying,
               fit: boxFit,
-              onReady: _handleReady,
+              onReady: widget.onReady,
               onError: widget.onError,
             ),
           const DecoratedBox(

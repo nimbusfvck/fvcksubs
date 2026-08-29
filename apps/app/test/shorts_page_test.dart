@@ -185,11 +185,10 @@ void main() {
     expect(previewPlayer.playedPlaying, isTrue);
   });
 
-  testWidgets('the poster backdrop blurs in once the player reports ready, not '
-      'the instant playback is requested', (
+  testWidgets('the poster backdrop blurs in gradually from the moment the '
+      'card becomes active, not in an instant snap', (
     tester,
   ) async {
-    final previewPlayer = RecordingPreviewPlayer();
     final registry = ExtensionRegistry([
       _extension(
         items: [
@@ -202,12 +201,9 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
-    );
-    // One pump resolves the preview and mounts AppPreviewPlayer, but stops
-    // short of the fake's onPlaybackReady callback (fired synchronously
-    // inside its own build) actually landing in a *settled* widget tree.
+    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    // Zero-duration pumps only — the card is already active by its first
+    // build, but no animation time has actually elapsed yet.
     await tester.pump();
     await tester.pump();
 
