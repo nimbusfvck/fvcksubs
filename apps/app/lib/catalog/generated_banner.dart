@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
-import 'catalog_status_badges.dart';
 
 const List<Color> _bannerPalette = [
   Color(0xFF4338CA), // indigo
@@ -69,13 +68,30 @@ class GeneratedBanner extends StatelessWidget {
   const GeneratedBanner({
     super.key,
     required this.participants,
-    this.status = ScheduleState.unknown,
+    this.eventName = '',
+    this.brandAboveParticipants = false,
+    this.centerContent = false,
+    this.showMatchup = true,
+    this.showBrand = true,
     this.branding,
   });
 
   final List<Participant> participants;
 
-  final ScheduleState status;
+  /// Competition or event name used when a supplied brand is unavailable.
+  final String eventName;
+
+  /// Places the brand above the participant logos for Featured Hero artwork.
+  final bool brandAboveParticipants;
+
+  /// Centers the participant and matchup group for Featured Hero artwork.
+  final bool centerContent;
+
+  /// Hides the matchup text when the owning hero renders the title separately.
+  final bool showMatchup;
+
+  /// Whether to render the competition brand in the artwork.
+  final bool showBrand;
 
   final EventBranding? branding;
 
@@ -108,85 +124,126 @@ class GeneratedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (homeColor, _) = fillsFor(participants, branding: branding);
-    final background = Color.lerp(AppColors.surfaceDark, homeColor, 0.62)!;
-    final accent =
-        _parseHex(branding?.secondaryColor) ?? _complementaryAccent(homeColor);
+    final primaryBrand = _parseHex(branding?.primaryColor);
+    final background = primaryBrand == null
+        ? AppColors.surfaceDark
+        : Color.lerp(AppColors.surfaceDark, _legibleFill(primaryBrand), 0.62)!;
+    final accent = _accentFor(homeColor, branding);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final height = constraints.maxHeight;
-        final compact = height < 128;
-        final crestSize = math.min(height * (compact ? 0.22 : 0.25), 44.0);
-
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            CustomPaint(painter: _BannerArtwork(background: background)),
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xs),
+    const crestSize = 24.0;
+    final brandHeight = brandAboveParticipants ? 24.0 : crestSize * 0.9;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CustomPaint(painter: _BannerArtwork(background: background)),
+        Positioned.fill(
+          child: Align(
+            alignment: centerContent ? Alignment.center : Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.sm,
+                brandAboveParticipants ? 56 : AppSpacing.sm,
+              ),
+              child: FractionallySizedBox(
+                widthFactor: 0.72,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: centerContent
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
                   children: [
-                    SizedBox(height: compact ? 0 : crestSize * 0.62),
-                    FractionallySizedBox(
-                      widthFactor: 0.72,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _BannerTeam(
-                              participant: participants[0],
-                              size: crestSize,
-                              showName: !compact,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: _BannerTeam(
-                              participant: participants[1],
-                              size: crestSize,
-                              showName: !compact,
-                            ),
-                          ),
-                        ],
+                    if (brandAboveParticipants && showBrand) ...[
+                      Center(child: _bannerBrand(brandHeight, accent)),
+                      const SizedBox(height: AppSpacing.xs),
+                    ],
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _BannerTeam(
+                          participant: participants[0],
+                          size: crestSize,
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        _BannerTeam(
+                          participant: participants[1],
+                          size: crestSize,
+                        ),
+                      ],
+                    ),
+                    if (showMatchup) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      MatchupText(
+                        home: participants[0].name,
+                        away: participants[1].name,
+                        accent: accent,
                       ),
-                    ),
-                    const Spacer(),
-                    _BannerMatchup(
-                      home: participants[0].name,
-                      away: participants[1].name,
-                      accent: accent,
-                      compact: compact,
-                    ),
+                    ],
                   ],
                 ),
               ),
             ),
-            if (branding?.logo case final logo?)
-              Positioned(
-                top: AppSpacing.xs,
-                right: AppSpacing.xs,
-                child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.9),
-              ),
-            if (status == ScheduleState.live)
-              const Positioned(
-                left: AppSpacing.xs,
-                top: AppSpacing.xs,
-                child: LiveBadge(),
-              )
-            else if (status == ScheduleState.scheduled)
-              const Positioned(
-                left: AppSpacing.xs,
-                top: AppSpacing.xs,
-                child: UpcomingBadge(),
-              ),
-          ],
-        );
-      },
+          ),
+        ),
+        if (!brandAboveParticipants && showBrand) ...[
+          if (branding?.logo case final logo?)
+            Positioned(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+              child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.9),
+            ),
+          if (branding?.logo == null)
+            Positioned(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+              child: _BrandMark(label: _eventBrand(eventName), color: accent),
+            ),
+        ],
+      ],
     );
   }
+
+  /// Returns the accent used for the `VS` separator in banner matchups.
+  static Color accentFor(
+    List<Participant> participants, {
+    EventBranding? branding,
+  }) {
+    final (homeColor, _) = fillsFor(participants, branding: branding);
+    return _accentFor(homeColor, branding);
+  }
+
+  Widget _bannerBrand(double height, Color accent) {
+    final logo = branding?.logo;
+    if (logo != null) {
+      return _BrandLogo(imageUrl: logo.url, height: height);
+    }
+    return _BrandMark(label: _eventBrand(eventName), color: accent);
+  }
+}
+
+Color _accentFor(Color homeColor, EventBranding? branding) {
+  final primaryBrand = _parseHex(branding?.primaryColor);
+  return _parseHex(branding?.secondaryColor) ??
+      (primaryBrand == null
+          ? AppColors.brandAccent
+          : _complementaryAccent(homeColor));
+}
+
+const _brandStopTokens = {'at', 'in', 'on', 'vs', 'the', 'live'};
+
+String _eventBrand(String title) {
+  final words = RegExp(r'[A-Za-z0-9]+')
+      .allMatches(title)
+      .map((match) => match.group(0)!)
+      .where((word) => !_brandStopTokens.contains(word.toLowerCase()))
+      .toList(growable: false);
+  if (words.isEmpty) return 'EVENT';
+  if (words.length == 1) {
+    final word = words.first.toUpperCase();
+    return word.substring(0, math.min(word.length, 4));
+  }
+  return words.take(4).map((word) => word.substring(0, 1).toUpperCase()).join();
 }
 
 Color _complementaryAccent(Color color) {
@@ -200,74 +257,66 @@ Color _complementaryAccent(Color color) {
 }
 
 class _BannerTeam extends StatelessWidget {
-  const _BannerTeam({
-    required this.participant,
-    required this.size,
-    required this.showName,
-  });
+  const _BannerTeam({required this.participant, required this.size});
 
   final Participant participant;
   final double size;
-  final bool showName;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _Crest(imageUrl: participant.logo?.url, size: size),
-      if (showName) ...[
-        const SizedBox(height: 2),
-        Text(
-          participant.name.toUpperCase(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.caption.copyWith(
-            color: AppColors.onDark,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-      ],
-    ],
-  );
+  Widget build(BuildContext context) =>
+      _Crest(imageUrl: participant.logo?.url, size: size, showFallback: false);
 }
 
-class _BannerMatchup extends StatelessWidget {
-  const _BannerMatchup({
+class MatchupText extends StatelessWidget {
+  const MatchupText({
+    super.key,
     required this.home,
     required this.away,
     required this.accent,
-    required this.compact,
+    this.singleLine = false,
+    this.uppercase = true,
+    this.textKey,
   });
 
   final String home;
   final String away;
   final Color accent;
-  final bool compact;
+  final bool singleLine;
+  final bool uppercase;
+  final Key? textKey;
 
   @override
   Widget build(BuildContext context) {
-    final style = compact ? AppTypography.titleSm : AppTypography.displaySm;
-    if (compact) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(child: _BannerName(home, style)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
-            child: Text(
-              'VS',
+    final style = AppTypography.displaySm;
+    final homeText = uppercase ? home.toUpperCase() : home;
+    final awayText = uppercase ? away.toUpperCase() : away;
+    if (singleLine) {
+      final nameStyle = style.copyWith(
+        color: AppColors.onDark,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.7,
+      );
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: homeText, style: nameStyle),
+            TextSpan(
+              text: ' VS ',
               style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
             ),
-          ),
-          Expanded(child: _BannerName(away, style)),
-        ],
+            TextSpan(text: awayText, style: nameStyle),
+          ],
+        ),
+        key: textKey,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _BannerName(home, style),
+        _BannerName(homeText, style),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -276,7 +325,7 @@ class _BannerMatchup extends StatelessWidget {
               style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
             ),
             const SizedBox(width: AppSpacing.xs),
-            Expanded(child: _BannerName(away, style)),
+            Expanded(child: _BannerName(awayText, style)),
           ],
         ),
       ],
@@ -335,10 +384,6 @@ class GeneratedLiveArtwork extends StatelessWidget {
     List<Participant> participants = const [],
     EventBranding? branding,
   }) {
-    if (participants.length >= 2) {
-      return GeneratedBanner.fillsFor(participants, branding: branding);
-    }
-
     final participant = participants.isEmpty ? null : participants.first;
     final primaryKey = participant?.name ?? seed;
     final primaryIndex = _paletteIndex(primaryKey);
@@ -630,6 +675,7 @@ class _Crest extends StatelessWidget {
     this.fallbackIcon = Icons.shield_outlined,
     this.fallbackIconScale = 0.8,
     this.showFallbackWhileLoading = false,
+    this.showFallback = true,
   });
 
   final String? imageUrl;
@@ -637,17 +683,20 @@ class _Crest extends StatelessWidget {
   final IconData fallbackIcon;
   final double fallbackIconScale;
   final bool showFallbackWhileLoading;
+  final bool showFallback;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: size,
     height: size,
     child: imageUrl == null
-        ? _CrestFallback(
-            size: size,
-            icon: fallbackIcon,
-            iconScale: fallbackIconScale,
-          )
+        ? showFallback
+              ? _CrestFallback(
+                  size: size,
+                  icon: fallbackIcon,
+                  iconScale: fallbackIconScale,
+                )
+              : const SizedBox.shrink()
         : CachedNetworkImage(
             imageUrl: imageUrl!,
             fit: BoxFit.contain,
@@ -660,11 +709,13 @@ class _Crest extends StatelessWidget {
                     iconScale: fallbackIconScale,
                   )
                 : const SizedBox.shrink(),
-            errorWidget: (context, url, error) => _CrestFallback(
-              size: size,
-              icon: fallbackIcon,
-              iconScale: fallbackIconScale,
-            ),
+            errorWidget: (context, url, error) => showFallback
+                ? _CrestFallback(
+                    size: size,
+                    icon: fallbackIcon,
+                    iconScale: fallbackIconScale,
+                  )
+                : const SizedBox.shrink(),
           ),
   );
 }
@@ -686,6 +737,24 @@ class _BrandLogo extends StatelessWidget {
       fadeInDuration: Duration.zero,
       placeholder: (_, _) => const SizedBox.shrink(),
       errorWidget: (_, _, _) => const SizedBox.shrink(),
+    ),
+  );
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    label,
+    style: AppTypography.titleLg.copyWith(
+      color: AppColors.onDark,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.6,
+      shadows: [Shadow(color: color.withValues(alpha: 0.8), blurRadius: 12)],
     ),
   );
 }

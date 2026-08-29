@@ -129,7 +129,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 300,
-            height: 172,
+            height: 260,
             child: MediaCardV2(
               item: EventItemV2(
                 ref: ref,
@@ -164,7 +164,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 300,
-            height: 172,
+            height: 260,
             child: MediaCardV2(
               item: EventItemV2(
                 ref: ref,
@@ -193,6 +193,38 @@ void main() {
     expect(find.text('VS'), findsOneWidget);
     expect(find.text('SIDE B'), findsOneWidget);
   });
+
+  testWidgets(
+    'an unbranded event derives a mark and does not show crest placeholders',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              height: 260,
+              child: MediaCardV2(
+                item: EventItemV2(
+                  ref: ref,
+                  title: 'Fighter A vs Fighter B',
+                  subtitle: 'Mixed Martial Arts',
+                  schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                  participants: const [
+                    Participant(name: 'Fighter A'),
+                    Participant(name: 'Fighter B'),
+                  ],
+                ),
+                onTap: _noop,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('MMA'), findsOneWidget);
+      expect(find.byIcon(Icons.shield_outlined), findsNothing);
+    },
+  );
 
   testWidgets('single-sided event renders its landscape artwork', (
     tester,

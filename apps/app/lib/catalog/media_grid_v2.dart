@@ -33,6 +33,9 @@ class MediaGridV2 extends StatelessWidget {
   bool get _portraitMode =>
       _items.any((entry) => entry.item.artwork?.portrait != null);
 
+  bool get _matchBannerMode =>
+      _items.any((entry) => isMatchBannerItem(entry.item));
+
   SliverGridDelegate _delegate(double width) {
     final count = columns ?? (width ~/ 300).clamp(2, 6);
     return _portraitMode
@@ -41,6 +44,13 @@ class MediaGridV2 extends StatelessWidget {
             crossAxisSpacing: AppSpacing.md,
             mainAxisSpacing: AppSpacing.md,
             childAspectRatio: 0.6,
+          )
+        : _matchBannerMode
+        ? SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: count,
+            crossAxisSpacing: AppSpacing.md,
+            mainAxisSpacing: AppSpacing.md,
+            mainAxisExtent: matchBannerCardHeight,
           )
         : SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: count,

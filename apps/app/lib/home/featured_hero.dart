@@ -372,6 +372,17 @@ MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
 }
 
 Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
+  EventItemV2(:final participants, :final branding, :final subtitle)
+      when participants.length == 2 =>
+    GeneratedBanner(
+      participants: participants,
+      eventName: subtitle ?? '',
+      brandAboveParticipants: true,
+      centerContent: true,
+      showMatchup: false,
+      showBrand: false,
+      branding: branding,
+    ),
   EventItemV2(:final participants, :final branding) => GeneratedLiveArtwork(
     seed: _artworkSeed(item),
     participants: participants,
@@ -487,6 +498,19 @@ class _FeaturedTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item case EventItemV2(
+      :final participants,
+      :final branding,
+    ) when participants.length == 2) {
+      return MatchupText(
+        home: participants[0].name,
+        away: participants[1].name,
+        accent: GeneratedBanner.accentFor(participants, branding: branding),
+        singleLine: true,
+        uppercase: true,
+        textKey: const Key('featured-title-text'),
+      );
+    }
     final logo = switch (item) {
       VideoItemV2() || SeriesItemV2() => item.artwork?.logo,
       _ => null,
@@ -529,8 +553,10 @@ class _FeaturedTitleText extends StatelessWidget {
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
     textAlign: TextAlign.center,
-    style: AppTypography.titleLg.copyWith(
+    style: AppTypography.displaySm.copyWith(
       color: AppColors.onDark,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.7,
       shadows: _featuredTextShadows,
     ),
   );

@@ -438,8 +438,13 @@ class _Carousel extends StatelessWidget {
     final posterMode = items.any(
       (entry) => entry.item.artwork?.portrait != null,
     );
+    final matchBannerMode = items.any((entry) => isMatchBannerItem(entry.item));
     final itemWidth = posterMode ? 140.0 : 300.0;
-    final height = posterMode ? 260.0 : 172.0;
+    final height = posterMode
+        ? 260.0
+        : matchBannerMode
+        ? matchBannerCardHeight
+        : 172.0;
 
     return SizedBox(
       height: height + Clickable.ringBleed * 2,

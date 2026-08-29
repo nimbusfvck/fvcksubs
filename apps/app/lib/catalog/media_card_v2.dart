@@ -12,6 +12,15 @@ import 'media_hero.dart';
 import 'catalog_status_badges.dart';
 import 'start_time_label.dart';
 
+/// Logical height reserved for a two-participant event card.
+const double matchBannerCardHeight = 270;
+
+/// Whether [item] needs the full football-style match banner layout.
+bool isMatchBannerItem(MediaItemV2 item) =>
+    item is EventItemV2 &&
+    item.participants.length == 2 &&
+    item.artwork?.portrait == null;
+
 class MediaCardV2 extends StatelessWidget {
   const MediaCardV2({
     super.key,
@@ -114,9 +123,11 @@ class _Match extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
+      AspectRatio(
+        aspectRatio: 16 / 9,
         child: GeneratedBanner(
           participants: item.participants,
+          eventName: item.subtitle ?? '',
           branding: item.branding,
         ),
       ),

@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
 import 'package:fvcksubs_app/player/widgets/stream_player.dart';
+import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -81,11 +83,11 @@ void main() {
     );
     expect(title.maxLines, 1);
     expect(title.overflow, TextOverflow.ellipsis);
-    expect(title.style?.fontSize, 18);
+    expect(title.style?.fontSize, 22);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('featured event logos have no identity frame', (tester) async {
+  testWidgets('featured event uses the shared banner layout', (tester) async {
     final item = VersionedMediaItem(
       item: EventItemV2(
         ref: const MediaRef(
@@ -108,6 +110,9 @@ void main() {
             logo: ImageRef('https://image.example/away.png'),
           ),
         ],
+        branding: const EventBranding(
+          logo: ImageRef('https://image.example/league.png'),
+        ),
       ),
     );
 
@@ -123,16 +128,25 @@ void main() {
     );
     await tester.pump();
 
-    final firstLogo = tester.widget<SizedBox>(
-      find.byKey(const ValueKey('live-identity-logo-0')).first,
-    );
-    expect(firstLogo.width, greaterThan(120));
+    expect(find.byType(GeneratedBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-identity-logo-0')), findsNothing);
     expect(find.byType(CachedNetworkImage), findsNWidgets(2));
     for (final logo in tester.widgetList<CachedNetworkImage>(
       find.byType(CachedNetworkImage),
     )) {
       expect(logo.filterQuality, FilterQuality.high);
     }
+    final title = tester.widget<Text>(
+      find.byKey(const Key('featured-title-text')),
+    );
+    final titleSpan = title.textSpan! as TextSpan;
+    expect(titleSpan.toPlainText(), 'HOME VS AWAY');
+    expect(titleSpan.children, hasLength(3));
+    expect(
+      (titleSpan.children![1] as TextSpan).style?.color,
+      isNot(AppColors.onDark),
+    );
+    expect(find.text('Two-logo event'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
