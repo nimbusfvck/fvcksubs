@@ -379,6 +379,7 @@ Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
       eventName: subtitle ?? '',
       brandAboveParticipants: true,
       centerContent: true,
+      participantLogoSize: 50,
       showMatchup: false,
       showBrand: false,
       branding: branding,

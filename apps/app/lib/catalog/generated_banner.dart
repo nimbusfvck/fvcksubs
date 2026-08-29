@@ -71,6 +71,7 @@ class GeneratedBanner extends StatelessWidget {
     this.eventName = '',
     this.brandAboveParticipants = false,
     this.centerContent = false,
+    this.participantLogoSize = 24,
     this.showMatchup = true,
     this.showBrand = true,
     this.branding,
@@ -86,6 +87,9 @@ class GeneratedBanner extends StatelessWidget {
 
   /// Centers the participant and matchup group for Featured Hero artwork.
   final bool centerContent;
+
+  /// Controls the rendered size of participant logos.
+  final double participantLogoSize;
 
   /// Hides the matchup text when the owning hero renders the title separately.
   final bool showMatchup;
@@ -130,7 +134,7 @@ class GeneratedBanner extends StatelessWidget {
         : Color.lerp(AppColors.surfaceDark, _legibleFill(primaryBrand), 0.62)!;
     final accent = _accentFor(homeColor, branding);
 
-    const crestSize = 24.0;
+    final crestSize = participantLogoSize;
     final brandHeight = brandAboveParticipants ? 24.0 : crestSize * 0.9;
     return Stack(
       fit: StackFit.expand,
@@ -202,7 +206,14 @@ class GeneratedBanner extends StatelessWidget {
             Positioned(
               top: AppSpacing.xs,
               right: AppSpacing.xs,
-              child: _BrandLogo(imageUrl: logo.url, height: crestSize * 0.9),
+              child: _BrandLogo(
+                imageUrl: logo.url,
+                height: crestSize * 0.9,
+                fallback: _BrandMark(
+                  label: _eventBrand(eventName),
+                  color: accent,
+                ),
+              ),
             ),
           if (branding?.logo == null)
             Positioned(
@@ -227,7 +238,11 @@ class GeneratedBanner extends StatelessWidget {
   Widget _bannerBrand(double height, Color accent) {
     final logo = branding?.logo;
     if (logo != null) {
-      return _BrandLogo(imageUrl: logo.url, height: height);
+      return _BrandLogo(
+        imageUrl: logo.url,
+        height: height,
+        fallback: _BrandMark(label: _eventBrand(eventName), color: accent),
+      );
     }
     return _BrandMark(label: _eventBrand(eventName), color: accent);
   }
@@ -732,10 +747,15 @@ class _Crest extends StatelessWidget {
 }
 
 class _BrandLogo extends StatelessWidget {
-  const _BrandLogo({required this.imageUrl, required this.height});
+  const _BrandLogo({
+    required this.imageUrl,
+    required this.height,
+    required this.fallback,
+  });
 
   final String imageUrl;
   final double height;
+  final Widget fallback;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -747,7 +767,7 @@ class _BrandLogo extends StatelessWidget {
       filterQuality: FilterQuality.high,
       fadeInDuration: Duration.zero,
       placeholder: (_, _) => const SizedBox.shrink(),
-      errorWidget: (_, _, _) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => fallback,
     ),
   );
 }
@@ -761,7 +781,7 @@ class _BrandMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: AppTypography.titleLg.copyWith(
+    style: AppTypography.titleMd.copyWith(
       color: AppColors.onDark,
       fontWeight: FontWeight.w800,
       letterSpacing: 0.6,

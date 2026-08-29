@@ -437,7 +437,7 @@ class _Carousel extends StatelessWidget {
   Widget build(BuildContext context) {
     final posterMode = items.any(
       (entry) =>
-          entry.item.artwork?.portrait != null || isMatchBannerItem(entry.item),
+          entry.item.artwork?.portrait != null && entry.item is! EventItemV2,
     );
     final itemWidth = posterMode ? 140.0 : 300.0;
     final height = posterMode ? 260.0 : 172.0;
@@ -452,10 +452,11 @@ class _Carousel extends StatelessWidget {
         itemBuilder: (context, i) {
           final item = items[i];
           final heroTag = Object();
+          final width = item.item is EventItemV2 ? 220.0 : itemWidth;
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: Clickable.ringBleed),
             child: SizedBox(
-              width: itemWidth,
+              width: width,
               child: MediaCardV2(
                 item: item.item,
                 heroTag: heroTag,

@@ -32,7 +32,7 @@ class MediaGridV2 extends StatelessWidget {
 
   bool get _portraitMode => _items.any(
     (entry) =>
-        entry.item.artwork?.portrait != null || isMatchBannerItem(entry.item),
+        entry.item.artwork?.portrait != null && entry.item is! EventItemV2,
   );
 
   SliverGridDelegate _delegate(double width) {

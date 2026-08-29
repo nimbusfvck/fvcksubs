@@ -194,6 +194,39 @@ void main() {
     expect(find.text('SIDE B'), findsOneWidget);
   });
 
+  testWidgets('two-participant event uses a banner over portrait artwork', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 260,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Sport match with poster',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                artwork: const Artwork(
+                  portrait: ImageRef('https://cdn.example/poster.jpg'),
+                ),
+                participants: const [
+                  Participant(name: 'Side A'),
+                  Participant(name: 'Side B'),
+                ],
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(GeneratedBanner), findsOneWidget);
+    expect(find.byType(Hero), findsNothing);
+  });
+
   testWidgets('narrow match banners scale their content without overflow', (
     tester,
   ) async {

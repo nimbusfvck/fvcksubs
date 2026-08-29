@@ -12,11 +12,9 @@ import 'media_hero.dart';
 import 'catalog_status_badges.dart';
 import 'start_time_label.dart';
 
-/// Whether [item] uses the generated portrait event artwork.
+/// Whether [item] uses the generated event banner.
 bool isMatchBannerItem(MediaItemV2 item) =>
-    item is EventItemV2 &&
-    item.participants.length == 2 &&
-    item.artwork?.portrait == null;
+    item is EventItemV2 && item.participants.length == 2;
 
 class MediaCardV2 extends StatelessWidget {
   const MediaCardV2({
@@ -40,6 +38,9 @@ class MediaCardV2 extends StatelessWidget {
 
   Widget _content() {
     final value = item;
+    if (value is EventItemV2 && value.participants.length == 2) {
+      return _Match(item: value, showSubtitle: showSubtitle);
+    }
     final portrait = value.artwork?.portrait;
     if (portrait != null) {
       return _Poster(
@@ -50,9 +51,6 @@ class MediaCardV2 extends StatelessWidget {
       );
     }
     if (value is EventItemV2) {
-      if (value.participants.length == 2) {
-        return _Match(item: value, showSubtitle: showSubtitle);
-      }
       if (_hasEventArtwork(value)) {
         return _SingleEvent(item: value, showSubtitle: showSubtitle);
       }

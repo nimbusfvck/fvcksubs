@@ -131,6 +131,10 @@ void main() {
     expect(find.byType(GeneratedBanner), findsOneWidget);
     expect(find.byKey(const ValueKey('live-identity-logo-0')), findsNothing);
     expect(find.byType(CachedNetworkImage), findsNWidgets(2));
+    expect(
+      tester.getSize(find.byType(CachedNetworkImage).first),
+      const Size(50, 50),
+    );
     for (final logo in tester.widgetList<CachedNetworkImage>(
       find.byType(CachedNetworkImage),
     )) {

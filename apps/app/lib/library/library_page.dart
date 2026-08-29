@@ -99,8 +99,7 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final posterMode = records.any(
       (record) =>
-          record.item.artwork?.portrait != null ||
-          isMatchBannerItem(record.item),
+          record.item.artwork?.portrait != null && record.item is! EventItemV2,
     );
     final itemWidth = posterMode ? 140.0 : 300.0;
     final height = posterMode ? 260.0 : 172.0;
