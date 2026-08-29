@@ -15,7 +15,9 @@ import 'models/playback_media.dart';
 import 'models/app_player_controller.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
+import 'state/playback_stall_detector.dart';
 import 'state/source_fallback_policy.dart';
+import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
 import 'workflow/play_item.dart';
 
@@ -24,6 +26,19 @@ export 'models/resolved_source.dart' show ResolvedSource, mergeResolvedSources;
 const Duration _minResumeProgress = Duration(seconds: 5);
 const Duration _resumeEndGuard = Duration(seconds: 30);
 const Duration _progressInterval = Duration(seconds: 10);
+
+/// How often playback is sampled for a stall.
+///
+/// Frequent enough that [PlaybackStallDetector.threshold] is the thing that
+/// decides when to act, rather than the sampling rate.
+const Duration _stallSampleInterval = Duration(seconds: 2);
+
+/// How many stalls in a row are answered by re-resolving the same source
+/// before playback gives up on it and moves to another.
+const int _maxConsecutiveStallRenewals = 2;
+
+/// How close together stall renewals must be to count as consecutive.
+const Duration _renewalPatienceWindow = Duration(minutes: 2);
 
 Duration? sourceSwitchSeekPosition({
   required bool isLive,
@@ -70,6 +85,12 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _advancing = false;
   LibraryController? _library;
   Timer? _progressTimer;
+  Timer? _stallTimer;
+  Timer? _renewalTimer;
+  final PlaybackStallDetector _stallDetector = PlaybackStallDetector();
+  bool _renewing = false;
+  DateTime? _lastStallRenewalAt;
+  int _consecutiveStallRenewals = 0;
   ValueListenable<AppPlayerValue>? _videoValue;
   AppPlayerController? _trackedPositionController;
   bool _hasResumed = false;
@@ -118,6 +139,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _progressTimer ??= Timer.periodic(
       _progressInterval,
       (_) => _reportProgress(),
+    );
+    _stallTimer ??= Timer.periodic(
+      _stallSampleInterval,
+      (_) => _sampleForStall(),
     );
   }
 
@@ -174,6 +199,8 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
+    _stallTimer?.cancel();
+    _renewalTimer?.cancel();
     _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
     _reportProgress();
@@ -209,7 +236,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller == null || !identical(controller, _controller)) return;
     final value = _videoValue?.value;
     if (value == null || !value.initialized) return;
-    _sourceStarted = true;
+    if (!_sourceStarted) {
+      _sourceStarted = true;
+      // Only once the stream is actually running: arming on the resolved URL
+      // alone would schedule renewals for a source that never played.
+      _armRenewalTimer();
+    }
     _lastPosition = value.position;
     _lastDuration = value.duration;
     final position = sourceSwitchSeekPosition(
@@ -289,6 +321,10 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_controller == null || _retrying) return;
     final attempt = ++_playbackAttempt;
     _failedSourceIds.remove(_current.source.id);
+    _renewalTimer?.cancel();
+    _renewalTimer = null;
+    _stallDetector.reset();
+    _consecutiveStallRenewals = 0;
     _sourceStarted = false;
     setState(() {
       _retrying = true;
@@ -327,6 +363,125 @@ class _PlayerPageState extends State<PlayerPage> {
             'Source is unavailable. Try another source or retry later.';
       });
     }
+  }
+
+  /// Arms a swap to a freshly signed URL before the current one expires.
+  ///
+  /// Providers that sign a playback URL bake an absolute deadline into it;
+  /// past that instant every request answers 403 and the player freezes
+  /// without reporting anything. Renewing ahead of the deadline keeps
+  /// playback continuous instead of recovering after the viewer has already
+  /// seen a spinner.
+  void _armRenewalTimer() {
+    _renewalTimer?.cancel();
+    _renewalTimer = null;
+    final remaining = streamTimeToExpiry(_current.stream.url);
+    if (remaining == null) return;
+    _renewalTimer = Timer(
+      renewalDelayFor(remaining),
+      () => unawaited(_renewCurrentSource()),
+    );
+  }
+
+  void _sampleForStall() {
+    final controller = _controller;
+    if (controller == null || !_sourceStarted || _renewing) return;
+    final value = controller.value.value;
+    if (!value.initialized) return;
+    final stalled = _stallDetector.sample(
+      position: value.position,
+      isBuffering: value.isBuffering,
+      isPlaying: value.isPlaying,
+      now: DateTime.now(),
+    );
+    if (!stalled) return;
+    // Renewing only helps when the URL was the problem. A source that stalls
+    // again right after a fresh one was minted is broken at the far end, and
+    // repeating the round trip would keep the viewer on a dead stream
+    // indefinitely.
+    final since = _lastStallRenewalAt;
+    final now = DateTime.now();
+    _consecutiveStallRenewals =
+        since != null && now.difference(since) < _renewalPatienceWindow
+        ? _consecutiveStallRenewals + 1
+        : 1;
+    _lastStallRenewalAt = now;
+    if (_consecutiveStallRenewals > _maxConsecutiveStallRenewals) {
+      _consecutiveStallRenewals = 0;
+      _stallDetector.reset();
+      _fallBackAfterFailedRenewal(_current.source.id);
+      return;
+    }
+    unawaited(_renewCurrentSource());
+  }
+
+  /// Re-resolves the source being watched and swaps the result in silently.
+  ///
+  /// Used both for a scheduled renewal and for a confirmed stall, because the
+  /// remedy is the same: the URL in hand no longer works and only the
+  /// extension can mint another. A source that cannot be re-resolved is
+  /// handed to [_fallBackAfterFailedRenewal] rather than left frozen.
+  Future<void> _renewCurrentSource() async {
+    if (_renewing || _controller == null || !mounted) return;
+    _renewing = true;
+    _renewalTimer?.cancel();
+    _renewalTimer = null;
+    final attempt = ++_playbackAttempt;
+    final scope = AppScope.of(context);
+    final sourceId = _current.source.id;
+    try {
+      final stream = await scope.registry.resolveSource(
+        widget.media.ref,
+        sourceId,
+      );
+      if (!PlaybackTarget.detect().canPlay(stream)) {
+        throw StateError('The renewed source is not playable on this device.');
+      }
+      if (!mounted || attempt != _playbackAttempt) return;
+      final position = _isLive ? null : _positionForSourceSwitch();
+      _detachPositionListener();
+      _stallDetector.reset();
+      _sourceStarted = false;
+      setState(() {
+        _pendingSwitchPosition = position;
+        _resolvedSources[_currentIndex] = ResolvedSource(
+          source: _current.source,
+          stream: stream,
+        );
+        _sourceRevision++;
+        _playbackError = null;
+        _controller = null;
+      });
+      scope.sourceCache.store(widget.media.ref, _resolvedSources);
+    } catch (_) {
+      if (!mounted || attempt != _playbackAttempt) return;
+      _fallBackAfterFailedRenewal(sourceId);
+    } finally {
+      _renewing = false;
+    }
+  }
+
+  /// Moves to the next source that has not failed, or surfaces the error.
+  ///
+  /// Unlike the pre-start fallback this runs mid-playback, so the source that
+  /// just died is recorded as failed first — walking back onto it would stall
+  /// again within seconds.
+  void _fallBackAfterFailedRenewal(String sourceId) {
+    _failedSourceIds.add(sourceId);
+    final nextIndex = nextUnfailedSourceIndex(
+      sources: _resolvedSources,
+      currentIndex: _currentIndex,
+      failedSourceIds: _failedSourceIds,
+    );
+    if (nextIndex != null) {
+      _stallDetector.reset();
+      _switchToResolvedSource(nextIndex);
+      return;
+    }
+    setState(() {
+      _playbackError = 'This source stopped responding. Try another source.';
+      _retrying = false;
+    });
   }
 
   void _resumeSavedPosition(Duration? duration) {
@@ -460,6 +615,10 @@ class _PlayerPageState extends State<PlayerPage> {
     final picked = _resolvedSources[index];
     final position = _isLive ? null : _positionForSourceSwitch();
     _detachPositionListener();
+    _renewalTimer?.cancel();
+    _renewalTimer = null;
+    _stallDetector.reset();
+    _consecutiveStallRenewals = 0;
     _failedSourceIds.remove(picked.source.id);
     unawaited(_eventSubscription?.cancel());
     _eventSubscription = null;

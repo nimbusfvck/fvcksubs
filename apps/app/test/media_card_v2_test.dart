@@ -194,6 +194,29 @@ void main() {
     expect(find.text('SIDE B'), findsOneWidget);
   });
 
+  testWidgets('narrow match banners scale their content without overflow', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 152,
+            height: 86,
+            child: GeneratedBanner(
+              participants: [
+                Participant(name: 'A very long home participant'),
+                Participant(name: 'A very long away participant'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'an unbranded event derives a mark and does not show crest placeholders',
     (tester) async {
@@ -222,6 +245,7 @@ void main() {
       );
 
       expect(find.text('MMA'), findsOneWidget);
+      expect(find.text('Mixed Martial Arts'), findsNothing);
       expect(find.byIcon(Icons.shield_outlined), findsNothing);
     },
   );

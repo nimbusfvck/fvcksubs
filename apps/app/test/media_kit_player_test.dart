@@ -112,4 +112,31 @@ void main() {
       );
     });
   });
+
+  group('mpvPlaybackTuning', () {
+    test('always asks FFmpeg to reconnect a dropped connection', () {
+      for (final isLive in [true, false]) {
+        final tuning = mpvPlaybackTuning(isLive: isLive);
+        expect(tuning['stream-lavf-o'], contains('reconnect=1'));
+        expect(tuning['stream-lavf-o'], contains('reconnect_streamed=1'));
+        expect(tuning['network-timeout'], '8');
+      }
+    });
+
+    test('live playback stops writing a disk cache nothing reads back', () {
+      expect(mpvPlaybackTuning(isLive: true)['cache-on-disk'], 'no');
+      expect(mpvPlaybackTuning(isLive: true)['cache-secs'], '20');
+      expect(
+        mpvPlaybackTuning(isLive: true)['demuxer-max-back-bytes'],
+        '${8 * 1024 * 1024}',
+      );
+    });
+
+    test('on-demand playback keeps media_kit\'s own cache defaults', () {
+      final tuning = mpvPlaybackTuning(isLive: false);
+      expect(tuning.containsKey('cache-on-disk'), isFalse);
+      expect(tuning.containsKey('cache-secs'), isFalse);
+      expect(tuning.containsKey('demuxer-max-back-bytes'), isFalse);
+    });
+  });
 }

@@ -98,17 +98,12 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final posterMode = records.any(
-      (record) => record.item.artwork?.portrait != null,
-    );
-    final matchBannerMode = records.any(
-      (record) => isMatchBannerItem(record.item),
+      (record) =>
+          record.item.artwork?.portrait != null ||
+          isMatchBannerItem(record.item),
     );
     final itemWidth = posterMode ? 140.0 : 300.0;
-    final height = posterMode
-        ? 260.0
-        : matchBannerMode
-        ? matchBannerCardHeight
-        : 172.0;
+    final height = posterMode ? 260.0 : 172.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

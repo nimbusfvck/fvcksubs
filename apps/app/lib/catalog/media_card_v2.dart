@@ -12,10 +12,7 @@ import 'media_hero.dart';
 import 'catalog_status_badges.dart';
 import 'start_time_label.dart';
 
-/// Logical height reserved for a two-participant event card.
-const double matchBannerCardHeight = 270;
-
-/// Whether [item] needs the full football-style match banner layout.
+/// Whether [item] uses the generated portrait event artwork.
 bool isMatchBannerItem(MediaItemV2 item) =>
     item is EventItemV2 &&
     item.participants.length == 2 &&
@@ -123,8 +120,7 @@ class _Match extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      AspectRatio(
-        aspectRatio: 16 / 9,
+      Expanded(
         child: GeneratedBanner(
           participants: item.participants,
           eventName: item.subtitle ?? '',
@@ -280,7 +276,7 @@ class _CardFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final event = item is EventItemV2 ? item as EventItemV2 : null;
     final detail = event != null
-        ? _eventMeta(event, showSubtitle: showSubtitle)
+        ? _eventMeta(event)
         : showSubtitle
         ? mediaItemSecondaryText(item)
         : null;
@@ -359,9 +355,6 @@ class _ScheduleStatus extends StatelessWidget {
   String? get _label => schedule.label ?? startTimeLabel(schedule.startsAt);
 }
 
-String? _eventMeta(EventItemV2 item, {required bool showSubtitle}) {
-  final clock = item.schedule.label ?? startTimeLabel(item.schedule.startsAt);
-  final detail = showSubtitle ? mediaItemSecondaryText(item) : null;
-  final values = [?detail, ?clock];
-  return values.isEmpty ? null : values.join(' · ');
+String? _eventMeta(EventItemV2 item) {
+  return item.schedule.label ?? startTimeLabel(item.schedule.startsAt);
 }

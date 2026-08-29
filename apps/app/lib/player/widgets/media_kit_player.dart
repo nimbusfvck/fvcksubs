@@ -46,6 +46,39 @@ SubtitleTrack? preferredSubtitleTrack({
   return null;
 }
 
+/// libmpv properties applied on top of media_kit's defaults.
+///
+/// media_kit configures mpv for on-demand playback: it caches the stream to
+/// disk, keeps a large back-buffer, gives every network request five seconds,
+/// and sets no FFmpeg reconnect options at all. On a live broadcast those
+/// choices cost a session — a match writes gigabytes of disk cache nobody can
+/// seek back into, and a single slow playlist reload burns retries until the
+/// demuxer stops feeding.
+///
+/// Values are strings because that is what `NativePlayer.setProperty` takes.
+@visibleForTesting
+Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
+  // FFmpeg's HTTP protocol does not re-establish a dropped connection unless
+  // asked. Without this a transient drop mid-segment ends the stream's
+  // supply; with it the demuxer rides over the gap.
+  'stream-lavf-o':
+      'reconnect=1,reconnect_streamed=1,'
+      'reconnect_on_network_error=1,reconnect_delay_max=5',
+  // Five seconds is tight for a large or slow playlist reload, and an abort
+  // costs one of the demuxer's five segment retries.
+  'network-timeout': '8',
+  if (isLive) ...{
+    // Nothing seeks back into a live broadcast, so the disk cache is written
+    // and never read.
+    'cache-on-disk': 'no',
+    'demuxer-max-back-bytes': '${8 * 1024 * 1024}',
+    // Prefetch further ahead than mpv's default so an upstream hiccup is
+    // absorbed by the cache instead of becoming a visible rebuffer. The cost
+    // is sitting further behind the live edge, which a viewer does not see.
+    'cache-secs': '20',
+  },
+};
+
 /// libmpv-backed player, used on macOS and iOS.
 ///
 /// iOS is here rather than on BetterPlayer because AVPlayer trusts a
@@ -154,7 +187,31 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     unawaited(_open());
   }
 
+  /// Applies [mpvPlaybackTuning] before the stream is opened.
+  ///
+  /// A property mpv does not recognise throws rather than being ignored, so
+  /// each is applied on its own: an unknown key costs that one setting, not
+  /// the whole tuning pass and not playback.
+  Future<void> _applyPlaybackTuning() async {
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    final tuning = mpvPlaybackTuning(isLive: widget.isLive);
+    for (final entry in tuning.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            '[Player] mpv property ${entry.key} rejected: '
+            '${redactPlaybackLogText(error)}',
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _open() async {
+    await _applyPlaybackTuning();
     try {
       await _player.open(
         mk.Media(widget.stream.url, httpHeaders: widget.stream.headers),

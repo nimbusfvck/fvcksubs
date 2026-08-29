@@ -148,39 +148,50 @@ class GeneratedBanner extends StatelessWidget {
               ),
               child: FractionallySizedBox(
                 widthFactor: 0.72,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: centerContent
-                      ? CrossAxisAlignment.center
-                      : CrossAxisAlignment.start,
-                  children: [
-                    if (brandAboveParticipants && showBrand) ...[
-                      Center(child: _bannerBrand(brandHeight, accent)),
-                      const SizedBox(height: AppSpacing.xs),
-                    ],
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _BannerTeam(
-                          participant: participants[0],
-                          size: crestSize,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        _BannerTeam(
-                          participant: participants[1],
-                          size: crestSize,
-                        ),
-                      ],
-                    ),
-                    if (showMatchup) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      MatchupText(
-                        home: participants[0].name,
-                        away: participants[1].name,
-                        accent: accent,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: centerContent
+                        ? Alignment.center
+                        : Alignment.centerLeft,
+                    child: SizedBox(
+                      width: constraints.maxWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: centerContent
+                            ? CrossAxisAlignment.center
+                            : CrossAxisAlignment.start,
+                        children: [
+                          if (brandAboveParticipants && showBrand) ...[
+                            Center(child: _bannerBrand(brandHeight, accent)),
+                            const SizedBox(height: AppSpacing.xs),
+                          ],
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _BannerTeam(
+                                participant: participants[0],
+                                size: crestSize,
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              _BannerTeam(
+                                participant: participants[1],
+                                size: crestSize,
+                              ),
+                            ],
+                          ),
+                          if (showMatchup) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            MatchupText(
+                              home: participants[0].name,
+                              away: participants[1].name,
+                              accent: accent,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
