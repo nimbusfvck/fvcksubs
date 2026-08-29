@@ -449,7 +449,7 @@ class _RailAction extends StatelessWidget {
       IconButton(
         tooltip: tooltip,
         onPressed: onTap,
-        icon: Icon(icon, size: 26),
+        icon: Icon(icon, size: 16),
         style: IconButton.styleFrom(
           foregroundColor: AppColors.onDark,
           backgroundColor: Colors.black45,
