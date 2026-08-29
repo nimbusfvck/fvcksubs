@@ -25,6 +25,7 @@ typedef PreviewNativePlayerBuilder =
       required bool muted,
       required bool looping,
       required bool playing,
+      required BoxFit fit,
       Key? key,
       void Function(Object? controller)? onControllerCreated,
       void Function(Object? controller)? onPlaybackReady,
@@ -39,6 +40,7 @@ Widget defaultPreviewNativePlayerBuilder(
   required bool muted,
   required bool looping,
   required bool playing,
+  required BoxFit fit,
   Key? key,
   void Function(Object? controller)? onControllerCreated,
   void Function(Object? controller)? onPlaybackReady,
@@ -50,7 +52,7 @@ Widget defaultPreviewNativePlayerBuilder(
   looping: looping,
   playing: playing,
   preview: true,
-  fit: BoxFit.contain,
+  fit: fit,
   onControllerCreated: onControllerCreated,
   onPlaybackReady: onPlaybackReady,
   key: key,
@@ -68,6 +70,7 @@ class AppPreviewPlayer extends StatefulWidget {
     required this.source,
     required this.muted,
     required this.playing,
+    this.fit = BoxFit.contain,
     this.onReady,
     this.onError,
     this.youtubeResolver = resolveYoutubePreviewStream,
@@ -81,6 +84,11 @@ class AppPreviewPlayer extends StatefulWidget {
 
   /// Controls playback without discarding the resolved stream.
   final bool playing;
+
+  /// How the video fills its layout bounds. Letterboxed by default per the
+  /// source plan's "not aggressively cropped" guidance; a viewer can switch
+  /// to fill via a fit toggle (Shorts wires this to [PlayerFitMode]).
+  final BoxFit fit;
 
   /// Called once the native player reports it's ready to show frames.
   final void Function()? onReady;
@@ -175,6 +183,7 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
       muted: widget.muted,
       looping: true,
       playing: widget.playing,
+      fit: widget.fit,
       onControllerCreated: _onControllerCreated,
       onPlaybackReady: _onPlaybackReady,
     );

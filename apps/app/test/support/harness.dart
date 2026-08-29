@@ -578,6 +578,7 @@ class RecordingPreviewPlayer {
   bool? playedMuted;
   bool? playedLooping;
   bool? playedPlaying;
+  BoxFit? playedFit;
   int buildCount = 0;
   FakeAppPlayerController? controller;
 
@@ -587,6 +588,7 @@ class RecordingPreviewPlayer {
     required bool muted,
     required bool looping,
     required bool playing,
+    required BoxFit fit,
     Key? key,
     void Function(Object? controller)? onControllerCreated,
     void Function(Object? controller)? onPlaybackReady,
@@ -595,6 +597,7 @@ class RecordingPreviewPlayer {
     playedMuted = muted;
     playedLooping = looping;
     playedPlaying = playing;
+    playedFit = fit;
     buildCount++;
     controller = FakeAppPlayerController();
     onControllerCreated?.call(controller);

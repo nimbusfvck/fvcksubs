@@ -6,6 +6,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
 import '../navigation/app_route_observer.dart';
+import '../player/models/app_player_controller.dart';
 import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import 'shorts_controller.dart';
@@ -31,8 +32,11 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
   int _currentIndex = 0;
 
   // Session-only per source plan §4: starts muted every time Shorts is
-  // entered, persists across pages only within this visit.
+  // entered, persists across pages only within this visit. The fill mode
+  // follows the same rule — a viewer's fit preference carries across pages
+  // for the session but resets to letterboxed on re-entry.
   bool _muted = true;
+  PlayerFitMode _fitMode = PlayerFitMode.contain;
 
   bool _routeVisible = true;
   ModalRoute<void>? _route;
@@ -116,6 +120,8 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
 
   void _toggleMute() => setState(() => _muted = !_muted);
 
+  void _toggleFit() => setState(() => _fitMode = _fitMode.toggled);
+
   Future<void> _watch(MediaItemV2 item, MediaDetailV2? detail) async {
     try {
       await watchShortsItem(context, item, detail: detail);
@@ -187,7 +193,9 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
           previewResolution: isCurrent ? state.previewFor(item.ref) : const PreviewResolution(),
           muted: _muted,
           playing: isCurrent,
+          fit: _fitMode,
           onToggleMute: _toggleMute,
+          onToggleFit: _toggleFit,
           onReady: () {},
           onError: (_) => _advancePastUnusable(index, state.items.length),
           onWatch: () => _watch(item, state.detailFor(item.ref)),
