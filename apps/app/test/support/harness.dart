@@ -614,6 +614,13 @@ class RecordingPreviewPlayer {
       controller = FakeAppPlayerController();
       _controllerContext = context;
       onControllerCreated?.call(controller);
+      // The real native widgets report ready asynchronously (after their
+      // own setup completes), never synchronously from within their own
+      // build — matching that here avoids a setState-during-build
+      // assertion in whatever ready fires into.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => onPlaybackReady?.call(controller),
+      );
     }
     return const SizedBox(key: Key('fake-preview-player'), height: 100);
   }

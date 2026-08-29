@@ -70,6 +70,12 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
   IconData _flashIcon = Icons.pause_rounded;
   int _flashGeneration = 0;
 
+  /// The source id the native player last reported itself ready for — the
+  /// backdrop only blurs in once a frame is genuinely on screen, not just
+  /// because playback was requested (still buffering shouldn't blur), and
+  /// stays blurred through an ordinary pause/resume on the same source.
+  String? _readySourceId;
+
   static const _flashHold = Duration(milliseconds: 350);
 
   @override
@@ -130,6 +136,12 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
     setState(() => _paused = false);
   }
 
+  void _handleReady() {
+    final id = widget.previewResolution.source?.id;
+    if (id != null) setState(() => _readySourceId = id);
+    widget.onReady();
+  }
+
   @override
   Widget build(BuildContext context) {
     final source = widget.previewResolution.source;
@@ -137,6 +149,7 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
     final effectivePlaying = widget.playing && !_paused;
     final boxFit = widget.fit == PlayerFitMode.cover ? BoxFit.cover : BoxFit.contain;
     final isPlayerActive = widget.previewResolution.status == PreviewStatus.usable && source != null;
+    final isReady = isPlayerActive && source.id == _readySourceId;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -145,10 +158,17 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
           // A blurred, zoomed backdrop so a contain-fit letterbox (bars, or
           // the player's now-transparent fill) shows something other than
           // flat black behind the video — the sharp copy below is only the
-          // loading placeholder, not this.
+          // loading placeholder, not this. Blurs in once a frame is
+          // genuinely on screen, not the instant playback is requested.
           if (artwork != null)
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: isReady ? 30 : 0),
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+              builder: (context, sigma, child) => ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                child: child,
+              ),
               child: CachedNetworkImage(
                 imageUrl: artwork.url,
                 fit: BoxFit.cover,
@@ -175,7 +195,7 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
               muted: widget.muted,
               playing: effectivePlaying,
               fit: boxFit,
-              onReady: widget.onReady,
+              onReady: _handleReady,
               onError: widget.onError,
             ),
           const DecoratedBox(

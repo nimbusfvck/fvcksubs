@@ -10,9 +10,10 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
-VideoItemV2 _item(String id, {String? title}) => VideoItemV2(
+VideoItemV2 _item(String id, {String? title, Artwork? artwork}) => VideoItemV2(
   ref: MediaRef(extensionId: 'a', providerId: 'a.p', id: id),
   title: title ?? id,
+  artwork: artwork,
 );
 
 const _directSourceResponse = PreviewResponse(
@@ -182,6 +183,40 @@ void main() {
     await gesture.up();
     await tester.pump();
     expect(previewPlayer.playedPlaying, isTrue);
+  });
+
+  testWidgets('the poster backdrop blurs in once the player reports ready, not '
+      'the instant playback is requested', (
+    tester,
+  ) async {
+    final previewPlayer = RecordingPreviewPlayer();
+    final registry = ExtensionRegistry([
+      _extension(
+        items: [
+          _item(
+            'one',
+            artwork: const Artwork(portrait: ImageRef('https://cdn.example.com/poster.jpg')),
+          ),
+        ],
+        previewFor: {'one': _directSourceResponse},
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+    );
+    // One pump resolves the preview and mounts AppPreviewPlayer, but stops
+    // short of the fake's onPlaybackReady callback (fired synchronously
+    // inside its own build) actually landing in a *settled* widget tree.
+    await tester.pump();
+    await tester.pump();
+
+    ImageFiltered backdrop() => tester.widget<ImageFiltered>(find.byType(ImageFiltered));
+    expect(backdrop().imageFilter.toString(), contains('0.0, 0.0'));
+
+    await tester.pumpAndSettle();
+
+    expect(backdrop().imageFilter.toString(), contains('30.0, 30.0'));
   });
 
   testWidgets('the fit button toggles between letterboxed and full-screen', (
