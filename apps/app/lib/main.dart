@@ -7,6 +7,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'addons/addons_controller.dart';
+import 'addons/extension_storage_hub.dart';
 import 'addons/installer_controller.dart';
 import 'addons/permission_dialog.dart';
 import 'app.dart';
@@ -44,7 +45,8 @@ Future<void> main() async {
   );
 
   final installedStore = SharedPreferencesInstalledExtensionStore();
-  await loadInstalledExtensions(registry, installedStore);
+  final extensionStorage = await ExtensionStorageHub.open();
+  await loadInstalledExtensions(registry, installedStore, extensionStorage);
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,6 +57,12 @@ Future<void> main() async {
     installedStore: installedStore,
     repoStore: repoStore,
     repoUrl: await repoStore.load(),
+    loadExtension: (manifest, source) => JsExtension.load(
+      manifest: manifest,
+      source: source,
+      storage: extensionStorage.forExtension(manifest.id),
+    ),
+    forgetStorage: extensionStorage.remove,
     requestConsent: (request) async {
       final context = navigatorKey.currentContext;
       if (context == null) return false;
@@ -158,6 +166,7 @@ Future<T> _loadPersistedOrDefault<T>({
 Future<void> loadInstalledExtensions(
   ExtensionRegistry registry,
   InstalledExtensionStore store,
+  ExtensionStorageHub storage,
 ) async {
   final Map<String, InstalledExtension> installed;
   try {
@@ -173,7 +182,11 @@ Future<void> loadInstalledExtensions(
         jsonDecode(record.manifestJson) as Map<String, Object?>,
       );
       final replaced = registry.install(
-        JsExtension.load(manifest: manifest, source: record.bundleJs),
+        JsExtension.load(
+          manifest: manifest,
+          source: record.bundleJs,
+          storage: storage.forExtension(manifest.id),
+        ),
       );
       if (replaced is JsExtension) replaced.dispose();
     } catch (error, stack) {

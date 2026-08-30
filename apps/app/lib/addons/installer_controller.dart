@@ -82,9 +82,11 @@ class InstallerController extends Cubit<InstallerState> {
     String? repoUrl,
     ContentExtension Function(Manifest manifest, String source) loadExtension =
         _loadJsExtension,
+    Future<void> Function(String extensionId) forgetStorage = _keepStorage,
     Future<bool> Function(PermissionRequest request) requestConsent =
         _refuseByDefault,
   }) : _loadExtension = loadExtension,
+       _forgetStorage = forgetStorage,
        _requestConsent = requestConsent,
        super(InstallerState(repoUrl: repoUrl));
 
@@ -93,7 +95,14 @@ class InstallerController extends Cubit<InstallerState> {
 
   static Future<bool> _refuseByDefault(PermissionRequest _) async => false;
 
+  static Future<void> _keepStorage(String _) async {}
+
   final ContentExtension Function(Manifest, String) _loadExtension;
+
+  /// Drops an uninstalled extension's `host.storage`. An extension the user
+  /// removed should not leave its cache behind to be picked back up if they
+  /// reinstall it later — that is the one moment the data is meant to go.
+  final Future<void> Function(String) _forgetStorage;
   final Future<bool> Function(PermissionRequest) _requestConsent;
 
   final ExtensionRegistry registry;
@@ -270,6 +279,7 @@ class InstallerController extends Cubit<InstallerState> {
       final removed = registry.uninstall(id);
       if (removed is JsExtension) removed.dispose();
       await installedStore.remove(id);
+      await _forgetStorage(id);
       if (state.repoUrl == null) {
         emit(
           state.copyWith(
