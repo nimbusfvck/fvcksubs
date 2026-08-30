@@ -22,6 +22,7 @@ flowchart TB
     SCOPE --- C5["Subtitle preference"]
     SCOPE --- K1["Catalog cache"]
     SCOPE --- K2["Source cache"]
+    SCOPE --- K3["Extension storage"]
 ```
 
 Two entries provide test seams:
@@ -32,6 +33,14 @@ Two entries provide test seams:
 
 Persisted state is loaded before the UI so the first frame uses the saved category,
 extension, and preferences.
+
+**Extension storage** is read in that same startup pass, and for a stricter reason than the
+rest: it backs `host.storage`, whose functions are synchronous, so every value an extension
+can ask for has to already be in memory before any bundle is evaluated. Each installed
+extension gets its own store, keyed by manifest id and handed to its engine at load. The
+shell keeps one opaque blob per extension and never interprets it; uninstalling drops that
+extension's blob. What an extension keeps there is its own cache — typically an upstream
+response too slow to re-fetch on every cold start.
 
 ## 6.2 Navigation
 

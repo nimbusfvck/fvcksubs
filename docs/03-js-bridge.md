@@ -220,6 +220,11 @@ flowchart LR
         subgraph M["host.match"]
             M1["resolve(query, candidates, options)"]
         end
+        subgraph S["host.storage"]
+            S1["read(key)"]
+            S2["write(key, value, ttlMs?)"]
+            S3["delete(key)"]
+        end
     end
 ```
 
@@ -230,6 +235,7 @@ const res = await fetch('https://api.example.com/thing', {
   method: 'POST',                        // default "GET"
   headers: { 'User-Agent': '…', Referer: 'https://example.com/' },
   body: 'a=1&b=2',                       // string
+  timeoutMs: 30000,                      // optional; raises THIS call's timeout
 });
 // res.status   number   — the final response's status
 // res.headers  object   — response headers, values joined with ", "
@@ -243,7 +249,7 @@ const res = await fetch('https://api.example.com/thing', {
 | Redirects | **Not followed automatically.** The host follows them itself, one hop at a time, re-checking the allowlist on **every hop**, and reports the final URL. |
 | Headers | Arbitrary request headers are honoured, including ones a browser would refuse to let you set. Nothing is auto-populated. |
 | Body | Text only. |
-| Timeouts | Per-request send and receive timeouts. |
+| Timeouts | Every call gets the engine's fetch timeout. `timeoutMs` raises that for one call, up to a host-configured ceiling — it can only lengthen its own call, never shorten one or affect another. Reserved for a known-slow upstream whose call is made *off* the discovery path; it does not widen the budget discovery itself runs under. The option is consumed by the host and never sent. |
 | Status | Any status is returned as data — a `404` resolves the promise with `status: 404`. Only transport failures, timeouts, allowlist rejections, and redirect-limit breaches reject. |
 | Concurrency | Multiple in-flight requests are supported, up to a slot limit; exceeding it throws. |
 
@@ -323,18 +329,52 @@ serializing extension-owned data through the host.
 
 See [Data Model §5.4](05-data-model.md#54-matching) for the algorithm's invariants.
 
+### `host.storage` — a cache that outlives the engine
+
+```js
+host.storage.write('schedule.v1', JSON.stringify(events), 6 * 60 * 60 * 1000);
+const raw = host.storage.read('schedule.v1');   // string | null
+host.storage.delete('schedule.v1');
+```
+
+| Function | Takes → returns |
+|---|---|
+| `read(key)` | key → the stored string, or `null` when absent or expired |
+| `write(key, value, ttlMs?)` | key, string value, optional lifetime → `true` when stored, `false` when refused |
+| `delete(key)` | key → `true` when the call reached a store |
+
+**A cache an extension may use, never one it may rely on.** Every call swallows its own
+failure: `read` reports `null` and `write` reports `false` when the host has no store, when
+the value is over the size limit, or when the store is full. Anything kept here must be
+re-derivable from the network. Values are opaque strings; encode your own JSON.
+
+Each extension gets its own namespace, keyed by its manifest id and handed to the engine at
+load — a bundle never names its own id and cannot name another's, so keys cannot collide
+across extensions. Uninstalling an extension drops everything it stored.
+
+Reads and writes are **synchronous**, like the rest of `host.*`: the host answers from
+memory, hydrated before any bundle is evaluated, and persists in the background. That shapes
+what belongs here — small, re-derivable data. It is not a database, and it must not hold
+signed or resolved stream URLs, which die long before any cache entry would.
+
+**What it is for:** a fetch too slow or too unreliable to repeat on every cold start. The
+pattern is to serve the stored copy immediately, then refresh behind the answer it gave,
+rather than making the first caller wait for the network. Data whose meaning depends on
+*when* it was fetched needs care: prefer values a later reader can re-judge for itself (a
+schedule of kickoff times, say) over a snapshot of a conclusion (what is live *now*).
+
 ### APIs not provided
 
-There is no storage, HTML parser, timer, logger, or filesystem. New host APIs require an
+There is no HTML parser, timer, logger, or filesystem. New host APIs require an
 implemented use case and fixture coverage.
 
-Practical consequences today: keep state in module scope within a single call chain rather
-than expecting it to persist; parse HTML with regular expressions or prefer JSON endpoints;
-and do not rely on `setTimeout` — it does not exist.
+Practical consequences today: parse HTML with regular expressions or prefer JSON endpoints;
+and do not rely on `setTimeout` — it does not exist. Module-scope state lives as long as the
+engine, which is the app session; `host.storage` is the only thing that crosses a restart.
 
 ## 3.6 Resource limits
 
-Applied per engine, at construction:
+Applied per engine at construction, plus the caps the host sets on each extension's store:
 
 | Limit | Purpose | On breach |
 |---|---|---|
@@ -342,8 +382,11 @@ Applied per engine, at construction:
 | Native stack | Caps recursion depth | The call fails with a runtime error |
 | Script time budget | Caps **JS execution** per entry into the engine, via an interrupt | The call fails with a runtime error |
 | Fetch timeout | Caps each HTTP request | The `fetch` promise rejects |
+| Maximum fetch timeout | Caps how far `timeoutMs` can raise one request | The request is clamped to the ceiling |
 | Redirect hops | Caps a redirect chain | The `fetch` promise rejects |
 | In-flight fetch slots | Caps concurrent requests | `fetch` throws |
+| Storage value size | Caps one stored value | `host.storage.write` returns `false` |
+| Storage key count | Caps how many keys one extension holds | `host.storage.write` returns `false` for a new key |
 
 Every limit has a finite default and can be configured by the host.
 

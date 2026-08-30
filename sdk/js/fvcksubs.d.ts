@@ -441,6 +441,23 @@ interface HostApi {
       options?: Record<string, JsonValue>,
     ): { index: number; confidence: number } | null;
   };
+  /**
+   * A small per-extension cache that survives an app restart.
+   *
+   * A cache an extension may use, never one it may rely on: every call
+   * swallows its own failure, so a missing store, an oversized value, or a
+   * full store reports a miss rather than throwing. Keep only data that can
+   * be re-fetched, never a signed or resolved stream URL. Values are opaque
+   * strings — encode your own JSON. Reads answer from memory, synchronously.
+   */
+  storage: {
+    /** The stored value, or null when absent, expired, or unavailable. */
+    read(key: string): string | null;
+    /** Stores a value for an optional lifetime. False when refused. */
+    write(key: string, value: string, ttlMs?: number): boolean;
+    /** Drops a key. */
+    delete(key: string): boolean;
+  };
 }
 
 declare const fvcksubs: FvcksubsSdk;
@@ -452,5 +469,16 @@ declare const host: HostApi;
  */
 declare function fetch(
   url: string,
-  options?: { method?: string; headers?: Record<string, string>; body?: string },
+  options?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    /**
+     * Raises this one request's timeout, up to a host-configured ceiling.
+     * Only for a known-slow upstream, and only on a call made off the source
+     * discovery path — discovery's own budget is unchanged. Consumed by the
+     * host; never sent with the request.
+     */
+    timeoutMs?: number;
+  },
 ): Promise<{ status: number; headers: Record<string, string>; url: string; body: string }>;

@@ -97,9 +97,13 @@ for decoding the complete protocol model.
 ## Sandbox constraints
 
 There is no Node.js, npm loader, DOM, filesystem, timer, or ambient network.
-Use the host-provided `fetch`, `host.codec`, `host.crypto`, and `host.match`
-APIs described in `docs/03-js-bridge.md`. Every request and redirect host must
-be declared in `manifest.json.permissions.hosts`.
+Use the host-provided `fetch`, `host.codec`, `host.crypto`, `host.match`, and
+`host.storage` APIs described in `docs/03-js-bridge.md`. Every request and
+redirect host must be declared in `manifest.json.permissions.hosts`.
+
+`host.storage` is a per-extension cache that survives a restart, not a
+database: every call reports a miss instead of throwing, so keep only what you
+can fetch again, and never a resolved stream URL.
 
 The shipped extension is still exactly two files: `manifest.json` and
 `bundle.js`. This SDK is source input to that bundle, not a third runtime file.

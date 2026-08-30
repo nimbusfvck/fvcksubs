@@ -82,7 +82,7 @@ belong in the contract layer.
 | **Contract** | Content model, protocol types, matcher algorithm | Content or provider-specific behavior |
 | **Runtime** | Executing untrusted JS under limits; the host function surface | Protocol semantics |
 | **Extensions** | Catalogs, metadata, source discovery and resolution | Anything about the user |
-| **Persistence** | Library, settings, installed extensions, caches | Extension-owned data |
+| **Persistence** | Library, settings, installed extensions, caches | Any reading of extension-owned data — an extension's own cache is stored as an opaque blob under its id, never interpreted |
 
 ## 1.4 Package layout
 
