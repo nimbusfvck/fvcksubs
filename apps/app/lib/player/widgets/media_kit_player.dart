@@ -63,21 +63,6 @@ Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
   // Five seconds is tight for a large or slow playlist reload, and an abort
   // costs one of the demuxer's five segment retries.
   'network-timeout': '8',
-  if (!isLive)
-    // FFmpeg's HTTP protocol does not re-establish a dropped connection
-    // unless asked. Without this a transient drop mid-file ends the stream's
-    // supply; with it the demuxer rides over the gap.
-    //
-    // Live is deliberately excluded. A reconnect is a *blocking* backoff on
-    // the demuxer thread — up to reconnect_delay_max, doubling per attempt —
-    // and a live edge does not wait: the seconds spent sleeping are seconds
-    // of broadcast that roll out of the playlist window unread, so the
-    // demuxer wakes up behind and drains its cushion to nothing. Measured
-    // against Kora with matched runs, the same tuning underran 15–17 times
-    // in 45 seconds with these options and 0–5 times without them.
-    'stream-lavf-o':
-        'reconnect=1,reconnect_streamed=1,'
-        'reconnect_on_network_error=1,reconnect_delay_max=5',
   if (isLive) ...{
     // Live providers are always network streams. Do not leave this to mpv's
     // auto detection: a cache gives segment downloads time to catch up before

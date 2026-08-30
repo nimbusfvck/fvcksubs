@@ -115,11 +115,9 @@ void main() {
   });
 
   group('mpvPlaybackTuning', () {
-    test('on-demand playback reconnects a dropped connection', () {
+    test('on-demand playback leaves reconnect policy unset', () {
       final tuning = mpvPlaybackTuning(isLive: false);
-      expect(tuning['stream-lavf-o'], contains('reconnect=1'));
-      expect(tuning['stream-lavf-o'], isNot(contains('reconnect_at_eof')));
-      expect(tuning['stream-lavf-o'], contains('reconnect_streamed=1'));
+      expect(tuning['stream-lavf-o'], isNull);
       expect(tuning['network-timeout'], '8');
     });
 
