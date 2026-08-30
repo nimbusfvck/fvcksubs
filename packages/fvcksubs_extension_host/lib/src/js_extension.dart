@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_js_runtime/fvcksubs_js_runtime.dart';
 
+import 'extension_storage.dart';
 import 'host_api.dart';
 
 /// Thrown when a JS-backed extension fails: a bundle that won't load, a role
@@ -45,6 +46,10 @@ class JsExtension extends ContentExtension {
   /// [prelude], when given, is evaluated before the bundle — a seam for
   /// tests, not a configuration mechanism.
   ///
+  /// [storage] backs `host.storage` for this bundle, and should already be
+  /// namespaced to [manifest]'s id. Without it the bundle still sees the
+  /// API, and every call reports a miss — see [ExtensionStorage].
+  ///
   /// Throws [JsExtensionException] if the bundle fails to evaluate or doesn't
   /// install the surface the host calls.
   factory JsExtension.load({
@@ -53,6 +58,8 @@ class JsExtension extends ContentExtension {
     String? prelude,
     Duration? scriptTimeout,
     Duration? fetchTimeout,
+    Duration? maxFetchTimeout,
+    ExtensionStorage? storage,
   }) {
     final engine = JsEngine(
       allowedHosts: manifest.permissions.hosts.toSet(),
@@ -62,11 +69,17 @@ class JsExtension extends ContentExtension {
       // of that budget on its own and take every other provider's results
       // down with it when the budget runs out.
       fetchTimeout: fetchTimeout ?? const Duration(seconds: 10),
+      // The ceiling a bundle may raise one call to with `timeoutMs` — see
+      // JsEngine's own docs. Kept well inside the app's discovery budget so
+      // a provider can only spend it on a call made *off* that path (a
+      // catalog fetch that fills a cache, say), not stretch discovery
+      // itself.
+      maxFetchTimeout: maxFetchTimeout ?? const Duration(seconds: 30),
       scriptTimeout: scriptTimeout ?? const Duration(seconds: 10),
     );
     try {
       // Before anything from the bundle: the host API it is allowed to use.
-      HostApi.install(engine);
+      HostApi.install(engine, storage: storage);
       if (prelude != null) engine.eval(prelude);
       engine.eval(source);
       final installed = engine.eval('typeof globalThis.__extension');

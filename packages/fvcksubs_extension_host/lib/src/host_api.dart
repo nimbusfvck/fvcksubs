@@ -6,6 +6,8 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_js_runtime/fvcksubs_js_runtime.dart';
 import 'package:pointycastle/export.dart';
 
+import 'extension_storage.dart';
+
 /// The synchronous half of the extension host API — `crypto` and `codec`.
 ///
 /// PLAN.md §18 splits the host API in two: `fetch` is async and has its own
@@ -29,9 +31,70 @@ abstract final class HostApi {
   /// evaluates the JS wrapper that exposes it as `host.crypto`/`host.codec`.
   ///
   /// Call before evaluating any bundle.
-  static void install(JsEngine engine) {
-    engine.setHostFunction(dispatch);
+  static void install(JsEngine engine, {ExtensionStorage? storage}) {
+    engine.setHostFunction(
+      storage == null
+          ? dispatch
+          : (name, argsJson) => dispatchWith(storage, name, argsJson),
+    );
     engine.eval(prelude);
+  }
+
+  /// [dispatch], plus the `storage.*` calls, which need somewhere to put
+  /// things and so cannot be static like the rest.
+  ///
+  /// A bundle running on a host that passed no storage still sees
+  /// `host.storage`; its calls just fail, which is why the prelude's wrapper
+  /// turns a read into `null` and a write into a no-op. Persistence is a
+  /// cache an extension may use, never one it may rely on.
+  static String dispatchWith(
+    ExtensionStorage storage,
+    String name,
+    String argsJson,
+  ) {
+    if (!name.startsWith('storage.')) return dispatch(name, argsJson);
+    try {
+      final args = (jsonDecode(argsJson) as Map).cast<String, Object?>();
+      final key = args['key'];
+      if (key is! String || key.isEmpty) {
+        throw ArgumentError('$name: "key" must be a non-empty string');
+      }
+      return jsonEncode({
+        'value': switch (name) {
+          'storage.read' => storage.read(key),
+          'storage.write' => _write(storage, key, args),
+          'storage.delete' => _deleteFrom(storage, key),
+          _ => throw ArgumentError('unknown host function "$name"'),
+        },
+      });
+    } catch (e) {
+      return jsonEncode({'error': '$e'});
+    }
+  }
+
+  static Object? _write(
+    ExtensionStorage storage,
+    String key,
+    Map<String, Object?> args,
+  ) {
+    final value = args['value'];
+    if (value is! String) {
+      throw ArgumentError('storage.write: "value" must be a string');
+    }
+    final ttlMs = args['ttlMs'];
+    storage.write(
+      key,
+      value,
+      ttl: ttlMs is num && ttlMs > 0
+          ? Duration(milliseconds: ttlMs.toInt())
+          : null,
+    );
+    return null;
+  }
+
+  static Object? _deleteFrom(ExtensionStorage storage, String key) {
+    storage.delete(key);
+    return null;
   }
 
   /// Handles one `__host_call`. Returns a JSON envelope: `{"value": ...}` on
@@ -277,6 +340,37 @@ abstract final class HostApi {
       // 16-byte GCM tag concatenated on the end.
       aesGcmDecrypt: (key, nonce, data) =>
         call('crypto.aesGcmDecrypt', { key, nonce, data }),
+    },
+    // A cache that outlives the engine, when the host has somewhere to put
+    // it. Every call swallows its own failure — an extension that asks for
+    // storage on a host without it, or writes more than the host allows,
+    // carries on with a cache miss instead of failing the role call.
+    storage: {
+      read: (key) => {
+        try {
+          return call('storage.read', { key });
+        } catch (_) {
+          return null;
+        }
+      },
+      // ttlMs is optional; without it the value stays until overwritten,
+      // deleted, or the host drops it.
+      write: (key, value, ttlMs) => {
+        try {
+          call('storage.write', { key, value, ttlMs: ttlMs || null });
+          return true;
+        } catch (_) {
+          return false;
+        }
+      },
+      delete: (key) => {
+        try {
+          call('storage.delete', { key });
+          return true;
+        } catch (_) {
+          return false;
+        }
+      },
     },
     match: {
       // Finds which of `candidates` is the same fixture as `query`, using the
