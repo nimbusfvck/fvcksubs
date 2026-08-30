@@ -123,19 +123,26 @@ void main() {
       }
     });
 
-    test('live playback stops writing a disk cache nothing reads back', () {
-      expect(mpvPlaybackTuning(isLive: true)['cache-on-disk'], 'no');
-      expect(mpvPlaybackTuning(isLive: true)['cache-secs'], '20');
-      expect(
-        mpvPlaybackTuning(isLive: true)['demuxer-max-back-bytes'],
-        '${8 * 1024 * 1024}',
-      );
+    test('live playback prioritizes a stable in-memory buffer', () {
+      final tuning = mpvPlaybackTuning(isLive: true);
+
+      expect(tuning['cache'], 'yes');
+      expect(tuning['cache-on-disk'], 'no');
+      expect(tuning['cache-secs'], '45');
+      expect(tuning['cache-pause-initial'], 'yes');
+      expect(tuning['cache-pause-wait'], '5');
+      expect(tuning['demuxer-max-bytes'], '${64 * 1024 * 1024}');
+      expect(tuning['demuxer-max-back-bytes'], '${8 * 1024 * 1024}');
     });
 
     test('on-demand playback keeps media_kit\'s own cache defaults', () {
       final tuning = mpvPlaybackTuning(isLive: false);
+      expect(tuning.containsKey('cache'), isFalse);
       expect(tuning.containsKey('cache-on-disk'), isFalse);
       expect(tuning.containsKey('cache-secs'), isFalse);
+      expect(tuning.containsKey('cache-pause-initial'), isFalse);
+      expect(tuning.containsKey('cache-pause-wait'), isFalse);
+      expect(tuning.containsKey('demuxer-max-bytes'), isFalse);
       expect(tuning.containsKey('demuxer-max-back-bytes'), isFalse);
     });
   });

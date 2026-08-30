@@ -240,7 +240,7 @@ flowchart TB
 
 | Concern | Decision |
 |---|---|
-| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
+| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. On libmpv platforms, live streams use an in-memory stability buffer and wait briefly for it before first frame or after an underrun; this deliberately stays a little behind the edge to avoid repeated rebuffering. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |

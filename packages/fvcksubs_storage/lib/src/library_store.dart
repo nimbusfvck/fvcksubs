@@ -22,17 +22,25 @@ class SharedPreferencesLibraryStore implements LibraryStore {
     final preferences = await SharedPreferences.getInstance();
     final raw = preferences.getString(_key);
     if (raw == null) return {};
-    final decoded = jsonDecode(raw);
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      return {};
+    }
     if (decoded is! List) {
-      throw const FormatException('library records must be a list');
+      return {};
     }
     final records = <String, UserMediaState>{};
     for (final entry in decoded) {
-      if (entry is! Map) {
-        throw const FormatException('library record must be an object');
+      if (entry is! Map) continue;
+      try {
+        final state = UserMediaState.fromJson(entry.cast<String, Object?>());
+        records[state.key] = state;
+      } on Object {
+        // A malformed record must not brick startup. Valid records remain
+        // available and the invalid record is not used by the app.
       }
-      final state = UserMediaState.fromJson(entry.cast<String, Object?>());
-      records[state.key] = state;
     }
     return records;
   }

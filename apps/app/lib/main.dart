@@ -65,7 +65,11 @@ Future<void> main() async {
   final libraryStore = SharedPreferencesLibraryStore();
   final libraryController = LibraryController(
     store: libraryStore,
-    initial: await libraryStore.load(),
+    initial: await _loadPersistedOrDefault(
+      name: 'library',
+      load: libraryStore.load,
+      fallback: const <String, UserMediaState>{},
+    ),
   );
 
   const pluginStore = SharedPreferencesPluginSelectionStore();
@@ -92,7 +96,16 @@ Future<void> main() async {
   final sourceListStore = SharedPreferencesSourceListStore();
   final sourceCache = SourceCache(
     sourceListStore: sourceListStore,
-    initial: await sourceListStore.load(),
+    initial: await _loadPersistedOrDefault(
+      name: 'source lists',
+      load: sourceListStore.load,
+      fallback: const <String, CachedSourceList>{},
+    ),
+  );
+  final catalogCache = await _loadPersistedOrDefault(
+    name: 'catalog cache',
+    load: () async => CatalogCache(store: await SembastCatalogPageStore.open()),
+    fallback: CatalogCache(),
   );
 
   runApp(
@@ -103,7 +116,7 @@ Future<void> main() async {
       installerController: installerController,
       libraryController: libraryController,
       pluginController: pluginController,
-      catalogCache: CatalogCache(store: await SembastCatalogPageStore.open()),
+      catalogCache: catalogCache,
       subtitlePreferenceController: subtitlePreferenceController,
       sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
@@ -127,6 +140,19 @@ Future<void> _restoreExternalSubtitleTracks(
 ) async {
   final tracks = await store.loadExternalTracks();
   controller.restoreExternalTracks(tracks);
+}
+
+Future<T> _loadPersistedOrDefault<T>({
+  required String name,
+  required Future<T> Function() load,
+  required T fallback,
+}) async {
+  try {
+    return await load();
+  } on Object catch (error, stack) {
+    debugPrint('Could not read persisted $name: $error\n$stack');
+    return fallback;
+  }
 }
 
 Future<void> loadInstalledExtensions(

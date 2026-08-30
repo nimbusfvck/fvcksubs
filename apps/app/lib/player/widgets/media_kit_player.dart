@@ -68,16 +68,36 @@ Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
   // costs one of the demuxer's five segment retries.
   'network-timeout': '8',
   if (isLive) ...{
+    // Live providers are always network streams. Do not leave this to mpv's
+    // auto detection: a cache gives segment downloads time to catch up before
+    // the decoder reaches the moving live edge.
+    'cache': 'yes',
     // Nothing seeks back into a live broadcast, so the disk cache is written
     // and never read.
     'cache-on-disk': 'no',
+    // media_kit's 32 MiB default is quickly consumed by a high-bitrate live
+    // rendition. Keep enough forward packet cache for a short upstream or
+    // mobile-network dip without persisting it to disk.
+    'demuxer-max-bytes': '${64 * 1024 * 1024}',
     'demuxer-max-back-bytes': '${8 * 1024 * 1024}',
-    // Prefetch further ahead than mpv's default so an upstream hiccup is
-    // absorbed by the cache instead of becoming a visible rebuffer. The cost
-    // is sitting further behind the live edge, which a viewer does not see.
-    'cache-secs': '20',
+    // cache-secs caps mpv's normal network read-ahead. A 20-second cap leaves
+    // little room for HLS segment jitter and makes playback repeatedly hit
+    // the live edge. A larger cache trades a small amount of live latency for
+    // continuous viewing.
+    'cache-secs': '45',
+    // Build a modest cushion before first frame and after an underrun. This
+    // avoids the visible start-stop loop caused by resuming at the live edge
+    // with only one segment available.
+    'cache-pause-initial': 'yes',
+    'cache-pause-wait': '5',
   },
 };
+
+@visibleForTesting
+Duration mediaKitBufferedAhead({
+  required Duration position,
+  required Duration bufferedPosition,
+}) => bufferedPosition > position ? bufferedPosition - position : Duration.zero;
 
 /// libmpv-backed player, used on macOS and iOS.
 ///
@@ -351,7 +371,9 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     key: _videoKey,
     controller: _video,
     fit: _fitMode == PlayerFitMode.contain ? BoxFit.contain : BoxFit.cover,
-    fill: widget.transparentBackground ? Colors.transparent : const Color(0xFF000000),
+    fill: widget.transparentBackground
+        ? Colors.transparent
+        : const Color(0xFF000000),
     subtitleViewConfiguration: SubtitleViewConfiguration(
       style: widget.subtitleAppearance?.textStyle ?? playerSubtitleTextStyle,
     ),

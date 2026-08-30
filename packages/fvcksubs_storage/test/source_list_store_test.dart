@@ -30,7 +30,10 @@ void main() {
     test('keyFor includes extension and provider, not just the opaque id', () {
       const refA = MediaRef(extensionId: 'a', providerId: 'a.p', id: 'x');
       const refB = MediaRef(extensionId: 'b', providerId: 'b.p', id: 'x');
-      expect(CachedSourceList.keyFor(refA), isNot(CachedSourceList.keyFor(refB)));
+      expect(
+        CachedSourceList.keyFor(refA),
+        isNot(CachedSourceList.keyFor(refB)),
+      );
     });
   });
 
@@ -52,7 +55,11 @@ void main() {
         fetchedAt: DateTime.utc(2026, 8, 16),
       );
       final b = CachedSourceList(
-        ref: const MediaRef(extensionId: 'fvck', providerId: 'fvck.p', id: 'e2'),
+        ref: const MediaRef(
+          extensionId: 'fvck',
+          providerId: 'fvck.p',
+          id: 'e2',
+        ),
         sources: const [StreamSource(id: 'b', label: 'SD')],
         fetchedAt: DateTime.utc(2026, 8, 17),
       );
@@ -76,6 +83,33 @@ void main() {
       await store.save({});
 
       expect(await store.load(), isEmpty);
+    });
+
+    test('malformed top-level data loads as empty', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('player.sourceLists', '{not-json');
+
+      expect(await SharedPreferencesSourceListStore().load(), isEmpty);
+    });
+
+    test('malformed records are skipped while valid records remain', () async {
+      final valid = CachedSourceList(
+        ref: ref,
+        sources: const [StreamSource(id: 'a', label: 'HD')],
+        fetchedAt: DateTime.utc(2026, 8, 16),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'player.sourceLists',
+        jsonEncode([
+          valid.toJson(),
+          {'ref': 'invalid'},
+        ]),
+      );
+
+      final loaded = await SharedPreferencesSourceListStore().load();
+
+      expect(loaded, {valid.key: valid});
     });
   });
 }

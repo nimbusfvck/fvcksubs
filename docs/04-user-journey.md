@@ -53,7 +53,8 @@ sequenceDiagram
 
 Everything the first frame depends on is read **before** the UI is built, so the app opens
 on the user's actual last state rather than picking a default and correcting itself a frame
-later.
+later. Optional persisted optimizations such as known source lists are disposable: malformed
+records are ignored so they cannot prevent startup.
 
 ## 4.3 Adding an extension
 

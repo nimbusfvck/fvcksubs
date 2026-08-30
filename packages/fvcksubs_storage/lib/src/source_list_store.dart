@@ -86,11 +86,25 @@ class SharedPreferencesSourceListStore implements SourceListStore {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
     if (raw == null) return {};
-    final decoded = jsonDecode(raw) as List<Object?>;
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      return {};
+    }
+    if (decoded is! List) return {};
+
     final records = <String, CachedSourceList>{};
     for (final entry in decoded) {
-      final cached = CachedSourceList.fromJson(entry! as Map<String, Object?>);
-      records[cached.key] = cached;
+      if (entry is! Map) continue;
+      try {
+        final cached = CachedSourceList.fromJson(entry.cast<String, Object?>());
+        records[cached.key] = cached;
+      } on Object {
+        // One bad source-list record must not prevent the app from starting.
+        // The persisted value is only an optimization; fresh discovery can
+        // rebuild the entry when it is needed.
+      }
     }
     return records;
   }
