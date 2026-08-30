@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/playback_stall_detector.dart';
+import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/widgets/media_kit_player.dart';
 import 'package:fvcksubs_app/player/widgets/player_subtitle_style.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -114,6 +116,45 @@ void main() {
     });
   });
 
+  group('preferred quality track', () {
+    AppQualityTrack track(int height, {int bitrate = 0}) => AppQualityTrack(
+      id: '$height-$bitrate',
+      height: height,
+      bitrate: bitrate,
+    );
+
+    test('chooses the highest rendition at or below the cap', () {
+      expect(
+        preferredQualityTrack(
+          tracks: [track(1080), track(720), track(480)],
+          maxHeight: 720,
+        )?.height,
+        720,
+      );
+    });
+
+    test('chooses the lowest rendition when every track exceeds the cap', () {
+      expect(
+        preferredQualityTrack(
+          tracks: [track(1080), track(720)],
+          maxHeight: 480,
+        )?.height,
+        720,
+      );
+    });
+
+    test('leaves Auto untouched and ignores unusable tracks', () {
+      expect(
+        preferredQualityTrack(tracks: [track(0), track(-1)], maxHeight: 720),
+        isNull,
+      );
+      expect(
+        preferredQualityTrack(tracks: [track(720)], maxHeight: null),
+        isNull,
+      );
+    });
+  });
+
   group('mpvPlaybackTuning', () {
     test('on-demand playback leaves reconnect policy unset', () {
       final tuning = mpvPlaybackTuning(isLive: false);
@@ -121,11 +162,10 @@ void main() {
       expect(tuning['network-timeout'], '8');
     });
 
-    test('live playback never blocks the demuxer on a reconnect backoff', () {
-      // The wait is served on the demuxer thread while the live edge keeps
-      // moving, so the recovery costs more than the drop it recovers from.
-      expect(mpvPlaybackTuning(isLive: true)['stream-lavf-o'], isNull);
-      expect(mpvPlaybackTuning(isLive: true)['network-timeout'], '8');
+    test('live playback leaves reconnect policy unset', () {
+      final tuning = mpvPlaybackTuning(isLive: true);
+      expect(tuning['stream-lavf-o'], isNull);
+      expect(tuning['network-timeout'], '8');
     });
 
     test('live playback prioritizes a stable in-memory buffer', () {
@@ -142,7 +182,9 @@ void main() {
 
     test('the rebuffer wait stays under the stall threshold', () {
       final wait = Duration(
-        seconds: int.parse(mpvPlaybackTuning(isLive: true)['cache-pause-wait']!),
+        seconds: int.parse(
+          mpvPlaybackTuning(isLive: true)['cache-pause-wait']!,
+        ),
       );
       // A rebuffer that outlives the stall timer costs the source a
       // re-resolve while libmpv is still recovering from it.

@@ -17,6 +17,16 @@ void main() {
     expect(await store.load(), ['nimora.cricfy', 'nimora.kora']);
   });
 
+  test('quality preference defaults to Auto and round-trips', () async {
+    const store = SharedPreferencesQualityPreferenceStore();
+
+    expect(await store.load(), isNull);
+    await store.save(720);
+    expect(await store.load(), 720);
+    await store.save(null);
+    expect(await store.load(), isNull);
+  });
+
   test('external subtitle selections round-trip per media item', () async {
     final store = SharedPreferencesSubtitlePreferenceStore();
     const first = MediaRef(
@@ -87,9 +97,9 @@ void main() {
       }
 
       final loaded = await store.loadExternalTracks();
-    expect(loaded, hasLength(10));
+      expect(loaded, hasLength(10));
       expect(loaded.keys.any((key) => key.endsWith('\u0000item-0')), isFalse);
-    expect(loaded.keys.any((key) => key.endsWith('\u0000item-10')), isTrue);
+      expect(loaded.keys.any((key) => key.endsWith('\u0000item-10')), isTrue);
     },
   );
 }

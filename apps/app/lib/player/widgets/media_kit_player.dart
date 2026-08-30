@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_wakelock.dart';
+import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 
@@ -139,6 +140,7 @@ class MediaKitPlayerView extends StatefulWidget {
     this.onControllerCreated,
     this.onPlaybackReady,
     this.preferredSubtitleLanguage,
+    this.preferredQualityMaxHeight,
     this.preferredExternalSubtitle,
     this.subtitleAppearance,
     this.muted = false,
@@ -155,6 +157,8 @@ class MediaKitPlayerView extends StatefulWidget {
   final void Function(Object? controller)? onControllerCreated;
   final void Function(Object? controller)? onPlaybackReady;
   final String? preferredSubtitleLanguage;
+
+  final int? preferredQualityMaxHeight;
   final SubtitleTrack? preferredExternalSubtitle;
   final SubtitleAppearance? subtitleAppearance;
 
@@ -199,6 +203,8 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   late PlayerFitMode _fitMode;
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
+  StreamSubscription<mk.Tracks>? _qualityTracksSubscription;
+  bool _preferredQualitySelectionDone = false;
 
   @override
   void initState() {
@@ -331,6 +337,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         );
       }
     }
+    _watchPreferredQuality();
     try {
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
@@ -353,6 +360,43 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         ),
       );
     }
+  }
+
+  Future<void> _applyPreferredQuality() async {
+    final track = preferredQualityTrack(
+      tracks: _adapter.qualityTracks,
+      maxHeight: widget.preferredQualityMaxHeight,
+    );
+    if (track == null || track.id == _adapter.activeQuality?.id) return;
+    try {
+      await _adapter.setQuality(track);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] preferred quality unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+  }
+
+  void _watchPreferredQuality() {
+    if (widget.preferredQualityMaxHeight == null) return;
+    if (_adapter.qualityTracks.isNotEmpty) {
+      _preferredQualitySelectionDone = true;
+      unawaited(_applyPreferredQuality());
+      return;
+    }
+    _qualityTracksSubscription = _player.stream.tracks.listen((_) {
+      if (_preferredQualitySelectionDone ||
+          _adapter.qualityTracks.isEmpty) {
+        return;
+      }
+      _preferredQualitySelectionDone = true;
+      unawaited(_applyPreferredQuality());
+      unawaited(_qualityTracksSubscription?.cancel());
+      _qualityTracksSubscription = null;
+    });
   }
 
   SubtitleTrack? _preferredSubtitle() => preferredSubtitleTrack(
@@ -407,6 +451,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   @override
   void dispose() {
     _wakelockRefreshTimer?.cancel();
+    unawaited(_qualityTracksSubscription?.cancel());
     if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.removeObserver(this);
       _wakelock?.release();

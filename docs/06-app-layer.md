@@ -20,6 +20,7 @@ flowchart TB
     SCOPE --- C3["Selection controller"]
     SCOPE --- C4["Install controller"]
     SCOPE --- C5["Subtitle preference"]
+    SCOPE --- C6["Quality preference"]
     SCOPE --- K1["Catalog cache"]
     SCOPE --- K2["Source cache"]
     SCOPE --- K3["Extension storage"]
@@ -94,6 +95,7 @@ flowchart LR
 | Library | its own record map | Recording a watch must never wipe a saved resume position. |
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
 | Subtitle preference | its language code and appearance | Native subtitle tracks declared by the video backend remain under native-player control. When there is no remembered external selection, a source-provided track matching the preferred language is auto-applied. The complete result of an explicit external-subtitle fetch is cached per media item, and the selected external track is remembered for later auto-apply. The persisted external-track cache is bounded and restored after the shell is shown. New external-subtitle lookup remains explicit. A subtitle failure releases playback rather than blocking it. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. Text size, text color, background color, and outline are global appearance preferences shared by both player backends. |
+| Quality preference | its maximum automatic video height | Global and persistent. Auto leaves the native backend's adaptive choice alone; a selected cap picks the highest available rendition at or below it when the stream exposes multiple video tracks. If a source has no rendition under the cap, the lowest available track is used. Manual quality switching in the player remains available. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
 | NSFW visibility | the registry plus a persisted app preference | **Show NSFW content** controls catalogs explicitly marked `mature`; unknown declarations remain compatible with older extensions. |
 

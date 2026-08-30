@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -75,6 +76,38 @@ void main() {
     expect(player.buildCount, greaterThan(initialBuilds));
     expect(player.controllers[1].lastSeekPosition, const Duration(minutes: 25));
     expect(find.text('Source B'), findsOneWidget);
+  });
+
+  testWidgets('passes the preferred maximum quality to the player', (
+    tester,
+  ) async {
+    final player = RecordingPlayer();
+    final quality = QualityPreferenceController(
+      store: FakeQualityPreferenceStore(),
+      initial: 720,
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'movie-quality',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [_resolvedSource('quality', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+        qualityPreferenceController: quality,
+      ),
+    );
+    await tester.pump();
+
+    expect(player.playedPreferredQualityMaxHeight, 720);
   });
 
   testWidgets('an initial playback error falls back to the next source', (
@@ -289,6 +322,7 @@ class _FailingPlayer extends RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    int? preferredQualityMaxHeight,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
@@ -301,6 +335,7 @@ class _FailingPlayer extends RecordingPlayer {
       onPlaybackReady: onPlaybackReady,
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredQualityMaxHeight: preferredQualityMaxHeight,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
       key: key,
@@ -332,6 +367,7 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    int? preferredQualityMaxHeight,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
@@ -344,6 +380,7 @@ class _PositionRecordingPlayer extends RecordingPlayer {
       onPlaybackReady: onPlaybackReady,
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
+      preferredQualityMaxHeight: preferredQualityMaxHeight,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
       key: key,

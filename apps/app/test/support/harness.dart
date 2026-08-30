@@ -10,6 +10,7 @@ import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
+import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
@@ -454,6 +455,9 @@ class RecordingPlayer {
   /// preference.
   String? playedPreferredSubtitleLanguage;
 
+  /// The preferred maximum quality passed to the most recent build.
+  int? playedPreferredQualityMaxHeight;
+
   /// The `preferredExternalSubtitle` the most recent build was called with —
   /// lets a test assert an external track only stands in for a source that
   /// carries nothing in the preferred language.
@@ -477,6 +481,7 @@ class RecordingPlayer {
     )?
     customControlsBuilder,
     String? preferredSubtitleLanguage,
+    int? preferredQualityMaxHeight,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
@@ -484,6 +489,7 @@ class RecordingPlayer {
     played = stream;
     playedIsLive = isLive;
     playedPreferredSubtitleLanguage = preferredSubtitleLanguage;
+    playedPreferredQualityMaxHeight = preferredQualityMaxHeight;
     playedPreferredExternalSubtitle = preferredExternalSubtitle;
     buildCount++;
     if (customControlsBuilder != null) {
@@ -501,8 +507,9 @@ class RecordingPlayer {
 /// A minimal [AppPlayerController] fake — just enough surface to construct
 /// one and emit an [AppPlayerEventType.error] on demand.
 class FakeAppPlayerController implements AppPlayerController {
-  FakeAppPlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
-    : _value = ValueNotifier(initialValue);
+  FakeAppPlayerController({
+    AppPlayerValue initialValue = const AppPlayerValue(),
+  }) : _value = ValueNotifier(initialValue);
 
   final ValueNotifier<AppPlayerValue> _value;
   final StreamController<AppPlayerEvent> _events =
@@ -751,6 +758,17 @@ class FakeSourcePriorityStore implements SourcePriorityStore {
   Future<void> save(List<String> providerIds) async => saved = providerIds;
 }
 
+/// In-memory [QualityPreferenceStore].
+class FakeQualityPreferenceStore implements QualityPreferenceStore {
+  int? saved;
+
+  @override
+  Future<int?> load() async => saved;
+
+  @override
+  Future<void> save(int? maxHeight) async => saved = maxHeight;
+}
+
 /// In-memory [CategorySelectionStore].
 class FakeCategorySelectionStore implements CategorySelectionStore {
   /// Seeds the store as if [initial] had already been saved — for tests that
@@ -811,6 +829,7 @@ Widget wrapApp({
   LibraryController? libraryController,
   PluginController? pluginController,
   CatalogCache? catalogCache,
+  QualityPreferenceController? qualityPreferenceController,
   SubtitlePreferenceController? subtitlePreferenceController,
   SourcePriorityController? sourcePriorityController,
   CategorySelectionStore? homeCategoryStore,
@@ -837,6 +856,9 @@ Widget wrapApp({
   pluginController:
       pluginController ?? PluginController(store: FakePluginSelectionStore()),
   catalogCache: catalogCache ?? CatalogCache(),
+  qualityPreferenceController:
+      qualityPreferenceController ??
+      QualityPreferenceController(store: FakeQualityPreferenceStore()),
   subtitlePreferenceController:
       subtitlePreferenceController ??
       SubtitlePreferenceController(store: FakeSubtitlePreferenceStore()),

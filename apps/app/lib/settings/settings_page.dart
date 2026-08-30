@@ -8,6 +8,7 @@ import '../addons/installer_controller.dart';
 import '../app_scope.dart';
 import '../player/state/source_priority_controller.dart';
 import '../player/state/subtitle_preference_controller.dart';
+import 'quality_preference.dart';
 import 'nsfw_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
@@ -18,6 +19,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context).subtitlePreferenceController;
+    final qualityController = AppScope.of(context).qualityPreferenceController;
     final nsfwController = AppScope.of(context).nsfwController;
     return Scaffold(
       appBar: const AppPageBar(title: 'Settings'),
@@ -39,6 +41,8 @@ class SettingsPage extends StatelessWidget {
             const _AddonsEntry(),
             const SizedBox(height: AppSpacing.md),
             const _SourcePriorityEntry(),
+            const SizedBox(height: AppSpacing.md),
+            QualityPreferenceEntry(controller: qualityController),
             const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
             const SizedBox(height: AppSpacing.md),
@@ -146,7 +150,9 @@ class _AddonsEntry extends StatelessWidget {
       builder: (context, _) {
         final installed = scope.registry.installed;
         final hasUpdate = installed.any(
-          (manifest) => scope.installerController.listingFor(manifest.id)?.isUpdate ?? false,
+          (manifest) =>
+              scope.installerController.listingFor(manifest.id)?.isUpdate ??
+              false,
         );
         return Material(
           color: AppColors.surfaceDarkElevated,
@@ -162,9 +168,9 @@ class _AddonsEntry extends StatelessWidget {
                         '${hasUpdate ? ' · update available' : ''}',
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AddonsPage()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const AddonsPage())),
           ),
         );
       },

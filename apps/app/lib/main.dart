@@ -17,6 +17,7 @@ import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
+import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
 import 'settings/nsfw_controller.dart';
@@ -94,6 +95,12 @@ Future<void> main() async {
     initialExternalSelections: await subtitleStore.loadExternalSelections(),
   );
 
+  const qualityStore = SharedPreferencesQualityPreferenceStore();
+  final qualityPreferenceController = QualityPreferenceController(
+    store: qualityStore,
+    initial: await qualityStore.load(),
+  );
+
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityController = SourcePriorityController(
     registry: registry,
@@ -125,6 +132,7 @@ Future<void> main() async {
       libraryController: libraryController,
       pluginController: pluginController,
       catalogCache: catalogCache,
+      qualityPreferenceController: qualityPreferenceController,
       subtitlePreferenceController: subtitlePreferenceController,
       sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),

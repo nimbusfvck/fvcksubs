@@ -213,7 +213,8 @@ flowchart LR
         F["Last-browsed category"]
         G["Selected extension"]
         H["Subtitle preference and appearance"]
-        I["Source priority"]
+        I["Preferred quality"]
+        J["Source priority"]
     end
 ```
 
@@ -227,6 +228,7 @@ flowchart LR
 | Last-browsed category | Where the user was | one value |
 | Selected extension | Whose data the browse screens use | one value |
 | Subtitle preference | Which language to prefer, plus subtitle appearance | a bounded global value |
+| Preferred quality | Maximum automatic video height, or Auto | one value |
 | Source priority | Stable stream-provider ids from first choice to last | by provider count |
 
 The source-list store is capped because it is derived cache data. Library records are retained

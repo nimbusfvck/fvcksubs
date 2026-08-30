@@ -9,6 +9,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../mappers/stream_player_mapping.dart';
 import '../state/player_wakelock.dart';
+import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'better_player_controller_adapter.dart';
 import 'platform_player_builder.dart';
@@ -28,6 +29,7 @@ typedef PlayerBuilder =
       )?
       customControlsBuilder,
       String? preferredSubtitleLanguage,
+      int? preferredQualityMaxHeight,
       SubtitleTrack? preferredExternalSubtitle,
       SubtitleAppearance? subtitleAppearance,
       Key? key,
@@ -46,6 +48,7 @@ Widget defaultPlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  int? preferredQualityMaxHeight,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
   Key? key,
@@ -59,6 +62,7 @@ Widget defaultPlayerBuilder(
   preferredExternalSubtitle: preferredExternalSubtitle,
   subtitleAppearance: subtitleAppearance,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
+  preferredQualityMaxHeight: preferredQualityMaxHeight,
   key: key,
 );
 
@@ -75,6 +79,7 @@ Widget mobilePlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  int? preferredQualityMaxHeight,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
   bool muted = false,
@@ -93,6 +98,7 @@ Widget mobilePlayerBuilder(
   onPlaybackReady: onPlaybackReady,
   customControlsBuilder: customControlsBuilder,
   preferredSubtitleLanguage: preferredSubtitleLanguage,
+  preferredQualityMaxHeight: preferredQualityMaxHeight,
   preferredExternalSubtitle: preferredExternalSubtitle,
   subtitleAppearance: subtitleAppearance,
   muted: muted,
@@ -113,6 +119,7 @@ class BetterPlayerView extends StatefulWidget {
     this.onPlaybackReady,
     this.customControlsBuilder,
     this.preferredSubtitleLanguage,
+    this.preferredQualityMaxHeight,
     this.preferredExternalSubtitle,
     this.subtitleAppearance,
     this.aspectRatio,
@@ -141,6 +148,8 @@ class BetterPlayerView extends StatefulWidget {
   customControlsBuilder;
 
   final String? preferredSubtitleLanguage;
+
+  final int? preferredQualityMaxHeight;
 
   final SubtitleTrack? preferredExternalSubtitle;
 
@@ -266,7 +275,9 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
           // AspectRatio box, i.e. the letterbox bars — not just a controls
           // chrome color. Controls aren't shown here (no
           // customControlsBuilder), so repurposing it is safe.
-          backgroundColor: widget.transparentBackground ? Colors.transparent : Colors.black,
+          backgroundColor: widget.transparentBackground
+              ? Colors.transparent
+              : Colors.black,
         ),
       ),
     );
@@ -306,9 +317,28 @@ class _BetterPlayerViewState extends State<BetterPlayerView>
       if (widget.muted) await _controller.setVolume(0);
       if (!widget.playing) await _controller.pause();
       _adapter.syncValue();
+      await _applyPreferredQuality();
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
       _logPlayback('setup_error error=${redactPlaybackLogText(error)}');
+    }
+  }
+
+  Future<void> _applyPreferredQuality() async {
+    final track = preferredQualityTrack(
+      tracks: _adapter.qualityTracks,
+      maxHeight: widget.preferredQualityMaxHeight,
+    );
+    if (track == null || track.id == _adapter.activeQuality?.id) return;
+    try {
+      await _adapter.setQuality(track);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] preferred quality unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
     }
   }
 

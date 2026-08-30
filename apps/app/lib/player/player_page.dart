@@ -751,6 +751,9 @@ class _PlayerPageState extends State<PlayerPage> {
         preferredSubtitleLanguage: AppScope.of(
           context,
         ).subtitlePreferenceController.languageCode,
+        preferredQualityMaxHeight: AppScope.of(
+          context,
+        ).qualityPreferenceController.maxHeight,
         subtitleAppearance: AppScope.of(
           context,
         ).subtitlePreferenceController.appearance,

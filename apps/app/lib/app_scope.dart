@@ -10,6 +10,7 @@ import 'library/library_controller.dart';
 import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/source_priority_controller.dart';
+import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
@@ -27,6 +28,7 @@ class AppScope extends InheritedWidget {
     required this.libraryController,
     required this.pluginController,
     required this.catalogCache,
+    required this.qualityPreferenceController,
     required this.subtitlePreferenceController,
     required this.sourcePriorityController,
     required this.homeCategoryStore,
@@ -52,6 +54,8 @@ class AppScope extends InheritedWidget {
   final PluginController pluginController;
 
   final CatalogCache catalogCache;
+
+  final QualityPreferenceController qualityPreferenceController;
 
   final SubtitlePreferenceController subtitlePreferenceController;
 
@@ -80,6 +84,7 @@ class AppScope extends InheritedWidget {
       libraryController != oldWidget.libraryController ||
       pluginController != oldWidget.pluginController ||
       catalogCache != oldWidget.catalogCache ||
+      qualityPreferenceController != oldWidget.qualityPreferenceController ||
       subtitlePreferenceController != oldWidget.subtitlePreferenceController ||
       sourcePriorityController != oldWidget.sourcePriorityController ||
       homeCategoryStore != oldWidget.homeCategoryStore ||

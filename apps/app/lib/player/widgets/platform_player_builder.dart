@@ -25,6 +25,7 @@ Widget platformPlayerBuilder(
   )?
   customControlsBuilder,
   String? preferredSubtitleLanguage,
+  int? preferredQualityMaxHeight,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
   bool muted = false,
@@ -45,6 +46,7 @@ Widget platformPlayerBuilder(
         onControllerCreated: onControllerCreated,
         onPlaybackReady: onPlaybackReady,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
+        preferredQualityMaxHeight: preferredQualityMaxHeight,
         preferredExternalSubtitle: preferredExternalSubtitle,
         subtitleAppearance: subtitleAppearance,
         muted: muted,
@@ -63,6 +65,7 @@ Widget platformPlayerBuilder(
         onPlaybackReady: onPlaybackReady,
         customControlsBuilder: customControlsBuilder,
         preferredSubtitleLanguage: preferredSubtitleLanguage,
+        preferredQualityMaxHeight: preferredQualityMaxHeight,
         preferredExternalSubtitle: preferredExternalSubtitle,
         subtitleAppearance: subtitleAppearance,
         muted: muted,

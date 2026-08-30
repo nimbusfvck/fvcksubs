@@ -88,6 +88,7 @@ class SharedPreferencesSubtitlePreferenceStore
   static const String _outlineKey = 'playback.subtitleOutline';
   static const String _externalKey = 'playback.externalSubtitleSelections';
   static const String _externalTracksKey = 'playback.externalSubtitleTracks';
+
   /// Maximum number of media entries retained in the external-track cache.
   static const int maxPersistedExternalTrackEntries = 10;
 
@@ -272,6 +273,40 @@ class SharedPreferencesSubtitlePreferenceStore
 
   static String _mediaKey(MediaRef ref) =>
       '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
+}
+
+/// Persists the viewer's maximum preferred video height, or `null` for Auto.
+abstract class QualityPreferenceStore {
+  /// Loads the maximum height, or `null` when Auto is selected.
+  Future<int?> load();
+
+  /// Saves the maximum height, or clears it when [maxHeight] is `null`.
+  Future<void> save(int? maxHeight);
+}
+
+/// [QualityPreferenceStore] backed by `shared_preferences`.
+class SharedPreferencesQualityPreferenceStore
+    implements QualityPreferenceStore {
+  /// Creates the shared-preferences-backed quality store.
+  const SharedPreferencesQualityPreferenceStore();
+
+  static const String _key = 'playback.qualityMaxHeight';
+
+  @override
+  Future<int?> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_key);
+  }
+
+  @override
+  Future<void> save(int? maxHeight) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (maxHeight == null) {
+      await prefs.remove(_key);
+      return;
+    }
+    await prefs.setInt(_key, maxHeight);
+  }
 }
 
 /// Persists the preferred order of stable stream-provider ids.
