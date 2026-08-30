@@ -325,7 +325,7 @@ abstract final class FeaturedAlgorithm {
 
     // Reserve high-value slots first. Each slot has its own comparator so a
     // high rating cannot displace a live event or the extension's lead item.
-    pick(_isLiveEvent, composite);
+    pick(_isLiveEvent, _eventComparator(now));
     pick(
       (candidate) => candidate.entry.item.kind == MediaKindV2.video,
       _editorialComparator(now),
@@ -517,10 +517,29 @@ abstract final class FeaturedAlgorithm {
         now,
       );
 
+  /// Gives an extension's event rating priority over catalog position and
+  /// kickoff time. Extensions use this generic editorial signal for facts the
+  /// shell cannot know, such as a football provider's top-club ranking.
+  static int Function(_FeaturedCandidate, _FeaturedCandidate) _eventComparator(
+    DateTime now,
+  ) => (first, second) {
+    final rating = _eventRatingCompare(first, second);
+    if (rating != 0) return rating;
+    return _compareScores(
+      first,
+      second,
+      _compositeScore(first, now),
+      _compositeScore(second, now),
+      now,
+    );
+  };
+
   static int Function(_FeaturedCandidate, _FeaturedCandidate)
   _upcomingComparator(DateTime now) => (first, second) {
     final firstItem = first.entry.item as EventItemV2;
     final secondItem = second.entry.item as EventItemV2;
+    final rating = _eventRatingCompare(first, second);
+    if (rating != 0) return rating;
     final start = firstItem.schedule.startsAt.compareTo(
       secondItem.schedule.startsAt,
     );
@@ -533,6 +552,16 @@ abstract final class FeaturedAlgorithm {
       now,
     );
   };
+
+  static int _eventRatingCompare(
+    _FeaturedCandidate first,
+    _FeaturedCandidate second,
+  ) {
+    final firstRating = first.entry.item.rating;
+    final secondRating = second.entry.item.rating;
+    if (firstRating == null && secondRating == null) return 0;
+    return (secondRating ?? -1).compareTo(firstRating ?? -1);
+  }
 
   static int _compareScores(
     _FeaturedCandidate first,

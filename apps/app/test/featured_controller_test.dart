@@ -96,6 +96,54 @@ void main() {
     expect(featured.single.item.title, 'Next');
   });
 
+  test('top-rated live event outranks an unrated live event', () {
+    final featured = FeaturedAlgorithm.select(
+      [
+        _event(
+          'ordinary-live',
+          'Ordinary live',
+          ScheduleState.live,
+          startsAt: now.subtract(const Duration(minutes: 5)),
+        ),
+        _event(
+          'top-live',
+          'Top club live',
+          ScheduleState.live,
+          startsAt: now.subtract(const Duration(minutes: 20)),
+          rating: 10,
+        ),
+      ],
+      maxItems: 1,
+      now: now,
+    );
+
+    expect(featured.single.item.title, 'Top club live');
+  });
+
+  test('top-rated upcoming event outranks an earlier unrated event', () {
+    final featured = FeaturedAlgorithm.select(
+      [
+        _event(
+          'ordinary-upcoming',
+          'Ordinary upcoming',
+          ScheduleState.scheduled,
+          startsAt: now.add(const Duration(hours: 1)),
+        ),
+        _event(
+          'top-upcoming',
+          'Top club upcoming',
+          ScheduleState.scheduled,
+          startsAt: now.add(const Duration(hours: 5)),
+          rating: 10,
+        ),
+      ],
+      maxItems: 1,
+      now: now,
+    );
+
+    expect(featured.single.item.title, 'Top club upcoming');
+  });
+
   test('excludes ended events and items without usable hero artwork', () {
     final featured = FeaturedAlgorithm.select([
       _event(
@@ -203,12 +251,14 @@ VersionedMediaItem _event(
   String title,
   ScheduleState state, {
   required DateTime startsAt,
+  double? rating,
   Artwork? artwork = _artwork,
 }) => VersionedMediaItem(
   item: EventItemV2(
     ref: MediaRef(extensionId: 'test', providerId: 'test.p', id: id),
     title: title,
     schedule: Schedule(startsAt: startsAt, state: state),
+    rating: rating,
     artwork: artwork,
   ),
 );
