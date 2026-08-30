@@ -298,6 +298,11 @@ class JsEngine {
     String? body,
     String? errorMessage,
   }) {
+    // A fetch can settle after the engine is gone — an extension replaced by
+    // an update, or one that left a request in flight when it was disposed.
+    // Handing the result to a freed engine is a use-after-free, and there is
+    // no JS left to deliver it to anyway.
+    if (_disposed) return;
     final headersPtr = (headersJson ?? '{}').toNativeUtf8();
     final urlPtr = (finalUrl ?? '').toNativeUtf8();
     final bodyPtr = (body ?? '').toNativeUtf8();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -47,6 +48,12 @@ void main() {
           await request.response.close();
         case '/never-responds':
           break; // deliberately never closes the response
+        case '/slow':
+          await Future<void>.delayed(const Duration(milliseconds: 700));
+          request.response
+            ..statusCode = 200
+            ..write('worth the wait');
+          await request.response.close();
         default:
           request.response.statusCode = 404;
           await request.response.close();
@@ -186,4 +193,24 @@ void main() {
       open.dispose();
     }
   });
+
+  test('a fetch that settles after dispose is dropped, not delivered', () async {
+    final doomed = JsEngine(
+      allowedHosts: {InternetAddress.loopbackIPv4.address},
+      fetchTimeout: const Duration(seconds: 5),
+    );
+    // Deliberately not awaited: the engine goes away while it is in flight,
+    // which is what an extension replaced by an update does to its own.
+    unawaited(
+      doomed
+          .evalAsync('await fetch(${jsonEncode(urlFor('127.0.0.1', '/slow'))})')
+          .catchError((Object _) => ''),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    doomed.dispose();
+
+    // Long enough for the response to arrive at a disposed engine.
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+  });
+
 }
