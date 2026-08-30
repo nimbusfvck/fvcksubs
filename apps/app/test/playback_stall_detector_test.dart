@@ -7,14 +7,18 @@ void main() {
   PlaybackStallDetector detector() =>
       PlaybackStallDetector(threshold: const Duration(seconds: 15));
 
+  // A frozen buffered position by default: the fetch has stopped too, which
+  // is what every case here except the rebuffer means by "not moving".
   bool feed(
     PlaybackStallDetector subject, {
     required int atSecond,
     required int positionSeconds,
+    int bufferedSeconds = 0,
     bool isBuffering = true,
     bool isPlaying = false,
   }) => subject.sample(
     position: Duration(seconds: positionSeconds),
+    bufferedPosition: Duration(seconds: bufferedSeconds),
     isBuffering: isBuffering,
     isPlaying: isPlaying,
     now: start.add(Duration(seconds: atSecond)),
@@ -96,6 +100,42 @@ void main() {
     expect(feed(subject, atSecond: 301, positionSeconds: 100), isFalse);
     expect(feed(subject, atSecond: 310, positionSeconds: 100), isFalse);
     expect(feed(subject, atSecond: 316, positionSeconds: 100), isTrue);
+  });
+
+  test('a rebuffer that keeps filling is not a stall', () {
+    final subject = detector();
+    // libmpv holds the frame while the cushion refills. The position is
+    // frozen throughout; only the buffered end moves.
+    for (var second = 0; second < 60; second += 2) {
+      expect(
+        feed(
+          subject,
+          atSecond: second,
+          positionSeconds: 100,
+          bufferedSeconds: 100 + second,
+        ),
+        isFalse,
+      );
+    }
+  });
+
+  test('a rebuffer that stops filling stalls from the moment it stops', () {
+    final subject = detector();
+    feed(subject, atSecond: 0, positionSeconds: 100, bufferedSeconds: 100);
+    feed(subject, atSecond: 10, positionSeconds: 100, bufferedSeconds: 110);
+    // The fetch dies here; the threshold is measured from this sample.
+    expect(
+      feed(subject, atSecond: 20, positionSeconds: 100, bufferedSeconds: 110),
+      isFalse,
+    );
+    expect(
+      feed(subject, atSecond: 24, positionSeconds: 100, bufferedSeconds: 110),
+      isFalse,
+    );
+    expect(
+      feed(subject, atSecond: 26, positionSeconds: 100, bufferedSeconds: 110),
+      isTrue,
+    );
   });
 
   test('reset forgets an in-progress stall', () {

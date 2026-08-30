@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/state/playback_stall_detector.dart';
 import 'package:fvcksubs_app/player/widgets/media_kit_player.dart';
 import 'package:fvcksubs_app/player/widgets/player_subtitle_style.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -114,13 +115,19 @@ void main() {
   });
 
   group('mpvPlaybackTuning', () {
-    test('always asks FFmpeg to reconnect a dropped connection', () {
-      for (final isLive in [true, false]) {
-        final tuning = mpvPlaybackTuning(isLive: isLive);
-        expect(tuning['stream-lavf-o'], contains('reconnect=1'));
-        expect(tuning['stream-lavf-o'], contains('reconnect_streamed=1'));
-        expect(tuning['network-timeout'], '8');
-      }
+    test('on-demand playback reconnects a dropped connection', () {
+      final tuning = mpvPlaybackTuning(isLive: false);
+      expect(tuning['stream-lavf-o'], contains('reconnect=1'));
+      expect(tuning['stream-lavf-o'], isNot(contains('reconnect_at_eof')));
+      expect(tuning['stream-lavf-o'], contains('reconnect_streamed=1'));
+      expect(tuning['network-timeout'], '8');
+    });
+
+    test('live playback never blocks the demuxer on a reconnect backoff', () {
+      // The wait is served on the demuxer thread while the live edge keeps
+      // moving, so the recovery costs more than the drop it recovers from.
+      expect(mpvPlaybackTuning(isLive: true)['stream-lavf-o'], isNull);
+      expect(mpvPlaybackTuning(isLive: true)['network-timeout'], '8');
     });
 
     test('live playback prioritizes a stable in-memory buffer', () {
@@ -130,9 +137,25 @@ void main() {
       expect(tuning['cache-on-disk'], 'no');
       expect(tuning['cache-secs'], '45');
       expect(tuning['cache-pause-initial'], 'yes');
-      expect(tuning['cache-pause-wait'], '5');
+      expect(tuning['cache-pause-wait'], '3');
       expect(tuning['demuxer-max-bytes'], '${64 * 1024 * 1024}');
       expect(tuning['demuxer-max-back-bytes'], '${8 * 1024 * 1024}');
+    });
+
+    test('the rebuffer wait stays under the stall threshold', () {
+      final wait = Duration(
+        seconds: int.parse(mpvPlaybackTuning(isLive: true)['cache-pause-wait']!),
+      );
+      // A rebuffer that outlives the stall timer costs the source a
+      // re-resolve while libmpv is still recovering from it.
+      expect(wait, lessThan(PlaybackStallDetector().threshold));
+    });
+
+    test('live playback joins the playlist behind the live edge', () {
+      // Negative: counted back from the newest segment. FFmpeg's own default
+      // is -3, so anything above it would shrink the cushion.
+      final index = int.parse(liveDemuxerLavfOptions['live_start_index']!);
+      expect(index, lessThan(-3));
     });
 
     test('on-demand playback keeps media_kit\'s own cache defaults', () {

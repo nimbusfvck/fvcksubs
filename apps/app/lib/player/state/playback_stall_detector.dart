@@ -22,22 +22,33 @@ class PlaybackStallDetector {
   final Duration threshold;
 
   Duration? _lastPosition;
+  Duration? _lastBufferedPosition;
   DateTime? _movingAt;
   bool _reported = false;
 
   /// Records one sample and returns whether this sample confirms a stall.
   ///
   /// Returns `true` exactly once per stall; further samples return `false`
-  /// until the position advances again, so a caller can act without
+  /// until playback makes progress again, so a caller can act without
   /// debouncing.
+  ///
+  /// A rebuffer is progress. libmpv holds the picture until it has rebuilt
+  /// its cushion, and on a live stream that cushion only refills as the
+  /// broadcast produces it — the position is frozen for as long as it takes,
+  /// while [bufferedPosition] climbs the whole time. Re-resolving there
+  /// destroys a stream that was seconds from resuming and starts the wait
+  /// over. Only a player fetching nothing *and* showing nothing has stalled.
   bool sample({
     required Duration position,
+    required Duration bufferedPosition,
     required bool isBuffering,
     required bool isPlaying,
     required DateTime now,
   }) {
-    if (position != _lastPosition) {
+    if (position != _lastPosition ||
+        bufferedPosition != _lastBufferedPosition) {
       _lastPosition = position;
+      _lastBufferedPosition = bufferedPosition;
       _movingAt = now;
       _reported = false;
       return false;
@@ -60,6 +71,7 @@ class PlaybackStallDetector {
   /// Forgets the current stall, for a swap that restarts playback.
   void reset() {
     _lastPosition = null;
+    _lastBufferedPosition = null;
     _movingAt = null;
     _reported = false;
   }

@@ -60,6 +60,19 @@ void main() {
     expect(ds.cacheConfiguration?.useCache, isFalse);
   });
 
+  test('live playback keeps its distance from the live edge', () {
+    final live = betterPlayerDataSource(
+      const PlayableStream(url: 'https://edge/live.m3u8'),
+      isLive: true,
+    );
+
+    // What is buffered before the picture starts is the cushion held for the
+    // whole session. Starting sooner means living at the live edge, where
+    // every jitter is an underrun and falling behind is fatal.
+    expect(live.bufferingConfiguration.bufferForPlaybackMs, 3000);
+    expect(live.bufferingConfiguration.bufferForPlaybackAfterRebufferMs, 6000);
+  });
+
   test('embedded previews use a small buffer without disk caching', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(url: 'https://edge/preview.mp4'),

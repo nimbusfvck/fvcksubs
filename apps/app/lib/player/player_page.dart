@@ -33,11 +33,11 @@ const Duration _progressInterval = Duration(seconds: 10);
 /// decides when to act, rather than the sampling rate.
 const Duration _stallSampleInterval = Duration(seconds: 2);
 
-/// How many stalls in a row are answered by re-resolving the same source
+/// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
-const int _maxConsecutiveStallRenewals = 2;
+const int _maxConsecutiveRenewals = 2;
 
-/// How close together stall renewals must be to count as consecutive.
+/// How close together renewals must be to count as consecutive.
 const Duration _renewalPatienceWindow = Duration(minutes: 2);
 
 Duration? sourceSwitchSeekPosition({
@@ -89,8 +89,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _renewalTimer;
   final PlaybackStallDetector _stallDetector = PlaybackStallDetector();
   bool _renewing = false;
-  DateTime? _lastStallRenewalAt;
-  int _consecutiveStallRenewals = 0;
+  DateTime? _lastRenewalAt;
+  int _consecutiveRenewals = 0;
   ValueListenable<AppPlayerValue>? _videoValue;
   AppPlayerController? _trackedPositionController;
   bool _hasResumed = false;
@@ -296,17 +296,24 @@ class _PlayerPageState extends State<PlayerPage> {
           !identical(controller, _controller)) {
         return;
       }
+      // A source that played and then failed is a working source with a URL
+      // that stopped working — ExoPlayer reports a segment that rolled out of
+      // a live window as a fatal source error, and the stream it was cut from
+      // is still there. Recover it the way a stall is recovered; only a
+      // source that never started is failed outright.
+      if (_sourceStarted) {
+        _recoverCurrentSource();
+        return;
+      }
       _failedSourceIds.add(_current.source.id);
-      if (!_sourceStarted) {
-        final nextIndex = nextUnfailedSourceIndex(
-          sources: _resolvedSources,
-          currentIndex: _currentIndex,
-          failedSourceIds: _failedSourceIds,
-        );
-        if (nextIndex != null) {
-          _switchToResolvedSource(nextIndex);
-          return;
-        }
+      final nextIndex = nextUnfailedSourceIndex(
+        sources: _resolvedSources,
+        currentIndex: _currentIndex,
+        failedSourceIds: _failedSourceIds,
+      );
+      if (nextIndex != null) {
+        _switchToResolvedSource(nextIndex);
+        return;
       }
       setState(() {
         _playbackError = (message == null || message.isEmpty)
@@ -324,7 +331,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer?.cancel();
     _renewalTimer = null;
     _stallDetector.reset();
-    _consecutiveStallRenewals = 0;
+    _consecutiveRenewals = 0;
     _sourceStarted = false;
     setState(() {
       _retrying = true;
@@ -390,24 +397,41 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!value.initialized) return;
     final stalled = _stallDetector.sample(
       position: value.position,
+      bufferedPosition: value.bufferedPosition,
       isBuffering: value.isBuffering,
       isPlaying: value.isPlaying,
       now: DateTime.now(),
     );
     if (!stalled) return;
-    // Renewing only helps when the URL was the problem. A source that stalls
-    // again right after a fresh one was minted is broken at the far end, and
-    // repeating the round trip would keep the viewer on a dead stream
-    // indefinitely.
-    final since = _lastStallRenewalAt;
+    _recoverCurrentSource();
+  }
+
+  /// Answers a source that has stopped delivering — a confirmed stall, or a
+  /// failure reported after playback had started — by re-resolving it.
+  ///
+  /// Both arrive at the same place: the URL in hand no longer works. Live
+  /// URLs are signed, per-edge and short-lived, and a re-resolve mints a new
+  /// one on a different edge, so the remedy is a round trip to the extension
+  /// rather than a message telling the viewer to pick another source.
+  ///
+  /// Renewing only helps when the URL was the problem. A source that fails
+  /// again right after a fresh one was minted is broken at the far end, and
+  /// repeating the round trip would keep the viewer on a dead stream
+  /// indefinitely, so the source is abandoned after
+  /// [_maxConsecutiveRenewals] tries inside [_renewalPatienceWindow].
+  void _recoverCurrentSource() {
+    // A failing player reports the same error many times a second. One
+    // recovery is in flight at a time; the rest are the same news twice.
+    if (_renewing) return;
+    final since = _lastRenewalAt;
     final now = DateTime.now();
-    _consecutiveStallRenewals =
+    _consecutiveRenewals =
         since != null && now.difference(since) < _renewalPatienceWindow
-        ? _consecutiveStallRenewals + 1
+        ? _consecutiveRenewals + 1
         : 1;
-    _lastStallRenewalAt = now;
-    if (_consecutiveStallRenewals > _maxConsecutiveStallRenewals) {
-      _consecutiveStallRenewals = 0;
+    _lastRenewalAt = now;
+    if (_consecutiveRenewals > _maxConsecutiveRenewals) {
+      _consecutiveRenewals = 0;
       _stallDetector.reset();
       _fallBackAfterFailedRenewal(_current.source.id);
       return;
@@ -618,7 +642,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer?.cancel();
     _renewalTimer = null;
     _stallDetector.reset();
-    _consecutiveStallRenewals = 0;
+    _consecutiveRenewals = 0;
     _failedSourceIds.remove(picked.source.id);
     unawaited(_eventSubscription?.cancel());
     _eventSubscription = null;

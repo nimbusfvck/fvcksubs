@@ -49,24 +49,35 @@ SubtitleTrack? preferredSubtitleTrack({
 /// libmpv properties applied on top of media_kit's defaults.
 ///
 /// media_kit configures mpv for on-demand playback: it caches the stream to
-/// disk, keeps a large back-buffer, gives every network request five seconds,
-/// and sets no FFmpeg reconnect options at all. On a live broadcast those
-/// choices cost a session — a match writes gigabytes of disk cache nobody can
-/// seek back into, and a single slow playlist reload burns retries until the
-/// demuxer stops feeding.
+/// disk, keeps a large back-buffer, and gives every network request five
+/// seconds. On a live broadcast those choices cost a session — a match writes
+/// gigabytes of disk cache nobody can seek back into, and a single slow
+/// playlist reload burns retries until the demuxer stops feeding.
+///
+/// What helps an on-demand file can hurt a live one, so the two are tuned
+/// apart rather than sharing a single set of "safer" values.
 ///
 /// Values are strings because that is what `NativePlayer.setProperty` takes.
 @visibleForTesting
 Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
-  // FFmpeg's HTTP protocol does not re-establish a dropped connection unless
-  // asked. Without this a transient drop mid-segment ends the stream's
-  // supply; with it the demuxer rides over the gap.
-  'stream-lavf-o':
-      'reconnect=1,reconnect_streamed=1,'
-      'reconnect_on_network_error=1,reconnect_delay_max=5',
   // Five seconds is tight for a large or slow playlist reload, and an abort
   // costs one of the demuxer's five segment retries.
   'network-timeout': '8',
+  if (!isLive)
+    // FFmpeg's HTTP protocol does not re-establish a dropped connection
+    // unless asked. Without this a transient drop mid-file ends the stream's
+    // supply; with it the demuxer rides over the gap.
+    //
+    // Live is deliberately excluded. A reconnect is a *blocking* backoff on
+    // the demuxer thread — up to reconnect_delay_max, doubling per attempt —
+    // and a live edge does not wait: the seconds spent sleeping are seconds
+    // of broadcast that roll out of the playlist window unread, so the
+    // demuxer wakes up behind and drains its cushion to nothing. Measured
+    // against Kora with matched runs, the same tuning underran 15–17 times
+    // in 45 seconds with these options and 0–5 times without them.
+    'stream-lavf-o':
+        'reconnect=1,reconnect_streamed=1,'
+        'reconnect_on_network_error=1,reconnect_delay_max=5',
   if (isLive) ...{
     // Live providers are always network streams. Do not leave this to mpv's
     // auto detection: a cache gives segment downloads time to catch up before
@@ -80,17 +91,46 @@ Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
     // mobile-network dip without persisting it to disk.
     'demuxer-max-bytes': '${64 * 1024 * 1024}',
     'demuxer-max-back-bytes': '${8 * 1024 * 1024}',
-    // cache-secs caps mpv's normal network read-ahead. A 20-second cap leaves
-    // little room for HLS segment jitter and makes playback repeatedly hit
-    // the live edge. A larger cache trades a small amount of live latency for
-    // continuous viewing.
+    // A ceiling on the read-ahead, not a target: libmpv reads as far as the
+    // playlist lets it, which on a live window is far less than this. Named
+    // explicitly because the default has moved between libmpv releases, and
+    // an old build's 10-second ceiling is inside the range live jitter needs.
     'cache-secs': '45',
-    // Build a modest cushion before first frame and after an underrun. This
-    // avoids the visible start-stop loop caused by resuming at the live edge
-    // with only one segment available.
+    // Wait for a segment or two before the first frame and after an underrun,
+    // and no more than that.
+    //
+    // This is a floor on the *rebuffer*, and a live playlist is a short
+    // sliding window — Kora publishes six two-second segments, twelve
+    // seconds in total. Asking for more cushion than the window holds cannot
+    // be answered by downloading faster: the data does not exist yet, so mpv
+    // sits frozen collecting it at one second per second. Every value here
+    // must stay well under both the window and
+    // [PlaybackStallDetector.threshold], or an ordinary rebuffer outlives the
+    // stall timer and the app re-resolves a source that was about to resume.
     'cache-pause-initial': 'yes',
-    'cache-pause-wait': '5',
+    'cache-pause-wait': '3',
   },
+};
+
+/// FFmpeg demuxer options merged into media_kit's own `demuxer-lavf-o` for a
+/// live stream.
+///
+/// Applied with mpv's `change-list ... add` rather than by setting the
+/// property: media_kit puts the protocol whitelist and the segment retry
+/// count in that same list, and writing it wholesale would drop them.
+@visibleForTesting
+const Map<String, String> liveDemuxerLavfOptions = {
+  // How far back from the live edge playback joins, in segments.
+  //
+  // FFmpeg's default of -3 is the cushion for the whole session: the demuxer
+  // reads to the edge and stays there, so the distance playback started at is
+  // the distance it keeps. Three of Kora's two-second segments is six
+  // seconds, and one slow segment spends all of it. Joining five segments
+  // back roughly doubles the cushion at the cost of a few seconds of latency
+  // nothing in a live broadcast can seek past anyway. FFmpeg clamps this to
+  // the segments the playlist actually lists, so a short window is not an
+  // error.
+  'live_start_index': '-5',
 };
 
 @visibleForTesting
@@ -207,7 +247,8 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     unawaited(_open());
   }
 
-  /// Applies [mpvPlaybackTuning] before the stream is opened.
+  /// Applies [mpvPlaybackTuning], and on a live stream
+  /// [liveDemuxerLavfOptions], before the stream is opened.
   ///
   /// A property mpv does not recognise throws rather than being ignored, so
   /// each is applied on its own: an unknown key costs that one setting, not
@@ -227,6 +268,35 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
           );
         }
       }
+    }
+    if (!widget.isLive) return;
+    for (final entry in liveDemuxerLavfOptions.entries) {
+      try {
+        await platform.command([
+          'change-list',
+          'demuxer-lavf-o',
+          'add',
+          '${entry.key}=${entry.value}',
+        ]);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            '[Player] mpv demuxer option ${entry.key} rejected: '
+            '${redactPlaybackLogText(error)}',
+          );
+        }
+      }
+    }
+    // libmpv answers a bad list edit on its own log rather than to the
+    // caller, so read the result back: this is the only place that shows
+    // whether the additions landed and media_kit's own entries survived.
+    if (kDebugMode) {
+      try {
+        debugPrint(
+          '[Player] demuxer-lavf-o: '
+          '${await platform.getProperty('demuxer-lavf-o')}',
+        );
+      } catch (_) {}
     }
   }
 

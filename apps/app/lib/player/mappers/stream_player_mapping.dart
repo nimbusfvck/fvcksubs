@@ -32,6 +32,14 @@ BetterPlayerDataSource betterPlayerDataSource(
           bufferForPlaybackMs: 350,
           bufferForPlaybackAfterRebufferMs: 750,
         )
+      // Live keeps ExoPlayer's defaults on purpose. They read like a lot for
+      // a playlist only twelve seconds long, but on a live stream the media
+      // buffered before the picture starts *is* the distance held from the
+      // live edge for the rest of the session. Lowering them to "about one
+      // segment" was measured on a Kora channel that had been running an hour
+      // without a single rebuffer: it started playback 1.6s from the edge,
+      // ran dry every few seconds, and inside half a minute had fallen out of
+      // the window into a fatal ExoPlayer source error.
       : const BetterPlayerBufferingConfiguration(),
 );
 
