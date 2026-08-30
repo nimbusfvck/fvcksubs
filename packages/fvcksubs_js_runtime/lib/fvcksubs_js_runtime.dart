@@ -62,9 +62,18 @@ class JsEngine {
   /// the code it runs, not for the host's round-trip. It is therefore not
   /// a bound on total wall-clock time for an [evalAsync]; [fetchTimeout]
   /// bounds each HTTP call separately.
+  ///
+  /// [fetchTimeout] is the default every call gets. A script may ask for
+  /// more on one call — `fetch(url, {timeoutMs: 30000})` — up to
+  /// [maxFetchTimeout], which is what stops one deliberately slow host from
+  /// widening the budget for every other request the engine makes. A script
+  /// can only *raise* its own call's timeout this way, never lower another
+  /// one's, and the request itself carries no trace of the option: it is
+  /// consumed here, not sent.
   JsEngine({
     Set<String>? allowedHosts,
     Duration? fetchTimeout,
+    Duration? maxFetchTimeout,
     int? maxRedirects,
     int memoryLimitBytes = 64 * 1024 * 1024,
     int maxStackBytes = 1024 * 1024,
@@ -72,6 +81,7 @@ class JsEngine {
   }) : _engine = bindings.qjsr_new_engine(),
        _allowedHosts = allowedHosts,
        _fetchTimeout = fetchTimeout ?? const Duration(seconds: 15),
+       _maxFetchTimeout = maxFetchTimeout ?? const Duration(seconds: 45),
        _maxRedirects = maxRedirects ?? 10 {
     if (_engine == ffi.nullptr) {
       throw StateError('Failed to create QuickJS engine');
@@ -83,11 +93,13 @@ class JsEngine {
       scriptTimeout.inMilliseconds,
     );
     _installFetch();
+    eval(_fetchOptionsShim);
   }
 
   final ffi.Pointer<bindings.QjsrEngine> _engine;
   final Set<String>? _allowedHosts;
   final Duration _fetchTimeout;
+  final Duration _maxFetchTimeout;
   final int _maxRedirects;
   final Dio _dio = Dio();
 
@@ -221,10 +233,12 @@ class JsEngine {
     String? body,
   ) async {
     try {
+      final headers = (jsonDecode(headersJson) as Map).cast<String, dynamic>();
       final result = await _performFetch(
         url: url,
         method: method,
-        headers: (jsonDecode(headersJson) as Map).cast<String, dynamic>(),
+        headers: headers,
+        timeout: _takeRequestTimeout(headers),
         body: body,
       );
       _resolveFetch(
@@ -239,10 +253,31 @@ class JsEngine {
     }
   }
 
+  /// Removes the shim's private timeout header from [headers] and returns
+  /// the timeout it asked for, clamped to `[_fetchTimeout, _maxFetchTimeout]`.
+  ///
+  /// Removing it matters as much as reading it: the option travels as a
+  /// header only because that is the one channel the native `fetch` bridge
+  /// already carries, and an extension's own header must never leave the
+  /// process.
+  Duration _takeRequestTimeout(Map<String, dynamic> headers) {
+    final key = headers.keys.firstWhere(
+      (name) => name.toLowerCase() == _timeoutHeader,
+      orElse: () => '',
+    );
+    if (key.isEmpty) return _fetchTimeout;
+    final requested = int.tryParse('${headers.remove(key)}');
+    if (requested == null || requested <= 0) return _fetchTimeout;
+    final asked = Duration(milliseconds: requested);
+    if (asked < _fetchTimeout) return _fetchTimeout;
+    return asked > _maxFetchTimeout ? _maxFetchTimeout : asked;
+  }
+
   Future<_FetchResult> _performFetch({
     required String url,
     required String method,
     required Map<String, dynamic> headers,
+    required Duration timeout,
     required String? body,
   }) async {
     var currentUrl = url;
@@ -262,8 +297,8 @@ class JsEngine {
           responseType: ResponseType.bytes,
           followRedirects: false,
           validateStatus: (_) => true,
-          sendTimeout: _fetchTimeout,
-          receiveTimeout: _fetchTimeout,
+          sendTimeout: timeout,
+          receiveTimeout: timeout,
         ),
       );
 
@@ -414,6 +449,47 @@ bool _hostAllowed(String host, Set<String> allowed) {
   }
   return false;
 }
+
+/// Name of the private header the [_fetchOptionsShim] moves `timeoutMs`
+/// into. Lower-case: [JsEngine._takeRequestTimeout] matches case-insensitively
+/// against it and strips it before the request goes out.
+const _timeoutHeader = 'x-qjsr-timeout-ms';
+
+/// Teaches the native `fetch` one option it has no parameter for.
+///
+/// The C bridge carries exactly url/method/headers/body, and widening that
+/// signature would mean regenerating the FFI bindings for every platform to
+/// pass a single integer. A JS wrapper that folds `timeoutMs` into a private
+/// header keeps the whole feature inside this library — the wrapper puts it
+/// in, [JsEngine._takeRequestTimeout] takes it back out, and nothing
+/// downstream (or upstream) ever sees it.
+///
+/// Installed before any script runs, so a bundle cannot get at the
+/// unwrapped `fetch` to smuggle the header in by hand.
+const _fetchOptionsShim = '''
+(() => {
+  const nativeFetch = globalThis.fetch;
+  if (typeof nativeFetch !== 'function') return;
+  globalThis.fetch = function (url, options) {
+    if (!options || options.timeoutMs == null) return nativeFetch(url, options);
+    const headers = {};
+    if (options.headers && typeof options.headers === 'object') {
+      for (const key of Object.keys(options.headers)) {
+        if (String(key).toLowerCase() === '$_timeoutHeader') continue;
+        headers[key] = options.headers[key];
+      }
+    }
+    headers['$_timeoutHeader'] = String(options.timeoutMs);
+    const next = {};
+    for (const key of Object.keys(options)) {
+      if (key === 'timeoutMs' || key === 'headers') continue;
+      next[key] = options[key];
+    }
+    next.headers = headers;
+    return nativeFetch(url, next);
+  };
+})();
+''';
 
 class _FetchResult {
   _FetchResult({

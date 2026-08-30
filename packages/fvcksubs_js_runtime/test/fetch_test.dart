@@ -54,6 +54,15 @@ void main() {
             ..statusCode = 200
             ..write('worth the wait');
           await request.response.close();
+        case '/echo-headers':
+          request.response
+            ..statusCode = 200
+            ..write(
+              jsonEncode({
+                for (final name in _receivedHeaderNames(request)) name: true,
+              }),
+            );
+          await request.response.close();
         default:
           request.response.statusCode = 404;
           await request.response.close();
@@ -213,4 +222,62 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 900));
   });
 
+  group('per-request timeoutMs', () {
+    test('lets one call wait past the engine-wide fetch timeout', () async {
+      final url = jsonEncode(urlFor('127.0.0.1', '/slow'));
+
+      // Same URL, same engine: only the option differs.
+      await expectLater(
+        engine.evalAsync('await fetch($url)'),
+        throwsA(isA<JsEvalException>()),
+      );
+      final result = await engine.evalAsync(
+        'fetch($url, {timeoutMs: 5000}).then((r) => r.body)',
+      );
+      expect(jsonDecode(result), 'worth the wait');
+    });
+
+    test('cannot be raised past maxFetchTimeout', () async {
+      final capped = JsEngine(
+        fetchTimeout: const Duration(milliseconds: 300),
+        maxFetchTimeout: const Duration(milliseconds: 400),
+      );
+      try {
+        await expectLater(
+          capped.evalAsync(
+            'await fetch(${jsonEncode(urlFor('127.0.0.1', '/slow'))}, '
+            '{timeoutMs: 5000})',
+          ),
+          throwsA(isA<JsEvalException>()),
+        );
+      } finally {
+        capped.dispose();
+      }
+    });
+
+    test('cannot be used to shorten a call below the engine default', () async {
+      final result = await engine.evalAsync(
+        'fetch(${jsonEncode(urlFor('127.0.0.1', '/ok'))}, {timeoutMs: 1})'
+        '.then((r) => r.body)',
+      );
+      expect(jsonDecode(result), 'hi there');
+    });
+
+    test('never sends the option on to the server', () async {
+      final result = await engine.evalAsync(
+        'fetch(${jsonEncode(urlFor('127.0.0.1', '/echo-headers'))}, '
+        '{timeoutMs: 5000, headers: {\'X-Keep\': \'yes\'}})'
+        '.then((r) => r.body)',
+      );
+      final names = (jsonDecode(jsonDecode(result) as String) as Map).keys;
+      expect(names, contains('x-keep'));
+      expect(names, isNot(contains('x-qjsr-timeout-ms')));
+    });
+  });
+}
+
+Iterable<String> _receivedHeaderNames(HttpRequest request) {
+  final names = <String>[];
+  request.headers.forEach((name, _) => names.add(name.toLowerCase()));
+  return names;
 }
