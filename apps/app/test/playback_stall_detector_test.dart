@@ -166,4 +166,69 @@ void main() {
       isTrue,
     );
   });
+
+  test('a deliberate interruption is given room before it counts', () {
+    final detector = PlaybackStallDetector();
+    final start = DateTime(2026);
+    // The viewer swapped the audio track: libmpv refills from the new point
+    // and the position sits still while it does.
+    detector.defer(const Duration(seconds: 20), now: start);
+
+    bool sampleAt(Duration elapsed) => detector.sample(
+      position: const Duration(seconds: 30),
+      bufferedPosition: const Duration(seconds: 30),
+      isBuffering: true,
+      isPlaying: false,
+      now: start.add(elapsed),
+    );
+
+    // Well past the bare threshold, but inside the grace.
+    expect(sampleAt(const Duration(seconds: 18)), isFalse);
+    // The grace has run out; the threshold is then measured from the last
+    // sample rather than firing the moment it lapses.
+    expect(sampleAt(const Duration(seconds: 21)), isFalse);
+    // A source that really did die is still caught, just later.
+    expect(sampleAt(const Duration(seconds: 33)), isTrue);
+  });
+
+  test('a seek that only fills the buffer still counts as stalled', () {
+    final detector = PlaybackStallDetector();
+    final start = DateTime(2026);
+    detector.defer(const Duration(seconds: 8), now: start);
+
+    // The demuxer is downloading hard — the buffer climbs every sample — but
+    // the picture never reaches the position that was asked for.
+    bool sampleAt(Duration elapsed, {required int bufferedSeconds}) =>
+        detector.sample(
+          position: const Duration(minutes: 3),
+          bufferedPosition: Duration(seconds: bufferedSeconds),
+          isBuffering: true,
+          isPlaying: false,
+          now: start.add(elapsed),
+        );
+
+    expect(sampleAt(const Duration(seconds: 6), bufferedSeconds: 200), isFalse);
+    expect(sampleAt(const Duration(seconds: 10), bufferedSeconds: 260), isFalse);
+    expect(sampleAt(const Duration(seconds: 20), bufferedSeconds: 400), isFalse);
+    expect(sampleAt(const Duration(seconds: 26), bufferedSeconds: 500), isTrue);
+  });
+
+  test('an ordinary rebuffer is still progress', () {
+    final detector = PlaybackStallDetector();
+    final start = DateTime(2026);
+    // No deliberate interruption: libmpv is rebuilding its cushion, which the
+    // watchdog must keep waiting through.
+    bool sampleAt(Duration elapsed, {required int bufferedSeconds}) =>
+        detector.sample(
+          position: const Duration(minutes: 3),
+          bufferedPosition: Duration(seconds: bufferedSeconds),
+          isBuffering: true,
+          isPlaying: false,
+          now: start.add(elapsed),
+        );
+
+    expect(sampleAt(Duration.zero, bufferedSeconds: 200), isFalse);
+    expect(sampleAt(const Duration(seconds: 20), bufferedSeconds: 260), isFalse);
+    expect(sampleAt(const Duration(seconds: 40), bufferedSeconds: 320), isFalse);
+  });
 }

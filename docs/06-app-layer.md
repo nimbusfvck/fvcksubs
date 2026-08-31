@@ -95,6 +95,7 @@ flowchart LR
 | Library | its own record map | Recording a watch must never wipe a saved resume position. |
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
 | Subtitle preference | its language code and appearance | Native subtitle tracks declared by the video backend remain under native-player control. When there is no remembered external selection, a source-provided track matching the preferred language is auto-applied. The complete result of an explicit external-subtitle fetch is cached per media item, and the selected external track is remembered for later auto-apply. The persisted external-track cache is bounded and restored after the shell is shown. New external-subtitle lookup remains explicit. A subtitle failure releases playback rather than blocking it. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. Text size, text color, background color, and outline are global appearance preferences shared by both player backends. |
+| Playback segments | item-level intro/recap/outro intervals | Optional segment lookup runs alongside source discovery. The player keeps the result in session state, highlights known intervals on the seekbar, offers an explicit Skip intro action only for episodes, and starts Up Next from a provider-supplied outro marker or falls back to one minute remaining when no outro is available; missing or failed metadata never blocks playback. |
 | Quality preference | its maximum automatic video height | Global and persistent. Auto leaves the native backend's adaptive choice alone; a selected cap picks the highest available rendition at or below it when the stream exposes multiple video tracks. If a source has no rendition under the cap, the lowest available track is used. Manual quality switching in the player remains available. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
 | NSFW visibility | the registry plus a persisted app preference | **Show NSFW content** controls catalogs explicitly marked `mature`; unknown declarations remain compatible with older extensions. |
@@ -245,7 +246,7 @@ flowchart TB
     CTL --> Q["Quality — one entry per resolution, highest first"]
     CTL --> SUB["Subtitles — the source's own, plus any fallback lookup"]
     CTL --> SRC["Source switch — instant, everything is already resolved"]
-    PP --> NEXT["Continue to the next episode near the end"]
+    PP --> NEXT["Continue to the next episode at a provider outro marker"]
     PP --> SAVE["Periodic progress save"]
 ```
 
@@ -274,7 +275,7 @@ flowchart TB
   `application/zstd`; ExoPlayer and libmpv sniff the container and play them, AVPlayer
   buffers until it reports a stall. The cost is libmpv's native payload in the iOS build.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
-  arrow keys seek five seconds, F or the fullscreen button toggles fullscreen, and Escape exits it. This
+  arrow keys seek five seconds, F toggles fullscreen, and Escape exits it. This
   keeps source, subtitle, quality, retry, and Up Next controls available across player backends. MediaKit's
   fullscreen route uses its desktop controls, which own pointer input and keyboard focus while fullscreen.
 - **Audio tracks** are exposed through the shared player contract whenever MediaKit (macOS

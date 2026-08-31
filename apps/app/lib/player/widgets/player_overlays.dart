@@ -223,6 +223,76 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
   }
 }
 
+/// Bottom inset shared by the floating player cards (skip intro / up next).
+const double kPlayerOverlayCardInset = AppSpacing.xl * 3 + AppSpacing.lg;
+
+class PlayerSkipIntroCard extends StatelessWidget {
+  const PlayerSkipIntroCard({
+    super.key,
+    required this.label,
+    required this.onSkipIntro,
+  });
+
+  final String label;
+  final VoidCallback onSkipIntro;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onSkipIntro,
+      borderRadius: AppRadius.lg,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark.withValues(alpha: 0.95),
+          borderRadius: AppRadius.lg,
+          border: Border.all(color: Colors.white24, width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onDark,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onSkipIntro,
+                    child: const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Icon(
+                        Icons.fast_forward_rounded,
+                        color: Colors.black,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class PlayerUpNextCard extends StatefulWidget {
   const PlayerUpNextCard({
     super.key,
@@ -280,33 +350,34 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
     color: Colors.transparent,
     child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
         color: AppColors.surfaceDark.withValues(alpha: 0.95),
-        borderRadius: AppRadius.sm,
+        borderRadius: AppRadius.lg,
         border: Border.all(color: Colors.white24, width: 0.5),
       ),
-      child: Column(
+      child: Row(
+
         children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: IconButton(
-                  tooltip: 'Close next episode',
-                  padding: EdgeInsets.zero,
-                  onPressed: widget.onCancel,
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: AppColors.onDarkSoft,
-                  ),
-                ),
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: IconButton(
+              tooltip: 'Close next episode',
+              padding: EdgeInsets.zero,
+              onPressed: widget.onCancel,
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: AppColors.onDarkSoft,
               ),
-              const SizedBox(width: AppSpacing.xxs),
-              Expanded(
-                child: Text(
+            ),
+          ),
+            const SizedBox(width: AppSpacing.xxs),
+           Expanded(
+            child: Column(
+              children: [
+                Text(
                   widget.seriesTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -315,71 +386,60 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.onDarkSoft,
-                      ),
-                    ),
-                  ],
+                  Text(
+                  widget.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              SizedBox(
-                width: 46,
-                height: 46,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, _) => CircularProgressIndicator(
-                        value: 1.0 - _controller.value,
-                        strokeWidth: 2.5,
-                        backgroundColor: Colors.white24,
-                        valueColor: const AlwaysStoppedAnimation(
-                          AppColors.brandAccent,
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) => CircularProgressIndicator(
+                    value: 1.0 - _controller.value,
+                    strokeWidth: 2.5,
+                    backgroundColor: Colors.white24,
+                    valueColor: const AlwaysStoppedAnimation(
+                      AppColors.brandAccent,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(1),
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: widget.onPlayNext,
+                      child: const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.black,
+                          size: 18,
                         ),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.all(1),
-                      child: Material(
-                        color: Colors.white,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: widget.onPlayNext,
-                          child: const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Icon(
-                              Icons.play_arrow_rounded,
-                              color: Colors.black,
-                              size: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+        
+         
         ],
       ),
     ),

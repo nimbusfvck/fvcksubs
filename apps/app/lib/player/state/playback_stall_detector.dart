@@ -24,6 +24,8 @@ class PlaybackStallDetector {
   Duration? _lastPosition;
   Duration? _lastBufferedPosition;
   DateTime? _movingAt;
+  DateTime? _quietUntil;
+  bool _awaitingPosition = false;
   bool _reported = false;
 
   /// Records one sample and returns whether this sample confirms a stall.
@@ -45,10 +47,32 @@ class PlaybackStallDetector {
     required bool isPlaying,
     required DateTime now,
   }) {
-    if (position != _lastPosition ||
-        bufferedPosition != _lastBufferedPosition) {
-      _lastPosition = position;
-      _lastBufferedPosition = bufferedPosition;
+    final quietUntil = _quietUntil;
+    if (quietUntil != null) {
+      if (now.isBefore(quietUntil)) {
+        _lastPosition = position;
+        _lastBufferedPosition = bufferedPosition;
+        _movingAt = now;
+        _reported = false;
+        return false;
+      }
+      _quietUntil = null;
+    }
+
+    // A rebuffer counts as progress, except while a deliberate interruption
+    // is still owed a picture. A seek that FFmpeg lands short of turns into a
+    // download that fetches segment after segment without ever reaching the
+    // position asked for: the buffer climbs the whole time, so treating that
+    // as progress leaves the watchdog asleep and the viewer on a spinner that
+    // never ends. Until the position itself moves, only the position counts.
+    final positionMoved = position != _lastPosition;
+    final progressed =
+        positionMoved ||
+        (!_awaitingPosition && bufferedPosition != _lastBufferedPosition);
+    _lastPosition = position;
+    _lastBufferedPosition = bufferedPosition;
+    if (progressed) {
+      if (positionMoved) _awaitingPosition = false;
       _movingAt = now;
       _reported = false;
       return false;
@@ -73,6 +97,23 @@ class PlaybackStallDetector {
     _lastPosition = null;
     _lastBufferedPosition = null;
     _movingAt = null;
+    _quietUntil = null;
+    _awaitingPosition = false;
     _reported = false;
+  }
+
+  /// Holds the watchdog off for [grace] after a deliberate interruption.
+  ///
+  /// A seek and an audio-track switch both freeze the position on purpose:
+  /// libmpv throws its cushion away and refills from the new point, and on a
+  /// slow upstream that takes longer than [threshold]. Nothing in the signals
+  /// available tells that apart from a source that died, so the viewer's own
+  /// action is what says so — without it, asking for another audio track
+  /// re-resolves the source, restarts playback and drops the track that was
+  /// chosen, which is the "stuck" the viewer sees.
+  void defer(Duration grace, {required DateTime now}) {
+    reset();
+    _quietUntil = now.add(grace);
+    _awaitingPosition = true;
   }
 }

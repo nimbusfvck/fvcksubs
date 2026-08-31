@@ -58,15 +58,16 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
     ];
   }
 
+  /// The track BetterPlayer is playing.
+  ///
+  /// Matched on the backend's own id rather than by identity: the adapter
+  /// wraps the track list afresh on every read, so an identity check only
+  /// happens to hold while the underlying list object is the same one.
   @override
-  AppAudioTrack? get activeAudio {
-    final track = _controller.betterPlayerAsmsAudioTrack;
-    if (track == null) return null;
-    for (final audio in audioTracks) {
-      if (identical(audio.platformTrack, track)) return audio;
-    }
-    return null;
-  }
+  AppAudioTrack? get activeAudio => audioTrackByNativeId(
+    audioTracks,
+    _betterPlayerNativeAudioId(_controller.betterPlayerAsmsAudioTrack),
+  );
 
   @override
   SubtitleTrack? get activeSubtitle {
@@ -146,8 +147,22 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
       id: uniqueAudioTrackId(base: base, occurrence: occurrence, index: index),
       label: audioTrackLabel(label: track.label, language: track.language),
       language: track.language,
+      nativeId: _betterPlayerNativeAudioId(track),
       platformTrack: track,
     );
+  }
+
+  /// BetterPlayer's own handle on a track: the playlist id where there is
+  /// one, and the rendition URL where there is not — DASH tracks carry an
+  /// index, HLS renditions frequently carry neither.
+  static String? _betterPlayerNativeAudioId(BetterPlayerAsmsAudioTrack? track) {
+    if (track == null) return null;
+    final id = track.id;
+    if (id != null) return 'id:$id';
+    final url = track.url?.trim();
+    if (url != null && url.isNotEmpty) return 'url:$url';
+    final label = track.label?.trim();
+    return label == null || label.isEmpty ? null : 'label:$label';
   }
 
   void syncValue() {

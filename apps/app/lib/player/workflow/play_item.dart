@@ -44,6 +44,7 @@ Future<void> _playMedia(
   // Kicked off before source discovery so it overlaps with the resolve the
   // viewer is already waiting through, instead of adding to it.
   final externalSubtitles = _prefetchExternalSubtitles(scope, item);
+  final playbackSegments = _prefetchPlaybackSegments(scope, item);
 
   // Live providers commonly sign URLs for a short window. Reusing a
   // resolved live stream after an extension update can hand AVPlayer an old
@@ -68,6 +69,7 @@ Future<void> _playMedia(
         contentRating: contentRating,
         episodeGuide: episodeGuide,
         externalSubtitles: externalSubtitles,
+        playbackSegments: playbackSegments,
         returnToDetail: returnToDetail,
       ),
     );
@@ -106,6 +108,7 @@ Future<void> _playMedia(
           episodeGuide: episodeGuide,
           pendingSources: pendingSources,
           externalSubtitles: externalSubtitles,
+          playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
         ),
       );
@@ -140,6 +143,7 @@ Future<void> _playMedia(
       episodeGuide: episodeGuide,
       pendingSources: result.second,
       externalSubtitles: externalSubtitles,
+      playbackSegments: playbackSegments,
       returnToDetail: returnToDetail,
     ),
   );
@@ -238,6 +242,7 @@ Future<void> _openPlayer(
   EpisodeGuide? episodeGuide,
   Stream<ResolvedSource>? pendingSources,
   Future<void>? externalSubtitles,
+  Future<List<PlaybackSegment>>? playbackSegments,
   bool returnToDetail = false,
 }) async {
   // Started alongside source resolution, so by now it has almost always
@@ -272,6 +277,7 @@ Future<void> _openPlayer(
       item: item.item,
       resolvedSources: resolved,
       pendingSources: pendingSources,
+      pendingSegments: playbackSegments,
       episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
     ),
@@ -398,6 +404,23 @@ Future<void> _prefetchExternalSubtitles(
     _debugSourceLog(
       'external_subtitles_error error=${redactPlaybackLogText(error)}',
     );
+  }
+}
+
+/// Looks up episode skip markers alongside source discovery. This is optional
+/// metadata: a failed lookup must never delay or fail playback.
+Future<List<PlaybackSegment>> _prefetchPlaybackSegments(
+  AppScope scope,
+  PlaybackMedia item,
+) async {
+  if (!item.isEpisode || item.isLive) return const [];
+  try {
+    return await scope.registry.playbackSegments(item.item);
+  } catch (error) {
+    _debugSourceLog(
+      'playback_segments_error error=${redactPlaybackLogText(error)}',
+    );
+    return const [];
   }
 }
 

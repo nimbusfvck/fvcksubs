@@ -87,6 +87,8 @@ automatically; `provider` remains an optional user-facing grouping label.
   failure does not discard other results.
 - `defineSubtitles({ providerId, subtitles })`: merges subtitle providers with
   the same failure isolation.
+- `defineSegments({ providerId, segments })`: registers optional episode
+  playback markers such as intro, recap, and outro intervals.
 - `sourceId(providerKey, payload)` / `sourcePayload(id, expectedKey)`: create
   and decode restart-safe opaque source ids.
 

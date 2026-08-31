@@ -2,11 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../../app_scope.dart';
 import '../../detail/episode_target_v2.dart';
-import '../../library/library_controller.dart';
 import '../../theme/tokens.dart';
 import 'live_timeline.dart';
 import '../models/playback_media.dart';
@@ -14,16 +12,54 @@ import 'player_controls_overlay.dart';
 import '../mappers/stream_player_mapping.dart' show subtitleIndicatorLabel;
 import '../models/app_player_controller.dart';
 import '../models/resolved_source.dart';
+import '../state/playback_stall_detector.dart';
 import '../sheets/player_selection_sheets.dart';
 import '../sheets/subtitle_picker_sheet.dart';
 import '../widgets/player_overlays.dart';
 
-const Duration _upNextTriggerRemaining = Duration(seconds: 90);
+const Duration _upNextFallbackTriggerRemaining = Duration(minutes: 1);
 const Duration _upNextCountdown = Duration(seconds: 10);
 const Duration _bufferingIndicatorDelay = Duration(milliseconds: 700);
 const Duration _bufferingProgressTolerance = Duration(milliseconds: 250);
 
+/// How long the stall watchdog is held off after the viewer swaps a track on
+/// demand.
+///
+/// A swap throws libmpv's cushion away and refills from the current point,
+/// which on a slow upstream outlasts [PlaybackStallDetector.threshold] — and
+/// a watchdog that fires there re-resolves the source, restarting playback
+/// and undoing the switch that was asked for.
+const Duration _trackSwitchSettleGrace = Duration(seconds: 20);
+
+/// The same, for a seek — deliberately much shorter.
+///
+/// A seek out of the buffered range is the one interruption that can hang
+/// outright rather than merely take a while, and re-resolving is what gets
+/// the viewer out of it: the demuxer is rebuilt and starts at the position
+/// asked for. Room for a slow refill, not room for a hang to sit in.
+const Duration _seekSettleGrace = Duration(seconds: 8);
+
+/// The same grace on a live stream, where it has to stay small.
+///
+/// A live URL is signed, short-lived and per-edge, so the re-resolve this
+/// defers is the recovery that live depends on most — and a live refill
+/// cannot take twenty seconds anyway: the playlist window holds only a few
+/// segments, and libmpv resumes after `cache-pause-wait`. Enough room for
+/// that refill, and no more.
+const Duration _liveSettleGrace = Duration(seconds: 6);
+
+/// The grace a deliberate interruption earns on this kind of stream.
+@visibleForTesting
+Duration playerSettleGrace({required bool isLive, required bool trackSwitch}) =>
+    isLive
+    ? _liveSettleGrace
+    : trackSwitch
+    ? _trackSwitchSettleGrace
+    : _seekSettleGrace;
+
 void _noFitToggle() {}
+
+void _noSettling(Duration grace) {}
 
 class PlayerPlaybackControls extends StatefulWidget {
   const PlayerPlaybackControls({
@@ -35,11 +71,11 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.currentIndex,
     required this.onChangeSource,
     required this.onBack,
-    this.onToggleFullScreen,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
     required this.isLive,
     this.episodeGuide,
+    this.playbackSegments = const [],
     this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
@@ -47,6 +83,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.onPlayNext,
     required this.onPauseUpNext,
     required this.onCancelUpNext,
+    this.onSettling = _noSettling,
   });
 
   final AppPlayerController? controller;
@@ -56,11 +93,11 @@ class PlayerPlaybackControls extends StatefulWidget {
   final int currentIndex;
   final VoidCallback onChangeSource;
   final VoidCallback onBack;
-  final VoidCallback? onToggleFullScreen;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
   final bool isLive;
   final EpisodeGuide? episodeGuide;
+  final List<PlaybackSegment> playbackSegments;
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
   final VoidCallback onNearEnd;
@@ -68,6 +105,11 @@ class PlayerPlaybackControls extends StatefulWidget {
   final VoidCallback onPlayNext;
   final VoidCallback onPauseUpNext;
   final VoidCallback onCancelUpNext;
+
+  /// Announces a deliberate interruption — a seek, or a track swap — so the
+  /// page can stop its stall watchdog from reading the refill that follows as
+  /// a dead source.
+  final void Function(Duration grace) onSettling;
 
   @override
   State<PlayerPlaybackControls> createState() => _PlayerPlaybackControlsState();
@@ -84,6 +126,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   double? _dragValueMs;
   String? _activeSubtitleLabel;
   String? _activeQualityLabel;
+
+  /// Whether a rendition was chosen, here or in Settings, rather than left to
+  /// the player. Only a viewer's own pick puts the tick on a height; Auto
+  /// keeps it, and names what is playing beside it.
+  bool? _qualityPinned;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
   Timer? _pausedLiveEdgeTimer;
@@ -99,6 +146,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       (widget.isLive &&
           value != null &&
           (value.isPlaying || liveSeekEdge(value) > Duration.zero));
+
+  Duration _settlingGrace({required bool trackSwitch}) =>
+      playerSettleGrace(isLive: widget.isLive, trackSwitch: trackSwitch);
 
   bool get _isBuffering =>
       !_isReady(_videoValue?.value) || _showBufferingIndicator;
@@ -203,10 +253,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       }
     }
 
-    final duration = value?.duration ?? Duration.zero;
     final position = value?.position ?? Duration.zero;
-    if (duration > _upNextTriggerRemaining &&
-        duration - position <= _upNextTriggerRemaining) {
+    final duration = value?.duration ?? Duration.zero;
+    if (_shouldShowUpNext(position, duration)) {
       widget.onNearEnd();
     }
 
@@ -336,7 +385,54 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _revealControls();
   }
 
-  void _seekTo(Duration target) => unawaited(widget.controller?.seekTo(target));
+  PlaybackSegment? get _activeIntroSegment {
+    if (!widget.media.isEpisode || widget.isLive) return null;
+    final position = _videoValue?.value.position ?? Duration.zero;
+    const lead = Duration(seconds: 5);
+    for (final segment in widget.playbackSegments) {
+      if (segment.type != PlaybackSegmentType.intro) continue;
+      final start = Duration(milliseconds: segment.startMs);
+      final end = Duration(milliseconds: segment.endMs);
+      if (position >= start - lead && position < end) return segment;
+    }
+    return null;
+  }
+
+  bool _hasReachedOutro(Duration position) {
+    if (!widget.media.isEpisode || widget.isLive) return false;
+    return widget.playbackSegments.any(
+      (segment) =>
+          segment.type == PlaybackSegmentType.outro &&
+          position >= Duration(milliseconds: segment.startMs),
+    );
+  }
+
+  bool get _hasOutroMarker =>
+      widget.media.isEpisode &&
+      !widget.isLive &&
+      widget.playbackSegments.any(
+        (segment) => segment.type == PlaybackSegmentType.outro,
+      );
+
+  bool _shouldShowUpNext(Duration position, Duration duration) {
+    if (_hasReachedOutro(position)) return true;
+    if (_hasOutroMarker || duration <= _upNextFallbackTriggerRemaining) {
+      return false;
+    }
+    return duration - position <= _upNextFallbackTriggerRemaining;
+  }
+
+  void _skipIntro() {
+    final segment = _activeIntroSegment;
+    if (segment == null) return;
+    _seekTo(Duration(milliseconds: segment.endMs));
+    _revealControls();
+  }
+
+  void _seekTo(Duration target) {
+    widget.onSettling(_settlingGrace(trackSwitch: false));
+    unawaited(widget.controller?.seekTo(target));
+  }
 
   Future<void> _openSubtitlePicker() async {
     if (widget.isLive) return;
@@ -388,7 +484,10 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Future<void> _openQualityPicker() async {
     _hideTimer?.cancel();
     final tracks = widget.controller?.qualityTracks ?? const [];
-    final current = widget.controller?.activeQuality;
+    final active = widget.controller?.activeQuality;
+    final pinned =
+        _qualityPinned ??
+        (AppScope.of(context).qualityPreferenceController.maxHeight != null);
     final picked = await showModalBottomSheet<AppQualityTrack>(
       context: context,
       isScrollControlled: true,
@@ -396,14 +495,21 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) =>
-          PlayerQualityPickerSheet(tracks: tracks, current: current),
+      builder: (_) => PlayerQualityPickerSheet(
+        tracks: tracks,
+        current: pinned ? active : null,
+        activeHeight: active?.height,
+      ),
     );
     if (!mounted) return;
     if (picked != null) {
+      widget.onSettling(_settlingGrace(trackSwitch: true));
       unawaited(widget.controller?.setQuality(picked));
       final height = picked.height;
-      setState(() => _activeQualityLabel = height > 0 ? '${height}p' : null);
+      setState(() {
+        _qualityPinned = height > 0;
+        _activeQualityLabel = height > 0 ? '${height}p' : null;
+      });
     }
     _revealControls();
   }
@@ -424,6 +530,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     );
     if (!mounted) return;
     if (picked != null) {
+      widget.onSettling(_settlingGrace(trackSwitch: true));
       await widget.controller?.setAudioTrack(picked);
     }
     _revealControls();
@@ -442,12 +549,12 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         : Positioned(
             left: AppSpacing.md,
             right: AppSpacing.md,
-            bottom: AppSpacing.xl * 2,
+            bottom: kPlayerOverlayCardInset,
             child: SafeArea(
               child: Align(
                 alignment: Alignment.bottomRight,
-                child: SizedBox(
-                  width: 280,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 250),
                   child: PlayerUpNextCard(
                     seriesTitle: widget.upNextV2!.seriesTitle,
                     subtitle: nextEpisodeContextLabel(widget.upNextV2!),
@@ -464,7 +571,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     return PlayerControlsOverlayView(
       title: _overlayTitle,
       subtitle: _overlaySubtitle,
-      favoriteAction: PlayerFavoriteButton(media: widget.media),
       controlsVisible: _controlsVisible,
       isLive: widget.isLive,
       isPlaying: value?.isPlaying ?? false,
@@ -482,10 +588,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       dragValueMs: _dragValueMs,
       onBackgroundTap: _handleBackgroundTap,
       onBack: widget.onBack,
-      onToggleFullScreen: widget.onToggleFullScreen,
       fitMode: widget.fitMode,
       onToggleFit: widget.onToggleFit,
       onSkip: _skip,
+      skipIntroLabel: _activeIntroSegment == null ? null : 'Skip intro',
+      onSkipIntro: _activeIntroSegment == null ? null : _skipIntro,
       onTogglePlayPause: _togglePlayPause,
       onChangeSource: () {
         _hideTimer?.cancel();
@@ -509,30 +616,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         setState(() => _dragValueMs = null);
         _revealControls();
       },
+      playbackSegments: widget.playbackSegments,
       upNextCard: upNextCard,
-    );
-  }
-}
-
-class PlayerFavoriteButton extends StatelessWidget {
-  const PlayerFavoriteButton({super.key, required this.media});
-
-  final PlaybackMedia media;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = AppScope.of(context).libraryController;
-    return BlocBuilder<LibraryController, LibraryState>(
-      bloc: controller,
-      builder: (context, state) {
-        final favorited = state.isFavorite(media.ref);
-        return IconButton(
-          icon: Icon(favorited ? Icons.favorite : Icons.favorite_border),
-          color: favorited ? AppColors.liveAccent : null,
-          tooltip: favorited ? 'Remove from favorites' : 'Add to favorites',
-          onPressed: () => controller.toggleFavorite(media.item),
-        );
-      },
     );
   }
 }

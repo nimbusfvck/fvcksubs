@@ -120,6 +120,13 @@ guide. Groups are generic and may represent any extension-defined grouping.
 | `label` | no | Resolved quality or rendition text shown by the player. |
 | `subtitles` | no | Subtitle tracks available with this stream. |
 
+### `PlaybackSegment`
+
+An optional `segments({ item })` role returns item-level playback intervals. Each entry has
+`type` (`intro`, `recap`, or `outro`) and integer `startMs`/`endMs` boundaries. The app
+currently exposes an explicit Skip intro action for episode items; missing segment data does
+not affect playback.
+
 A subtitle track uses `language` for preference matching and display, `url` as
 the absolute SRT or VTT location, and optional `label` for extra text such as
 `Forced` or `SDH`.

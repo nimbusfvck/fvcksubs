@@ -64,6 +64,16 @@ Map<String, String> mpvPlaybackTuning({required bool isLive}) => {
   // Five seconds is tight for a large or slow playlist reload, and an abort
   // costs one of the demuxer's five segment retries.
   'network-timeout': '8',
+  // Back to libmpv's own default, which media_kit turns off.
+  //
+  // Every seek here is absolute, and `hr-seek` lands them on the exact
+  // frame asked for by decoding forward from the keyframe before it. With
+  // framedrop off those in-between frames are not just decoded but shown,
+  // so a seek into a long-GOP encode spends seconds replaying video nobody
+  // asked to watch before the picture settles — the wait a browser does not
+  // have, because it starts at the keyframe. Dropping them keeps the seek
+  // exact and gives the time back.
+  'hr-seek-framedrop': 'yes',
   if (isLive) ...{
     // Live providers are always network streams. Do not leave this to mpv's
     // auto detection: a cache gives segment downloads time to catch up before
@@ -118,6 +128,102 @@ const Map<String, String> liveDemuxerLavfOptions = {
   // error.
   'live_start_index': '-5',
 };
+
+/// How long a deferred subtitle waits for the decoder to report a picture
+/// before it is given up on.
+///
+/// The wait exists because applying a subtitle before libmpv knows the video
+/// size leaves it selected with nothing drawn. Eight seconds was enough for a
+/// short playlist, but a long VOD playlist — FlyStream ships one entry per
+/// segment for the whole film, behind a fresh HTTPS connection per segment —
+/// routinely spends longer than that before the first frame, and the viewer's
+/// remembered subtitle was being dropped on exactly the sources that need it.
+/// Nothing is held open by waiting: the apply is guarded by the widget still
+/// being mounted and by the selection revision.
+@visibleForTesting
+const Duration videoParamsWait = Duration(seconds: 30);
+
+/// FFmpeg demuxer options merged into media_kit's own `demuxer-lavf-o` for an
+/// on-demand HLS stream.
+///
+/// Applied the same way as [liveDemuxerLavfOptions], and only to HLS: these
+/// are options of FFmpeg's HLS demuxer, and handing them to any other demuxer
+/// only earns a warning in the log.
+@visibleForTesting
+const Map<String, String> vodHlsDemuxerLavfOptions = {
+  // Give every segment its own connection instead of reusing one.
+  //
+  // Seeking past the buffered range abandons the segment being read and asks
+  // for a distant one. On a kept-alive connection that leaves an undrained
+  // response body in front of the new request, and the read that follows
+  // waits on data that will never come — playback freezes at the seek target
+  // while FFmpeg burns `network-timeout` and its five segment retries.
+  // Playing forward never trips it, which is why only seeks out of the cache
+  // hang.
+  //
+  // The cost is a handshake per segment. Providers like FlyStream sign every
+  // segment URL separately anyway, so the connection was buying less than it
+  // looks. Live keeps persistence: it reads sequentially, never seeks far,
+  // and pays that handshake at the live edge where there is no slack.
+  'http_persistent': '0',
+};
+
+/// libmpv options applied to an on-demand HLS stream before it is opened.
+@visibleForTesting
+const Map<String, String> vodHlsMpvOptions = {
+  // Open on the smallest rendition, never the largest.
+  //
+  // libmpv's own default is `max`, so a playlist offering 4K opens on 4K and
+  // spends the first seconds decoding it — and downloading it — before
+  // [_selectPreferredVariant] re-opens on the one actually wanted. Starting
+  // at the bottom makes that opening moment cheap, and nothing stays there:
+  // the re-open follows as soon as the track list arrives.
+  'hls-bitrate': 'min',
+};
+
+/// The rendition ceiling for a viewer who has not chosen one.
+///
+/// Left to itself libmpv opens the largest rendition on offer, which on a
+/// phone means downloading and decoding 4K nobody asked for and cannot see.
+/// A viewer who wants more says so — in Settings, or in the player's own
+/// quality picker, both of which override this.
+@visibleForTesting
+const int defaultStartupMaxHeight = 720;
+
+/// The ceiling to open an on-demand stream at.
+///
+/// A live stream is left alone: its renditions are the channel's own, and it
+/// has no picker to correct a choice made for the viewer.
+@visibleForTesting
+int? startupMaxHeight({required int? preference, required bool isLive}) =>
+    isLive ? preference : preference ?? defaultStartupMaxHeight;
+
+/// The `hls-bitrate` that makes libmpv open [track] instead of whatever it
+/// would have chosen, or `null` when the choice cannot be expressed.
+///
+/// libmpv picks the highest variant whose bitrate does not exceed the value
+/// given, so the wanted variant's own bitrate names it. A playlist that
+/// declares no bitrate cannot be addressed this way, and a variant already
+/// playing needs no addressing at all.
+@visibleForTesting
+int? hlsBitrateForVariant({
+  required AppQualityTrack? wanted,
+  required AppQualityTrack? active,
+}) {
+  if (wanted == null) return null;
+  final bitrate = wanted.bitrate;
+  if (bitrate == null || bitrate <= 0) return null;
+  if (active != null && active.id == wanted.id) return null;
+  return bitrate;
+}
+
+/// Whether [target] is inside the range libmpv has already downloaded.
+///
+/// The back edge is the current position: libmpv keeps a back-buffer, but how
+/// much of it survives is not reported, so only the forward range is claimed.
+@visibleForTesting
+bool isWithinBuffer(Duration target, AppPlayerValue value) =>
+    target >= value.position && target <= value.bufferedPosition;
 
 @visibleForTesting
 Duration mediaKitBufferedAhead({
@@ -260,8 +366,27 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         }
       }
     }
-    if (!widget.isLive) return;
-    for (final entry in liveDemuxerLavfOptions.entries) {
+    if (!widget.isLive && widget.stream.format == StreamFormat.hls) {
+      for (final entry in vodHlsMpvOptions.entries) {
+        try {
+          await platform.setProperty(entry.key, entry.value);
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '[Player] mpv property ${entry.key} rejected: '
+              '${redactPlaybackLogText(error)}',
+            );
+          }
+        }
+      }
+    }
+    final demuxerOptions = widget.isLive
+        ? liveDemuxerLavfOptions
+        : widget.stream.format == StreamFormat.hls
+        ? vodHlsDemuxerLavfOptions
+        : const <String, String>{};
+    if (demuxerOptions.isEmpty) return;
+    for (final entry in demuxerOptions.entries) {
       try {
         await platform.command([
           'change-list',
@@ -307,6 +432,8 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       return;
     }
 
+    await _selectPreferredVariant();
+
     final preferredSubtitle = _preferredSubtitle();
     if (preferredSubtitle != null) {
       try {
@@ -338,6 +465,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       }
     }
     _watchPreferredQuality();
+    unawaited(_logSeekability());
     try {
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
@@ -362,10 +490,100 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     }
   }
 
+  /// Chooses the rendition the viewer asked for by re-opening the stream on
+  /// it, rather than switching to it while it plays.
+  ///
+  /// An HLS variant is its own playlist with its own read position. Switching
+  /// `vid` mid-stream leaves the newly wanted playlist to catch up with
+  /// playback on its own, and a later seek has to reconcile positions that
+  /// were never together — the demuxer answers by pulling segment after
+  /// segment with no picture to show for it. Opening on the variant means
+  /// there is only ever one playlist, from the first frame.
+  ///
+  /// Only for on-demand HLS with a preference set. Anything that cannot be
+  /// expressed as a bitrate is left to [_watchPreferredQuality] and its
+  /// mid-stream switch, which is worse but still better than ignoring the
+  /// preference.
+  Future<void> _selectPreferredVariant() async {
+    final maxHeight = _startupMaxHeight;
+    if (maxHeight == null || widget.stream.format != StreamFormat.hls) return;
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    // Only what libmpv already knows. A source can take twenty seconds to
+    // report a rendition list, and blocking the rest of the open on it costs
+    // the viewer that wait for nothing: [vodHlsMpvOptions] has already kept
+    // the opening rendition off the largest one, and _watchPreferredQuality
+    // still raises it to the ceiling when the list finally lands.
+    if (_adapter.qualityTracks.isEmpty) return;
+    try {
+      final bitrate = hlsBitrateForVariant(
+        wanted: preferredQualityTrack(
+          tracks: _adapter.qualityTracks,
+          maxHeight: maxHeight,
+        ),
+        active: _adapter.activeQuality,
+      );
+      if (bitrate == null) return;
+      await platform.setProperty('hls-bitrate', '$bitrate');
+      await _player.open(
+        mk.Media(widget.stream.url, httpHeaders: widget.stream.headers),
+        play: widget.playing,
+      );
+      // The re-opened stream is already on the wanted rendition, so the
+      // watcher must not switch again on top of it.
+      _preferredQualitySelectionDone = true;
+    } catch (error) {
+      // Falling through leaves the mid-stream switch in charge, which is how
+      // this worked before.
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] variant selection unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+  }
+
+  /// Reports whether libmpv can actually seek this stream.
+  ///
+  /// FFmpeg's HLS demuxer refuses to seek a playlist that carries neither
+  /// `#EXT-X-ENDLIST` nor `#EXT-X-PLAYLIST-TYPE:VOD` — it treats it as live,
+  /// however long it is. libmpv answers a seek it cannot delegate by reading
+  /// *forward* to the target instead, which on a long film is an unbounded
+  /// download that never reaches the position asked for: the picture never
+  /// returns and the spinner never stops.
+  ///
+  /// That failure and an ordinary slow refill look identical from the
+  /// outside, and only this property tells them apart. Debug builds only.
+  Future<void> _logSeekability() async {
+    if (!kDebugMode) return;
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    try {
+      await _player.stream.duration
+          .firstWhere((value) => value > Duration.zero)
+          .timeout(videoParamsWait);
+      debugPrint(
+        '[Player] seekable=${await platform.getProperty('seekable')} '
+        'partially-seekable='
+        '${await platform.getProperty('partially-seekable')} '
+        'duration=${_player.state.duration}',
+      );
+    } catch (_) {
+      // Diagnostics only: a stream that never reports a duration has already
+      // told the viewer more than this line would.
+    }
+  }
+
+  int? get _startupMaxHeight => startupMaxHeight(
+    preference: widget.preferredQualityMaxHeight,
+    isLive: widget.isLive,
+  );
+
   Future<void> _applyPreferredQuality() async {
     final track = preferredQualityTrack(
       tracks: _adapter.qualityTracks,
-      maxHeight: widget.preferredQualityMaxHeight,
+      maxHeight: _startupMaxHeight,
     );
     if (track == null || track.id == _adapter.activeQuality?.id) return;
     try {
@@ -381,7 +599,10 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   }
 
   void _watchPreferredQuality() {
-    if (widget.preferredQualityMaxHeight == null) return;
+    // The stream was re-opened on the wanted rendition already; switching
+    // again is the mid-stream switch this exists to avoid.
+    if (_preferredQualitySelectionDone) return;
+    if (_startupMaxHeight == null) return;
     if (_adapter.qualityTracks.isNotEmpty) {
       _preferredQualitySelectionDone = true;
       unawaited(_applyPreferredQuality());
@@ -415,7 +636,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       if ((params.w ?? 0) <= 0 || (params.h ?? 0) <= 0) {
         await _player.stream.videoParams
             .firstWhere((value) => (value.w ?? 0) > 0 && (value.h ?? 0) > 0)
-            .timeout(const Duration(seconds: 8));
+            .timeout(videoParamsWait);
       }
       if (!shouldApplyDeferredSubtitle(
         mounted: mounted,
@@ -515,6 +736,10 @@ class _MediaKitControllerAdapter implements AppPlayerController {
                 _events.add(const AppPlayerEvent(AppPlayerEventType.completed)),
           ),
       _player.stream.error.listen(_onLogError),
+      // libmpv rebuilds its track list on every load and whenever the tracks
+      // change, and media_kit does not read back which one is selected — so
+      // ask, each time the list moves.
+      _player.stream.tracks.listen((_) => unawaited(_refreshSelectedAudioId())),
     ];
   }
 
@@ -533,6 +758,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   SubtitleTrack? _activeSubtitle;
   String? _failedSubtitleUrl;
   int _subtitleSelectionRevision = 0;
+  String? _selectedAudioId;
 
   int get subtitleSelectionRevision => _subtitleSelectionRevision;
 
@@ -578,14 +804,37 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     ];
   }
 
+  /// The track libmpv is playing, or `null` while that is still unknown.
+  ///
+  /// media_kit reports `auto` until something selects a track explicitly, and
+  /// hands out a new [mk.AudioTrack] object every time the track list is
+  /// rebuilt — so neither its value nor its identity can answer this. The
+  /// `aid` libmpv actually resolved is read in the background and matched by
+  /// id, with media_kit's own value standing in until the first reading
+  /// lands.
   @override
   AppAudioTrack? get activeAudio {
+    final tracks = audioTracks;
+    final selected = audioTrackByNativeId(tracks, _selectedAudioId);
+    if (selected != null) return selected;
     final track = _player.state.track.audio;
     if (track.id == 'no' || track.id == 'auto') return null;
-    for (final audio in audioTracks) {
-      if (identical(audio.platformTrack, track)) return audio;
+    return audioTrackByNativeId(tracks, track.id);
+  }
+
+  Future<void> _refreshSelectedAudioId() async {
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    try {
+      final aid = (await platform.getProperty('aid')).trim();
+      // `auto` is libmpv still deciding, and `no` only appears while audio is
+      // off. Neither replaces a selection already known.
+      if (aid.isEmpty || aid == 'auto' || aid == 'no') return;
+      _selectedAudioId = aid;
+    } catch (_) {
+      // Reading a property is best effort: without it the picker falls back
+      // to media_kit's own value rather than failing.
     }
-    return null;
   }
 
   @override
@@ -606,8 +855,39 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   @override
   Future<void> play() => _player.play();
 
+  /// Seeks, asking libmpv for frame accuracy only where it is cheap.
+  ///
+  /// `hr-seek` makes libmpv land on the exact frame requested by decoding
+  /// forward from wherever the demuxer put it. Inside the buffered range that
+  /// costs nothing — the packets are already here. Outside it, every one of
+  /// those in-between frames has to be *downloaded* first, and if FFmpeg's
+  /// HLS seek lands short (its timeline comes from segment durations, which a
+  /// provider's own timestamps need not agree with), the distance to make up
+  /// grows with the size of the jump. That is a seek that fetches segment
+  /// after segment and never arrives.
+  ///
+  /// A jump out of the buffer takes the demuxer's own landing point instead —
+  /// the nearest keyframe, a second or two off at worst, which is what a
+  /// browser gives too. Short seeks and skip-intro keep their precision.
   @override
-  Future<void> seekTo(Duration position) => _player.seek(position);
+  Future<void> seekTo(Duration position) async {
+    await _setSeekPrecision(precise: isWithinBuffer(position, _value.value));
+    await _player.seek(position);
+  }
+
+  Future<void> _setSeekPrecision({required bool precise}) async {
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    try {
+      await platform.setProperty('hr-seek', precise ? 'yes' : 'no');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] hr-seek rejected: ${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+  }
 
   @override
   Future<void> setQuality(AppQualityTrack? track) => _player.setVideoTrack(
@@ -617,8 +897,13 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   );
 
   @override
-  Future<void> setAudioTrack(AppAudioTrack track) =>
-      _player.setAudioTrack(track.platformTrack! as mk.AudioTrack);
+  Future<void> setAudioTrack(AppAudioTrack track) async {
+    // Recorded before the switch so the picker marks the viewer's choice
+    // immediately, rather than after libmpv has finished re-buffering it.
+    _selectedAudioId = track.nativeId;
+    await _player.setAudioTrack(track.platformTrack! as mk.AudioTrack);
+    await _refreshSelectedAudioId();
+  }
 
   @override
   Future<void> setFit(PlayerFitMode mode) async => _setFit(mode);
@@ -671,6 +956,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
       ),
       language: track.language,
       details: details,
+      nativeId: track.id,
       platformTrack: track,
     );
   }

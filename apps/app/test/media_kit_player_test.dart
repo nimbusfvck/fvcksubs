@@ -155,6 +155,80 @@ void main() {
     });
   });
 
+  group('startupMaxHeight', () {
+    test('a viewer who chose nothing is kept off the largest rendition', () {
+      expect(
+        startupMaxHeight(preference: null, isLive: false),
+        defaultStartupMaxHeight,
+      );
+      // Downloading and decoding 4K nobody asked for is the thing this
+      // exists to prevent.
+      expect(defaultStartupMaxHeight, lessThan(2160));
+    });
+
+    test('a viewer who chose is obeyed, higher or lower', () {
+      expect(startupMaxHeight(preference: 2160, isLive: false), 2160);
+      expect(startupMaxHeight(preference: 480, isLive: false), 480);
+    });
+
+    test('live keeps the channel to itself', () {
+      expect(startupMaxHeight(preference: null, isLive: true), isNull);
+      expect(startupMaxHeight(preference: 1080, isLive: true), 1080);
+    });
+  });
+
+  group('vodHlsMpvOptions', () {
+    test('on-demand HLS opens on the smallest rendition', () {
+      // libmpv's own default is `max`; the wanted rendition arrives by
+      // re-open once the track list is known.
+      expect(vodHlsMpvOptions['hls-bitrate'], 'min');
+    });
+  });
+
+  group('hlsBitrateForVariant', () {
+    const uhd = AppQualityTrack(id: '1', height: 2160, bitrate: 1900000);
+    const hd = AppQualityTrack(id: '2', height: 720, bitrate: 1500000);
+
+    test('names the wanted rendition by its own bitrate', () {
+      expect(hlsBitrateForVariant(wanted: hd, active: uhd), 1500000);
+    });
+
+    test('leaves a rendition already playing alone', () {
+      expect(hlsBitrateForVariant(wanted: hd, active: hd), isNull);
+    });
+
+    test('gives up on a playlist that declares no bitrate', () {
+      // Nothing to address it with: the mid-stream switch stays in charge.
+      const unpriced = AppQualityTrack(id: '3', height: 720);
+      expect(hlsBitrateForVariant(wanted: unpriced, active: uhd), isNull);
+      expect(hlsBitrateForVariant(wanted: null, active: uhd), isNull);
+    });
+  });
+
+  group('isWithinBuffer', () {
+    const value = AppPlayerValue(
+      initialized: true,
+      position: Duration(minutes: 3),
+      bufferedPosition: Duration(minutes: 6),
+      duration: Duration(minutes: 58),
+    );
+
+    test('a target already downloaded keeps frame accuracy', () {
+      expect(isWithinBuffer(const Duration(minutes: 4), value), isTrue);
+      expect(isWithinBuffer(const Duration(minutes: 6), value), isTrue);
+    });
+
+    test('a jump past the buffer gives it up', () {
+      // The frames between where FFmpeg lands and the exact target would have
+      // to be downloaded before the picture returns.
+      expect(isWithinBuffer(const Duration(minutes: 10), value), isFalse);
+    });
+
+    test('a jump backwards gives it up', () {
+      expect(isWithinBuffer(const Duration(minutes: 1), value), isFalse);
+    });
+  });
+
   group('mpvPlaybackTuning', () {
     test('on-demand playback leaves reconnect policy unset', () {
       final tuning = mpvPlaybackTuning(isLive: false);
@@ -189,6 +263,17 @@ void main() {
       // A rebuffer that outlives the stall timer costs the source a
       // re-resolve while libmpv is still recovering from it.
       expect(wait, lessThan(PlaybackStallDetector().threshold));
+    });
+
+    test('on-demand HLS gives every segment its own connection', () {
+      // A kept-alive connection leaves an undrained response body in front of
+      // the request a far seek makes, and the read that follows never
+      // returns — the freeze the viewer sees only when seeking out of the
+      // buffered range.
+      expect(vodHlsDemuxerLavfOptions['http_persistent'], '0');
+      // Live reads sequentially and never seeks far, and pays the handshake
+      // at the edge where there is no slack.
+      expect(liveDemuxerLavfOptions.containsKey('http_persistent'), isFalse);
     });
 
     test('live playback joins the playlist behind the live edge', () {

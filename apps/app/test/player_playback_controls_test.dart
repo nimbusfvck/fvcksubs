@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/controls/player_playback_controls.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
+import 'package:fvcksubs_app/player/state/playback_stall_detector.dart';
 import 'package:fvcksubs_app/player/models/resolved_source.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -135,6 +136,264 @@ void main() {
     expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
   });
 
+  testWidgets('up-next trigger follows the provider outro marker', (
+    tester,
+  ) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-1',
+      ),
+      title: 'Episode',
+      subtitle: 'Series',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    var nearEndCalls = 0;
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 60),
+        duration: Duration(minutes: 2),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        playbackSegments: const [
+          PlaybackSegment(
+            type: PlaybackSegmentType.outro,
+            startMs: 90000,
+            endMs: 110000,
+          ),
+        ],
+        onNearEnd: () => nearEndCalls++,
+      ),
+    );
+    expect(nearEndCalls, 0);
+
+    controller.update(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 90),
+        duration: Duration(minutes: 2),
+      ),
+    );
+    await tester.pump();
+    expect(nearEndCalls, 1);
+  });
+
+  testWidgets('up-next falls back to one minute without an outro marker', (
+    tester,
+  ) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-1',
+      ),
+      title: 'Episode',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    var nearEndCalls = 0;
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 59),
+        duration: Duration(minutes: 2),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        onNearEnd: () => nearEndCalls++,
+      ),
+    );
+    expect(nearEndCalls, 0);
+
+    controller.update(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 60),
+        duration: Duration(minutes: 2),
+      ),
+    );
+    await tester.pump();
+    expect(nearEndCalls, 1);
+  });
+
+  testWidgets('a seek tells the page to hold off its stall watchdog', (
+    tester,
+  ) async {
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 50),
+      ),
+    );
+    final graces = <Duration>[];
+
+    await tester.pumpWidget(_controls(controller, onSettling: graces.add));
+    await tester.tap(find.byIcon(Icons.forward_10_rounded));
+
+    expect(controller.lastSeek, const Duration(seconds: 60));
+    expect(graces, [playerSettleGrace(isLive: false, trackSwitch: false)]);
+  });
+
+  test('the live grace stays inside the stall watchdog budget', () {
+    // A live URL is signed and short-lived, so the re-resolve this defers is
+    // the recovery live depends on most. On demand there is no such urgency.
+    final threshold = PlaybackStallDetector().threshold;
+    expect(
+      playerSettleGrace(isLive: true, trackSwitch: false),
+      lessThan(threshold),
+    );
+    expect(
+      playerSettleGrace(isLive: true, trackSwitch: true),
+      lessThan(threshold),
+    );
+  });
+
+  test('a seek is given less room to settle than a track swap', () {
+    // A seek out of the buffered range can hang outright, and the re-resolve
+    // this grace defers is what recovers it. A track swap only ever refills.
+    expect(
+      playerSettleGrace(isLive: false, trackSwitch: false),
+      lessThan(playerSettleGrace(isLive: false, trackSwitch: true)),
+    );
+  });
+
+  testWidgets('skip intro seeks to the provider segment end', (tester) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-1',
+      ),
+      title: 'Episode',
+      subtitle: 'Series',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 50),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        playbackSegments: const [
+          PlaybackSegment(
+            type: PlaybackSegmentType.intro,
+            startMs: 42000,
+            endMs: 128500,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Skip intro'), findsOneWidget);
+    await tester.tap(find.text('Skip intro'));
+    expect(controller.lastSeek, const Duration(milliseconds: 128500));
+  });
+
+  testWidgets('skip intro appears in the right-side overlay at its marker', (
+    tester,
+  ) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-1',
+      ),
+      title: 'Episode',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    final visibility = <bool>[];
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration.zero,
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        playbackSegments: const [
+          PlaybackSegment(
+            type: PlaybackSegmentType.intro,
+            startMs: 420000,
+            endMs: 480000,
+          ),
+        ],
+        onVisibilityChanged: visibility.add,
+      ),
+    );
+    await tester.tapAt(const Offset(20, 300));
+    expect(visibility, contains(false));
+
+    controller.update(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 7),
+        duration: Duration(minutes: 10),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Skip intro'), findsOneWidget);
+    expect(tester.getCenter(find.text('Skip intro')).dx, greaterThan(400));
+  });
+
   testWidgets('repeated buffering resumes when playback is still intended', (
     tester,
   ) async {
@@ -197,11 +456,15 @@ Widget _controls(
   VoidCallback? manualNext,
   PlaybackMedia? media,
   EpisodeGuide? episodeGuide,
+  List<PlaybackSegment> playbackSegments = const [],
+  VoidCallback? onNearEnd,
+  void Function(bool visibility)? onVisibilityChanged,
+  void Function(Duration grace)? onSettling,
 }) => wrapApp(
   registry: ExtensionRegistry([]),
   child: PlayerPlaybackControls(
     controller: controller,
-    onVisibilityChanged: (_) {},
+    onVisibilityChanged: onVisibilityChanged ?? (_) {},
     media:
         media ??
         const PlaybackMedia(
@@ -228,11 +491,13 @@ Widget _controls(
     onBack: () {},
     isLive: false,
     episodeGuide: episodeGuide,
+    playbackSegments: playbackSegments,
     onManualNext: manualNext,
-    onNearEnd: () {},
+    onNearEnd: onNearEnd ?? () {},
     onPlayNext: () {},
     onPauseUpNext: () {},
     onCancelUpNext: () {},
+    onSettling: onSettling ?? (_) {},
   ),
 );
 
@@ -244,6 +509,7 @@ class _RecoveryController implements AppPlayerController {
   final StreamController<AppPlayerEvent> _events = StreamController.broadcast();
   int playCalls = 0;
   int pauseCalls = 0;
+  Duration? lastSeek;
 
   void update(AppPlayerValue value) => _value.value = value;
 
@@ -269,7 +535,7 @@ class _RecoveryController implements AppPlayerController {
   @override
   Future<void> pause() async => pauseCalls++;
   @override
-  Future<void> seekTo(Duration position) async {}
+  Future<void> seekTo(Duration position) async => lastSeek = position;
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {}
   @override

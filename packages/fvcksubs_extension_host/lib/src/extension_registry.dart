@@ -514,6 +514,24 @@ class ExtensionRegistry {
     }
   }
 
+  /// Looks up optional playback segments for [item]. A missing role or a
+  /// failed upstream is an empty result and never blocks playback.
+  Future<List<PlaybackSegment>> playbackSegments(MediaItemV2 item) async {
+    final extension = extensionById(item.ref.extensionId);
+    if (!isExtensionEnabled(extension.manifest.id)) return const [];
+
+    final declaresSegments = extension.manifest.providers.any(
+      (provider) => provider.roles.contains(ProviderRole.segments),
+    );
+    if (!declaresSegments) return const [];
+
+    try {
+      return await extension.playbackSegments(item);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Resolves a just-in-time preview for [item], from the extension that
   /// owns it.
   ///

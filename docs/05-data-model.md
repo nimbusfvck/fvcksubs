@@ -115,6 +115,15 @@ flowchart LR
 `headers` matters: many edges redirect away from, or reject, playback requests that lack a
 `User-Agent` or `Referer`. Whatever the upstream needs must be returned here.
 
+### Playback segments
+
+An extension may provide playback segments through the optional `segments` role. Each
+segment has a `type` (`intro`, `recap`, or `outro`) and integer `startMs`/`endMs` boundaries.
+Segment metadata is looked up by the item, not by a resolved source, and is session-only
+derived data. The shell exposes an explicit **Skip intro** action for episode items while
+the playhead is inside an `intro` interval; it never skips automatically. A failed lookup
+is equivalent to no segments.
+
 Subtitle tracks contain a language, URL, and optional label. The player detects SRT or VTT
 from the response content, so the protocol does not include a subtitle format field.
 

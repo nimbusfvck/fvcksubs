@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../theme/tokens.dart';
 import '../models/app_player_controller.dart';
 import '../widgets/player_fit_button.dart';
+import '../widgets/player_overlays.dart';
 
 void _noFitToggle() {}
 
@@ -11,7 +13,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
-    required this.favoriteAction,
     required this.controlsVisible,
     required this.isLive,
     required this.isPlaying,
@@ -27,10 +28,11 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.dragValueMs,
     required this.onBackgroundTap,
     required this.onBack,
-    this.onToggleFullScreen,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
     required this.onSkip,
+    this.skipIntroLabel,
+    this.onSkipIntro,
     required this.onTogglePlayPause,
     required this.onChangeSource,
     required this.onPlayNext,
@@ -41,6 +43,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.onTimelineChanged,
     required this.onTimelineChangeEnd,
     this.upNextCard,
+    this.playbackSegments = const [],
   });
 
   /// Media title shown in the top bar.
@@ -48,9 +51,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Optional secondary line shown below the media title.
   final String? subtitle;
-
-  /// Favorite control rendered in the top bar.
-  final Widget favoriteAction;
 
   /// Whether the transport and top/bottom controls are visible.
   final bool controlsVisible;
@@ -64,7 +64,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Whether the player is buffering and should show a loading indicator.
   final bool isBuffering;
 
-  /// Current source label; null hides the source selector.
+  /// Current source label used as the source selector tooltip; null hides it.
   final String? sourceLabel;
 
   /// Active subtitle label shown in the subtitle control.
@@ -97,9 +97,6 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Handles leaving the player screen.
   final VoidCallback onBack;
 
-  /// Toggles fullscreen; null hides the fullscreen action.
-  final VoidCallback? onToggleFullScreen;
-
   /// Current video viewport mode.
   final PlayerFitMode fitMode;
 
@@ -108,6 +105,12 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Skips forward or backward by the requested number of seconds.
   final ValueChanged<int> onSkip;
+
+  /// Label for the optional episode intro action.
+  final String? skipIntroLabel;
+
+  /// Seeks to the end of the active intro segment.
+  final VoidCallback? onSkipIntro;
 
   /// Toggles playback between playing and paused.
   final VoidCallback onTogglePlayPause;
@@ -139,6 +142,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Optional auto-next episode card displayed over the player.
   final Widget? upNextCard;
 
+  /// Source-independent intro, recap, and outro intervals for the timeline.
+  final List<PlaybackSegment> playbackSegments;
+
   @override
   Widget build(BuildContext context) => GestureDetector(
     behavior: HitTestBehavior.opaque,
@@ -149,10 +155,8 @@ class PlayerControlsOverlayView extends StatelessWidget {
         _PlayerTopControls(
           title: title,
           subtitle: subtitle,
-          favoriteAction: favoriteAction,
           visible: controlsVisible,
           onBack: onBack,
-          onToggleFullScreen: onToggleFullScreen,
           fitMode: fitMode,
           onToggleFit: onToggleFit,
         ),
@@ -184,7 +188,26 @@ class PlayerControlsOverlayView extends StatelessWidget {
           onTimelineChangeStart: onTimelineChangeStart,
           onTimelineChanged: onTimelineChanged,
           onTimelineChangeEnd: onTimelineChangeEnd,
+          playbackSegments: playbackSegments,
         ),
+        if (upNextCard == null && skipIntroLabel != null && onSkipIntro != null)
+          Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: kPlayerOverlayCardInset,
+            child: SafeArea(
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 250),
+                  child: PlayerSkipIntroCard(
+                    label: skipIntroLabel!,
+                    onSkipIntro: onSkipIntro!,
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (upNextCard case final Widget card) card,
       ],
     ),
@@ -195,20 +218,16 @@ class _PlayerTopControls extends StatelessWidget {
   const _PlayerTopControls({
     required this.title,
     required this.subtitle,
-    required this.favoriteAction,
     required this.visible,
     required this.onBack,
-    required this.onToggleFullScreen,
     required this.fitMode,
     required this.onToggleFit,
   });
 
   final String title;
   final String? subtitle;
-  final Widget favoriteAction;
   final bool visible;
   final VoidCallback onBack;
-  final VoidCallback? onToggleFullScreen;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
 
@@ -290,15 +309,6 @@ class _PlayerTopControls extends StatelessWidget {
                       ],
                     ),
                   ),
-                  favoriteAction,
-                  if (onToggleFullScreen != null)
-                    IconButton(
-                      icon: const Icon(Icons.fullscreen_rounded),
-                      color: Colors.white,
-                      iconSize: 24,
-                      tooltip: 'Toggle fullscreen',
-                      onPressed: onToggleFullScreen,
-                    ),
                   PlayerFitButton(mode: fitMode, onToggle: onToggleFit),
                 ],
               ),
@@ -406,6 +416,7 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.onTimelineChangeStart,
     required this.onTimelineChanged,
     required this.onTimelineChangeEnd,
+    required this.playbackSegments,
   });
 
   final bool visible;
@@ -427,6 +438,7 @@ class _PlayerBottomControls extends StatelessWidget {
   final ValueChanged<double> onTimelineChangeStart;
   final ValueChanged<double> onTimelineChanged;
   final ValueChanged<double> onTimelineChangeEnd;
+  final List<PlaybackSegment> playbackSegments;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -457,134 +469,103 @@ class _PlayerBottomControls extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (sourceLabel != null)
-                            InkWell(
-                              onTap: onChangeSource,
-                              borderRadius: AppRadius.sm,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.sm,
-                                  vertical: AppSpacing.xxs + 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white12,
-                                  borderRadius: AppRadius.sm,
-                                  border: Border.all(
-                                    color: Colors.white24,
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.playlist_play_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: AppSpacing.xxs),
-                                    Text(
-                                      sourceLabel!,
-                                      style: AppTypography.bodySm.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onPlayNext != null)
+                          IconButton(
+                            onPressed: onPlayNext,
+                            icon: const Icon(Icons.skip_next_rounded),
+                            color: Colors.white,
+                            iconSize: 24,
+                            tooltip: 'Next Episode',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
                             ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (onPlayNext != null)
-                            IconButton(
-                              onPressed: onPlayNext,
-                              icon: const Icon(Icons.skip_next_rounded),
-                              color: Colors.white,
-                              iconSize: 24,
-                              tooltip: 'Next Episode',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 40,
-                                minHeight: 40,
-                              ),
-                            ),
-                          if (!isLive)
-                            GestureDetector(
-                              onTap: onOpenSubtitlePicker,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.xs,
-                                  vertical: AppSpacing.xxs,
-                                ),
-                                child: Icon(
-                                  activeSubtitleLabel != null
-                                      ? Icons.closed_caption_rounded
-                                      : Icons.closed_caption_off_rounded,
-                                  color: activeSubtitleLabel != null
-                                      ? AppColors.brandAccent
-                                      : Colors.white,
-                                  size: 26,
-                                ),
-                              ),
-                            ),
-                          if (onOpenAudioPicker != null)
-                            GestureDetector(
-                              onTap: onOpenAudioPicker,
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.xs,
-                                  vertical: AppSpacing.xxs,
-                                ),
-                                child: Icon(
-                                  Icons.audiotrack_rounded,
-                                  color: Colors.white,
-                                  size: 26,
-                                ),
-                              ),
-                            ),
+                          ),
+                        if (!isLive)
                           GestureDetector(
-                            onTap: onOpenQualityPicker,
+                            onTap: onOpenSubtitlePicker,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.xs,
                                 vertical: AppSpacing.xxs,
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (activeQualityLabel == null)
-                                    const Icon(
-                                      Icons.high_quality_rounded,
-                                      color: Colors.white,
-                                      size: 26,
-                                    ),
-                                  if (activeQualityLabel != null) ...[
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      activeQualityLabel!,
-                                      style: AppTypography.caption.copyWith(
-                                        color: AppColors.brandAccent,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                              child: Icon(
+                                activeSubtitleLabel != null
+                                    ? Icons.closed_caption_rounded
+                                    : Icons.closed_caption_off_rounded,
+                                color: activeSubtitleLabel != null
+                                    ? AppColors.brandAccent
+                                    : Colors.white,
+                                size: 26,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ],
+                        if (onOpenAudioPicker != null)
+                          GestureDetector(
+                            onTap: onOpenAudioPicker,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.xs,
+                                vertical: AppSpacing.xxs,
+                              ),
+                              child: Icon(
+                                Icons.audiotrack_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
+                          ),
+                        GestureDetector(
+                          onTap: onOpenQualityPicker,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: AppSpacing.xxs,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (activeQualityLabel == null)
+                                  const Icon(
+                                    Icons.high_quality_rounded,
+                                    color: Colors.white,
+                                    size: 26,
+                                  ),
+                                if (activeQualityLabel != null) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    activeQualityLabel!,
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.brandAccent,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (sourceLabel != null)
+                          IconButton(
+                            onPressed: onChangeSource,
+                            icon: const Icon(Icons.playlist_play_rounded),
+                            color: Colors.white,
+                            iconSize: 26,
+                            tooltip: sourceLabel!,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                   if (isLive || duration > Duration.zero)
                     _PlayerTimeline(
@@ -598,6 +579,7 @@ class _PlayerBottomControls extends StatelessWidget {
                       onChangeStart: onTimelineChangeStart,
                       onChanged: onTimelineChanged,
                       onChangeEnd: onTimelineChangeEnd,
+                      playbackSegments: playbackSegments,
                     ),
                 ],
               ),
@@ -621,6 +603,7 @@ class _PlayerTimeline extends StatelessWidget {
     required this.onChangeStart,
     required this.onChanged,
     required this.onChangeEnd,
+    required this.playbackSegments,
   });
 
   final bool isLive;
@@ -633,6 +616,7 @@ class _PlayerTimeline extends StatelessWidget {
   final ValueChanged<double> onChangeStart;
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onChangeEnd;
+  final List<PlaybackSegment> playbackSegments;
 
   @override
   Widget build(BuildContext context) {
@@ -660,13 +644,17 @@ class _PlayerTimeline extends StatelessWidget {
           ),
         Expanded(
           child: SliderTheme(
-            data: const SliderThemeData(
+            data: SliderThemeData(
               trackHeight: 3,
-              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
               activeTrackColor: AppColors.brandAccent,
               secondaryActiveTrackColor: Colors.white54,
               inactiveTrackColor: Colors.white24,
               thumbColor: AppColors.brandAccent,
+              trackShape: _PlaybackSegmentSliderTrackShape(
+                segments: playbackSegments,
+                timelineExtent: timelineExtent,
+              ),
             ),
             child: Slider(
               value: (dragValueMs ?? position.inMilliseconds.toDouble()).clamp(
@@ -712,6 +700,78 @@ class _PlayerTimeline extends StatelessWidget {
       maxLines: 1,
     )..layout();
     return painter.width + AppSpacing.xs;
+  }
+}
+
+/// Paints source-independent playback markers over the normal seek track.
+///
+/// The base slider still owns all interaction and progress semantics; this
+/// shape only adds a yellow overlay for intervals such as intros or recaps.
+class _PlaybackSegmentSliderTrackShape extends RoundedRectSliderTrackShape {
+  const _PlaybackSegmentSliderTrackShape({
+    required this.segments,
+    required this.timelineExtent,
+  });
+
+  final List<PlaybackSegment> segments;
+  final Duration timelineExtent;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    super.paint(
+      context,
+      offset,
+      parentBox: parentBox,
+      sliderTheme: sliderTheme,
+      enableAnimation: enableAnimation,
+      textDirection: textDirection,
+      thumbCenter: thumbCenter,
+      secondaryOffset: secondaryOffset,
+      isDiscrete: isDiscrete,
+      isEnabled: isEnabled,
+      additionalActiveTrackHeight: additionalActiveTrackHeight,
+    );
+
+    final maxMs = timelineExtent.inMilliseconds;
+    if (maxMs <= 0 || segments.isEmpty) return;
+
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final markerPaint = Paint()..color = AppColors.ratingAccent;
+    final radius = Radius.circular(trackRect.height / 2);
+    for (final segment in segments) {
+      if (segment.type == PlaybackSegmentType.unknown) continue;
+      final startMs = segment.startMs.clamp(0, maxMs).toDouble();
+      final endMs = segment.endMs.clamp(0, maxMs).toDouble();
+      if (endMs <= startMs) continue;
+
+      final left = trackRect.left + trackRect.width * startMs / maxMs;
+      final right = trackRect.left + trackRect.width * endMs / maxMs;
+      context.canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(left, trackRect.top, right, trackRect.bottom),
+          radius,
+        ),
+        markerPaint,
+      );
+    }
   }
 }
 

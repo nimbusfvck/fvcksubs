@@ -35,9 +35,27 @@ different upstream services.
 | | `resolve({ sourceId })` | one playable stream | **Expensive**, short-lived. |
 | `search` | `search({ query, page, category })` | a page of items | Free-text search, optionally scoped to one category. |
 | `subtitles` | `subtitles({ item })` | a list of subtitle tracks | Lookup independent of any source. |
+| `segments` | `segments({ item })` | a list of playback segments | Optional skip markers, independent of any source. |
 
 A role the manifest does not declare is **never invoked**. The host checks the manifest
 before routing, so an extension only implements what it declares.
+
+### `segments` response
+
+The optional `segments` role returns source-independent playback intervals. Times are
+integer milliseconds. Unknown segment types remain valid data but are not actionable by the
+shell.
+
+```json
+{
+  "segments": [
+    { "type": "intro", "startMs": 42000, "endMs": 128500 }
+  ]
+}
+```
+
+Segment lookup is best-effort metadata. A missing role, failed request, or malformed response
+contributes an empty list and must never prevent the player from opening.
 
 ### `sources` input
 

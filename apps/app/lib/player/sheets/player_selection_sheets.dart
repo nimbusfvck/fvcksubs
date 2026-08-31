@@ -197,12 +197,27 @@ class PlayerQualityPickerSheet extends StatelessWidget {
     super.key,
     required this.tracks,
     required this.current,
+    this.activeHeight,
   });
 
   final List<AppQualityTrack> tracks;
+
+  /// The rendition the viewer pinned, or `null` while the choice is Auto.
   final AppQualityTrack? current;
 
+  /// The rendition actually playing, whoever chose it.
+  ///
+  /// Auto says what the player will do, not what it did — so on its own it
+  /// leaves the viewer guessing whether the picture they are unhappy with is
+  /// 480p or 1080p. Naming it turns the row into an answer.
+  final int? activeHeight;
+
   bool get _autoSelected => current == null;
+
+  String get _autoLabel {
+    final height = activeHeight;
+    return height == null || height <= 0 ? 'Auto' : 'Auto (${height}p)';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +249,7 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                 children: [
                   ListTile(
                     title: Text(
-                      'Auto',
+                      _autoLabel,
                       style: AppTypography.bodyMd.copyWith(
                         color: AppColors.onDark,
                       ),
@@ -286,6 +301,7 @@ class PlayerAudioPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.of(context).size.height * 0.6;
+    final labels = audioTrackPickerLabels(tracks);
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
@@ -314,7 +330,7 @@ class PlayerAudioPickerSheet extends StatelessWidget {
                   for (final (index, track) in tracks.indexed)
                     ListTile(
                       title: Text(
-                        audioTrackPickerLabel(track, index),
+                        labels[index],
                         style: AppTypography.bodyMd.copyWith(
                           color: AppColors.onDark,
                         ),

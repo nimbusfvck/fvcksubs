@@ -181,6 +181,10 @@ class JsExtension extends ContentExtension {
   Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) =>
       _subtitlesFromJson(item.toJson());
 
+  @override
+  Future<List<PlaybackSegment>> playbackSegments(MediaItemV2 item) =>
+      _segmentsFromJson(item.toJson());
+
   Future<List<SubtitleTrack>> _subtitlesFromJson(
     Map<String, Object?> item,
   ) async {
@@ -194,6 +198,25 @@ class JsExtension extends ContentExtension {
     return [
       for (final entry in list)
         SubtitleTrack.fromJson((entry as Map).cast<String, Object?>()),
+    ];
+  }
+
+  Future<List<PlaybackSegment>> _segmentsFromJson(
+    Map<String, Object?> item,
+  ) async {
+    if (!_hasMethod('segments')) {
+      throw UnsupportedError('${_manifest.id} does not provide segments');
+    }
+    final decoded = await _call('segments', {'item': item});
+    final list = decoded['segments'];
+    if (list is! List) {
+      throw JsExtensionException(
+        '${_manifest.id}.segments did not return a "segments" list',
+      );
+    }
+    return [
+      for (final entry in list)
+        PlaybackSegment.fromJson((entry as Map).cast<String, Object?>()),
     ];
   }
 

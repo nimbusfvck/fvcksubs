@@ -12,6 +12,7 @@ export 'src/content/media_item_version_adapter.dart';
 export 'src/content/media_ref.dart';
 export 'src/content/participant.dart';
 export 'src/content/preview_source.dart';
+export 'src/content/playback_segment.dart';
 export 'src/content/stream.dart';
 export 'src/matcher/event_match_resolver.dart';
 export 'src/matcher/jaro_winkler.dart';

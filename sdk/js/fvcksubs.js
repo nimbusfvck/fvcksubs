@@ -14,6 +14,7 @@
   const streams = [];
   const searches = [];
   const subtitles = [];
+  const segments = [];
   const previews = [];
 
   function requiredString(value, name) {
@@ -185,6 +186,14 @@
     subtitles.push({ providerId, subtitles: lookup });
   }
 
+  /** Registers an optional playback-segment lookup handler. */
+  function defineSegments(definition) {
+    const providerId = requiredString(definition && definition.providerId, 'segments.providerId');
+    const lookup = requiredFunction(definition && definition.segments, 'segments.segments');
+    unique(segments, (entry) => entry.providerId === providerId, `segments provider ${providerId}`);
+    segments.push({ providerId, segments: lookup });
+  }
+
   /**
    * Registers a just-in-time preview handler for a provider ID (e.g. a
    * Shorts feed card). Unlike the other `define*` calls, this is the one
@@ -312,6 +321,17 @@
     );
     return { subtitles: settled.flat() };
   };
+  globalThis.__extension.segments = async (args) => {
+    const settled = await Promise.all(
+      segments.map((provider) =>
+        Promise.resolve().then(() => provider.segments(args)).then(
+          (value) => listResult(value, 'segments', 'segments').segments,
+          () => [],
+        ),
+      ),
+    );
+    return { segments: settled.flat() };
+  };
 
   globalThis.fvcksubs = Object.freeze({
     defineCatalog,
@@ -319,6 +339,7 @@
     defineStream,
     defineSearch,
     defineSubtitles,
+    defineSegments,
     definePreview,
     sourceId,
     sourcePayload,

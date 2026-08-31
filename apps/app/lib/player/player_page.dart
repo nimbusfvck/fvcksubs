@@ -61,6 +61,7 @@ class PlayerPage extends StatefulWidget {
     required this.resolvedSources,
     this.episodeGuide,
     this.pendingSources,
+    this.pendingSegments,
     this.returnToDetail = false,
   }) : media = PlaybackMedia(item),
        assert(resolvedSources.isNotEmpty, 'Must provide at least one source');
@@ -69,6 +70,7 @@ class PlayerPage extends StatefulWidget {
   final List<ResolvedSource> resolvedSources;
   final EpisodeGuide? episodeGuide;
   final Stream<ResolvedSource>? pendingSources;
+  final Future<List<PlaybackSegment>>? pendingSegments;
   final bool returnToDetail;
 
   @override
@@ -81,6 +83,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<List<ResolvedSource>>? _refetch;
   late final NextEpisodeV2? _nextEpisode;
   bool _showUpNext = false;
+  List<PlaybackSegment> _playbackSegments = const [];
   bool _upNextPaused = false;
   bool _advancing = false;
   LibraryController? _library;
@@ -129,6 +132,18 @@ class _PlayerPageState extends State<PlayerPage> {
         : null;
     final pending = widget.pendingSources;
     if (pending != null) unawaited(_addPendingSources(pending));
+    final pendingSegments = widget.pendingSegments;
+    if (pendingSegments != null) {
+      unawaited(_loadPlaybackSegments(pendingSegments));
+    }
+  }
+
+  Future<void> _loadPlaybackSegments(
+    Future<List<PlaybackSegment>> pending,
+  ) async {
+    final segments = await pending;
+    if (!mounted) return;
+    setState(() => _playbackSegments = segments);
   }
 
   @override
@@ -708,16 +723,17 @@ class _PlayerPageState extends State<PlayerPage> {
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
         onBack: () => _dismiss(controller),
-        onToggleFullScreen: _supportsFullScreen ? _toggleFullScreen : null,
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
         isLive: _isLive,
+        playbackSegments: _playbackSegments,
         episodeGuide: widget.episodeGuide,
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _showNextEpisode,
         onManualNext: _nextEpisode == null ? null : _playNextEpisode,
         onPlayNext: _playNextEpisode,
+        onSettling: (grace) => _stallDetector.defer(grace, now: DateTime.now()),
         onPauseUpNext: () => setState(() => _upNextPaused = true),
         onCancelUpNext: () => setState(() {
           _showUpNext = false;

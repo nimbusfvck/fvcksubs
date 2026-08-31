@@ -195,6 +195,10 @@ the source.
 `StreamSource.id` is the identity passed to `resolve` and the cache identity.
 A resolved stream does not repeat a source label.
 
+The optional `segments` role returns item-level playback intervals separately from stream
+resolution. Its response is `{ "segments": [...] }`, with integer millisecond boundaries;
+extensions may omit the role, and the host treats failures as an empty result.
+
 Separate audio remains supported only when the native mapping forwards it. A
 platform that cannot play a declared combination must reject the source before
 opening the player and provide a usable error.

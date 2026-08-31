@@ -270,6 +270,15 @@ interface SubtitleTrack {
   /** Optional extra display text, such as `Forced` or `SDH`. */
   label?: string;
 }
+type PlaybackSegmentType = 'intro' | 'recap' | 'outro';
+interface PlaybackSegment {
+  /** Segment category used by the player to choose the available action. */
+  type: PlaybackSegmentType;
+  /** Inclusive start time in integer milliseconds. */
+  startMs: number;
+  /** Exclusive end time in integer milliseconds. */
+  endMs: number;
+}
 interface DrmConfig {
   /** DRM mode used by the native player. */
   scheme: 'clearKey' | 'widevine' | 'unsupported';
@@ -340,6 +349,10 @@ interface SubtitlesResult {
   /** Fallback subtitle tracks merged with subtitles returned by the stream. */
   subtitles: SubtitleTrack[];
 }
+interface SegmentsResult {
+  /** Provider-supplied skip-able playback intervals. */
+  segments: PlaybackSegment[];
+}
 
 interface FvcksubsSdk {
   /**
@@ -391,6 +404,11 @@ interface FvcksubsSdk {
   defineSubtitles(definition: {
     providerId: string;
     subtitles(args: { item: MediaItem }): SubtitlesResult | Promise<SubtitlesResult>;
+  }): void;
+  /** Registers an optional playback-segment lookup provider. */
+  defineSegments(definition: {
+    providerId: string;
+    segments(args: { item: MediaItem }): SegmentsResult | Promise<SegmentsResult>;
   }): void;
   /**
    * Registers a just-in-time preview provider (e.g. for a Shorts feed card).

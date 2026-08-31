@@ -21,6 +21,9 @@ enum ProviderRole {
   /// a fallback for when a resolved source's own tracks are missing, out of
   /// sync, or erroring.
   subtitles,
+
+  /// Returns provider-supplied skip-able playback intervals for an item.
+  segments,
 }
 
 /// Thrown when a manifest cannot be loaded — malformed, or a protocol version

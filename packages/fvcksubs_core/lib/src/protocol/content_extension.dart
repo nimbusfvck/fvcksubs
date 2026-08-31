@@ -2,6 +2,7 @@ import '../content/media_detail_v2.dart';
 import '../content/media_item_v2.dart';
 import '../content/media_ref.dart';
 import '../content/preview_source.dart';
+import '../content/playback_segment.dart';
 import '../content/stream.dart';
 import 'catalog.dart';
 import 'catalog_v2.dart';
@@ -76,6 +77,11 @@ abstract class ContentExtension {
   /// guaranteed to be possible.
   Future<List<SubtitleTrack>> externalSubtitles(MediaItemV2 item) =>
       throw UnsupportedError('${manifest.id} does not provide subtitles');
+
+  /// Looks up skip-able playback intervals for [item] independently of its
+  /// resolved source. Fills [ProviderRole.segments].
+  Future<List<PlaybackSegment>> playbackSegments(MediaItemV2 item) =>
+      throw UnsupportedError('${manifest.id} does not provide segments');
 
   /// Resolves a just-in-time preview for [item] (e.g. a Shorts card).
   ///
