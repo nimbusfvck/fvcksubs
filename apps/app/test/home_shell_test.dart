@@ -218,7 +218,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('a wide handheld window gets a rail instead of a bottom bar', (
+  testWidgets('a tablet-sized handheld window gets a rail instead of a bottom bar', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1000, 800);
@@ -254,6 +254,32 @@ void main() {
         deviceClass: DeviceClass.handheld,
       ),
     );
+    await tester.pump();
+
+    expect(find.byType(AppNavRail), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('a phone keeps the bottom bar after rotating to landscape', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomeShell(),
+        registry: ExtensionRegistry([FakeExtension()]),
+        deviceClass: DeviceClass.handheld,
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(AppNavRail), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+
+    tester.view.physicalSize = const Size(844, 390);
     await tester.pump();
 
     expect(find.byType(AppNavRail), findsNothing);

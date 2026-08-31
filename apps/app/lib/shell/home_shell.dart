@@ -51,7 +51,8 @@ class _HomeShellState extends State<HomeShell> {
       builder: (context, _) => _body,
     );
 
-    final useRail = scope.deviceClass.isTv || !AppBreakpoints.isPhone(context);
+    final useRail =
+        scope.deviceClass.isTv || AppBreakpoints.usesNavigationRail(context);
 
     if (useRail) {
       return Scaffold(
