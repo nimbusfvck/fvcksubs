@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../player/models/app_player_controller.dart';
 import '../player/state/quality_preference_controller.dart';
 import '../theme/tokens.dart';
 
@@ -20,8 +21,10 @@ class QualityPreferenceEntry extends StatelessWidget {
         title: const Text('Preferred quality'),
         subtitle: Text(
           controller.maxHeight == null
-              ? 'Use the player\'s automatic quality selection.'
-              : 'Use up to ${controller.maxHeight}p when available.',
+              ? 'Up to ${qualityRungLabel(height: defaultStartupMaxHeight)}, '
+                    'unless you pick another in the player.'
+              : 'Use up to ${qualityRungLabel(height: controller.maxHeight)} '
+                    'when available.',
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
@@ -62,15 +65,23 @@ class QualityPreferencePage extends StatelessWidget {
               onChanged: controller.select,
               child: Column(
                 children: [
-                  const RadioListTile<int?>(
+                  RadioListTile<int?>(
                     value: null,
-                    title: Text('Auto'),
-                    subtitle: Text('Let the player adapt to the connection.'),
+                    title: const Text('Auto'),
+                    // Not adaptive: this player picks a rendition when the
+                    // stream opens and stays on it. Auto means the app
+                    // chooses, and it chooses this.
+                    subtitle: Text(
+                      'Up to ${qualityRungLabel(height: defaultStartupMaxHeight)}, '
+                      'chosen for you.',
+                    ),
                   ),
                   for (final height in preferredQualityHeights)
                     RadioListTile<int?>(
                       value: height,
-                      title: Text('${height}p'),
+                      title: Text(
+                        qualityRungLabel(height: height) ?? '${height}p',
+                      ),
                     ),
                 ],
               ),

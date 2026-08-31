@@ -49,14 +49,68 @@ class AppQualityTrack {
   const AppQualityTrack({
     required this.id,
     required this.height,
+    this.width,
     this.bitrate,
     this.platformTrack,
   });
 
   final String id;
   final int height;
+
+  /// The frame width, where the backend reports one. It is what names the
+  /// rendition — see [qualityRungLabel].
+  final int? width;
+
   final int? bitrate;
   final Object? platformTrack;
+}
+
+/// Names a rendition the way viewers meet it elsewhere: 720p, 1080p, 4K.
+///
+/// A wide release is letterboxed into its frame, so the rung a provider calls
+/// 1080p arrives as 1920x800 and its 720p as 1280x534. The height is whatever
+/// the aspect ratio left over — calling that "800p" names nothing anyone
+/// recognises — while the width is the rung itself. So width decides, and
+/// height only stands in for a backend that reports no width.
+///
+/// Answers `null` when neither says anything useful, which is a caller's cue
+/// to say nothing rather than to invent a number.
+String? qualityRungLabel({int? width, int? height}) {
+  // Descending, and read as "at least this wide": the first rung a
+  // measurement reaches is the one it belongs to.
+  const byWidth = <int, String>{
+    7680: '8K',
+    3840: '4K',
+    2560: '1440p',
+    1920: '1080p',
+    1280: '720p',
+    854: '480p',
+    640: '360p',
+  };
+  const byHeight = <int, String>{
+    4320: '8K',
+    2160: '4K',
+    1440: '1440p',
+    1080: '1080p',
+    720: '720p',
+    480: '480p',
+    360: '360p',
+  };
+
+  String? rungFor(int? value, Map<int, String> rungs) {
+    if (value == null || value <= 0) return null;
+    for (final rung in rungs.entries) {
+      // A little short still counts: encoders round, and 1912 wide is 1080p
+      // by any reading.
+      if (value >= rung.key * 0.95) return rung.value;
+    }
+    return null;
+  }
+
+  final named = rungFor(width, byWidth) ?? rungFor(height, byHeight);
+  if (named != null) return named;
+  // Below every rung the app names, the height is at least honest.
+  return height != null && height > 0 ? '${height}p' : null;
 }
 
 class AppAudioTrack {

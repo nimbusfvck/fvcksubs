@@ -498,7 +498,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       builder: (_) => PlayerQualityPickerSheet(
         tracks: tracks,
         current: pinned ? active : null,
-        activeHeight: active?.height,
+        playing: active,
       ),
     );
     if (!mounted) return;
@@ -508,7 +508,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       final height = picked.height;
       setState(() {
         _qualityPinned = height > 0;
-        _activeQualityLabel = height > 0 ? '${height}p' : null;
+        _activeQualityLabel = height > 0
+            ? qualityRungLabel(width: picked.width, height: height)
+            : null;
       });
     }
     _revealControls();

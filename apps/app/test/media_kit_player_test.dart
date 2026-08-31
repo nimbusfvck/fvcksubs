@@ -205,6 +205,48 @@ void main() {
     });
   });
 
+  group('resolveSliceOffset', () {
+    const start = Duration(minutes: 10);
+    const full = Duration(minutes: 148);
+    const remaining = Duration(minutes: 138);
+
+    test('a cut describing what is left is placed at its start', () {
+      expect(
+        resolveSliceOffset(
+          reportedDuration: remaining,
+          sliceStart: start,
+          sliceDuration: remaining,
+          fullDuration: full,
+        ),
+        start,
+      );
+    });
+
+    test('a stream that already knows the whole film needs no offset', () {
+      expect(
+        resolveSliceOffset(
+          reportedDuration: full,
+          sliceStart: start,
+          sliceDuration: remaining,
+          fullDuration: full,
+        ),
+        Duration.zero,
+      );
+    });
+
+    test('nothing reported yet keeps the start it was opened at', () {
+      expect(
+        resolveSliceOffset(
+          reportedDuration: Duration.zero,
+          sliceStart: start,
+          sliceDuration: remaining,
+          fullDuration: full,
+        ),
+        start,
+      );
+    });
+  });
+
   group('isWithinBuffer', () {
     const value = AppPlayerValue(
       initialized: true,

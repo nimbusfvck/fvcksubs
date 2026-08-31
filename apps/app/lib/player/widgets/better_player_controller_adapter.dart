@@ -31,6 +31,7 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
         AppQualityTrack(
           id: '${track.height}:${track.bitrate ?? 0}',
           height: track.height!,
+          width: track.width,
           bitrate: track.bitrate,
           platformTrack: track,
         ),
@@ -43,6 +44,7 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
         : AppQualityTrack(
             id: '${track.height}:${track.bitrate ?? 0}',
             height: track.height!,
+            width: track.width,
             bitrate: track.bitrate,
             platformTrack: track,
           );

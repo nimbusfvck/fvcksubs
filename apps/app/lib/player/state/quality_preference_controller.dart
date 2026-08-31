@@ -8,6 +8,14 @@ import '../models/app_player_controller.dart';
 /// Maximum video heights offered by the app, in descending display order.
 const preferredQualityHeights = <int>[2160, 1440, 1080, 720, 480, 360];
 
+/// The ceiling for a viewer who has not chosen one.
+///
+/// Left to itself libmpv opens the largest rendition a master offers — there
+/// is no adaptive switching in this player — which on a phone means
+/// downloading and decoding 4K nobody asked for and cannot see. A viewer who
+/// wants more says so, in Settings or in the player's own quality picker.
+const defaultStartupMaxHeight = 720;
+
 class QualityPreferenceController extends ChangeNotifier {
   QualityPreferenceController({required this.store, int? initial})
     : _maxHeight = normalizePreferredQuality(initial);

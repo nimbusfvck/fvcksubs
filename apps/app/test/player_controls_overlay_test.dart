@@ -237,7 +237,7 @@ void main() {
           body: PlayerQualityPickerSheet(
             tracks: tracks,
             current: null,
-            activeHeight: 720,
+            playing: AppQualityTrack(id: '2', height: 720, width: 1280),
           ),
         ),
       ),
@@ -269,6 +269,34 @@ void main() {
     );
 
     expect(find.text('Auto'), findsOneWidget);
+  });
+
+  test('a letterboxed rendition is named by the rung it belongs to', () {
+    // What providers actually serve for a wide release: the height is
+    // whatever the aspect ratio left over, and calling 1920x800 "800p" names
+    // nothing anyone recognises.
+    expect(qualityRungLabel(width: 1920, height: 800), '1080p');
+    expect(qualityRungLabel(width: 1280, height: 534), '720p');
+    expect(qualityRungLabel(width: 640, height: 266), '360p');
+    expect(qualityRungLabel(width: 3840, height: 1600), '4K');
+  });
+
+  test('a 16:9 rendition keeps the name it already had', () {
+    expect(qualityRungLabel(width: 1920, height: 1080), '1080p');
+    expect(qualityRungLabel(width: 1280, height: 720), '720p');
+    expect(qualityRungLabel(width: 3840, height: 2160), '4K');
+    expect(qualityRungLabel(width: 7680, height: 4320), '8K');
+    expect(qualityRungLabel(width: 2560, height: 1440), '1440p');
+  });
+
+  test('height stands in where a backend reports no width', () {
+    expect(qualityRungLabel(height: 1080), '1080p');
+    expect(qualityRungLabel(height: 2160), '4K');
+    // Encoders round, and a rung a little short is still that rung.
+    expect(qualityRungLabel(width: 1912, height: 796), '1080p');
+    // Below every rung the app names, the height is at least honest.
+    expect(qualityRungLabel(width: 320, height: 180), '180p');
+    expect(qualityRungLabel(), isNull);
   });
 
   test('the playing track is found by the backend id, not by identity', () {

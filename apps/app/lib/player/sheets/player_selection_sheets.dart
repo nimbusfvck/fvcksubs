@@ -197,7 +197,7 @@ class PlayerQualityPickerSheet extends StatelessWidget {
     super.key,
     required this.tracks,
     required this.current,
-    this.activeHeight,
+    this.playing,
   });
 
   final List<AppQualityTrack> tracks;
@@ -210,13 +210,15 @@ class PlayerQualityPickerSheet extends StatelessWidget {
   /// Auto says what the player will do, not what it did — so on its own it
   /// leaves the viewer guessing whether the picture they are unhappy with is
   /// 480p or 1080p. Naming it turns the row into an answer.
-  final int? activeHeight;
+  final AppQualityTrack? playing;
 
   bool get _autoSelected => current == null;
 
   String get _autoLabel {
-    final height = activeHeight;
-    return height == null || height <= 0 ? 'Auto' : 'Auto (${height}p)';
+    final rung = playing == null
+        ? null
+        : qualityRungLabel(width: playing!.width, height: playing!.height);
+    return rung == null ? 'Auto' : 'Auto ($rung)';
   }
 
   @override
@@ -264,7 +266,11 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                   for (final track in tracks)
                     ListTile(
                       title: Text(
-                        '${track.height}p',
+                        qualityRungLabel(
+                              width: track.width,
+                              height: track.height,
+                            ) ??
+                            '${track.height}p',
                         style: AppTypography.bodyMd.copyWith(
                           color: AppColors.onDark,
                         ),
