@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +9,7 @@ import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../diagnostics/player_diagnostics.dart';
+import '../mappers/hls_playlists.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_wakelock.dart';
 import '../state/quality_preference_controller.dart';
@@ -181,15 +184,6 @@ const Map<String, String> vodHlsMpvOptions = {
   'hls-bitrate': 'min',
 };
 
-/// The rendition ceiling for a viewer who has not chosen one.
-///
-/// Left to itself libmpv opens the largest rendition on offer, which on a
-/// phone means downloading and decoding 4K nobody asked for and cannot see.
-/// A viewer who wants more says so — in Settings, or in the player's own
-/// quality picker, both of which override this.
-@visibleForTesting
-const int defaultStartupMaxHeight = 720;
-
 /// The ceiling to open an on-demand stream at.
 ///
 /// A live stream is left alone: its renditions are the channel's own, and it
@@ -215,6 +209,31 @@ int? hlsBitrateForVariant({
   if (bitrate == null || bitrate <= 0) return null;
   if (active != null && active.id == wanted.id) return null;
   return bitrate;
+}
+
+/// How long a playlist is given before playback goes ahead without it.
+@visibleForTesting
+const Duration playlistFetchTimeout = Duration(seconds: 8);
+
+/// How much to add to what libmpv reports so the app keeps speaking in film
+/// time after a cut playlist is opened.
+///
+/// A cut is a file in its own right, and libmpv may describe it either way:
+/// as a stream starting at zero that runs for what remains, or — where the
+/// fragments carry absolute timestamps, as FlyStream's do — as one that
+/// already knows where it sits. The duration it reports says which: a cut
+/// describes the runtime that is left, the whole film describes all of it.
+@visibleForTesting
+Duration resolveSliceOffset({
+  required Duration reportedDuration,
+  required Duration sliceStart,
+  required Duration sliceDuration,
+  required Duration fullDuration,
+}) {
+  if (reportedDuration <= Duration.zero) return sliceStart;
+  final asSlice = (reportedDuration - sliceDuration).abs();
+  final asWhole = (reportedDuration - fullDuration).abs();
+  return asSlice <= asWhole ? sliceStart : Duration.zero;
 }
 
 /// Whether [target] is inside the range libmpv has already downloaded.
@@ -311,6 +330,15 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   PlayerWakelockLease? _wakelock;
   StreamSubscription<mk.Tracks>? _qualityTracksSubscription;
   bool _preferredQualitySelectionDone = false;
+  HlsMaster? _master;
+  HlsVariant? _cutVariant;
+  HlsAudioRendition? _cutAudio;
+  HlsMediaPlaylist? _videoPlaylist;
+  HlsMediaPlaylist? _audioPlaylist;
+  int? _variantHeight;
+  bool _playlistsResolved = false;
+  int _sliceRevision = 0;
+  final List<File> _sliceFiles = [];
 
   @override
   void initState() {
@@ -340,6 +368,10 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         if (mounted) setState(() => _fitMode = mode);
       },
     );
+    _adapter
+      ..sliceSeek = _sliceSeekTo
+      ..sliceSelectAudio = _selectCutAudio
+      ..sliceSelectQuality = _selectCutQuality;
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
   }
@@ -465,6 +497,9 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       }
     }
     _watchPreferredQuality();
+    // Read ahead of the first jump: the pickers should describe the film from
+    // the start, not only once a cut has replaced libmpv's track list.
+    unawaited(_ensurePlaylists());
     unawaited(_logSeekability());
     try {
       widget.onPlaybackReady?.call(_adapter);
@@ -544,6 +579,238 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     }
   }
 
+  Future<bool> _sliceSeekTo(Duration target) => _cutAt(target);
+
+  /// Re-opens the film at [target], optionally on another rendition or
+  /// another audio track.
+  ///
+  /// Seeking, changing quality and changing audio all arrive here: on this
+  /// packaging every one of them is a seek as far as FFmpeg is concerned, and
+  /// a cut is how none of them has to be one.
+  ///
+  /// Answers `false` for everything this cannot serve — a live stream, a
+  /// source that is not HLS, a playlist that cannot be read, packaging that
+  /// seeks perfectly well — and for any failure along the way, so the worst
+  /// it can do is hand the seek back to libmpv exactly as before.
+  Future<bool> _cutAt(
+    Duration target, {
+    HlsVariant? variant,
+    HlsAudioRendition? audio,
+  }) async {
+    if (widget.isLive || widget.stream.format != StreamFormat.hls) return false;
+    try {
+      await _ensurePlaylists();
+      if (variant != null && !await _useVariant(variant)) return false;
+      if (audio != null && !await _useAudio(audio)) return false;
+      final video = _videoPlaylist;
+      // Only fMP4 goes down this path: it is the packaging measured to hang,
+      // and every other kind still seeks the ordinary way.
+      if (video == null || !video.isFragmentedMp4 || !mounted) return false;
+
+      final index = video.segmentIndexAt(target);
+      final start = video.startOf(index);
+      final videoCut = await _writeSlice(video.sliceFrom(index), 'video');
+      final audioPlaylist = _audioPlaylist;
+      // Cut the audio at the video's own starting moment rather than at the
+      // target, so the two begin as close together as their segment
+      // boundaries allow.
+      final audioCut = audioPlaylist == null
+          ? null
+          : await _writeSlice(
+              audioPlaylist.sliceFrom(audioPlaylist.segmentIndexAt(start)),
+              'audio',
+            );
+      // Both cuts are named from one master, so FFmpeg keeps them in a single
+      // demuxer and lines them up by the timestamps inside the segments.
+      // Attaching the audio from outside instead makes libmpv treat it as a
+      // stream of its own starting at zero, and the two boundaries are
+      // seconds apart.
+      final master = await _writeSlice(
+        hlsSliceMaster(
+          videoPlaylist: _basename(videoCut),
+          audioPlaylist: audioCut == null ? null : _basename(audioCut),
+          height: _variantHeight,
+        ),
+        'master',
+      );
+      if (!mounted) return false;
+
+      // Re-opening drops the subtitle libmpv was showing; the viewer chose it
+      // for the film, not for this stretch of it.
+      final subtitle = _adapter.activeSubtitle;
+      _adapter.beginSlice(start: start, fullDuration: video.totalDuration);
+      await _player.open(
+        mk.Media(master.path, httpHeaders: widget.stream.headers),
+        play: true,
+      );
+      if (subtitle != null) unawaited(_adapter.setSubtitle(subtitle));
+      _publishSliceSelection();
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] seek by cut: target=$target segment=$index start=$start',
+        );
+      }
+      return true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] seek by cut unavailable: '
+          '${redactPlaybackLogText(error)}',
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Reads the playlists a cut is made from, once per source.
+  Future<void> _ensurePlaylists() async {
+    if (_playlistsResolved) return;
+    _playlistsResolved = true;
+    final source = Uri.tryParse(widget.stream.url);
+    if (source == null ||
+        (!source.isScheme('http') && !source.isScheme('https'))) {
+      return;
+    }
+    final body = await _fetchPlaylist(source);
+    if (body == null) return;
+
+    final master = parseHlsMaster(body, base: source);
+    if (!master.isMaster) {
+      // Already a media playlist: it is its own rendition.
+      final media = parseHlsMediaPlaylist(body, base: source);
+      if (media.isMediaPlaylist) _videoPlaylist = media;
+      return;
+    }
+    _master = master;
+    final variant = master.variantFor(_startupMaxHeight);
+    if (variant == null || !await _useVariant(variant)) return;
+    final audio = master.audioFor(variant.audioGroup);
+    if (audio != null) await _useAudio(audio);
+    _publishSliceTracks();
+  }
+
+  /// Loads [variant]'s playlist and makes it the one cuts are taken from.
+  Future<bool> _useVariant(HlsVariant variant) async {
+    if (identical(variant, _cutVariant) && _videoPlaylist != null) return true;
+    final body = await _fetchPlaylist(variant.url);
+    if (body == null) return false;
+    final playlist = parseHlsMediaPlaylist(body, base: variant.url);
+    if (!playlist.isMediaPlaylist) return false;
+    _videoPlaylist = playlist;
+    _variantHeight = variant.height;
+    _cutVariant = variant;
+    return true;
+  }
+
+  Future<bool> _useAudio(HlsAudioRendition rendition) async {
+    if (identical(rendition, _cutAudio) && _audioPlaylist != null) return true;
+    final body = await _fetchPlaylist(rendition.url);
+    if (body == null) return false;
+    final playlist = parseHlsMediaPlaylist(body, base: rendition.url);
+    if (!playlist.isMediaPlaylist) return false;
+    _audioPlaylist = playlist;
+    _cutAudio = rendition;
+    return true;
+  }
+
+  /// Hands the pickers the ladder the provider actually offers.
+  ///
+  /// Only where cuts are in play. Anywhere else libmpv's own track list is
+  /// the truthful one, and switching goes through libmpv as it always has.
+  void _publishSliceTracks() {
+    final master = _master;
+    if (master == null || _videoPlaylist?.isFragmentedMp4 != true || !mounted) {
+      return;
+    }
+    _adapter
+      ..sliceQualityTracks = [
+        for (final variant in master.variants)
+          if ((variant.height ?? 0) > 0)
+            AppQualityTrack(
+              id: 'variant:${variant.height}',
+              height: variant.height!,
+              width: variant.width,
+              platformTrack: variant,
+            ),
+      ]
+      ..sliceAudioTracks = [
+        for (final (index, rendition) in master.audio.indexed)
+          AppAudioTrack(
+            id: 'rendition:$index',
+            label: rendition.name ?? 'Audio ${index + 1}',
+            language: rendition.language,
+            nativeId: 'rendition:$index',
+            platformTrack: rendition,
+          ),
+      ];
+    _publishSliceSelection();
+  }
+
+  void _publishSliceSelection() {
+    AppQualityTrack? quality;
+    for (final track in _adapter.sliceQualityTracks) {
+      if (identical(track.platformTrack, _cutVariant)) quality = track;
+    }
+    AppAudioTrack? audio;
+    for (final track in _adapter.sliceAudioTracks) {
+      if (identical(track.platformTrack, _cutAudio)) audio = track;
+    }
+    _adapter
+      ..sliceActiveQuality = quality
+      ..sliceActiveAudio = audio;
+  }
+
+  Future<bool> _selectCutAudio(AppAudioTrack track) {
+    final rendition = track.platformTrack;
+    if (rendition is! HlsAudioRendition) return Future.value(false);
+    return _cutAt(_adapter.value.value.position, audio: rendition);
+  }
+
+  Future<bool> _selectCutQuality(AppQualityTrack? track) {
+    final master = _master;
+    if (master == null) return Future.value(false);
+    final chosen = track?.platformTrack;
+    // Auto arrives as a placeholder rather than a rendition: it means the
+    // ceiling gets to choose again.
+    final variant = chosen is HlsVariant
+        ? chosen
+        : master.variantFor(_startupMaxHeight);
+    if (variant == null) return Future.value(false);
+    return _cutAt(_adapter.value.value.position, variant: variant);
+  }
+
+  Future<String?> _fetchPlaylist(Uri url) async {
+    final client = HttpClient()..connectionTimeout = playlistFetchTimeout;
+    try {
+      final request = await client.getUrl(url).timeout(playlistFetchTimeout);
+      widget.stream.headers.forEach(request.headers.set);
+      final response = await request.close().timeout(playlistFetchTimeout);
+      if (response.statusCode != HttpStatus.ok) {
+        await response.drain<void>();
+        return null;
+      }
+      return await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(playlistFetchTimeout);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  String _basename(File file) => file.uri.pathSegments.last;
+
+  /// Writes a cut where libmpv can open it, and remembers it for cleanup.
+  Future<File> _writeSlice(String body, String kind) async {
+    final file = File(
+      '${Directory.systemTemp.path}/fvcksubs-$kind-'
+      '${identityHashCode(this)}-${_sliceRevision++}.m3u8',
+    );
+    await file.writeAsString(body, flush: true);
+    _sliceFiles.add(file);
+    return file;
+  }
+
   /// Reports whether libmpv can actually seek this stream.
   ///
   /// FFmpeg's HLS demuxer refuses to seek a playlist that carries neither
@@ -568,6 +835,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         'partially-seekable='
         '${await platform.getProperty('partially-seekable')} '
         'duration=${_player.state.duration}',
+      );
+      // Which libmpv is actually loaded, and which FFmpeg came with it. The
+      // seek that hangs lives in FFmpeg's HLS demuxer, not in the decoder.
+      debugPrint(
+        '[Player] mpv=${await platform.getProperty('mpv-version')} '
+        'ffmpeg=${await platform.getProperty('ffmpeg-version')}',
       );
     } catch (_) {
       // Diagnostics only: a stream that never reports a duration has already
@@ -679,6 +952,10 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
     }
     _adapter.dispose();
     unawaited(_player.dispose());
+    for (final file in _sliceFiles) {
+      unawaited(file.delete().catchError((_) => file));
+    }
+    _sliceFiles.clear();
     super.dispose();
   }
 
@@ -706,6 +983,19 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         : const SizedBox.shrink(),
     wakelock: false,
   );
+}
+
+/// A cut being opened, until libmpv says how it reads it.
+class _PendingSlice {
+  const _PendingSlice({
+    required this.start,
+    required this.sliceDuration,
+    required this.fullDuration,
+  });
+
+  final Duration start;
+  final Duration sliceDuration;
+  final Duration fullDuration;
 }
 
 class _MediaKitControllerAdapter implements AppPlayerController {
@@ -759,6 +1049,66 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   String? _failedSubtitleUrl;
   int _subtitleSelectionRevision = 0;
   String? _selectedAudioId;
+  Duration _timelineOffset = Duration.zero;
+  Duration? _fullDuration;
+  _PendingSlice? _pendingSlice;
+
+  /// Seeks by re-opening the stream at the moment wanted, for packaging the
+  /// bundled FFmpeg cannot seek. Answers `false` to leave the seek alone.
+  Future<bool> Function(Duration target)? sliceSeek;
+
+  /// What the provider's own master offers, once it has been read.
+  ///
+  /// A cut names one rendition and one audio track, so libmpv's track list
+  /// describes the cut rather than the film — the pickers would lose every
+  /// choice the viewer had before the first jump. These stand in for it.
+  List<AppQualityTrack> sliceQualityTracks = const [];
+  List<AppAudioTrack> sliceAudioTracks = const [];
+  AppQualityTrack? sliceActiveQuality;
+  AppAudioTrack? sliceActiveAudio;
+
+  /// Switches by re-opening at the current moment rather than by moving a
+  /// track inside the demuxer, which is a seek by another name — and the
+  /// seek this whole path exists to avoid.
+  Future<bool> Function(AppAudioTrack track)? sliceSelectAudio;
+  Future<bool> Function(AppQualityTrack? track)? sliceSelectQuality;
+
+  /// Announces that a cut beginning at [start] is being opened.
+  ///
+  /// The offset is provisional until libmpv reports a duration; only then is
+  /// it clear whether it is describing the cut or the whole film.
+  void beginSlice({required Duration start, required Duration fullDuration}) {
+    _timelineOffset = start;
+    _fullDuration = fullDuration;
+    _pendingSlice = _PendingSlice(
+      start: start,
+      sliceDuration: fullDuration - start,
+      fullDuration: fullDuration,
+    );
+    unawaited(_applySubtitleDelay());
+  }
+
+  /// Moves subtitle timing by as much as the cut moved the clock.
+  ///
+  /// Every subtitle here is a file libmpv loads beside the video, and its
+  /// times are counted from the start of the film. A cut restarts libmpv's
+  /// own clock at the moment it begins, so a line written for minute ten
+  /// would wait ten minutes into the cut to appear. What the position gains
+  /// as an offset, the subtitles owe back as a delay.
+  Future<void> _applySubtitleDelay() async {
+    final platform = _player.platform;
+    if (platform is! mk.NativePlayer) return;
+    final seconds = -_timelineOffset.inMilliseconds / 1000;
+    try {
+      await platform.setProperty('sub-delay', '$seconds');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] sub-delay rejected: ${redactPlaybackLogText(error)}',
+        );
+      }
+    }
+  }
 
   int get subtitleSelectionRevision => _subtitleSelectionRevision;
 
@@ -769,12 +1119,16 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   Stream<AppPlayerEvent> get events => _events.stream;
 
   @override
-  List<AppQualityTrack> get qualityTracks => [
+  List<AppQualityTrack> get qualityTracks =>
+      sliceQualityTracks.isNotEmpty ? sliceQualityTracks : _mpvQualityTracks;
+
+  List<AppQualityTrack> get _mpvQualityTracks => [
     for (final track in _player.state.tracks.video)
       if ((track.h ?? 0) > 0)
         AppQualityTrack(
           id: track.id,
           height: track.h!,
+          width: track.w,
           bitrate: track.bitrate?.round(),
           platformTrack: track,
         ),
@@ -782,11 +1136,13 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   AppQualityTrack? get activeQuality {
+    if (sliceQualityTracks.isNotEmpty) return sliceActiveQuality;
     final track = _player.state.track.video;
     if ((track.h ?? 0) <= 0) return null;
     return AppQualityTrack(
       id: track.id,
       height: track.h!,
+      width: track.w,
       bitrate: track.bitrate?.round(),
       platformTrack: track,
     );
@@ -794,6 +1150,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   List<AppAudioTrack> get audioTracks {
+    if (sliceAudioTracks.isNotEmpty) return sliceAudioTracks;
     final occurrences = <String, int>{};
     final tracks = _player.state.tracks.audio.where(
       (track) => track.id != 'no' && track.id != 'auto',
@@ -814,6 +1171,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   /// lands.
   @override
   AppAudioTrack? get activeAudio {
+    if (sliceAudioTracks.isNotEmpty) return sliceActiveAudio;
     final tracks = audioTracks;
     final selected = audioTrackByNativeId(tracks, _selectedAudioId);
     if (selected != null) return selected;
@@ -871,8 +1229,13 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   /// browser gives too. Short seeks and skip-intro keep their precision.
   @override
   Future<void> seekTo(Duration position) async {
-    await _setSeekPrecision(precise: isWithinBuffer(position, _value.value));
-    await _player.seek(position);
+    final slice = sliceSeek;
+    final buffered = isWithinBuffer(position, _value.value);
+    // Only a jump out of what is already here is worth re-opening for, and
+    // only that jump is the one libmpv cannot make on this packaging.
+    if (slice != null && !buffered && await slice(position)) return;
+    await _setSeekPrecision(precise: buffered);
+    await _player.seek(position - _timelineOffset);
   }
 
   Future<void> _setSeekPrecision({required bool precise}) async {
@@ -890,7 +1253,13 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   }
 
   @override
-  Future<void> setQuality(AppQualityTrack? track) => _player.setVideoTrack(
+  Future<void> setQuality(AppQualityTrack? track) async {
+    final select = sliceSelectQuality;
+    if (select != null && await select(track)) return;
+    await _setVideoTrack(track);
+  }
+
+  Future<void> _setVideoTrack(AppQualityTrack? track) => _player.setVideoTrack(
     track == null || track.id == 'auto'
         ? mk.VideoTrack.auto()
         : track.platformTrack! as mk.VideoTrack,
@@ -898,6 +1267,8 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   Future<void> setAudioTrack(AppAudioTrack track) async {
+    final select = sliceSelectAudio;
+    if (select != null && await select(track)) return;
     // Recorded before the switch so the picker marks the viewer's choice
     // immediately, rather than after libmpv has finished re-buffering it.
     _selectedAudioId = track.nativeId;
@@ -981,14 +1352,32 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     bool? isPlaying,
     bool? isBuffering,
   }) {
+    final pending = _pendingSlice;
+    if (pending != null && duration != null && duration > Duration.zero) {
+      _timelineOffset = resolveSliceOffset(
+        reportedDuration: duration,
+        sliceStart: pending.start,
+        sliceDuration: pending.sliceDuration,
+        fullDuration: pending.fullDuration,
+      );
+      _pendingSlice = null;
+      // The reading that resolved the offset can overturn the provisional
+      // one, and the subtitles follow it.
+      unawaited(_applySubtitleDelay());
+    }
+    final offset = _timelineOffset;
     final initialized =
         _player.state.duration > Duration.zero ||
         _player.state.position > Duration.zero;
     _value.value = _value.value.copyWith(
       initialized: initialized,
-      position: position,
-      duration: duration,
-      bufferedPosition: bufferedPosition,
+      position: position == null ? null : position + offset,
+      // A cut runs from where it begins to the end; the film it came from is
+      // the timeline the rest of the app speaks in.
+      duration: _fullDuration ?? duration,
+      bufferedPosition: bufferedPosition == null
+          ? null
+          : bufferedPosition + offset,
       isPlaying: isPlaying,
       isBuffering: isBuffering,
     );
