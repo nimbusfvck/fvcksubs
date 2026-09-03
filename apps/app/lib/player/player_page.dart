@@ -7,6 +7,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
 import '../detail/episode_target_v2.dart';
+import 'diagnostics/player_diagnostics.dart';
 import '../library/library_controller.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
@@ -174,7 +175,9 @@ class _PlayerPageState extends State<PlayerPage> {
     await for (final source in pending) {
       if (!mounted) return;
       final playingId = _current.source.id;
-      final merged = mergeResolvedSources(_resolvedSources, [source]);
+      final merged = mergeResolvedSources(_resolvedSources, [
+        source,
+      ], preserveSourceId: playingId);
       final cache = AppScope.of(context).sourceCache;
       cache.store(widget.media.ref, merged);
       cache.promote(widget.media.ref, playingId);
@@ -207,7 +210,11 @@ class _PlayerPageState extends State<PlayerPage> {
     // Merge, never replace: the source being watched keeps playing and keeps
     // its place, exactly as it does for sources that settle late.
     final playingId = _current.source.id;
-    final merged = mergeResolvedSources(_resolvedSources, found);
+    final merged = mergeResolvedSources(
+      _resolvedSources,
+      found,
+      preserveSourceId: playingId,
+    );
     scope.sourceCache.store(widget.media.ref, merged);
     scope.sourceCache.promote(widget.media.ref, playingId);
     setState(() {
@@ -329,6 +336,13 @@ class _PlayerPageState extends State<PlayerPage> {
         _recoverCurrentSource();
         return;
       }
+      if (kDebugMode) {
+        debugPrint(
+          '[PlaybackSources] playback_failed '
+          'source=${_current.source.providerId}/${_current.source.label} '
+          'error=${redactPlaybackLogText(message)}',
+        );
+      }
       _failedSourceIds.add(_current.source.id);
       final nextIndex = nextUnfailedSourceIndex(
         sources: _resolvedSources,
@@ -336,6 +350,14 @@ class _PlayerPageState extends State<PlayerPage> {
         failedSourceIds: _failedSourceIds,
       );
       if (nextIndex != null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[PlaybackSources] playback_fallback '
+            'from=${_current.source.providerId}/${_current.source.label} '
+            'to=${_resolvedSources[nextIndex].source.providerId}/'
+            '${_resolvedSources[nextIndex].source.label}',
+          );
+        }
         _switchToResolvedSource(nextIndex);
         return;
       }

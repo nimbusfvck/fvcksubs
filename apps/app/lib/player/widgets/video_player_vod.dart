@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:video_player/video_player.dart' as vp;
 
+import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
 import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
@@ -79,7 +80,13 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
     final stopwatch = Stopwatch()..start();
     _openStopwatch = stopwatch;
     try {
-      _logOpenStage('initialize_start', stopwatch);
+      _logOpenStage(
+        'initialize_start',
+        stopwatch,
+        details:
+            'url=${safePlaybackUrlForLog(widget.stream.url)} '
+            'format=${widget.stream.format.name}',
+      );
       await _player.initialize();
       _logOpenStage(
         'initialize_done',
@@ -138,7 +145,11 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
       _logOpenStage('ready_reported', stopwatch);
       widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
-      _logOpenStage('failed', stopwatch, details: 'error=${error.runtimeType}');
+      _logOpenStage(
+        'failed',
+        stopwatch,
+        details: 'error=${redactPlaybackLogText(error)}',
+      );
       _adapter.reportError(error);
     }
   }
