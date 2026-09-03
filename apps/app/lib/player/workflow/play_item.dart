@@ -47,7 +47,7 @@ Future<void> _playMedia(
   final playbackSegments = _prefetchPlaybackSegments(scope, item);
 
   // Live providers commonly sign URLs for a short window. Reusing a
-  // resolved live stream after an extension update can hand AVPlayer an old
+  // resolved live stream after an extension update can hand the native player an old
   // URL even though source discovery itself is still valid.
   final canUseCache = canUseCachedPlaybackSources(item);
   final cached = canUseCache ? scope.sourceCache.peek(item.ref) : null;
@@ -245,14 +245,20 @@ Future<void> _openPlayer(
   Future<List<PlaybackSegment>>? playbackSegments,
   bool returnToDetail = false,
 }) async {
+  final stopwatch = Stopwatch()..start();
   // Started alongside source resolution, so by now it has almost always
   // landed. The grace is for when it has not: playback opens without it
   // rather than waiting on a subtitle the viewer may not even need.
   if (externalSubtitles != null) {
+    _debugSourceLog('player_open_subtitle_wait_start');
     await Future.any([
       externalSubtitles,
       Future<void>.delayed(_externalSubtitleGrace),
     ]);
+    _debugSourceLog(
+      'player_open_subtitle_wait_done '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
   }
   final resolved = _preferredFirst(
     sources,
@@ -281,6 +287,10 @@ Future<void> _openPlayer(
       episodeGuide: episodeGuide,
       returnToDetail: returnToDetail,
     ),
+  );
+  _debugSourceLog(
+    'player_route_push source=${_sourceLogName(resolved.first.source)} '
+    'elapsed=${stopwatch.elapsedMilliseconds}ms',
   );
   unawaited(
     replaceCurrent ? navigator.pushReplacement(route) : navigator.push(route),
