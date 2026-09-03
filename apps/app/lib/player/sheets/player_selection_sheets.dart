@@ -46,6 +46,7 @@ class PlayerSourcePickerSheet extends StatefulWidget {
 class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
   late List<ResolvedSource> _sources = widget.resolvedSources;
   bool _refreshing = false;
+  _SourceGroup? _expanded;
 
   Future<void> _refresh() async {
     final onRefresh = widget.onRefresh;
@@ -65,25 +66,35 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
     }
   }
 
-  Map<String, List<ResolvedSource>> _groupedSources() {
+  List<_SourceGroup> _groupedSources() {
     final providerNames = widget.providerNames;
-    final groups = <String, List<ResolvedSource>>{};
+    final groups = <String, _SourceGroup>{};
     for (final source in _sources) {
       final providerId = source.source.providerId;
-      final providerName =
+      final label =
           providerNames[providerId] ??
           (source.source.provider.isNotEmpty
               ? source.source.provider
               : providerId.isNotEmpty
               ? providerId.split('.').last
-              : 'Unknown provider');
-      groups.putIfAbsent(providerName, () => []).add(source);
+              : source.source.label);
+      // Sources without provider metadata cannot be safely grouped together:
+      // keep each one directly selectable instead of hiding it under a
+      // generic "Unknown provider" row.
+      final key = providerId.isNotEmpty
+          ? providerId
+          : source.source.provider.isNotEmpty
+          ? source.source.provider
+          : source.source.id;
+      groups.putIfAbsent(key, () => _SourceGroup(label: label, sources: []));
+      groups[key]!.sources.add(source);
     }
-    return groups;
+    return groups.values.toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final expanded = _expanded;
     final maxHeight = MediaQuery.of(context).size.height * 0.6;
     return SafeArea(
       child: ConstrainedBox(
@@ -101,87 +112,116 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Row(
-                children: [
-                  // Balances the control so the title stays optically centred.
-                  const SizedBox(width: _refreshControlSize),
-                  Expanded(
-                    child: Text(
-                      'Video Sources',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.titleMd.copyWith(
-                        color: AppColors.onDark,
-                      ),
+            Row(
+              children: [
+                SizedBox(
+                  width: _refreshControlSize,
+                  child: expanded == null
+                      ? null
+                      : IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 18,
+                          ),
+                          color: AppColors.onDark,
+                          onPressed: () => setState(() => _expanded = null),
+                        ),
+                ),
+                Expanded(
+                  child: Text(
+                    expanded?.label ?? 'Video Sources',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.titleMd.copyWith(
+                      color: AppColors.onDark,
                     ),
                   ),
-                  SizedBox(
-                    width: _refreshControlSize,
-                    height: _refreshControlSize,
-                    child: widget.onRefresh == null
-                        ? null
-                        : _refreshing
-                        ? const Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.onDarkSoft,
-                              ),
+                ),
+                SizedBox(
+                  width: _refreshControlSize,
+                  height: _refreshControlSize,
+                  child: expanded != null || widget.onRefresh == null
+                      ? null
+                      : _refreshing
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.onDarkSoft,
                             ),
-                          )
-                        : IconButton(
-                            icon: const Icon(Icons.refresh),
-                            color: AppColors.onDark,
-                            iconSize: 20,
-                            tooltip: 'Look for more sources',
-                            onPressed: _refresh,
                           ),
-                  ),
-                ],
-              ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.refresh),
+                          color: AppColors.onDark,
+                          iconSize: 20,
+                          tooltip: 'Look for more sources',
+                          onPressed: _refresh,
+                        ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.xs),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
-                children: [
-                  for (final group in _groupedSources().entries) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.md,
-                        AppSpacing.sm,
-                        AppSpacing.md,
-                        AppSpacing.xs,
-                      ),
-                      child: Text(
-                        group.key,
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.onDarkSoft,
-                        ),
-                      ),
-                    ),
-                    for (final item in group.value)
-                      ListTile(
-                        title: Text(
-                          item.source.label,
-                          style: AppTypography.bodyMd.copyWith(
-                            color: AppColors.onDark,
+                children: expanded == null
+                    ? [
+                        for (final group in _groupedSources())
+                          ListTile(
+                            title: Text(
+                              group.sources.length > 1
+                                  ? '${group.label} (${group.sources.length})'
+                                  : group.label,
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onDark,
+                              ),
+                            ),
+                            trailing:
+                                group.sources.any(
+                                  (item) =>
+                                      item.source.id ==
+                                      widget.current.source.id,
+                                )
+                                ? const Icon(
+                                    Icons.check,
+                                    color: AppColors.brandAccent,
+                                  )
+                                : group.sources.length > 1
+                                ? const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: AppColors.onDarkSoft,
+                                  )
+                                : null,
+                            onTap: () {
+                              if (group.sources.length == 1) {
+                                Navigator.of(context).pop(group.sources.first);
+                              } else {
+                                setState(() => _expanded = group);
+                              }
+                            },
                           ),
-                        ),
-                        subtitle: _subtitleSummary(item),
-                        trailing: item.source.id == widget.current.source.id
-                            ? const Icon(
-                                Icons.check,
-                                color: AppColors.brandAccent,
-                              )
-                            : null,
-                        onTap: () => Navigator.of(context).pop(item),
-                      ),
-                  ],
-                ],
+                      ]
+                    : [
+                        for (final item in expanded.sources)
+                          ListTile(
+                            title: Text(
+                              item.source.label,
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onDark,
+                              ),
+                            ),
+                            subtitle: _subtitleSummary(item),
+                            trailing: item.source.id == widget.current.source.id
+                                ? const Icon(
+                                    Icons.check,
+                                    color: AppColors.brandAccent,
+                                  )
+                                : null,
+                            onTap: () => Navigator.of(context).pop(item),
+                          ),
+                      ],
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -190,6 +230,13 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
       ),
     );
   }
+}
+
+class _SourceGroup {
+  const _SourceGroup({required this.label, required this.sources});
+
+  final String label;
+  final List<ResolvedSource> sources;
 }
 
 class PlayerQualityPickerSheet extends StatelessWidget {
