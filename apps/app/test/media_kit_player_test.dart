@@ -7,6 +7,10 @@ import 'package:fvcksubs_app/player/widgets/player_subtitle_style.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 void main() {
+  test('keeps the HLS cut workaround disabled for native track switching', () {
+    expect(hlsCutWorkaroundEnabled, isFalse);
+  });
+
   test('deferred subtitle retries after a failed first attempt', () {
     expect(
       shouldApplyDeferredSubtitle(
@@ -244,6 +248,42 @@ void main() {
         ),
         start,
       );
+    });
+  });
+
+  test('subtitle loaded after a cut uses the inverse cut clock', () {
+    expect(
+      subtitleDelaySeconds(const Duration(minutes: 10, milliseconds: 250)),
+      -600.25,
+    );
+  });
+
+  group('HLS audio selection', () {
+    test('the original master keeps its native audio tracks', () {
+      expect(
+        usesSliceAudioTracks(sliceIsActive: false, hasSliceTracks: true),
+        isFalse,
+      );
+    });
+
+    test('a cut keeps the provider audio ladder available', () {
+      expect(
+        usesSliceAudioTracks(sliceIsActive: true, hasSliceTracks: true),
+        isTrue,
+      );
+    });
+  });
+
+  group('HLS playlist bytes', () {
+    test('decodes a valid UTF-8 playlist', () {
+      expect(
+        decodeHlsPlaylistBytes('#EXTM3U\n#EXTINF:2.0,\npart.m4s\n'.codeUnits),
+        '#EXTM3U\n#EXTINF:2.0,\npart.m4s\n',
+      );
+    });
+
+    test('rejects binary data instead of throwing in a background fetch', () {
+      expect(decodeHlsPlaylistBytes(const [0x23, 0xff, 0x00]), isNull);
     });
   });
 

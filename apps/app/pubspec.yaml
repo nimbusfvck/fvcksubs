@@ -22,9 +22,26 @@ dependencies:
   # The libmpv player used on macOS and iOS. Android keeps BetterPlayer and
   # embeds none of this payload.
   media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_macos_video: ^1.1.4
-  media_kit_libs_ios_video: ^1.1.4
+  media_kit_video:
+    git:
+      url: https://github.com/mdikcinar/media-kit.git
+      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
+      path: media_kit_video
+  # A/B Darwin libmpv v0.7.0 from the maintained fork. Keep the Dart player
+  # API unchanged so the native playback result is isolated on both platforms.
+  media_kit_libs_macos_video:
+    git:
+      url: https://github.com/mdikcinar/media-kit.git
+      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
+      path: libs/macos/media_kit_libs_macos_video
+  media_kit_libs_ios_video:
+    git:
+      url: https://github.com/mdikcinar/media-kit.git
+      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
+      path: libs/ios/media_kit_libs_ios_video
+  # Official AVFoundation backend for iOS/macOS VOD. 2.14 adds public
+  # audio/video track APIs used by the app's quality and audio pickers.
+  video_player: ^2.14.0
   wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   device_info_plus: ^13.2.0

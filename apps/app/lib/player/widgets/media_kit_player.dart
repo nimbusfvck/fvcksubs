@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -215,6 +216,14 @@ int? hlsBitrateForVariant({
 @visibleForTesting
 const Duration playlistFetchTimeout = Duration(seconds: 8);
 
+/// Disabled while Darwin playback is verified against the newer libmpv payload.
+///
+/// The cut path re-opens fMP4 HLS to work around a seek stall, but it changes
+/// the native media timeline and is the only app-owned path that can disturb
+/// a selected external subtitle when audio tracks change. Re-enable only
+/// after a clean-process test proves both seeking and audio/subtitle switching.
+final bool hlsCutWorkaroundEnabled = false;
+
 /// How much to add to what libmpv reports so the app keeps speaking in film
 /// time after a cut playlist is opened.
 ///
@@ -236,6 +245,43 @@ Duration resolveSliceOffset({
   return asSlice <= asWhole ? sliceStart : Duration.zero;
 }
 
+/// The libmpv subtitle delay that maps a cut playlist's clock back onto the
+/// original film timeline.
+///
+/// A cut opened at minute ten reports its position from zero, while an
+/// external subtitle file still counts from the beginning of the film. The
+/// inverse cut offset makes both clocks describe the same cue.
+@visibleForTesting
+double subtitleDelaySeconds(Duration timelineOffset) =>
+    -timelineOffset.inMilliseconds / 1000;
+
+/// Whether the audio picker must describe a locally cut HLS master.
+///
+/// Before any cut, libmpv's tracks still belong to the provider's original
+/// master, so selecting one can keep the current media and subtitle clock.
+/// A cut carries just one audio rendition, so its picker needs the saved
+/// provider ladder instead.
+@visibleForTesting
+bool usesSliceAudioTracks({
+  required bool sliceIsActive,
+  required bool hasSliceTracks,
+}) => sliceIsActive && hasSliceTracks;
+
+/// Decodes an HLS playlist strictly, rejecting a media segment or an upstream
+/// error page that only happened to arrive at a playlist URL.
+///
+/// Playlist inspection is optional: libmpv owns normal playback, and a
+/// malformed response must only disable the cut workaround rather than throw
+/// from its background prefetch.
+@visibleForTesting
+String? decodeHlsPlaylistBytes(List<int> bytes) {
+  try {
+    return utf8.decode(bytes);
+  } on FormatException {
+    return null;
+  }
+}
+
 /// Whether [target] is inside the range libmpv has already downloaded.
 ///
 /// The back edge is the current position: libmpv keeps a back-buffer, but how
@@ -250,13 +296,14 @@ Duration mediaKitBufferedAhead({
   required Duration bufferedPosition,
 }) => bufferedPosition > position ? bufferedPosition - position : Duration.zero;
 
-/// libmpv-backed player, used on macOS and iOS.
+/// libmpv-backed player for Apple live playback, DASH VOD, and sources with a
+/// separate external audio URL.
 ///
-/// iOS is here rather than on BetterPlayer because AVPlayer trusts a
-/// segment's declared MIME type, and several live providers serve MPEG-TS
-/// mislabelled as `text/plain` or `application/zstd`. libmpv sniffs the
-/// container instead, so those streams play. The native payload comes from
-/// media_kit_libs_macos_video and media_kit_libs_ios_video.
+/// Live providers can mislabel MPEG-TS as `text/plain` or `application/zstd`,
+/// so libmpv's container sniffing keeps those streams playable. It also owns
+/// the external-audio composition that AVFoundation cannot provide here. The
+/// native payload comes from media_kit_libs_macos_video and
+/// media_kit_libs_ios_video.
 class MediaKitPlayerView extends StatefulWidget {
   const MediaKitPlayerView({
     super.key,
@@ -368,10 +415,12 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         if (mounted) setState(() => _fitMode = mode);
       },
     );
-    _adapter
-      ..sliceSeek = _sliceSeekTo
-      ..sliceSelectAudio = _selectCutAudio
-      ..sliceSelectQuality = _selectCutQuality;
+    if (hlsCutWorkaroundEnabled) {
+      _adapter
+        ..sliceSeek = _sliceSeekTo
+        ..sliceSelectAudio = _selectCutAudio
+        ..sliceSelectQuality = _selectCutQuality;
+    }
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
   }
@@ -497,9 +546,11 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       }
     }
     _watchPreferredQuality();
-    // Read ahead of the first jump: the pickers should describe the film from
-    // the start, not only once a cut has replaced libmpv's track list.
-    unawaited(_ensurePlaylists());
+    if (hlsCutWorkaroundEnabled) {
+      // Read ahead of the first jump: the pickers should describe the film
+      // from the start, not only once a cut has replaced libmpv's track list.
+      unawaited(_ensurePlaylists());
+    }
     unawaited(_logSeekability());
     try {
       widget.onPlaybackReady?.call(_adapter);
@@ -643,7 +694,20 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         mk.Media(master.path, httpHeaders: widget.stream.headers),
         play: true,
       );
-      if (subtitle != null) unawaited(_adapter.setSubtitle(subtitle));
+      if (subtitle != null) {
+        try {
+          await _adapter.setSubtitle(subtitle);
+        } catch (error) {
+          // A subtitle that cannot be re-attached must not undo the audio
+          // change or make this otherwise playable cut look like a failure.
+          if (kDebugMode) {
+            debugPrint(
+              '[Player] subtitle unavailable after cut: '
+              '${redactPlaybackLogText(error)}',
+            );
+          }
+        }
+      }
       _publishSliceSelection();
       if (kDebugMode) {
         debugPrint(
@@ -761,6 +825,9 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
   }
 
   Future<bool> _selectCutAudio(AppAudioTrack track) {
+    // The original master has every audio track already. Re-opening it for a
+    // simple selection changes the clock that an external subtitle follows.
+    if (!_adapter.sliceIsActive) return Future.value(false);
     final rendition = track.platformTrack;
     if (rendition is! HlsAudioRendition) return Future.value(false);
     return _cutAt(_adapter.value.value.position, audio: rendition);
@@ -789,10 +856,22 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         await response.drain<void>();
         return null;
       }
-      return await response
-          .transform(utf8.decoder)
-          .join()
+      final bytes = await response
+          .fold<BytesBuilder>(
+            BytesBuilder(copy: false),
+            (buffer, chunk) => buffer..add(chunk),
+          )
           .timeout(playlistFetchTimeout);
+      return decodeHlsPlaylistBytes(bytes.takeBytes());
+    } catch (error) {
+      // Playlist inspection only supports the optional cut workaround. The
+      // original URL stays with libmpv, which may still play it normally.
+      if (kDebugMode) {
+        debugPrint(
+          '[Player] HLS playlist unavailable: ${redactPlaybackLogText(error)}',
+        );
+      }
+      return null;
     } finally {
       client.close(force: true);
     }
@@ -882,8 +961,7 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
       return;
     }
     _qualityTracksSubscription = _player.stream.tracks.listen((_) {
-      if (_preferredQualitySelectionDone ||
-          _adapter.qualityTracks.isEmpty) {
+      if (_preferredQualitySelectionDone || _adapter.qualityTracks.isEmpty) {
         return;
       }
       _preferredQualitySelectionDone = true;
@@ -1066,6 +1144,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   List<AppAudioTrack> sliceAudioTracks = const [];
   AppQualityTrack? sliceActiveQuality;
   AppAudioTrack? sliceActiveAudio;
+  bool sliceIsActive = false;
 
   /// Switches by re-opening at the current moment rather than by moving a
   /// track inside the demuxer, which is a seek by another name — and the
@@ -1078,6 +1157,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   /// The offset is provisional until libmpv reports a duration; only then is
   /// it clear whether it is describing the cut or the whole film.
   void beginSlice({required Duration start, required Duration fullDuration}) {
+    sliceIsActive = true;
     _timelineOffset = start;
     _fullDuration = fullDuration;
     _pendingSlice = _PendingSlice(
@@ -1085,7 +1165,6 @@ class _MediaKitControllerAdapter implements AppPlayerController {
       sliceDuration: fullDuration - start,
       fullDuration: fullDuration,
     );
-    unawaited(_applySubtitleDelay());
   }
 
   /// Moves subtitle timing by as much as the cut moved the clock.
@@ -1098,7 +1177,7 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   Future<void> _applySubtitleDelay() async {
     final platform = _player.platform;
     if (platform is! mk.NativePlayer) return;
-    final seconds = -_timelineOffset.inMilliseconds / 1000;
+    final seconds = subtitleDelaySeconds(_timelineOffset);
     try {
       await platform.setProperty('sub-delay', '$seconds');
     } catch (error) {
@@ -1150,7 +1229,12 @@ class _MediaKitControllerAdapter implements AppPlayerController {
 
   @override
   List<AppAudioTrack> get audioTracks {
-    if (sliceAudioTracks.isNotEmpty) return sliceAudioTracks;
+    if (usesSliceAudioTracks(
+      sliceIsActive: sliceIsActive,
+      hasSliceTracks: sliceAudioTracks.isNotEmpty,
+    )) {
+      return sliceAudioTracks;
+    }
     final occurrences = <String, int>{};
     final tracks = _player.state.tracks.audio.where(
       (track) => track.id != 'no' && track.id != 'auto',
@@ -1171,7 +1255,12 @@ class _MediaKitControllerAdapter implements AppPlayerController {
   /// lands.
   @override
   AppAudioTrack? get activeAudio {
-    if (sliceAudioTracks.isNotEmpty) return sliceActiveAudio;
+    if (usesSliceAudioTracks(
+      sliceIsActive: sliceIsActive,
+      hasSliceTracks: sliceAudioTracks.isNotEmpty,
+    )) {
+      return sliceActiveAudio;
+    }
     final tracks = audioTracks;
     final selected = audioTrackByNativeId(tracks, _selectedAudioId);
     if (selected != null) return selected;
@@ -1297,6 +1386,10 @@ class _MediaKitControllerAdapter implements AppPlayerController {
                 language: track.language,
               ),
       );
+      // Loading a subtitle is asynchronous and a cut has just opened a new
+      // libmpv timeline. Apply the offset only after that load completes: an
+      // earlier write can be reset by the new media or subtitle track.
+      await _applySubtitleDelay();
     } catch (_) {
       if (identical(_activeSubtitle, track)) _activeSubtitle = null;
       _failedSubtitleUrl = track?.url;

@@ -552,26 +552,29 @@ packages:
   media_kit_libs_ios_video:
     dependency: transitive
     description:
-      name: media_kit_libs_ios_video
-      sha256: b5382994eb37a4564c368386c154ad70ba0cc78dacdd3fb0cd9f30db6d837991
-      url: "https://pub.dev"
-    source: hosted
+      path: "libs/ios/media_kit_libs_ios_video"
+      ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      resolved-ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      url: "https://github.com/mdikcinar/media-kit.git"
+    source: git
     version: "1.1.4"
   media_kit_libs_macos_video:
     dependency: transitive
     description:
-      name: media_kit_libs_macos_video
-      sha256: f26aa1452b665df288e360393758f84b911f70ffb3878032e1aabba23aa1032d
-      url: "https://pub.dev"
-    source: hosted
+      path: "libs/macos/media_kit_libs_macos_video"
+      ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      resolved-ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      url: "https://github.com/mdikcinar/media-kit.git"
+    source: git
     version: "1.1.4"
   media_kit_video:
     dependency: transitive
     description:
-      name: media_kit_video
-      sha256: afaa509e7b7e0bf247557a3a740cde903a52c34ace9810f94500e127bd7b043d
-      url: "https://pub.dev"
-    source: hosted
+      path: media_kit_video
+      ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      resolved-ref: "7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f"
+      url: "https://github.com/mdikcinar/media-kit.git"
+    source: git
     version: "2.0.1"
   meta:
     dependency: transitive
@@ -1162,6 +1165,46 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  video_player:
+    dependency: transitive
+    description:
+      name: video_player
+      sha256: "8c837b570dccb9ae6ff73d2e0b03c7e708bfefd3bd1194faa7f3e7f200dfc399"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.14.0"
+  video_player_android:
+    dependency: transitive
+    description:
+      name: video_player_android
+      sha256: "39cf6b79ead3e5b339a8a27651359bde5ed47f753b4c3d0c0942db033591f5ba"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.12.1"
+  video_player_avfoundation:
+    dependency: transitive
+    description:
+      name: video_player_avfoundation
+      sha256: "436fd029bd1c1e303b2d95ebd76948893f3c28dab286e7235ba9dd7b22533bf0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.11.1"
+  video_player_platform_interface:
+    dependency: transitive
+    description:
+      name: video_player_platform_interface
+      sha256: "92c0fbabe20c788e71fd10d26cea998d0d253282e65d145aed0818731cf593ce"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.9.0"
+  video_player_web:
+    dependency: transitive
+    description:
+      name: video_player_web
+      sha256: "9f3c00be2ef9b76a95d94ac5119fb843dca6f2c69e6c9968f6f2b6c9e7afbdeb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
   visibility_detector:
     dependency: transitive
     description:

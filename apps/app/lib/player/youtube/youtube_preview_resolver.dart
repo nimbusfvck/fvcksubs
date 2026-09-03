@@ -14,11 +14,11 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 /// YouTube never returns a muxed MP4 for this client — only separate
 /// video-only + audio-only streams, or HLS. A muxed HLS stream is preferred
 /// because it carries audio and video together and both native players
-/// (BetterPlayer on Android, MediaKit on iOS/macOS) already play HLS
+/// (BetterPlayer on Android, video_player on Apple VOD) already play HLS
 /// natively; a plain muxed MP4 is the second choice. Separate video+audio is
 /// the last resort — it plays correctly on MediaKit (which applies
-/// [PlayableStream.audioUrl] as a second track) but silently, video-only, on
-/// BetterPlayer, which has no equivalent for a second audio URL.
+/// [PlayableStream.audioUrl] as a second track) while the Apple video_player
+/// route deliberately falls back to MediaKit rather than dropping the audio.
 Future<PlayableStream> resolveYoutubePreviewStream(String videoId) async {
   final youtube = YoutubeExplode();
   try {
@@ -41,7 +41,9 @@ const _maxPreviewHeight = 480;
 T _lightestFittingQuality<T extends VideoStreamInfo>(List<T> streams) {
   final byQuality = streams.toList()
     ..sort((a, b) => a.videoResolution.compareTo(b.videoResolution));
-  final withinCap = byQuality.where((s) => s.videoResolution.height <= _maxPreviewHeight);
+  final withinCap = byQuality.where(
+    (s) => s.videoResolution.height <= _maxPreviewHeight,
+  );
   return withinCap.isNotEmpty ? withinCap.last : byQuality.first;
 }
 
