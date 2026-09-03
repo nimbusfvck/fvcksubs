@@ -110,6 +110,7 @@ void main() {
 
     expect(skips, [-10, 10]);
     expect(find.byIcon(Icons.closed_caption_off_rounded), findsOneWidget);
+    expect(find.byKey(const Key('player-scrub-preview')), findsNothing);
   });
 
   testWidgets('on-demand timeline shows the dragged position', (tester) async {
@@ -147,7 +148,8 @@ void main() {
       ),
     );
 
-    expect(find.text('01:15'), findsOneWidget);
+    expect(find.text('01:15'), findsNWidgets(2));
+    expect(find.byKey(const Key('player-scrub-preview')), findsOneWidget);
     expect(find.text('02:00'), findsOneWidget);
   });
 
@@ -331,18 +333,8 @@ void main() {
         details: 'EAC3 · 5.1',
         nativeId: '2',
       ),
-      AppAudioTrack(
-        id: 'id-2',
-        label: 'Audio',
-        language: 'id',
-        nativeId: '3',
-      ),
-      AppAudioTrack(
-        id: 'id-3',
-        label: 'Audio',
-        language: 'id',
-        nativeId: '4',
-      ),
+      AppAudioTrack(id: 'id-2', label: 'Audio', language: 'id', nativeId: '3'),
+      AppAudioTrack(id: 'id-3', label: 'Audio', language: 'id', nativeId: '4'),
     ];
 
     final labels = audioTrackPickerLabels(tracks);

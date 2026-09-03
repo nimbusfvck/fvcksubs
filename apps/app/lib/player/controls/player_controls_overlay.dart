@@ -643,39 +643,99 @@ class _PlayerTimeline extends StatelessWidget {
             ),
           ),
         Expanded(
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              activeTrackColor: AppColors.brandAccent,
-              secondaryActiveTrackColor: Colors.white54,
-              inactiveTrackColor: Colors.white24,
-              thumbColor: AppColors.brandAccent,
-              trackShape: _PlaybackSegmentSliderTrackShape(
-                segments: playbackSegments,
-                timelineExtent: timelineExtent,
-              ),
-            ),
-            child: Slider(
-              value: (dragValueMs ?? position.inMilliseconds.toDouble()).clamp(
-                0.0,
-                timelineExtent.inMilliseconds.toDouble(),
-              ),
-              min: 0.0,
-              max: timelineExtent > Duration.zero
-                  ? timelineExtent.inMilliseconds.toDouble()
-                  : 1.0,
-              secondaryTrackValue: timelineExtent > Duration.zero
-                  ? bufferedExtent.inMilliseconds
-                        .clamp(0, timelineExtent.inMilliseconds)
-                        .toDouble()
-                  : null,
-              onChangeStart: timelineExtent > Duration.zero
-                  ? onChangeStart
-                  : null,
-              onChanged: timelineExtent > Duration.zero ? onChanged : null,
-              onChangeEnd: timelineExtent > Duration.zero ? onChangeEnd : null,
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxMs = timelineExtent.inMilliseconds.toDouble();
+              final sliderValue = (dragValueMs ??
+                      position.inMilliseconds.toDouble())
+                  .clamp(0.0, maxMs)
+                  .toDouble();
+              final progress = maxMs > 0 ? sliderValue / maxMs : 0.0;
+              const previewWidth = 68.0;
+              const trackInset = 8.0;
+              final trackWidth = (constraints.maxWidth - trackInset * 2)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+              final thumbCenter = trackInset + progress * trackWidth;
+              final maxPreviewLeft = (constraints.maxWidth - previewWidth)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+              final previewLeft = (thumbCenter - previewWidth / 2)
+                  .clamp(0.0, maxPreviewLeft)
+                  .toDouble();
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  SliderTheme(
+                    data: SliderThemeData(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      activeTrackColor: AppColors.brandAccent,
+                      secondaryActiveTrackColor: Colors.white54,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: AppColors.brandAccent,
+                      trackShape: _PlaybackSegmentSliderTrackShape(
+                        segments: playbackSegments,
+                        timelineExtent: timelineExtent,
+                      ),
+                    ),
+                    child: Slider(
+                      value: sliderValue,
+                      min: 0.0,
+                      max: timelineExtent > Duration.zero ? maxMs : 1.0,
+                      secondaryTrackValue: timelineExtent > Duration.zero
+                          ? bufferedExtent.inMilliseconds
+                                .clamp(0, timelineExtent.inMilliseconds)
+                                .toDouble()
+                          : null,
+                      onChangeStart: timelineExtent > Duration.zero
+                          ? onChangeStart
+                          : null,
+                      onChanged: timelineExtent > Duration.zero
+                          ? onChanged
+                          : null,
+                      onChangeEnd: timelineExtent > Duration.zero
+                          ? onChangeEnd
+                          : null,
+                    ),
+                  ),
+                  if (dragValueMs != null)
+                    Positioned(
+                      left: previewLeft,
+                      top: -30,
+                      width: previewWidth,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          key: const Key('player-scrub-preview'),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceDarkElevated,
+                            borderRadius: AppRadius.sm,
+                            border: Border.all(color: AppColors.outlineDark),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: AppSpacing.xxs,
+                            ),
+                            child: Text(
+                              _formatDuration(
+                                Duration(milliseconds: dragValueMs!.round()),
+                              ),
+                              textAlign: TextAlign.center,
+                              style: durationStyle.copyWith(
+                                color: AppColors.onDark,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         if (!isLive)
