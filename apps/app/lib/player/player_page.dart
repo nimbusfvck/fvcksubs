@@ -83,6 +83,15 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<List<ResolvedSource>>? _refetch;
   late final NextEpisodeV2? _nextEpisode;
   bool _showUpNext = false;
+
+  /// Whether the viewer has closed the up-next card for this episode.
+  ///
+  /// Closing it is an answer, not a pause: the card is offered from a
+  /// position sample, so without remembering the answer the next sample —
+  /// a moment later — asks again, and the card returns for the rest of the
+  /// episode. Playing the next episode replaces this route, so a fresh one
+  /// starts willing to ask again.
+  bool _upNextDismissed = false;
   List<PlaybackSegment> _playbackSegments = const [];
   bool _upNextPaused = false;
   bool _advancing = false;
@@ -541,7 +550,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _showNextEpisode() {
-    if (_nextEpisode == null || _showUpNext) return;
+    if (_nextEpisode == null || _showUpNext || _upNextDismissed) return;
     setState(() {
       _showUpNext = true;
       _upNextPaused = false;
@@ -738,6 +747,7 @@ class _PlayerPageState extends State<PlayerPage> {
         onCancelUpNext: () => setState(() {
           _showUpNext = false;
           _upNextPaused = false;
+          _upNextDismissed = true;
         }),
       );
 

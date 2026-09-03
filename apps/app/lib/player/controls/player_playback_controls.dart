@@ -141,6 +141,15 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   bool _valueUpdateScheduled = false;
   Duration _liveEdge = Duration.zero;
 
+  /// Segments the viewer has already skipped.
+  ///
+  /// A seek does not always land where it was aimed: a jump out of the
+  /// buffered range takes the demuxer's own landing point, and a cut playlist
+  /// begins at the segment boundary before it. Either can leave playback
+  /// still inside the intro that was just skipped, and the button would offer
+  /// itself again — the one thing the viewer has already answered.
+  final Set<String> _skippedSegments = {};
+
   bool _isReady(AppPlayerValue? value) =>
       value?.initialized == true ||
       (widget.isLive &&
@@ -385,15 +394,32 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _revealControls();
   }
 
+  String _segmentKey(PlaybackSegment segment) =>
+      '${segment.type.name}:${segment.startMs}:${segment.endMs}';
+
   PlaybackSegment? get _activeIntroSegment {
     if (!widget.media.isEpisode || widget.isLive) return null;
-    final position = _videoValue?.value.position ?? Duration.zero;
+    final value = _videoValue?.value;
+    // Segment metadata can arrive before the native player has initialized.
+    // AVPlayer can also report initialized for a moment before play() starts;
+    // do not offer a seek action against that placeholder position (zero).
+    if (value?.initialized != true) return null;
+    final position = value!.position;
+    if (!value.isPlaying && position <= Duration.zero) return null;
     const lead = Duration(seconds: 5);
     for (final segment in widget.playbackSegments) {
       if (segment.type != PlaybackSegmentType.intro) continue;
       final start = Duration(milliseconds: segment.startMs);
       final end = Duration(milliseconds: segment.endMs);
-      if (position >= start - lead && position < end) return segment;
+      final key = _segmentKey(segment);
+      // Rewinding to before the intro is a change of mind, and the offer
+      // comes back with it.
+      if (position < start - lead) {
+        _skippedSegments.remove(key);
+        continue;
+      }
+      if (position >= end || _skippedSegments.contains(key)) continue;
+      return segment;
     }
     return null;
   }
@@ -425,6 +451,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   void _skipIntro() {
     final segment = _activeIntroSegment;
     if (segment == null) return;
+    _skippedSegments.add(_segmentKey(segment));
     _seekTo(Duration(milliseconds: segment.endMs));
     _revealControls();
   }

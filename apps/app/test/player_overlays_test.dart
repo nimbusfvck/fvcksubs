@@ -24,13 +24,17 @@ void main() {
       ),
     );
 
-    final title = tester.getCenter(find.text('Example Series'));
+    final title = tester.getTopLeft(find.text('Example Series'));
+    final subtitle = tester.getTopLeft(find.text('Season 2 · Episode 3'));
     final close = tester.getCenter(find.byTooltip('Close next episode'));
+    final play = tester.getCenter(find.byIcon(Icons.play_arrow_rounded));
+
+    // Close on the left, then the text block, then the play control.
     expect(close.dx, lessThan(title.dx));
-    expect(
-      close.dy,
-      lessThan(tester.getCenter(find.text('Season 2 · Episode 3')).dy),
-    );
+    expect(play.dx, greaterThan(title.dx));
+    // The two lines read as one block: they share a left edge rather than
+    // each floating on its own width.
+    expect(subtitle.dx, title.dx);
   });
 
   testWidgets('up-next countdown does not resume after an outside-tap pause', (

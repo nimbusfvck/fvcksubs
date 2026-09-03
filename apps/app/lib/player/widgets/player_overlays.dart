@@ -223,6 +223,13 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
   }
 }
 
+/// Side of the round control at the end of the floating player cards.
+///
+/// It sets the height of both: a 44pt box around a 22pt circle read as a
+/// thick band of padding rather than a button. This is the smallest that
+/// still clears the tap target once the card's own padding is counted.
+const double kPlayerOverlayControlSize = 36;
+
 /// Bottom inset shared by the floating player cards (skip intro / up next).
 const double kPlayerOverlayCardInset = AppSpacing.xl * 3 + AppSpacing.lg;
 
@@ -243,7 +250,7 @@ class PlayerSkipIntroCard extends StatelessWidget {
       onTap: onSkipIntro,
       borderRadius: AppRadius.lg,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.xs),
+        padding: const EdgeInsets.all(AppSpacing.xxs),
         decoration: BoxDecoration(
           color: AppColors.surfaceDark.withValues(alpha: 0.95),
           borderRadius: AppRadius.lg,
@@ -252,7 +259,7 @@ class PlayerSkipIntroCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: AppSpacing.xxs),
             Text(
               label,
               maxLines: 1,
@@ -262,10 +269,10 @@ class PlayerSkipIntroCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.xs),
             SizedBox(
-              width: 44,
-              height: 44,
+              width: kPlayerOverlayControlSize,
+              height: kPlayerOverlayControlSize,
               child: Center(
                 child: Material(
                   color: Colors.white,
@@ -274,8 +281,8 @@ class PlayerSkipIntroCard extends StatelessWidget {
                     customBorder: const CircleBorder(),
                     onTap: onSkipIntro,
                     child: const SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: Icon(
                         Icons.fast_forward_rounded,
                         color: Colors.black,
@@ -350,18 +357,17 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
     color: Colors.transparent,
     child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xs),
+      padding: const EdgeInsets.all(AppSpacing.xxs),
       decoration: BoxDecoration(
         color: AppColors.surfaceDark.withValues(alpha: 0.95),
         borderRadius: AppRadius.lg,
         border: Border.all(color: Colors.white24, width: 0.5),
       ),
       child: Row(
-
         children: [
           SizedBox(
-            width: 44,
-            height: 44,
+            width: kPlayerOverlayControlSize,
+            height: kPlayerOverlayControlSize,
             child: IconButton(
               tooltip: 'Close next episode',
               padding: EdgeInsets.zero,
@@ -373,9 +379,15 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
               ),
             ),
           ),
-            const SizedBox(width: AppSpacing.xxs),
-           Expanded(
+          const SizedBox(width: AppSpacing.xxs),
+          Expanded(
             child: Column(
+              // The title and its episode line read as one block against the
+              // close button beside them; centring left each of them adrift
+              // on its own width. Only the play control stays centred, and it
+              // is centred in its own corner rather than in the card.
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   widget.seriesTitle,
@@ -386,7 +398,7 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                  Text(
+                Text(
                   widget.subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -399,8 +411,8 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
           ),
           const SizedBox(width: AppSpacing.sm),
           SizedBox(
-            width: 44,
-            height: 44,
+            width: kPlayerOverlayControlSize,
+            height: kPlayerOverlayControlSize,
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -424,8 +436,8 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
                       customBorder: const CircleBorder(),
                       onTap: widget.onPlayNext,
                       child: const SizedBox(
-                        width: 24,
-                        height: 24,
+                        width: 22,
+                        height: 22,
                         child: Icon(
                           Icons.play_arrow_rounded,
                           color: Colors.black,
@@ -438,8 +450,6 @@ class _PlayerUpNextCardState extends State<PlayerUpNextCard>
               ],
             ),
           ),
-        
-         
         ],
       ),
     ),
