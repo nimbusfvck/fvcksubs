@@ -52,4 +52,25 @@ void main() {
       ['a', 'x', 'y'],
     );
   });
+
+  test('empty Settings order preserves discovery order', () {
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'first', providerName: 'Atlas'),
+      FakeExtension(id: 'second', providerName: 'Boreal'),
+    ]);
+    final controller = SourcePriorityController(
+      registry: registry,
+      store: FakeSourcePriorityStore(),
+    );
+
+    expect(
+      controller
+          .order(const [
+            StreamSource(id: 'b', label: 'B', providerId: 'second.p'),
+            StreamSource(id: 'a', label: 'A', providerId: 'first.p'),
+          ])
+          .map((source) => source.id),
+      ['b', 'a'],
+    );
+  });
 }

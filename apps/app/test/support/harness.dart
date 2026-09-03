@@ -251,6 +251,7 @@ class FakeExtension extends ContentExtension {
   Future<List<StreamSource>> sources(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
+    bool fast = false,
   }) async {
     sourcesCalls++;
     lastEnabledProviders = enabledProviders;
@@ -378,6 +379,7 @@ class SubtitleFakeExtension extends ContentExtension {
   Future<List<StreamSource>> sources(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
+    bool fast = false,
   }) async => [
     for (final id in subtitlesBySourceId.keys)
       StreamSource(id: id, label: 'Source $id'),

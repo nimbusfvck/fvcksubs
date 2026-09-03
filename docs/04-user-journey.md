@@ -203,8 +203,10 @@ flowchart TD
     D -->|Play| P
 ```
 
-Long-form content opens a detail screen, and source discovery is deferred until the user
-selects Play. Live events and channels start the playback flow directly.
+Long-form content opens a detail screen. While that screen is visible, the shell may warm
+the cheap source descriptors for the primary/resume episode in the background; signed stream
+URLs are still resolved only after the user selects Play. Live events and channels start the
+playback flow directly.
 
 ### On the detail screen
 
@@ -256,12 +258,10 @@ flowchart TD
 
 ### Play overlay
 
-Pressing Play is **one action**. A titled page that exists only to hold a spinner turns it
-into two: somewhere the back button can land, and something that flashes past on a fast
-connection. It also has nothing to show — the item is already on screen behind it. So the
-wait is an overlay over what the user was already looking at, and backing out of it is
-treated as a change of mind, not as a request to be dropped into a player once the network
-finally answers.
+Pressing Play is **one action**. The source wait opens immediately as a full-screen,
+player-style loading route while discovery or the first resolution is still running. It is
+not a second destination: backing out abandons the pending play, rather than allowing a late
+network result to push a player after the viewer changed their mind.
 
 ### Source resolution before playback
 
@@ -358,7 +358,7 @@ their detail page.
 | Hidden work | Effect they notice |
 |---|---|
 | Session caching of catalog responses | Switching category is instant |
-| Persisting which sources exist for an item | A cold start goes straight to playing |
+| Partial source discovery plus background completion | A cold start starts from the first suitable provider while the picker keeps filling |
 | Background re-discovery after a cached hit | Links stay fresh without a wait |
 | Per-provider failure tolerance | One broken upstream never empties a screen |
 | Capability filtering before the player opens | No player that opens onto a dead stream |

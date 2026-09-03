@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -13,6 +14,7 @@ import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
+import '../player/models/playback_media.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
 import '../player/workflow/primary_episode_target.dart';
@@ -57,6 +59,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
   String? _selectedGroupId;
   int? _selectedRangeIndex;
   bool _descriptionExpanded = false;
+  bool _sourcePrefetchStarted = false;
 
   @override
   void didChangeDependencies() {
@@ -116,6 +119,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
   );
 
   Widget _buildDetail(MediaDetailV2 detail) {
+    _prefetchPrimarySources(detail);
     final item = detail.item;
     final trailers = detail.trailers
         .where((trailer) => !_isAutoplayTrailer(trailer))
@@ -276,6 +280,22 @@ class _DetailPageV2State extends State<DetailPageV2> {
     );
   }
 
+  void _prefetchPrimarySources(MediaDetailV2 detail) {
+    if (_sourcePrefetchStarted) return;
+    _sourcePrefetchStarted = true;
+    if (detail.item.isUpcoming) return;
+    final scope = AppScope.of(context);
+    final target = primaryEpisodeTarget(
+      detail.episodeGuide,
+      detail.item.ref,
+      scope.libraryController.state,
+    );
+    final item = primaryPlaybackTarget(detail, target);
+    if (item != null) {
+      unawaited(prefetchPlaybackSources(scope, PlaybackMedia(item)));
+    }
+  }
+
   Widget _primaryActionRow({
     required MediaDetailV2 detail,
     required MediaItemV2 item,
@@ -318,7 +338,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
           onPressed: () => libraryController.toggleReminder(item),
         );
       }
-      final target = primaryEpisodeTarget(detail.episodeGuide, detail.item.ref, state);
+      final target = primaryEpisodeTarget(
+        detail.episodeGuide,
+        detail.item.ref,
+        state,
+      );
       final primaryTarget = primaryPlaybackTarget(detail, target);
       return _PrimaryPlayButton(
         onPressed: primaryTarget == null
@@ -453,7 +477,11 @@ class _DetailPageV2State extends State<DetailPageV2> {
   ) {
     final selected = _selectedRangeIndex;
     if (selected != null && selected < rangeCount) return selected;
-    final target = primaryEpisodeTarget(detail.episodeGuide, detail.item.ref, library);
+    final target = primaryEpisodeTarget(
+      detail.episodeGuide,
+      detail.item.ref,
+      library,
+    );
     if (target == null || target.group.id != group.id) return 0;
     return (target.index ~/ _episodesPerRange).clamp(0, rangeCount - 1);
   }

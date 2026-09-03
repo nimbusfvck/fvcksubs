@@ -148,16 +148,19 @@ class JsExtension extends ContentExtension {
   Future<List<StreamSource>> sources(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
-  }) => _sourcesFromJson(item.toJson(), enabledProviders);
+    bool fast = false,
+  }) => _sourcesFromJson(item.toJson(), enabledProviders, fast);
 
   Future<List<StreamSource>> _sourcesFromJson(
     Map<String, Object?> item,
     Set<String>? enabledProviders,
+    bool fast,
   ) async {
     final decoded = await _call('sources', {
       'item': item,
       if (enabledProviders != null)
         'enabledProviders': enabledProviders.toList(),
+      if (fast) 'fast': true,
     });
     final list = decoded['sources'];
     if (list is! List) {

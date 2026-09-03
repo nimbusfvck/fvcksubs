@@ -44,9 +44,15 @@ abstract class ContentExtension {
   /// §7, "Stream sources are separate, toggleable providers") filters its own
   /// fan-out by this; an extension with a single, non-toggleable stream
   /// provider can ignore it.
+  ///
+  /// [fast] asks a fan-out extension to return the first non-empty provider
+  /// result instead of waiting for every provider. It is intended for the
+  /// initial playback handoff; callers that need a complete picker should
+  /// leave it false.
   Future<List<StreamSource>> sources(
     MediaItemV2 item, {
     Set<String>? enabledProviders,
+    bool fast = false,
   }) => throw UnsupportedError('${manifest.id} does not provide sources');
 
   /// Resolves a source id into a ready stream. Half of [ProviderRole.stream].

@@ -27,6 +27,7 @@ class SourceCache {
   final Map<MediaRef, List<ResolvedSource>> _resolved = {};
   final Map<MediaRef, DateTime> _resolvedAt = {};
   final Map<String, CachedSourceList> _persisted;
+  final Map<String, Future<List<StreamSource>>> _sourceListLoads = {};
 
   List<ResolvedSource>? peek(MediaRef ref) => _resolved[ref];
 
@@ -43,6 +44,27 @@ class SourceCache {
 
   List<StreamSource>? peekSourceList(MediaRef ref) =>
       _persisted[CachedSourceList.keyFor(ref)]?.sources;
+
+  /// Shares an in-flight source discovery between the detail prefetch and a
+  /// Play tap. Without this, a viewer who taps Play while the detail screen is
+  /// warming the source list starts a second QuickJS/network fan-out.
+  Future<List<StreamSource>> loadSourceList(
+    MediaRef ref,
+    Future<List<StreamSource>> Function() loader, {
+    bool fast = false,
+  }) {
+    // Fast initial playback and full background refreshes must not share a
+    // future: a detail-page full discovery already in flight should never
+    // make the Play tap wait for the slowest provider.
+    final key = '${CachedSourceList.keyFor(ref)}:${fast ? 'fast' : 'full'}';
+    final existing = _sourceListLoads[key];
+    if (existing != null) return existing;
+    final future = loader().whenComplete(() {
+      _sourceListLoads.remove(key);
+    });
+    _sourceListLoads[key] = future;
+    return future;
+  }
 
   void recordSourceList(MediaRef ref, List<StreamSource> sources) {
     final key = CachedSourceList.keyFor(ref);
@@ -63,11 +85,14 @@ class SourceCache {
     List<StreamSource> existing,
     List<StreamSource> refreshed,
   ) {
-    final refreshedById = {for (final source in refreshed) source.id: source};
+    final refreshedByKey = {
+      for (final source in refreshed) sourceDescriptorKey(source): source,
+    };
     final retained = <StreamSource>[
-      for (final source in existing) ?refreshedById.remove(source.id),
+      for (final source in existing)
+        ?refreshedByKey.remove(sourceDescriptorKey(source)),
     ];
-    return [...retained, ...refreshedById.values];
+    return [...retained, ...refreshedByKey.values];
   }
 
   void _evictOldestPersisted() {

@@ -422,7 +422,10 @@ class ExtensionRegistry {
   /// providers: each provider's [CatalogPage.nextPage] would need its own
   /// cursor tracked independently, which isn't worth the complexity while
   /// only one search-capable extension exists.
-  Future<List<VersionedMediaItem>> search(String query, {String? category}) async {
+  Future<List<VersionedMediaItem>> search(
+    String query, {
+    String? category,
+  }) async {
     final providers = <ContentExtension>[
       for (final extension in _extensions)
         if (isExtensionEnabled(extension.manifest.id) &&
@@ -443,8 +446,10 @@ class ExtensionRegistry {
           )) {
             return <VersionedMediaItem>[];
           }
-          return (await extension.search(query, category: category)).items
-              .toList();
+          return (await extension.search(
+            query,
+            category: category,
+          )).items.toList();
         } catch (_) {
           return <VersionedMediaItem>[];
         }
@@ -459,7 +464,7 @@ class ExtensionRegistry {
   /// down exactly which of the extension's own *stream*-role providers are
   /// enabled, so an extension fanning out across several internal sources
   /// (Kora, later Cricfy) can filter itself — see [ContentExtension.sources].
-  Future<List<StreamSource>> sources(MediaItemV2 item) {
+  Future<List<StreamSource>> sources(MediaItemV2 item, {bool fast = false}) {
     final extension = extensionById(item.ref.extensionId);
     if (!isExtensionEnabled(extension.manifest.id)) {
       return Future.value(const []);
@@ -482,7 +487,7 @@ class ExtensionRegistry {
           provider.id,
     };
     return extension
-        .sources(item, enabledProviders: enabledStreamProviders)
+        .sources(item, enabledProviders: enabledStreamProviders, fast: fast)
         .then((sources) => sources.where(isSourceEnabled).toList());
   }
 

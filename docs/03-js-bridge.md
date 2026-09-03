@@ -167,12 +167,17 @@ Every argument and every result below is plain JSON.
 | `catalog` | `{ providerId, catalogId, category?, page?, filters?, subCategory? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
 | `search` | `{ query, page?, category? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
 | `meta` | `{ ref: { extensionId, providerId, id } }` | `{ item, description?, genres?, runtimeMinutes?, certification?, cast?, seasons? }` |
-| `sources` | `{ item, enabledProviders?: [providerId, …] }` | `{ sources: [ { id, label, provider? }, … ] }` |
+| `sources` | `{ item, enabledProviders?: [providerId, …], fast?: boolean }` | `{ sources: [ { id, label, provider? }, … ] }` |
 | `resolve` | `{ sourceId }` | `{ url, headers?, format?, drm?, audioUrl?, label?, subtitles? }` |
 | `subtitles` | `{ item }` | `{ subtitles: [ { language, url, label? }, … ] }` |
 
 Note the two envelope shapes: `catalog`, `search`, `meta`, and `resolve` return the object
 **directly**, while `sources` and `subtitles` return a **wrapper** with a single named list.
+
+For a fan-out stream extension, `fast: true` may return the first non-empty
+provider result without waiting for slower providers. The app uses this only
+for the initial playback handoff; a normal call still returns the complete
+source list for the picker and fallback ordering.
 Returning the wrong shape is reported as a protocol error naming the role.
 
 ```js

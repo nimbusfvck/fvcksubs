@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
@@ -124,6 +126,42 @@ void main() {
       expect(SourceCache().peekSourceList(ref), isNull);
     });
 
+    test('shares an in-flight source discovery', () async {
+      final cache = SourceCache();
+      final gate = Completer<List<StreamSource>>();
+      var calls = 0;
+      Future<List<StreamSource>> load() {
+        calls++;
+        return gate.future;
+      }
+
+      final first = cache.loadSourceList(ref, load);
+      final second = cache.loadSourceList(ref, load);
+      expect(calls, 1);
+
+      final result = [source('a')];
+      gate.complete(result);
+      expect(await first, result);
+      expect(await second, result);
+    });
+
+    test('does not let full discovery block fast discovery', () async {
+      final cache = SourceCache();
+      final fullGate = Completer<List<StreamSource>>();
+      final fastResult = [source('fast')];
+
+      final full = cache.loadSourceList(ref, () => fullGate.future);
+      final fast = cache.loadSourceList(
+        ref,
+        () async => fastResult,
+        fast: true,
+      );
+
+      expect(await fast, fastResult);
+      fullGate.complete(const []);
+      expect(await full, isEmpty);
+    });
+
     test('recordSourceList then peekSourceList round-trips the list', () {
       final cache = SourceCache();
       final sources = [source('a'), source('b')];
@@ -143,6 +181,27 @@ void main() {
         'a',
         'c',
       ]);
+    });
+
+    test('refresh dedupes descriptors whose tokenized ids changed', () {
+      final cache = SourceCache();
+      cache.recordSourceList(ref, [
+        const StreamSource(
+          id: 'c1',
+          label: 'Server 4',
+          providerId: 'nimora.cricfy',
+        ),
+      ]);
+      cache.recordSourceList(ref, [
+        const StreamSource(
+          id: 'c2',
+          label: 'Server 4',
+          providerId: 'nimora.cricfy',
+        ),
+      ]);
+
+      expect(cache.peekSourceList(ref), hasLength(1));
+      expect(cache.peekSourceList(ref)!.single.id, 'c2');
     });
 
     test('recordSourceList persists through sourceListStore', () async {

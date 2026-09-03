@@ -185,9 +185,9 @@ synopsis, optional trailer actions, cast, episodes, and an optional related-item
 A trailer with a `video/*`
 MIME may autoplay as the header preview; other trailer URLs open in the platform
 browser view (Chrome Custom Tab on Android), with an external-app fallback. Trailer
-previews do not enter the normal source-resolution pipeline. Source discovery is
-**gated behind Play** — the screen shows
-what metadata returned and pays for nothing more until the viewer commits.
+previews do not enter the normal source-resolution pipeline. The detail screen may warm
+cheap source descriptors for the primary/resume episode in the background, but signed
+stream URLs remain **gated behind Play**.
 
 The Play button's label is computed rather than fixed, so it states what will actually
 happen: start, continue, or continue at a named episode. Episode cards show a saved playback
@@ -256,7 +256,7 @@ flowchart TB
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
-| Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Source discovery and each source resolve have bounded waits; a timeout or provider error is logged in debug builds and dropped independently, so a slow provider must not hide a ready fallback. For on-demand playback, the selected source stays first when discovery refreshes, while remaining sources are added to the picker individually as each resolves. |
+| Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
 | Errors | If the first source fails before playback initializes, mark it failed and try the next already-resolved source once. After playback starts, never auto-advance; keep retry and source switching available. |
 
 ## 6.7 Platform handling

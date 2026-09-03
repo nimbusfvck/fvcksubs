@@ -13,6 +13,34 @@ import '../player_page.dart';
 import '../state/source_priority_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 
+/// Warms the cheap, opaque source descriptors while a detail page is open.
+///
+/// This intentionally does not resolve signed playback URLs. Resolution stays
+/// just-in-time, while a later Play tap can reuse the discovery already in
+/// flight (or the persisted descriptor list).
+Future<void> prefetchPlaybackSources(AppScope scope, PlaybackMedia item) async {
+  if (!canUseCachedPlaybackSources(item)) return;
+  if (scope.sourceCache.peekSourceList(item.ref)?.isNotEmpty ?? false) return;
+  final stopwatch = Stopwatch()..start();
+  _debugSourceLog('detail_source_prefetch_start ref=${item.ref.id}');
+  try {
+    final sources = await _loadSources(scope, item);
+    if (sources.isNotEmpty) {
+      scope.sourceCache.recordSourceList(item.ref, sources);
+    }
+    _debugSourceLog(
+      'detail_source_prefetch_done count=${sources.length} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+  } catch (_) {
+    // Detail prefetch is opportunistic; Play will try discovery again if it
+    // failed or timed out here.
+    _debugSourceLog(
+      'detail_source_prefetch_failed elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+  }
+}
+
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
@@ -86,11 +114,13 @@ Future<void> _playMedia(
       ?.where(scope.registry.isSourceEnabled)
       .toList();
   if (enabledCachedList != null && enabledCachedList.isNotEmpty) {
+    final orderedCachedList = scope.sourcePriorityController.order(
+      enabledCachedList,
+    );
     final fast = await _resolveWithOverlay(
-      context,
       navigator,
       (progress) => _resolveKnownSources(scope, item, [
-        enabledCachedList.first,
+        orderedCachedList.first,
       ], progress),
     );
     if (fast == null) return; // abandoned mid-resolve
@@ -117,7 +147,6 @@ Future<void> _playMedia(
   }
 
   final result = await _resolveWithOverlay(
-    context,
     navigator,
     (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
   );
@@ -131,7 +160,9 @@ Future<void> _playMedia(
   }
 
   final first = result.first!;
-  scope.sourceCache.store(item.ref, [first]);
+  if (result.refresh == null) {
+    scope.sourceCache.store(item.ref, [first]);
+  }
   unawaited(
     _openPlayer(
       navigator,
@@ -141,7 +172,7 @@ Future<void> _playMedia(
       replaceCurrent,
       contentRating: contentRating,
       episodeGuide: episodeGuide,
-      pendingSources: result.second,
+      pendingSources: _appendResolvedSources(result.second, result.refresh),
       externalSubtitles: externalSubtitles,
       playbackSegments: playbackSegments,
       returnToDetail: returnToDetail,
@@ -175,20 +206,17 @@ Future<List<ResolvedSource>> refetchPlayableSources(
 }
 
 Future<T?> _resolveWithOverlay<T>(
-  BuildContext context,
   NavigatorState navigator,
   Future<T> Function(_ResolveProgress progress) resolve,
 ) async {
   final progress = _ResolveProgress();
-  final overlay = DialogRoute<void>(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.black87,
-    builder: (_) => _PlayLoadingOverlay(progress: progress),
+  final overlay = MaterialPageRoute<void>(
+    builder: (_) => _PlayLoadingPage(progress: progress),
   );
 
   var abandoned = false;
   unawaited(overlay.popped.whenComplete(() => abandoned = true));
+  _debugSourceLog('player_route_loading');
   unawaited(navigator.push(overlay));
 
   final result = await resolve(progress);
@@ -212,6 +240,7 @@ Future<List<ResolvedSource>?> _revalidate(
 }
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
+const _preferredSourceGrace = Duration(milliseconds: 750);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
 const _sourceDiscoveryTimeout = Duration(seconds: 20);
@@ -264,6 +293,12 @@ Future<void> _openPlayer(
     sources,
     scope.sourcePriorityController,
     scope.subtitlePreferenceController,
+  );
+  _debugSourceLog(
+    'player_source_candidates '
+    'priority=${scope.sourcePriorityController.state.orderedProviderIds.join(',')} '
+    'candidates=${sources.map((source) => _sourceLogName(source.source)).join(',')} '
+    'selected=${_sourceLogName(resolved.first.source)}',
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
   final savedRating = scope.libraryController
@@ -334,7 +369,13 @@ Future<List<ResolvedSource>> _playableSources(
   return _resolveKnownSources(scope, item, sources, progress);
 }
 
-Future<({ResolvedSource? first, Stream<ResolvedSource> second})>
+Future<
+  ({
+    ResolvedSource? first,
+    Stream<ResolvedSource> second,
+    Future<List<ResolvedSource>?>? refresh,
+  })
+>
 _resolveFirstPlayableWithRetry(
   AppScope scope,
   PlaybackMedia item,
@@ -346,18 +387,41 @@ _resolveFirstPlayableWithRetry(
   return _resolveFirstPlayable(scope, item, progress);
 }
 
-Future<({ResolvedSource? first, Stream<ResolvedSource> second})>
+Future<
+  ({
+    ResolvedSource? first,
+    Stream<ResolvedSource> second,
+    Future<List<ResolvedSource>?>? refresh,
+  })
+>
 _resolveFirstPlayable(
   AppScope scope,
   PlaybackMedia item,
   _ResolveProgress progress,
 ) async {
-  final sources = await _loadSources(scope, item);
+  // Start complete discovery immediately. It is both the fallback if the
+  // fast provider cannot resolve and the source-picker feed after playback
+  // has already started.
+  final refresh = canUseCachedPlaybackSources(item)
+      ? _revalidate(scope, item)
+      : null;
+  final sources = await _loadSources(scope, item, fast: true);
   if (sources.isEmpty) {
-    return (first: null, second: const Stream<ResolvedSource>.empty());
+    final complete = refresh == null ? null : await refresh;
+    if (complete != null && complete.isNotEmpty) {
+      return (
+        first: complete.first,
+        second: const Stream<ResolvedSource>.empty(),
+        refresh: null,
+      );
+    }
+    return (
+      first: null,
+      second: const Stream<ResolvedSource>.empty(),
+      refresh: null,
+    );
   }
 
-  scope.sourceCache.recordSourceList(item.ref, sources);
   final ordered = scope.sourcePriorityController.order(sources);
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
@@ -366,12 +430,19 @@ _resolveFirstPlayable(
       _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
-  final first = await _firstNonNull(futures);
+  final first = scope.sourcePriorityController.state.orderedProviderIds.isEmpty
+      ? await _firstMatching(futures, (_) => true)
+      : await _firstByPriority(futures);
   final preferred = scope.subtitlePreferenceController;
   if (first == null ||
       preferred.languageCode == null ||
       preferred.isSatisfiedBy(first.stream.subtitles)) {
-    return (first: first, second: all);
+    if (first != null) return (first: first, second: all, refresh: refresh);
+    final complete = refresh == null ? null : await refresh;
+    if (complete != null && complete.isNotEmpty) {
+      return (first: complete.first, second: all, refresh: null);
+    }
+    return (first: null, second: all, refresh: null);
   }
   final subtitleMatch = await Future.any<ResolvedSource?>([
     _firstMatching(
@@ -380,7 +451,10 @@ _resolveFirstPlayable(
     ),
     Future<ResolvedSource?>.delayed(_subtitleSourceGrace, () => null),
   ]);
-  return (first: subtitleMatch ?? first, second: all);
+  if (subtitleMatch != null) {
+    return (first: subtitleMatch, second: all, refresh: refresh);
+  }
+  return (first: first, second: all, refresh: refresh);
 }
 
 /// Looks up external subtitles for [item] while its sources resolve.
@@ -451,13 +525,19 @@ bool needsExternalSubtitleLookup(
 
 Future<List<StreamSource>> _loadSources(
   AppScope scope,
-  PlaybackMedia item,
-) async {
+  PlaybackMedia item, {
+  bool fast = false,
+}) async {
   final stopwatch = Stopwatch()..start();
   try {
-    final sources = await scope.registry
-        .sources(item.item)
-        .timeout(_sourceDiscoveryTimeout);
+    final sources = await scope.sourceCache.loadSourceList(
+      item.ref,
+      () => scope.registry
+          .sources(item.item, fast: fast)
+          .timeout(_sourceDiscoveryTimeout),
+      fast: fast,
+    );
+    final orderedSources = scope.sourcePriorityController.order(sources);
     final providers = sources
         .map(
           (source) => source.providerId.isNotEmpty
@@ -468,27 +548,84 @@ Future<List<StreamSource>> _loadSources(
         .toSet()
         .join(',');
     _debugSourceLog(
-      'discovery_ok count=${sources.length} '
+      'discovery_ok count=${orderedSources.length} '
+      'mode=${fast ? 'fast' : 'full'} '
       'providers=${providers.isEmpty ? 'none' : providers} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
-    return sources;
+    return orderedSources;
   } on TimeoutException {
     _debugSourceLog(
-      'discovery_timeout after=${stopwatch.elapsedMilliseconds}ms',
+      'discovery_timeout mode=${fast ? 'fast' : 'full'} '
+      'after=${stopwatch.elapsedMilliseconds}ms',
     );
     return const [];
   } catch (error) {
     _debugSourceLog(
-      'discovery_error error=${redactPlaybackLogText(error)} '
+      'discovery_error mode=${fast ? 'fast' : 'full'} '
+      'error=${redactPlaybackLogText(error)} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
     return const [];
   }
 }
 
-Future<ResolvedSource?> _firstNonNull(List<Future<ResolvedSource?>> futures) =>
-    _firstMatching(futures, (_) => true);
+/// Chooses the highest-priority source that resolves successfully, while
+/// keeping a short deadline so a broken preferred provider cannot hold up
+/// playback. All resolves are started in parallel; the grace window only
+/// controls which completed result wins the initial handoff.
+Future<ResolvedSource?> _firstByPriority(
+  List<Future<ResolvedSource?>> futures,
+) {
+  final completer = Completer<ResolvedSource?>();
+  final results = List<ResolvedSource?>.filled(futures.length, null);
+  final settled = List<bool>.filled(futures.length, false);
+  var graceElapsed = false;
+
+  void choose() {
+    if (completer.isCompleted) return;
+    if (graceElapsed) {
+      for (final result in results) {
+        if (result != null) {
+          completer.complete(result);
+          return;
+        }
+      }
+    } else {
+      for (var index = 0; index < results.length; index++) {
+        if (!settled[index]) return;
+        final result = results[index];
+        if (result != null) {
+          completer.complete(result);
+          return;
+        }
+      }
+    }
+    if (settled.every((value) => value)) completer.complete(null);
+  }
+
+  final timer = Timer(_preferredSourceGrace, () {
+    graceElapsed = true;
+    choose();
+  });
+  for (var index = 0; index < futures.length; index++) {
+    unawaited(
+      futures[index].then<void>(
+        (value) {
+          settled[index] = true;
+          results[index] = value;
+          choose();
+        },
+        onError: (Object _, StackTrace _) {
+          settled[index] = true;
+          choose();
+        },
+      ),
+    );
+  }
+  unawaited(completer.future.whenComplete(timer.cancel));
+  return completer.future;
+}
 
 Future<ResolvedSource?> _firstMatching(
   List<Future<ResolvedSource?>> futures,
@@ -538,6 +675,20 @@ Stream<ResolvedSource> _sourcesFromFuture(
   Future<List<ResolvedSource>?> future,
 ) async* {
   final sources = await future;
+  if (sources == null) return;
+  yield* Stream<ResolvedSource>.fromIterable(sources);
+}
+
+/// Yields the fast result immediately, then appends the complete background
+/// discovery once it has finished. [refresh] is started by the caller before
+/// this stream is handed to the player, so both phases overlap.
+Stream<ResolvedSource> _appendResolvedSources(
+  Stream<ResolvedSource> initial,
+  Future<List<ResolvedSource>?>? refresh,
+) async* {
+  yield* initial;
+  if (refresh == null) return;
+  final sources = await refresh;
   if (sources == null) return;
   yield* Stream<ResolvedSource>.fromIterable(sources);
 }
@@ -662,16 +813,16 @@ class _ResolveProgress extends ChangeNotifier {
   }
 }
 
-class _PlayLoadingOverlay extends StatefulWidget {
-  const _PlayLoadingOverlay({required this.progress});
+class _PlayLoadingPage extends StatefulWidget {
+  const _PlayLoadingPage({required this.progress});
 
   final _ResolveProgress progress;
 
   @override
-  State<_PlayLoadingOverlay> createState() => _PlayLoadingOverlayState();
+  State<_PlayLoadingPage> createState() => _PlayLoadingPageState();
 }
 
-class _PlayLoadingOverlayState extends State<_PlayLoadingOverlay> {
+class _PlayLoadingPageState extends State<_PlayLoadingPage> {
   Timer? _ticker;
   int _cursor = 0;
 
@@ -690,62 +841,64 @@ class _PlayLoadingOverlayState extends State<_PlayLoadingOverlay> {
   }
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: ListenableBuilder(
-          listenable: widget.progress,
-          builder: (context, _) {
-            final outstanding = widget.progress.outstanding;
-            final total = widget.progress.total;
-            final line = outstanding.isEmpty
-                ? 'Finding sources…'
-                : 'Checking ${outstanding[_cursor % outstanding.length]}…';
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.surfaceDark,
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: ListenableBuilder(
+            listenable: widget.progress,
+            builder: (context, _) {
+              final outstanding = widget.progress.outstanding;
+              final total = widget.progress.total;
+              final line = outstanding.isEmpty
+                  ? 'Finding sources…'
+                  : 'Checking ${outstanding[_cursor % outstanding.length]}…';
 
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                      Icon(
-                        Icons.travel_explore,
-                        color: AppColors.onDark,
-                        size: 22,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  line,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.titleSm.copyWith(
-                    color: AppColors.onDark,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                if (total > 0) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '${widget.progress.settledCount} of $total ready',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onDarkSoft,
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                        Icon(
+                          Icons.travel_explore,
+                          color: AppColors.onDark,
+                          size: 22,
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    line,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.titleSm.copyWith(
+                      color: AppColors.onDark,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (total > 0) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${widget.progress.settledCount} of $total ready',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDarkSoft,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     ),
