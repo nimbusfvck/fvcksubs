@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/controls/player_controls_overlay.dart';
 import 'package:fvcksubs_app/player/controls/player_playback_controls.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
@@ -127,13 +128,145 @@ void main() {
     },
   );
 
-  testWidgets('manual next is visible before the up-next card appears', (
+  testWidgets('episode list opens from the player controls', (tester) async {
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 2),
+      ),
+    );
+    const seriesRef = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'series-1',
+    );
+    const currentRef = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'episode-1',
+    );
+    const guide = EpisodeGuide(
+      groups: [
+        EpisodeGroup(
+          id: 'season-1',
+          title: 'Season 1',
+          episodes: [
+            EpisodeSummary(ref: currentRef, title: 'Pilot', position: 1),
+            EpisodeSummary(
+              ref: MediaRef(
+                extensionId: 'test',
+                providerId: 'test.provider',
+                id: 'episode-2',
+              ),
+              title: 'Second Episode',
+              position: 2,
+            ),
+          ],
+        ),
+      ],
+    );
+    var selected = false;
+    const current = EpisodeItemV2(
+      ref: currentRef,
+      title: 'Pilot',
+      subtitle: 'Example Series',
+      episode: EpisodeIdentity(
+        parentRef: seriesRef,
+        groupId: 'season-1',
+        position: 1,
+      ),
+    );
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(current),
+        episodeGuide: guide,
+        onPlayEpisode: (_) => selected = true,
+      ),
+    );
+
+    expect(find.byIcon(Icons.video_library_rounded), findsOneWidget);
+    final qualityTopBefore = tester
+        .getTopLeft(find.byIcon(Icons.high_quality_rounded))
+        .dy;
+    await tester.tap(find.byIcon(Icons.video_library_rounded));
+    await tester.pump();
+    expect(find.byKey(const Key('player-episode-rail')), findsOneWidget);
+    expect(find.text('Season 1 · Episode 2'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byIcon(Icons.high_quality_rounded)).dy,
+      closeTo(qualityTopBefore, 0.1),
+    );
+
+    await tester.tap(find.text('Second Episode'));
+    expect(selected, isTrue);
+  });
+
+  testWidgets('hiding player controls also closes the episode list', (
     tester,
   ) async {
-    final controller = _RecoveryController();
-    await tester.pumpWidget(_controls(controller, manualNext: () {}));
+    const currentRef = MediaRef(
+      extensionId: 'test',
+      providerId: 'test.provider',
+      id: 'episode-1',
+    );
+    const episode = EpisodeItemV2(
+      ref: currentRef,
+      title: 'Episode 1',
+      subtitle: 'Example Series',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season-1',
+        position: 1,
+      ),
+    );
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 2),
+      ),
+    );
+    const guide = EpisodeGuide(
+      groups: [
+        EpisodeGroup(
+          id: 'season-1',
+          title: 'Season 1',
+          episodes: [
+            EpisodeSummary(ref: currentRef, title: 'Episode 1', position: 1),
+            EpisodeSummary(
+              ref: MediaRef(
+                extensionId: 'test',
+                providerId: 'test.provider',
+                id: 'episode-2',
+              ),
+              title: 'Episode 2',
+              position: 2,
+            ),
+          ],
+        ),
+      ],
+    );
 
-    expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        episodeGuide: guide,
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.video_library_rounded));
+    await tester.pump();
+    expect(find.byKey(const Key('player-episode-rail')), findsOneWidget);
+
+    await tester.tapAt(const Offset(20, 250));
+    await tester.pump();
+    expect(find.byKey(const Key('player-episode-rail')), findsNothing);
   });
 
   testWidgets('up-next trigger follows the provider outro marker', (
@@ -575,11 +708,11 @@ void main() {
 
 Widget _controls(
   _RecoveryController controller, {
-  VoidCallback? manualNext,
   PlaybackMedia? media,
   EpisodeGuide? episodeGuide,
   List<PlaybackSegment> playbackSegments = const [],
   VoidCallback? onNearEnd,
+  ValueChanged<PlayerEpisodeEntry>? onPlayEpisode,
   void Function(bool visibility)? onVisibilityChanged,
   void Function(Duration grace)? onSettling,
 }) => wrapApp(
@@ -614,7 +747,7 @@ Widget _controls(
     isLive: false,
     episodeGuide: episodeGuide,
     playbackSegments: playbackSegments,
-    onManualNext: manualNext,
+    onPlayEpisode: onPlayEpisode ?? (_) {},
     onNearEnd: onNearEnd ?? () {},
     onPlayNext: () {},
     onPauseUpNext: () {},

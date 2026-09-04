@@ -67,7 +67,7 @@ void main() {
     await tester.pump();
     final initialBuilds = player.buildCount;
 
-    await tester.tap(find.text('Source A'));
+    await tester.tap(find.byTooltip('Source A'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Source B').last);
     await tester.pumpAndSettle();
@@ -75,7 +75,7 @@ void main() {
     expect(player.played, second.stream);
     expect(player.buildCount, greaterThan(initialBuilds));
     expect(player.controllers[1].lastSeekPosition, const Duration(minutes: 25));
-    expect(find.text('Source B'), findsOneWidget);
+    expect(find.byTooltip('Source B'), findsOneWidget);
   });
 
   testWidgets('passes the preferred maximum quality to the player', (
@@ -186,7 +186,7 @@ void main() {
     controller.add(later);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Server 3'));
+    await tester.tap(find.byTooltip('Server 3'));
     await tester.pumpAndSettle();
     expect(
       find.text('Bein Sport 1'),
@@ -228,7 +228,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Server 3'));
+    await tester.tap(find.byTooltip('Server 3'));
     await tester.pumpAndSettle();
     expect(find.text('Bein Sport 1'), findsOneWidget);
     await controller.close();
@@ -282,7 +282,7 @@ void main() {
 
     expect(player.playedPreferredExternalSubtitle, external);
 
-    await tester.tap(find.text('Source A'));
+    await tester.tap(find.byTooltip('Source A'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Source B').last);
     await tester.pumpAndSettle();

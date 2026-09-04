@@ -12,6 +12,7 @@ import '../library/library_controller.dart';
 import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'controls/player_playback_controls.dart';
+import 'controls/player_controls_overlay.dart';
 import 'models/playback_media.dart';
 import 'models/app_player_controller.dart';
 import 'models/resolved_source.dart';
@@ -21,6 +22,7 @@ import 'state/source_fallback_policy.dart';
 import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
 import 'workflow/play_item.dart';
+import 'workflow/primary_episode_target.dart';
 
 export 'models/resolved_source.dart' show ResolvedSource, mergeResolvedSources;
 
@@ -593,6 +595,21 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  void _playEpisode(PlayerEpisodeEntry entry) {
+    if (_advancing) return;
+    final current = widget.media.item;
+    if (current is! EpisodeItemV2) return;
+    _advancing = true;
+    unawaited(
+      playItemV2(
+        context,
+        episodeItemFrom(current, entry.group, entry.index),
+        episodeGuide: widget.episodeGuide,
+        replaceCurrent: true,
+      ),
+    );
+  }
+
   void _dismiss(AppPlayerController? controller) {
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
@@ -762,7 +779,7 @@ class _PlayerPageState extends State<PlayerPage> {
         upNextV2: _showUpNext ? _nextEpisode : null,
         upNextPaused: _upNextPaused,
         onNearEnd: _showNextEpisode,
-        onManualNext: _nextEpisode == null ? null : _playNextEpisode,
+        onPlayEpisode: _playEpisode,
         onPlayNext: _playNextEpisode,
         onSettling: (grace) => _stallDetector.defer(grace, now: DateTime.now()),
         onPauseUpNext: () => setState(() => _upNextPaused = true),

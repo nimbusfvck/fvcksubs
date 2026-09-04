@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../catalog/artwork_placeholder.dart';
+import '../../detail/episode_target_v2.dart';
 import '../../theme/tokens.dart';
 import '../models/app_player_controller.dart';
 import '../widgets/player_fit_button.dart';
 import '../widgets/player_overlays.dart';
+
+typedef PlayerEpisodeEntry = ({
+  EpisodeGroup group,
+  int index,
+  EpisodeSummary episode,
+});
 
 void _noFitToggle() {}
 
@@ -35,7 +44,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
     this.onSkipIntro,
     required this.onTogglePlayPause,
     required this.onChangeSource,
-    required this.onPlayNext,
+    required this.episodeEntries,
+    required this.currentEpisodeRef,
+    required this.onPlayEpisode,
     required this.onOpenSubtitlePicker,
     this.onOpenAudioPicker,
     required this.onOpenQualityPicker,
@@ -118,8 +129,14 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Opens the source-selection UI.
   final VoidCallback onChangeSource;
 
-  /// Starts the next episode manually; null hides the manual next icon.
-  final VoidCallback? onPlayNext;
+  /// Episodes available to show in the in-player episode rail.
+  final List<PlayerEpisodeEntry> episodeEntries;
+
+  /// The episode currently loaded in the player, if this is episodic content.
+  final MediaRef? currentEpisodeRef;
+
+  /// Starts an episode selected from the in-player episode rail.
+  final ValueChanged<PlayerEpisodeEntry> onPlayEpisode;
 
   /// Opens the subtitle-selection UI.
   final VoidCallback onOpenSubtitlePicker;
@@ -181,7 +198,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
           atLiveEdge: atLiveEdge,
           dragValueMs: dragValueMs,
           onChangeSource: onChangeSource,
-          onPlayNext: onPlayNext,
+          episodeEntries: episodeEntries,
+          currentEpisodeRef: currentEpisodeRef,
+          onPlayEpisode: onPlayEpisode,
           onOpenSubtitlePicker: onOpenSubtitlePicker,
           onOpenAudioPicker: onOpenAudioPicker,
           onOpenQualityPicker: onOpenQualityPicker,
@@ -395,7 +414,7 @@ class _PlayerTransportControls extends StatelessWidget {
   );
 }
 
-class _PlayerBottomControls extends StatelessWidget {
+class _PlayerBottomControls extends StatefulWidget {
   const _PlayerBottomControls({
     required this.visible,
     required this.isLive,
@@ -409,7 +428,9 @@ class _PlayerBottomControls extends StatelessWidget {
     required this.atLiveEdge,
     required this.dragValueMs,
     required this.onChangeSource,
-    required this.onPlayNext,
+    required this.episodeEntries,
+    required this.currentEpisodeRef,
+    required this.onPlayEpisode,
     required this.onOpenSubtitlePicker,
     required this.onOpenAudioPicker,
     required this.onOpenQualityPicker,
@@ -431,7 +452,9 @@ class _PlayerBottomControls extends StatelessWidget {
   final bool atLiveEdge;
   final double? dragValueMs;
   final VoidCallback onChangeSource;
-  final VoidCallback? onPlayNext;
+  final List<PlayerEpisodeEntry> episodeEntries;
+  final MediaRef? currentEpisodeRef;
+  final ValueChanged<PlayerEpisodeEntry> onPlayEpisode;
   final VoidCallback onOpenSubtitlePicker;
   final VoidCallback? onOpenAudioPicker;
   final VoidCallback onOpenQualityPicker;
@@ -439,6 +462,59 @@ class _PlayerBottomControls extends StatelessWidget {
   final ValueChanged<double> onTimelineChanged;
   final ValueChanged<double> onTimelineChangeEnd;
   final List<PlaybackSegment> playbackSegments;
+
+  @override
+  State<_PlayerBottomControls> createState() => _PlayerBottomControlsState();
+}
+
+class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
+  bool _episodeListVisible = false;
+
+  @override
+  void didUpdateWidget(covariant _PlayerBottomControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.visible) _episodeListVisible = false;
+  }
+
+  bool get visible => widget.visible;
+  bool get isLive => widget.isLive;
+  String? get sourceLabel => widget.sourceLabel;
+  String? get activeSubtitleLabel => widget.activeSubtitleLabel;
+  String? get activeQualityLabel => widget.activeQualityLabel;
+  Duration get position => widget.position;
+  Duration get duration => widget.duration;
+  Duration get timelineExtent => widget.timelineExtent;
+  Duration get bufferedExtent => widget.bufferedExtent;
+  bool get atLiveEdge => widget.atLiveEdge;
+  double? get dragValueMs => widget.dragValueMs;
+  VoidCallback get onChangeSource => widget.onChangeSource;
+  List<PlayerEpisodeEntry> get episodeEntries => widget.episodeEntries;
+  MediaRef? get currentEpisodeRef => widget.currentEpisodeRef;
+  ValueChanged<PlayerEpisodeEntry> get onPlayEpisode => widget.onPlayEpisode;
+  VoidCallback get onOpenSubtitlePicker => widget.onOpenSubtitlePicker;
+  VoidCallback? get onOpenAudioPicker => widget.onOpenAudioPicker;
+  VoidCallback get onOpenQualityPicker => widget.onOpenQualityPicker;
+  ValueChanged<double> get onTimelineChangeStart =>
+      widget.onTimelineChangeStart;
+  ValueChanged<double> get onTimelineChanged => widget.onTimelineChanged;
+  ValueChanged<double> get onTimelineChangeEnd => widget.onTimelineChangeEnd;
+  List<PlaybackSegment> get playbackSegments => widget.playbackSegments;
+
+  void _toggleEpisodeList() =>
+      setState(() => _episodeListVisible = !_episodeListVisible);
+
+  void _playEpisode(PlayerEpisodeEntry entry) {
+    if (entry.episode.ref == currentEpisodeRef) {
+      setState(() => _episodeListVisible = false);
+      return;
+    }
+    final available =
+        entry.episode.availableAt == null ||
+        !entry.episode.availableAt!.isAfter(DateTime.now().toUtc());
+    if (!available) return;
+    setState(() => _episodeListVisible = false);
+    onPlayEpisode(entry);
+  }
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -469,18 +545,30 @@ class _PlayerBottomControls extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_episodeListVisible)
+                    PlayerEpisodeRail(
+                      entries: episodeEntries,
+                      currentEpisodeRef: currentEpisodeRef,
+                      onPlayEpisode: _playEpisode,
+                    ),
                   Align(
                     alignment: Alignment.centerRight,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (onPlayNext != null)
+                        if (episodeEntries.isNotEmpty)
                           IconButton(
-                            onPressed: onPlayNext,
-                            icon: const Icon(Icons.skip_next_rounded),
+                            onPressed: _toggleEpisodeList,
+                            icon: Icon(
+                              _episodeListVisible
+                                  ? Icons.close_rounded
+                                  : Icons.video_library_rounded,
+                            ),
                             color: Colors.white,
                             iconSize: 24,
-                            tooltip: 'Next Episode',
+                            tooltip: _episodeListVisible
+                                ? 'Close Episodes'
+                                : 'Episodes',
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
                               minWidth: 40,
@@ -646,10 +734,10 @@ class _PlayerTimeline extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final maxMs = timelineExtent.inMilliseconds.toDouble();
-              final sliderValue = (dragValueMs ??
-                      position.inMilliseconds.toDouble())
-                  .clamp(0.0, maxMs)
-                  .toDouble();
+              final sliderValue =
+                  (dragValueMs ?? position.inMilliseconds.toDouble())
+                      .clamp(0.0, maxMs)
+                      .toDouble();
               final progress = maxMs > 0 ? sliderValue / maxMs : 0.0;
               const previewWidth = 68.0;
               const trackInset = 8.0;
@@ -760,6 +848,200 @@ class _PlayerTimeline extends StatelessWidget {
       maxLines: 1,
     )..layout();
     return painter.width + AppSpacing.xs;
+  }
+}
+
+class PlayerEpisodeRail extends StatefulWidget {
+  const PlayerEpisodeRail({
+    super.key,
+    required this.entries,
+    required this.currentEpisodeRef,
+    required this.onPlayEpisode,
+  });
+
+  final List<PlayerEpisodeEntry> entries;
+  final MediaRef? currentEpisodeRef;
+  final ValueChanged<PlayerEpisodeEntry> onPlayEpisode;
+
+  @override
+  State<PlayerEpisodeRail> createState() => _PlayerEpisodeRailState();
+}
+
+class _PlayerEpisodeRailState extends State<PlayerEpisodeRail> {
+  static const double _cardGap = AppSpacing.sm;
+  final ScrollController _scrollController = ScrollController();
+  int? _centeredIndex;
+
+  @override
+  void didUpdateWidget(covariant PlayerEpisodeRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentIndex = _currentIndex;
+    if (currentIndex != _centeredIndex) {
+      _centeredIndex = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  int get _currentIndex => widget.entries.indexWhere(
+    (entry) => entry.episode.ref == widget.currentEpisodeRef,
+  );
+
+  void _centerCurrent(double cardWidth, double availableWidth) {
+    final index = _currentIndex;
+    if (index < 0 || _centeredIndex == index || !_scrollController.hasClients) {
+      return;
+    }
+    _centeredIndex = index;
+    final target =
+        (index * (cardWidth + _cardGap) - (availableWidth - cardWidth) / 2)
+            .clamp(0.0, _scrollController.position.maxScrollExtent)
+            .toDouble();
+    _scrollController.jumpTo(target);
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final cardWidth = constraints.maxWidth < 500 ? 164.0 : 188.0;
+      if (_centeredIndex == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _centerCurrent(cardWidth, constraints.maxWidth);
+        });
+      }
+      return SizedBox(
+        key: const Key('player-episode-rail'),
+        height: 132,
+        child: ListView.separated(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          itemCount: widget.entries.length,
+          separatorBuilder: (_, _) => const SizedBox(width: _cardGap),
+          itemBuilder: (context, index) {
+            final entry = widget.entries[index];
+            return SizedBox(
+              width: cardWidth,
+              child: _PlayerEpisodeCard(
+                entry: entry,
+                guideGroupCount: _groupCount,
+                selected: entry.episode.ref == widget.currentEpisodeRef,
+                onTap: () => widget.onPlayEpisode(entry),
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+
+  int get _groupCount =>
+      widget.entries.map((entry) => entry.group.id).toSet().length;
+}
+
+class _PlayerEpisodeCard extends StatelessWidget {
+  const _PlayerEpisodeCard({
+    required this.entry,
+    required this.guideGroupCount,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PlayerEpisodeEntry entry;
+  final int guideGroupCount;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final episode = entry.episode;
+    final available =
+        episode.availableAt == null ||
+        !episode.availableAt!.isAfter(DateTime.now().toUtc());
+    final image = episode.artwork?.landscape ?? episode.artwork?.portrait;
+    final position = episodeContextLabel(
+      groupTitle: guideGroupCount > 1
+          ? entry.group.title
+          : groupTitleFor(EpisodeGuide(groups: [entry.group]), entry.group.id),
+      episode: episode.position,
+    );
+    final title = episode.title.trim();
+    final named = title.isNotEmpty && title != 'Episode ${episode.position}';
+    final borderColor = selected
+        ? AppColors.brandAccent
+        : AppColors.outlineDark;
+    return Opacity(
+      opacity: available ? 1 : 0.45,
+      child: Material(
+        color: AppColors.surfaceDarkElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.md,
+          side: BorderSide(color: borderColor, width: selected ? 1.5 : 0.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: available ? onTap : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 78,
+                width: double.infinity,
+                child: image == null
+                    ? const ArtworkPlaceholder(icon: Icons.movie_outlined)
+                    : CachedNetworkImage(
+                        imageUrl: image.url,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => const ArtworkPlaceholder(
+                          icon: Icons.movie_outlined,
+                        ),
+                        errorWidget: (_, _, _) => const ArtworkPlaceholder(
+                          icon: Icons.movie_outlined,
+                        ),
+                      ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                    vertical: AppSpacing.xxs,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        position,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption.copyWith(
+                          color: selected
+                              ? AppColors.brandAccent
+                              : AppColors.onDarkSoft,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (named)
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.onDark,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -79,7 +79,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     this.upNextV2,
     this.upNextPaused = false,
     required this.onNearEnd,
-    this.onManualNext,
+    required this.onPlayEpisode,
     required this.onPlayNext,
     required this.onPauseUpNext,
     required this.onCancelUpNext,
@@ -101,7 +101,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final NextEpisodeV2? upNextV2;
   final bool upNextPaused;
   final VoidCallback onNearEnd;
-  final VoidCallback? onManualNext;
+  final ValueChanged<PlayerEpisodeEntry> onPlayEpisode;
   final VoidCallback onPlayNext;
   final VoidCallback onPauseUpNext;
   final VoidCallback onCancelUpNext;
@@ -176,6 +176,18 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     return item is EpisodeItemV2
         ? currentEpisodeContextLabel(item, widget.episodeGuide)
         : null;
+  }
+
+  List<PlayerEpisodeEntry> get _episodeEntries {
+    final guide = widget.episodeGuide;
+    if (guide == null || !widget.media.isEpisode || widget.isLive) {
+      return const [];
+    }
+    return [
+      for (final group in guide.groups)
+        for (final entry in group.episodes.indexed)
+          (group: group, index: entry.$1, episode: entry.$2),
+    ];
   }
 
   @override
@@ -627,7 +639,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         _hideTimer?.cancel();
         widget.onChangeSource();
       },
-      onPlayNext: widget.onManualNext,
+      episodeEntries: _episodeEntries,
+      currentEpisodeRef: widget.media.isEpisode ? widget.media.ref : null,
+      onPlayEpisode: widget.onPlayEpisode,
       onOpenSubtitlePicker: _openSubtitlePicker,
       onOpenAudioPicker: audioTracks.length > 1 ? _openAudioPicker : null,
       onOpenQualityPicker: _openQualityPicker,
