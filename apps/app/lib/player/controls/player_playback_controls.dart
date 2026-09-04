@@ -124,6 +124,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   bool _resumeAfterBuffering = false;
   Timer? _hideTimer;
   double? _dragValueMs;
+  double _playbackSpeed = 1.0;
   String? _activeSubtitleLabel;
   String? _activeQualityLabel;
 
@@ -200,6 +201,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   void didUpdateWidget(covariant PlayerPlaybackControls oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncVideoValue();
+    if (!identical(oldWidget.controller, widget.controller)) {
+      unawaited(widget.controller?.setPlaybackSpeed(_playbackSpeed));
+    }
   }
 
   @override
@@ -473,6 +477,24 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     unawaited(widget.controller?.seekTo(target));
   }
 
+  void _setPlaybackSpeed(double speed) {
+    setState(() => _playbackSpeed = speed);
+    unawaited(widget.controller?.setPlaybackSpeed(speed));
+    _revealControls();
+  }
+
+  Future<void> _openSettings() async {
+    _hideTimer?.cancel();
+    final picked = await showDialog<double>(
+      context: context,
+      builder: (_) =>
+          PlayerPlaybackSettingsDialog(currentSpeed: _playbackSpeed),
+    );
+    if (!mounted) return;
+    if (picked != null) _setPlaybackSpeed(picked);
+    _revealControls();
+  }
+
   Future<void> _openSubtitlePicker() async {
     if (widget.isLive) return;
     _hideTimer?.cancel();
@@ -631,6 +653,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onBack: widget.onBack,
       fitMode: widget.fitMode,
       onToggleFit: widget.onToggleFit,
+      onOpenSettings: _openSettings,
       onSkip: _skip,
       skipIntroLabel: _activeIntroSegment == null ? null : 'Skip intro',
       onSkipIntro: _activeIntroSegment == null ? null : _skipIntro,

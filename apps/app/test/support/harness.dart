@@ -566,6 +566,9 @@ class FakeAppPlayerController implements AppPlayerController {
   Future<void> seekTo(Duration position) async {}
 
   @override
+  Future<void> setPlaybackSpeed(double speed) async {}
+
+  @override
   Future<void> setSubtitle(SubtitleTrack? track) async {}
 
   @override

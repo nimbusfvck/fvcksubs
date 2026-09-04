@@ -471,6 +471,9 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   @override
   Future<void> seekTo(Duration position) => _player.seekTo(position);
   @override
+  Future<void> setPlaybackSpeed(double speed) =>
+      _player.setPlaybackSpeed(speed);
+  @override
   Future<void> setQuality(AppQualityTrack? track) async {
     final native = track?.platformTrack as vp.VideoTrack?;
     if (kDebugMode) {

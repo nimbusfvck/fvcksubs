@@ -98,6 +98,8 @@ class BetterPlayerControllerAdapter implements AppPlayerController {
   @override
   Future<void> seekTo(Duration position) => _controller.seekTo(position);
   @override
+  Future<void> setPlaybackSpeed(double speed) => _controller.setSpeed(speed);
+  @override
   Future<void> setQuality(AppQualityTrack? track) => _controller.setTrack(
     track?.platformTrack as BetterPlayerAsmsTrack? ??
         BetterPlayerAsmsTrack.defaultTrack(),

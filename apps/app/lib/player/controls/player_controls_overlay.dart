@@ -16,6 +16,7 @@ typedef PlayerEpisodeEntry = ({
 });
 
 void _noFitToggle() {}
+void _noOpenSettings() {}
 
 class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({
@@ -39,6 +40,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.onBack,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
+    this.onOpenSettings = _noOpenSettings,
     required this.onSkip,
     this.skipIntroLabel,
     this.onSkipIntro,
@@ -114,6 +116,9 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Toggles between preserving the source ratio and filling the viewport.
   final VoidCallback onToggleFit;
 
+  /// Opens the player settings sheet.
+  final VoidCallback onOpenSettings;
+
   /// Skips forward or backward by the requested number of seconds.
   final ValueChanged<int> onSkip;
 
@@ -176,6 +181,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           onBack: onBack,
           fitMode: fitMode,
           onToggleFit: onToggleFit,
+          onOpenSettings: onOpenSettings,
         ),
         _PlayerTransportControls(
           visible: controlsVisible,
@@ -241,6 +247,7 @@ class _PlayerTopControls extends StatelessWidget {
     required this.onBack,
     required this.fitMode,
     required this.onToggleFit,
+    required this.onOpenSettings,
   });
 
   final String title;
@@ -249,6 +256,7 @@ class _PlayerTopControls extends StatelessWidget {
   final VoidCallback onBack;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -329,6 +337,12 @@ class _PlayerTopControls extends StatelessWidget {
                     ),
                   ),
                   PlayerFitButton(mode: fitMode, onToggle: onToggleFit),
+                  IconButton(
+                    onPressed: onOpenSettings,
+                    icon: const Icon(Icons.settings_outlined),
+                    color: Colors.white,
+                    tooltip: 'Settings',
+                  ),
                 ],
               ),
             ),

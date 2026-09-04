@@ -19,6 +19,11 @@ List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
 
 const double _refreshControlSize = 40;
 
+const playerPlaybackSpeeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+String playerPlaybackSpeedLabel(double speed) =>
+    speed == speed.roundToDouble() ? '${speed.toInt()}x' : '${speed}x';
+
 class PlayerSourcePickerSheet extends StatefulWidget {
   const PlayerSourcePickerSheet({
     super.key,
@@ -410,6 +415,47 @@ class PlayerAudioPickerSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class PlayerPlaybackSettingsDialog extends StatelessWidget {
+  const PlayerPlaybackSettingsDialog({super.key, required this.currentSpeed});
+
+  final double currentSpeed;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.5;
+    return AlertDialog(
+      backgroundColor: AppColors.surfaceDark,
+      title: Text(
+        'Playback speed',
+        style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+      ),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final speed in playerPlaybackSpeeds)
+                ListTile(
+                  title: Text(
+                    playerPlaybackSpeedLabel(speed),
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  trailing: speed == currentSpeed
+                      ? const Icon(Icons.check, color: AppColors.brandAccent)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(speed),
+                ),
+            ],
+          ),
         ),
       ),
     );

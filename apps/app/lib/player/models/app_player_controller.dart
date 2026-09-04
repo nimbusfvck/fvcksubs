@@ -306,6 +306,7 @@ abstract interface class AppPlayerController {
   Future<void> play();
   Future<void> pause();
   Future<void> seekTo(Duration position);
+  Future<void> setPlaybackSpeed(double speed);
   Future<void> setSubtitle(SubtitleTrack? track);
   Future<void> setQuality(AppQualityTrack? track);
   Future<void> setAudioTrack(AppAudioTrack track);

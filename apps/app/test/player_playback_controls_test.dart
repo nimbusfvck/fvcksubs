@@ -67,6 +67,22 @@ void main() {
     expect(find.text('Episode title'), findsNothing);
   });
 
+  testWidgets('settings menu applies playback speed to the player', (
+    tester,
+  ) async {
+    final controller = _RecoveryController();
+
+    await tester.pumpWidget(_controls(controller));
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Playback speed'), findsOneWidget);
+    await tester.tap(find.text('1.5x'));
+    await tester.pump();
+
+    expect(controller.lastPlaybackSpeed, 1.5);
+  });
+
   testWidgets('episode controls hide opaque group ids without a guide', (
     tester,
   ) async {
@@ -765,6 +781,7 @@ class _RecoveryController implements AppPlayerController {
   int playCalls = 0;
   int pauseCalls = 0;
   Duration? lastSeek;
+  double? lastPlaybackSpeed;
 
   void update(AppPlayerValue value) => _value.value = value;
 
@@ -791,6 +808,9 @@ class _RecoveryController implements AppPlayerController {
   Future<void> pause() async => pauseCalls++;
   @override
   Future<void> seekTo(Duration position) async => lastSeek = position;
+  @override
+  Future<void> setPlaybackSpeed(double speed) async =>
+      lastPlaybackSpeed = speed;
   @override
   Future<void> setSubtitle(SubtitleTrack? track) async {}
   @override

@@ -1327,6 +1327,9 @@ class _MediaKitControllerAdapter implements AppPlayerController {
     await _player.seek(position - _timelineOffset);
   }
 
+  @override
+  Future<void> setPlaybackSpeed(double speed) => _player.setRate(speed);
+
   Future<void> _setSeekPrecision({required bool precise}) async {
     final platform = _player.platform;
     if (platform is! mk.NativePlayer) return;

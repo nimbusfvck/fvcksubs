@@ -247,6 +247,7 @@ flowchart TB
     CTL --> SUB["Subtitles — the source's own, plus any fallback lookup"]
     CTL --> SRC["Source switch — instant, everything is already resolved"]
     CTL --> EP["Episodes — horizontal in-player rail with artwork and titles"]
+    CTL --> SET["Settings — playback speed popup"]
     PP --> NEXT["Continue to the next episode at a provider outro marker"]
     PP --> SAVE["Periodic progress save"]
 ```
@@ -256,6 +257,7 @@ flowchart TB
 | Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. On libmpv platforms, live streams use an in-memory stability buffer and wait briefly for it before first frame or after an underrun; this deliberately stays a little behind the edge to avoid repeated rebuffering. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Episode list | Episodic playback exposes the loaded guide as an app-owned horizontal rail above the timeline. The current episode is centered and highlighted; selecting another available episode replaces the current player route through the normal playback workflow. Unreleased episodes remain visible but disabled. |
+| Playback speed | The top-right Settings action opens an app-owned popup with 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x presets. The selected speed is applied through the shared player contract across native backends and remains active when the current player controller is replaced. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
 | Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
