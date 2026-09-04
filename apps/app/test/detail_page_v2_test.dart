@@ -70,6 +70,59 @@ void main() {
     },
   );
 
+  testWidgets('renders a movie collection above recommendations', (
+    tester,
+  ) async {
+    const movie = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'movie',
+      ),
+      title: 'Movie',
+    );
+    const collectionItem = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'collection-movie',
+      ),
+      title: 'Collection Movie',
+    );
+    const recommendation = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'recommendation',
+      ),
+      title: 'Recommendation',
+    );
+    const detail = MediaDetailV2(
+      item: movie,
+      collection: MediaCollectionV2(
+        id: 'collection',
+        name: 'Example Collection',
+        items: [collectionItem],
+      ),
+      recommendations: [recommendation],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: movie),
+        registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Example Collection'), findsOneWidget);
+    expect(find.text('You Might Also Like'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Example Collection')).dy,
+      lessThan(tester.getTopLeft(find.text('You Might Also Like')).dy),
+    );
+  });
+
   testWidgets('selects the season containing the latest watched episode', (
     tester,
   ) async {

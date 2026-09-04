@@ -17,6 +17,11 @@ void main() {
     providerId: 'example.catalog',
     id: 'video-2',
   );
+  const collectionItemRef = MediaRef(
+    extensionId: 'example',
+    providerId: 'example.catalog',
+    id: 'video-3',
+  );
 
   test('detail and episode guide round-trip', () {
     const detail = MediaDetailV2(
@@ -42,6 +47,13 @@ void main() {
           mimeType: 'video/mp4',
         ),
       ],
+      collection: MediaCollectionV2(
+        id: '531241',
+        name: 'Example Collection',
+        items: [
+          VideoItemV2(ref: collectionItemRef, title: 'Collection movie'),
+        ],
+      ),
       recommendations: [
         VideoItemV2(ref: recommendationRef, title: 'Related video'),
       ],

@@ -225,6 +225,53 @@ class _DetailPageV2State extends State<DetailPageV2> {
                     groups: groups,
                     libraryController: libraryController,
                   ),
+                  if (detail.collection case final collection?
+                      when collection.items.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    _SectionTitle(collection.name),
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      height: 248 + Clickable.ringBleed * 2,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: collection.items.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(width: AppSpacing.sm),
+                        itemBuilder: (context, index) {
+                          final collectionItem = collection.items[index];
+                          final heroTag = Object();
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: Clickable.ringBleed,
+                            ),
+                            child: SizedBox(
+                              width: 152,
+                              child: MediaCardV2(
+                                item: collectionItem,
+                                heroTag: heroTag,
+                                onTap: () => openVersionedItem(
+                                  context,
+                                  VersionedMediaItem(item: collectionItem),
+                                  heroTag: heroTag,
+                                  contentRating: widget.contentRating,
+                                ),
+                                onLongPress: () => showMediaCardActions(
+                                  context,
+                                  collectionItem,
+                                  onViewDetails: () => openDetails(
+                                    context,
+                                    collectionItem,
+                                    heroTag: heroTag,
+                                    contentRating: widget.contentRating,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                   if (detail.recommendations.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.xl),
                     const _SectionTitle('You Might Also Like'),

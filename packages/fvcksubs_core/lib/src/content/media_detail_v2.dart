@@ -319,6 +319,62 @@ class EpisodeGuide extends Equatable {
   List<Object?> get props => [groups, defaultEpisodeRef];
 }
 
+/// A group of related movie items supplied by an extension.
+class MediaCollectionV2 extends Equatable {
+  /// Creates a collection shelf.
+  const MediaCollectionV2({
+    required this.id,
+    required this.name,
+    required this.items,
+  });
+
+  /// Decodes and validates a collection shelf.
+  factory MediaCollectionV2.fromJson(Map<String, Object?> json) {
+    _rejectUnknown(json, const {'id', 'name', 'items'}, 'detail.collection');
+    final id = json['id'];
+    final name = json['name'];
+    final items = json['items'];
+    if (id is! String || id.isEmpty) {
+      throw const FormatException('detail.collection.id must be a non-empty string');
+    }
+    if (name is! String || name.isEmpty) {
+      throw const FormatException('detail.collection.name must be a non-empty string');
+    }
+    if (items is! List) {
+      throw const FormatException('detail.collection.items must be a list');
+    }
+    return MediaCollectionV2(
+      id: id,
+      name: name,
+      items: [
+        for (final item in items)
+          MediaItemV2.fromJson(
+            _object(item, 'detail.collection.items[]'),
+          ),
+      ],
+    );
+  }
+
+  /// Stable TMDB or extension-defined collection identifier.
+  final String id;
+
+  /// Display name for the collection section.
+  final String name;
+
+  /// Items in the collection, in extension-defined display order.
+  final List<MediaItemV2> items;
+
+  /// Encodes this collection shelf.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'items': items.map((item) => item.toJson()).toList(),
+  };
+
+  @override
+  List<Object?> get props => [id, name, items];
+}
+
 /// Strict protocol-v2 detail response.
 class MediaDetailV2 extends Equatable {
   /// Creates a protocol-v2 detail response.
@@ -329,6 +385,7 @@ class MediaDetailV2 extends Equatable {
     this.facts = const [],
     this.credits = const [],
     this.trailers = const [],
+    this.collection,
     this.recommendations = const [],
     this.episodeGuide,
   });
@@ -342,6 +399,7 @@ class MediaDetailV2 extends Equatable {
       'facts',
       'credits',
       'trailers',
+      'collection',
       'recommendations',
       'episodeGuide',
     }, 'media detail');
@@ -365,6 +423,10 @@ class MediaDetailV2 extends Equatable {
     if (recommendations != null && recommendations is! List) {
       throw const FormatException('detail.recommendations must be a list');
     }
+    final collection = json['collection'];
+    if (collection != null && collection is! Map) {
+      throw const FormatException('detail.collection must be an object');
+    }
     return MediaDetailV2(
       item: MediaItemV2.fromJson(_object(json['item'], 'detail.item')),
       description: _optionalString(json['description'], 'detail.description'),
@@ -384,6 +446,11 @@ class MediaDetailV2 extends Equatable {
         for (final trailer in (trailers as List?) ?? const [])
           MediaTrailer.fromJson(_object(trailer, 'detail.trailers[]')),
       ],
+      collection: collection == null
+          ? null
+          : MediaCollectionV2.fromJson(
+              _object(collection, 'detail.collection'),
+            ),
       recommendations: [
         for (final recommendation in (recommendations as List?) ?? const [])
           MediaItemV2.fromJson(
@@ -416,6 +483,9 @@ class MediaDetailV2 extends Equatable {
   /// Optional preview videos in extension-defined display order.
   final List<MediaTrailer> trailers;
 
+  /// Optional related movie collection shown above recommendations.
+  final MediaCollectionV2? collection;
+
   /// Optional related items shown in a recommendation shelf at the bottom.
   final List<MediaItemV2> recommendations;
 
@@ -432,6 +502,7 @@ class MediaDetailV2 extends Equatable {
       'credits': credits.map((credit) => credit.toJson()).toList(),
     if (trailers.isNotEmpty)
       'trailers': trailers.map((trailer) => trailer.toJson()).toList(),
+    if (collection != null) 'collection': collection!.toJson(),
     if (recommendations.isNotEmpty)
       'recommendations': recommendations
           .map((recommendation) => recommendation.toJson())
@@ -447,6 +518,7 @@ class MediaDetailV2 extends Equatable {
     facts,
     credits,
     trailers,
+    collection,
     recommendations,
     episodeGuide,
   ];
