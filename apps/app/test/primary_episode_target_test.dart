@@ -205,6 +205,26 @@ void main() {
       expect((item as EpisodeItemV2).episode.groupId, 'season-2');
       expect(item.subtitle, 'Series');
     });
+
+    test('an episode parent keeps its series ref for rail playback', () {
+      const current = EpisodeItemV2(
+        ref: _s1e1,
+        title: 'Episode 1',
+        subtitle: 'Series',
+        episode: EpisodeIdentity(
+          parentRef: _seriesRef,
+          groupId: 'season-1',
+          position: 1,
+        ),
+      );
+
+      final item = episodeItemFrom(current, _season1, 1);
+
+      expect(item.ref, _s1e2);
+      expect(item.episode.parentRef, _seriesRef);
+      expect(item.episode.groupId, 'season-1');
+      expect(item.subtitle, 'Series');
+    });
   });
 }
 

@@ -95,21 +95,37 @@ MediaItemV2? primaryPlaybackTarget(
   MediaDetailV2 detail,
   PrimaryEpisodeTarget? target,
 ) {
-  if (target == null) return hasEpisodes(detail.episodeGuide) ? null : detail.item;
+  if (target == null) {
+    return hasEpisodes(detail.episodeGuide) ? null : detail.item;
+  }
   return episodeItemFrom(detail.item, target.group, target.index);
 }
 
-/// Builds the playable [EpisodeItemV2] for episode [index] of [group],
-/// carrying [parent]'s artwork as a fallback and its title as the subtitle.
-EpisodeItemV2 episodeItemFrom(MediaItemV2 parent, EpisodeGroup group, int index) {
+/// Builds the playable [EpisodeItemV2] for episode [index] of [group].
+///
+/// [parent] is normally the series item. When an in-player rail is opened
+/// from an episode, it may be the current episode instead; in that case its
+/// episode identity supplies the real series ref so resume and detail
+/// navigation remain attached to the same series.
+EpisodeItemV2 episodeItemFrom(
+  MediaItemV2 parent,
+  EpisodeGroup group,
+  int index,
+) {
   final episode = group.episodes[index];
+  final parentRef = parent is EpisodeItemV2
+      ? parent.episode.parentRef
+      : parent.ref;
+  final parentTitle = parent is EpisodeItemV2
+      ? parent.subtitle ?? parent.title
+      : parent.title;
   return EpisodeItemV2(
     ref: episode.ref,
     title: episode.title,
-    subtitle: parent.title,
+    subtitle: parentTitle,
     artwork: episode.artwork ?? parent.artwork,
     episode: EpisodeIdentity(
-      parentRef: parent.ref,
+      parentRef: parentRef,
       groupId: group.id,
       position: episode.position,
     ),

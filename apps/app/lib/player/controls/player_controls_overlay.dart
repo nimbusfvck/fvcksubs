@@ -17,6 +17,7 @@ typedef PlayerEpisodeEntry = ({
 
 void _noFitToggle() {}
 void _noOpenSettings() {}
+void _noEpisodeListVisibilityChanged(bool visible) {}
 
 class PlayerControlsOverlayView extends StatelessWidget {
   const PlayerControlsOverlayView({
@@ -41,6 +42,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
     this.onOpenSettings = _noOpenSettings,
+    this.onEpisodeListVisibilityChanged = _noEpisodeListVisibilityChanged,
     required this.onSkip,
     this.skipIntroLabel,
     this.onSkipIntro,
@@ -118,6 +120,10 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Opens the player settings sheet.
   final VoidCallback onOpenSettings;
+
+  /// Announces episode rail visibility so the player can pause auto-hide while
+  /// the viewer is choosing an episode.
+  final ValueChanged<bool> onEpisodeListVisibilityChanged;
 
   /// Skips forward or backward by the requested number of seconds.
   final ValueChanged<int> onSkip;
@@ -207,6 +213,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           episodeEntries: episodeEntries,
           currentEpisodeRef: currentEpisodeRef,
           onPlayEpisode: onPlayEpisode,
+          onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
           onOpenSubtitlePicker: onOpenSubtitlePicker,
           onOpenAudioPicker: onOpenAudioPicker,
           onOpenQualityPicker: onOpenQualityPicker,
@@ -445,6 +452,7 @@ class _PlayerBottomControls extends StatefulWidget {
     required this.episodeEntries,
     required this.currentEpisodeRef,
     required this.onPlayEpisode,
+    required this.onEpisodeListVisibilityChanged,
     required this.onOpenSubtitlePicker,
     required this.onOpenAudioPicker,
     required this.onOpenQualityPicker,
@@ -469,6 +477,7 @@ class _PlayerBottomControls extends StatefulWidget {
   final List<PlayerEpisodeEntry> episodeEntries;
   final MediaRef? currentEpisodeRef;
   final ValueChanged<PlayerEpisodeEntry> onPlayEpisode;
+  final ValueChanged<bool> onEpisodeListVisibilityChanged;
   final VoidCallback onOpenSubtitlePicker;
   final VoidCallback? onOpenAudioPicker;
   final VoidCallback onOpenQualityPicker;
@@ -505,6 +514,8 @@ class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
   List<PlayerEpisodeEntry> get episodeEntries => widget.episodeEntries;
   MediaRef? get currentEpisodeRef => widget.currentEpisodeRef;
   ValueChanged<PlayerEpisodeEntry> get onPlayEpisode => widget.onPlayEpisode;
+  ValueChanged<bool> get onEpisodeListVisibilityChanged =>
+      widget.onEpisodeListVisibilityChanged;
   VoidCallback get onOpenSubtitlePicker => widget.onOpenSubtitlePicker;
   VoidCallback? get onOpenAudioPicker => widget.onOpenAudioPicker;
   VoidCallback get onOpenQualityPicker => widget.onOpenQualityPicker;
@@ -514,12 +525,16 @@ class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
   ValueChanged<double> get onTimelineChangeEnd => widget.onTimelineChangeEnd;
   List<PlaybackSegment> get playbackSegments => widget.playbackSegments;
 
-  void _toggleEpisodeList() =>
-      setState(() => _episodeListVisible = !_episodeListVisible);
+  void _toggleEpisodeList() {
+    final nextVisible = !_episodeListVisible;
+    setState(() => _episodeListVisible = nextVisible);
+    onEpisodeListVisibilityChanged(nextVisible);
+  }
 
   void _playEpisode(PlayerEpisodeEntry entry) {
     if (entry.episode.ref == currentEpisodeRef) {
       setState(() => _episodeListVisible = false);
+      onEpisodeListVisibilityChanged(false);
       return;
     }
     final available =
@@ -527,6 +542,7 @@ class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
         !entry.episode.availableAt!.isAfter(DateTime.now().toUtc());
     if (!available) return;
     setState(() => _episodeListVisible = false);
+    onEpisodeListVisibilityChanged(false);
     onPlayEpisode(entry);
   }
 

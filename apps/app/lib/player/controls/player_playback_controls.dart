@@ -483,6 +483,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _revealControls();
   }
 
+  void _onEpisodeListVisibilityChanged(bool visible) {
+    _hideTimer?.cancel();
+    if (!visible) _revealControls();
+  }
+
   Future<void> _openSettings() async {
     _hideTimer?.cancel();
     final picked = await showDialog<double>(
@@ -654,6 +659,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       fitMode: widget.fitMode,
       onToggleFit: widget.onToggleFit,
       onOpenSettings: _openSettings,
+      onEpisodeListVisibilityChanged: _onEpisodeListVisibilityChanged,
       onSkip: _skip,
       skipIntroLabel: _activeIntroSegment == null ? null : 'Skip intro',
       onSkipIntro: _activeIntroSegment == null ? null : _skipIntro,

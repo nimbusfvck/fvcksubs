@@ -214,6 +214,8 @@ void main() {
       tester.getTopLeft(find.byIcon(Icons.high_quality_rounded)).dy,
       closeTo(qualityTopBefore, 0.1),
     );
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.byKey(const Key('player-episode-rail')), findsOneWidget);
 
     await tester.tap(find.text('Second Episode'));
     expect(selected, isTrue);
