@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
+import 'artwork_cache.dart';
 
 const List<Color> _bannerPalette = [
   Color(0xFF4338CA), // indigo
@@ -728,6 +729,8 @@ class _Crest extends StatelessWidget {
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
             fadeInDuration: Duration.zero,
+            memCacheWidth: artworkCacheDimension(context, size),
+            memCacheHeight: artworkCacheDimension(context, size),
             placeholder: (context, url) => showFallbackWhileLoading
                 ? _CrestFallback(
                     size: size,
@@ -766,6 +769,8 @@ class _BrandLogo extends StatelessWidget {
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
       fadeInDuration: Duration.zero,
+      memCacheWidth: artworkCacheDimension(context, height * 2.2),
+      memCacheHeight: artworkCacheDimension(context, height),
       placeholder: (_, _) => const SizedBox.shrink(),
       errorWidget: (_, _, _) => fallback,
     ),

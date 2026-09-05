@@ -46,6 +46,40 @@ void main() {
     expect(find.byType(Hero), findsOneWidget);
   });
 
+  testWidgets('poster decode size follows the rendered card size', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(devicePixelRatio: 2),
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              height: 172,
+              child: MediaCardV2(
+                item: VideoItemV2(
+                  ref: ref,
+                  title: 'Sized poster',
+                  artwork: Artwork(
+                    portrait: ImageRef('https://cdn.example/sized.jpg'),
+                  ),
+                ),
+                onTap: _noop,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final image = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
+    expect(image.memCacheWidth, 600);
+    expect(image.memCacheHeight, isNotNull);
+  });
+
   testWidgets('long press opens the favorite action without tapping', (
     tester,
   ) async {

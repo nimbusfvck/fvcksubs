@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
+import '../catalog/artwork_cache.dart';
 import '../catalog/generated_banner.dart';
 import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
@@ -323,10 +324,10 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
     final artwork = media.artwork;
     final image = artwork?.portrait ?? artwork?.landscape;
     final fallbackArtwork = _fallbackArtwork(media);
-    final cacheWidth =
-        (MediaQuery.sizeOf(context).width *
-                MediaQuery.devicePixelRatioOf(context))
-            .round();
+    final cacheWidth = artworkCacheDimension(
+      context,
+      MediaQuery.sizeOf(context).width,
+    );
     return RepaintBoundary(
       child: Stack(
         fit: StackFit.expand,
@@ -548,6 +549,8 @@ class _FeaturedTitle extends StatelessWidget {
               imageUrl: logo.url,
               fit: BoxFit.contain,
               fadeInDuration: Duration.zero,
+              memCacheWidth: artworkCacheDimension(context, 280),
+              memCacheHeight: artworkCacheDimension(context, 56),
               placeholder: (_, _) => Center(child: fallback),
               errorWidget: (_, _, _) => Center(child: fallback),
             ),

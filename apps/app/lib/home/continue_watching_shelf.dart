@@ -8,6 +8,7 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import '../detail/detail_page_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../catalog/artwork_placeholder.dart';
+import '../catalog/artwork_cache.dart';
 import '../catalog/media_card_actions.dart';
 import '../library/library_controller.dart';
 import '../theme/tokens.dart';
@@ -149,13 +150,23 @@ class _ContinueCard extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (image != null)
-            CachedNetworkImage(
-              imageUrl: image.url,
-              fit: BoxFit.cover,
-              placeholder: (_, _) =>
-                  const ArtworkPlaceholder(icon: Icons.movie_outlined),
-              errorWidget: (_, _, _) =>
-                  const ArtworkPlaceholder(icon: Icons.movie_outlined),
+            LayoutBuilder(
+              builder: (context, constraints) => CachedNetworkImage(
+                imageUrl: image.url,
+                fit: BoxFit.cover,
+                memCacheWidth: artworkCacheDimension(
+                  context,
+                  constraints.maxWidth,
+                ),
+                memCacheHeight: artworkCacheDimension(
+                  context,
+                  constraints.maxHeight,
+                ),
+                placeholder: (_, _) =>
+                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
+                errorWidget: (_, _, _) =>
+                    const ArtworkPlaceholder(icon: Icons.movie_outlined),
+              ),
             )
           else
             const ArtworkPlaceholder(icon: Icons.movie_outlined),

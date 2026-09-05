@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'artwork_cache.dart';
 
 class ParticipantAvatar extends StatelessWidget {
   const ParticipantAvatar({super.key, this.imageUrl, this.size = 28});
@@ -25,6 +26,8 @@ class ParticipantAvatar extends StatelessWidget {
             imageUrl: imageUrl!,
             fit: BoxFit.contain,
             fadeInDuration: Duration.zero,
+            memCacheWidth: artworkCacheDimension(context, size),
+            memCacheHeight: artworkCacheDimension(context, size),
             placeholder: (context, url) => const SizedBox.shrink(),
             errorWidget: (context, url, error) => _Fallback(size: size),
           ),

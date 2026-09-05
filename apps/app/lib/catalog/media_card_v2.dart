@@ -6,6 +6,7 @@ import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 import '../utils/media_item_metadata.dart';
 import '../widgets/clickable.dart';
+import 'artwork_cache.dart';
 import 'artwork_placeholder.dart';
 import 'generated_banner.dart';
 import 'media_hero.dart';
@@ -89,15 +90,25 @@ class _Poster extends StatelessWidget {
           children: [
             Hero(
               tag: heroTag,
-              child: CachedNetworkImage(
-                imageUrl: image.url,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                fadeInDuration: Duration.zero,
-                placeholder: (_, _) =>
-                    ArtworkPlaceholder(icon: _placeholderIcon(item)),
-                errorWidget: (_, _, _) =>
-                    ArtworkPlaceholder(icon: _placeholderIcon(item)),
+              child: LayoutBuilder(
+                builder: (context, constraints) => CachedNetworkImage(
+                  imageUrl: image.url,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  fadeInDuration: Duration.zero,
+                  memCacheWidth: artworkCacheDimension(
+                    context,
+                    constraints.maxWidth,
+                  ),
+                  memCacheHeight: artworkCacheDimension(
+                    context,
+                    constraints.maxHeight,
+                  ),
+                  placeholder: (_, _) =>
+                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
+                  errorWidget: (_, _, _) =>
+                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
+                ),
               ),
             ),
             if (item.releaseDate case final releaseDate? when item.isUpcoming)
@@ -163,13 +174,23 @@ class _SingleEventArtwork extends StatelessWidget {
             logo: item.artwork?.logo,
             branding: item.branding,
           )
-        : CachedNetworkImage(
-            imageUrl: landscape.url,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            fadeInDuration: Duration.zero,
-            placeholder: (_, _) => const _EventArtworkFallback(),
-            errorWidget: (_, _, _) => const _EventArtworkFallback(),
+        : LayoutBuilder(
+            builder: (context, constraints) => CachedNetworkImage(
+              imageUrl: landscape.url,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              fadeInDuration: Duration.zero,
+              memCacheWidth: artworkCacheDimension(
+                context,
+                constraints.maxWidth,
+              ),
+              memCacheHeight: artworkCacheDimension(
+                context,
+                constraints.maxHeight,
+              ),
+              placeholder: (_, _) => const _EventArtworkFallback(),
+              errorWidget: (_, _, _) => const _EventArtworkFallback(),
+            ),
           );
 
     return Stack(
