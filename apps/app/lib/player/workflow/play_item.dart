@@ -13,6 +13,11 @@ import '../player_page.dart';
 import '../state/source_priority_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 
+/// A Play tap owns the navigator until its loading route has handed off to
+/// the player. Without this, a quick second tap can stack another loading and
+/// player route on top of the first workflow.
+final Set<NavigatorState> _activePlayNavigators = <NavigatorState>{};
+
 /// Warms the cheap, opaque source descriptors while a detail page is open.
 ///
 /// This intentionally does not resolve signed playback URLs. Resolution stays
@@ -48,14 +53,22 @@ Future<void> playItemV2(
   ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
-}) => _playMedia(
-  context,
-  PlaybackMedia(item),
-  episodeGuide: episodeGuide,
-  contentRating: contentRating,
-  replaceCurrent: replaceCurrent,
-  returnToDetail: returnToDetail,
-);
+}) async {
+  final navigator = Navigator.of(context);
+  if (!_activePlayNavigators.add(navigator)) return;
+  try {
+    await _playMedia(
+      context,
+      PlaybackMedia(item),
+      episodeGuide: episodeGuide,
+      contentRating: contentRating,
+      replaceCurrent: replaceCurrent,
+      returnToDetail: returnToDetail,
+    );
+  } finally {
+    _activePlayNavigators.remove(navigator);
+  }
+}
 
 Future<void> _playMedia(
   BuildContext context,
@@ -68,6 +81,7 @@ Future<void> _playMedia(
   final scope = AppScope.of(context);
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
+  final routeToReplace = replaceCurrent ? ModalRoute.of(context) : null;
 
   // Kicked off before source discovery so it overlaps with the resolve the
   // viewer is already waiting through, instead of adding to it.
@@ -87,19 +101,17 @@ Future<void> _playMedia(
       )
       .toList();
   if (enabledCached != null && enabledCached.isNotEmpty) {
-    unawaited(
-      _openPlayer(
-        navigator,
-        scope,
-        item,
-        enabledCached,
-        replaceCurrent,
-        contentRating: contentRating,
-        episodeGuide: episodeGuide,
-        externalSubtitles: externalSubtitles,
-        playbackSegments: playbackSegments,
-        returnToDetail: returnToDetail,
-      ),
+    await _openPlayer(
+      navigator,
+      scope,
+      item,
+      enabledCached,
+      replaceCurrent,
+      contentRating: contentRating,
+      episodeGuide: episodeGuide,
+      externalSubtitles: externalSubtitles,
+      playbackSegments: playbackSegments,
+      returnToDetail: returnToDetail,
     );
     if (scope.sourceCache.isStale(item.ref)) {
       unawaited(_revalidate(scope, item));
@@ -122,33 +134,61 @@ Future<void> _playMedia(
       (progress) => _resolveKnownSources(scope, item, [
         orderedCachedList.first,
       ], progress),
-    );
-    if (fast == null) return; // abandoned mid-resolve
-    if (fast.isNotEmpty) {
-      scope.sourceCache.store(item.ref, fast);
-      final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
-      unawaited(
-        _openPlayer(
+      onResolved: (resolved, loadingRoute) async {
+        if (resolved.isEmpty) return false;
+        scope.sourceCache.store(item.ref, resolved);
+        final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
+        await _openPlayer(
           navigator,
           scope,
           item,
-          fast,
+          resolved,
           replaceCurrent,
+          loadingRoute: loadingRoute,
+          routeToReplace: routeToReplace,
           contentRating: contentRating,
           episodeGuide: episodeGuide,
           pendingSources: pendingSources,
           externalSubtitles: externalSubtitles,
           playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
-        ),
-      );
-      return;
-    }
+        );
+        return true;
+      },
+    );
+    if (fast == null) return; // abandoned mid-resolve
+    if (fast.isNotEmpty) return;
   }
 
   final result = await _resolveWithOverlay(
     navigator,
     (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
+    onResolved: (resolved, loadingRoute) async {
+      final first = resolved.first;
+      if (first == null) return false;
+      if (resolved.refresh == null) {
+        scope.sourceCache.store(item.ref, [first]);
+      }
+      await _openPlayer(
+        navigator,
+        scope,
+        item,
+        [first],
+        replaceCurrent,
+        loadingRoute: loadingRoute,
+        routeToReplace: routeToReplace,
+        contentRating: contentRating,
+        episodeGuide: episodeGuide,
+        pendingSources: _appendResolvedSources(
+          resolved.second,
+          resolved.refresh,
+        ),
+        externalSubtitles: externalSubtitles,
+        playbackSegments: playbackSegments,
+        returnToDetail: returnToDetail,
+      );
+      return true;
+    },
   );
   if (result == null) return;
 
@@ -158,26 +198,6 @@ Future<void> _playMedia(
     );
     return;
   }
-
-  final first = result.first!;
-  if (result.refresh == null) {
-    scope.sourceCache.store(item.ref, [first]);
-  }
-  unawaited(
-    _openPlayer(
-      navigator,
-      scope,
-      item,
-      [first],
-      replaceCurrent,
-      contentRating: contentRating,
-      episodeGuide: episodeGuide,
-      pendingSources: _appendResolvedSources(result.second, result.refresh),
-      externalSubtitles: externalSubtitles,
-      playbackSegments: playbackSegments,
-      returnToDetail: returnToDetail,
-    ),
-  );
 }
 
 /// Resolved URLs for live events and channels are usually signed and short
@@ -207,11 +227,18 @@ Future<List<ResolvedSource>> refetchPlayableSources(
 
 Future<T?> _resolveWithOverlay<T>(
   NavigatorState navigator,
-  Future<T> Function(_ResolveProgress progress) resolve,
-) async {
+  Future<T> Function(_ResolveProgress progress) resolve, {
+  Future<bool> Function(T result, Route<void> loadingRoute)? onResolved,
+}) async {
   final progress = _ResolveProgress();
+  final loadingReady = Completer<void>();
   final overlay = MaterialPageRoute<void>(
-    builder: (_) => _PlayLoadingPage(progress: progress),
+    builder: (_) => _PlayLoadingPage(
+      progress: progress,
+      onMounted: () {
+        if (!loadingReady.isCompleted) loadingReady.complete();
+      },
+    ),
   );
 
   var abandoned = false;
@@ -220,10 +247,21 @@ Future<T?> _resolveWithOverlay<T>(
   unawaited(navigator.push(overlay));
 
   final result = await resolve(progress);
-  progress.dispose();
 
-  if (abandoned) return null;
-  navigator.removeRoute(overlay);
+  // A very fast source can resolve before the route gets its first build.
+  // Keep the notifier alive until the loading page is mounted or abandoned.
+  await Future.any([loadingReady.future, overlay.popped]);
+  if (abandoned) {
+    progress.dispose();
+    return null;
+  }
+  var handedOff = false;
+  try {
+    handedOff = onResolved == null ? false : await onResolved(result, overlay);
+  } finally {
+    if (!handedOff && overlay.isActive) navigator.removeRoute(overlay);
+    progress.dispose();
+  }
   return result;
 }
 
@@ -267,6 +305,8 @@ Future<void> _openPlayer(
   PlaybackMedia item,
   List<ResolvedSource> sources,
   bool replaceCurrent, {
+  Route<void>? loadingRoute,
+  Route<dynamic>? routeToReplace,
   required ContentRating contentRating,
   EpisodeGuide? episodeGuide,
   Stream<ResolvedSource>? pendingSources,
@@ -276,19 +316,17 @@ Future<void> _openPlayer(
 }) async {
   final stopwatch = Stopwatch()..start();
   // Started alongside source resolution, so by now it has almost always
-  // landed. The grace is for when it has not: playback opens without it
-  // rather than waiting on a subtitle the viewer may not even need.
+  // landed. The short grace keeps the preferred track available without
+  // making a slow subtitle provider block playback indefinitely.
   if (externalSubtitles != null) {
     _debugSourceLog('player_open_subtitle_wait_start');
-    await Future.any([
-      externalSubtitles,
-      Future<void>.delayed(_externalSubtitleGrace),
-    ]);
+    await _waitForExternalSubtitles(externalSubtitles);
     _debugSourceLog(
       'player_open_subtitle_wait_done '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
   }
+  if (loadingRoute != null && !loadingRoute.isActive) return;
   final resolved = _preferredFirst(
     sources,
     scope.sourcePriorityController,
@@ -327,9 +365,38 @@ Future<void> _openPlayer(
     'player_route_push source=${_sourceLogName(resolved.first.source)} '
     'elapsed=${stopwatch.elapsedMilliseconds}ms',
   );
+  final push = loadingRoute == null
+      ? replaceCurrent
+            ? navigator.pushReplacement(route)
+            : navigator.push(route)
+      : navigator.push(route);
+  if (loadingRoute != null) {
+    if (loadingRoute.isActive) navigator.removeRoute(loadingRoute);
+    if (replaceCurrent && routeToReplace?.isActive == true) {
+      navigator.removeRoute(routeToReplace!);
+    }
+  }
+  unawaited(push);
+}
+
+Future<void> _waitForExternalSubtitles(Future<void> pending) {
+  final completer = Completer<void>();
+  Timer? graceTimer;
+
+  void finish() {
+    if (completer.isCompleted) return;
+    graceTimer?.cancel();
+    completer.complete();
+  }
+
+  graceTimer = Timer(_externalSubtitleGrace, finish);
   unawaited(
-    replaceCurrent ? navigator.pushReplacement(route) : navigator.push(route),
+    pending.then<void>(
+      (_) => finish(),
+      onError: (Object _, StackTrace _) => finish(),
+    ),
   );
+  return completer.future;
 }
 
 List<ResolvedSource> _preferredFirst(
@@ -814,9 +881,10 @@ class _ResolveProgress extends ChangeNotifier {
 }
 
 class _PlayLoadingPage extends StatefulWidget {
-  const _PlayLoadingPage({required this.progress});
+  const _PlayLoadingPage({required this.progress, required this.onMounted});
 
   final _ResolveProgress progress;
+  final VoidCallback onMounted;
 
   @override
   State<_PlayLoadingPage> createState() => _PlayLoadingPageState();
@@ -829,6 +897,7 @@ class _PlayLoadingPageState extends State<_PlayLoadingPage> {
   @override
   void initState() {
     super.initState();
+    widget.onMounted();
     _ticker = Timer.periodic(const Duration(milliseconds: 900), (_) {
       if (mounted) setState(() => _cursor++);
     });
