@@ -141,6 +141,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Duration? _bufferingWatchPosition;
   bool _valueUpdateScheduled = false;
   Duration _liveEdge = Duration.zero;
+  Duration _liveEdgeLead = Duration.zero;
 
   /// Segments the viewer has already skipped.
   ///
@@ -222,6 +223,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _videoValue?.removeListener(_onValueChanged);
     _stopPausedLiveEdgeTracking();
     _liveEdge = Duration.zero;
+    _liveEdgeLead = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
   }
 
@@ -259,8 +261,18 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     }
 
     if (widget.isLive) {
-      final edge = liveSeekEdge(value);
-      if (edge > _liveEdge) _liveEdge = edge;
+      final nativeEdge = value?.seekablePosition ?? Duration.zero;
+      if (nativeEdge > Duration.zero) {
+        final observedLead = nativeEdge - (value?.position ?? Duration.zero);
+        if (observedLead > Duration.zero) _liveEdgeLead = observedLead;
+        final estimatedEdge =
+            (value?.position ?? Duration.zero) + _liveEdgeLead;
+        if (estimatedEdge > _liveEdge) _liveEdge = estimatedEdge;
+        if (nativeEdge > _liveEdge) _liveEdge = nativeEdge;
+      } else {
+        final edge = liveSeekEdge(value);
+        if (edge > _liveEdge) _liveEdge = edge;
+      }
     } else {
       _syncActiveSubtitleLabel();
     }

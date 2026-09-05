@@ -6,10 +6,9 @@ const Duration liveEdgeSyncTolerance = Duration(seconds: 5);
 
 Duration liveSeekEdge(AppPlayerValue? value) {
   if (value == null) return Duration.zero;
-  var edge = value.seekablePosition;
-  if (edge <= Duration.zero) edge = value.duration;
-  if (value.position > edge) edge = value.position;
-  return edge;
+  if (value.seekablePosition > Duration.zero) return value.seekablePosition;
+  if (value.duration > value.position) return value.duration;
+  return value.position;
 }
 
 /// The furthest buffered point used for the seekbar's secondary track.

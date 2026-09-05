@@ -15,6 +15,15 @@ void main() {
     expect(bufferedSeekEdge(value), const Duration(seconds: 90));
   });
 
+  test('does not replace a seekable edge with a late position sample', () {
+    const value = AppPlayerValue(
+      position: Duration(seconds: 64),
+      seekablePosition: Duration(seconds: 60),
+    );
+
+    expect(liveSeekEdge(value), const Duration(seconds: 60));
+  });
+
   test('moves the live edge forward while playback remains paused', () {
     expect(
       liveEdgeAfterPause(
