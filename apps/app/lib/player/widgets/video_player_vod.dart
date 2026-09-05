@@ -122,6 +122,7 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
     _player = vp.VideoPlayerController.networkUrl(
       Uri.parse(widget.stream.url),
       httpHeaders: widget.stream.headers,
+      isLive: widget.isLive,
     );
     _adapter = _VideoPlayerControllerAdapter(
       _player,
@@ -239,6 +240,10 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
     final ahead = bufferedPosition > value.position
         ? bufferedPosition - value.position
         : Duration.zero;
+    final seekablePosition = value.seekable.fold<Duration>(
+      Duration.zero,
+      (latest, range) => range.end > latest ? range.end : latest,
+    );
     _logOpenStage(
       'playback_state',
       stopwatch,
@@ -246,6 +251,7 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
           'live=${widget.isLive} '
           'position_ms=${value.position.inMilliseconds} '
           'buffered_ms=${bufferedPosition.inMilliseconds} '
+          'seekable_ms=${seekablePosition.inMilliseconds} '
           'ahead_ms=${ahead.inMilliseconds} '
           'is_playing=${value.isPlaying} '
           'is_buffering=${value.isBuffering} '
@@ -582,6 +588,10 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
       Duration.zero,
       (latest, range) => range.end > latest ? range.end : latest,
     );
+    final seekable = source.seekable.fold<Duration>(
+      Duration.zero,
+      (latest, range) => range.end > latest ? range.end : latest,
+    );
     _value.value = AppPlayerValue(
       initialized: source.isInitialized,
       isPlaying: source.isPlaying,
@@ -589,6 +599,7 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
       position: source.position,
       duration: source.duration,
       bufferedPosition: buffered,
+      seekablePosition: seekable,
     );
   }
 

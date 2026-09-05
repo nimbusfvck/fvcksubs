@@ -14,6 +14,9 @@ workspace:
   - packages/fvcksubs_extension_host
   - packages/fvcksubs_storage
   - packages/fvcksubs_js_runtime
+  - packages/video_player_platform_interface
+  - packages/video_player_avfoundation
+  - packages/video_player
   - apps/app
 
 dev_dependencies:

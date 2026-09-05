@@ -3,15 +3,16 @@ import 'package:fvcksubs_app/player/controls/live_timeline.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 
 void main() {
-  test('uses the furthest known live point for the timeline extent', () {
+  test('uses the native seekable edge instead of read-ahead buffering', () {
     const value = AppPlayerValue(
       duration: Duration(seconds: 20),
       position: Duration(seconds: 25),
-      bufferedPosition: Duration(seconds: 32),
+      bufferedPosition: Duration(seconds: 90),
+      seekablePosition: Duration(seconds: 32),
     );
 
     expect(liveSeekEdge(value), const Duration(seconds: 32));
-    expect(bufferedSeekEdge(value), const Duration(seconds: 32));
+    expect(bufferedSeekEdge(value), const Duration(seconds: 90));
   });
 
   test('moves the live edge forward while playback remains paused', () {

@@ -39,9 +39,10 @@ dependencies:
       url: https://github.com/mdikcinar/media-kit.git
       ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
       path: libs/ios/media_kit_libs_ios_video
-  # Official AVFoundation backend for iOS/macOS VOD. 2.14 adds public
-  # audio/video track APIs used by the app's quality and audio pickers.
-  video_player: ^2.14.0
+  # Local fork: preserve the official API while exposing AVFoundation's live
+  # seekable ranges and allowing live seeks beyond the 1ms indefinite duration.
+  video_player:
+    path: ../../packages/video_player
   wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   device_info_plus: ^13.2.0

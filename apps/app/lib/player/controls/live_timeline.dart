@@ -6,9 +6,9 @@ const Duration liveEdgeSyncTolerance = Duration(seconds: 5);
 
 Duration liveSeekEdge(AppPlayerValue? value) {
   if (value == null) return Duration.zero;
-  var edge = value.duration;
+  var edge = value.seekablePosition;
+  if (edge <= Duration.zero) edge = value.duration;
   if (value.position > edge) edge = value.position;
-  if (value.bufferedPosition > edge) edge = value.bufferedPosition;
   return edge;
 }
 

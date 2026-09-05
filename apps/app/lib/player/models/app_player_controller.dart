@@ -10,6 +10,7 @@ class AppPlayerValue {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
+    this.seekablePosition = Duration.zero,
   });
 
   final bool initialized;
@@ -19,6 +20,10 @@ class AppPlayerValue {
   final Duration duration;
   final Duration bufferedPosition;
 
+  /// The end of the native seekable window. For live playback this is the
+  /// timeline edge, independent of read-ahead buffering.
+  final Duration seekablePosition;
+
   AppPlayerValue copyWith({
     bool? initialized,
     bool? isPlaying,
@@ -26,6 +31,7 @@ class AppPlayerValue {
     Duration? position,
     Duration? duration,
     Duration? bufferedPosition,
+    Duration? seekablePosition,
   }) => AppPlayerValue(
     initialized: initialized ?? this.initialized,
     isPlaying: isPlaying ?? this.isPlaying,
@@ -33,6 +39,7 @@ class AppPlayerValue {
     position: position ?? this.position,
     duration: duration ?? this.duration,
     bufferedPosition: bufferedPosition ?? this.bufferedPosition,
+    seekablePosition: seekablePosition ?? this.seekablePosition,
   );
 }
 
