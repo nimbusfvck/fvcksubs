@@ -45,6 +45,47 @@ void main() {
     expect(tapped, same(first));
   });
 
+  testWidgets('flat catalog cards keep year and rating metadata', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: MediaGridV2(
+              sections: [
+                const CatalogSectionV2(
+                  id: 'movies',
+                  title: 'Movies',
+                  items: [
+                    VersionedMediaItem(
+                      item: VideoItemV2(
+                        ref: MediaRef(
+                          extensionId: 'example',
+                          providerId: 'example.catalog',
+                          id: 'rated',
+                        ),
+                        title: 'Rated movie',
+                        releaseYear: 2026,
+                        rating: 8.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              onTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Movies'), findsNothing);
+    expect(find.textContaining('2026'), findsOneWidget);
+    expect(find.textContaining('8.4'), findsOneWidget);
+  });
+
   testWidgets(
     'two-participant event with portrait artwork keeps banner ratio',
     (tester) async {

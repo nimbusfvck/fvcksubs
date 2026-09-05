@@ -27,7 +27,6 @@ class ParticipantAvatar extends StatelessWidget {
             fit: BoxFit.contain,
             fadeInDuration: Duration.zero,
             memCacheWidth: artworkCacheDimension(context, size),
-            memCacheHeight: artworkCacheDimension(context, size),
             placeholder: (context, url) => const SizedBox.shrink(),
             errorWidget: (context, url, error) => _Fallback(size: size),
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/addons/addons_page.dart';
+import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/app_nav_rail.dart';
@@ -14,6 +15,17 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'support/harness.dart';
 
 void main() {
+  Finder catalogItemText(String title) =>
+      find.descendant(of: find.byType(MediaCardV2), matching: find.text(title));
+
+  Future<void> revealCatalog(WidgetTester tester) async {
+    await tester.drag(
+      find.byType(CustomScrollView).first,
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('nav is fixed and does not depend on installed extensions', (
     tester,
   ) async {
@@ -69,67 +81,65 @@ void main() {
     expect(find.widgetWithText(AppPageBar, 'Settings'), findsOneWidget);
   });
 
-  testWidgets(
-    'Shorts full-screen fit extends the nav bar over the video, and '
-    'switching away resets it',
-    (tester) async {
-      final registry = ExtensionRegistry([
-        FakeExtension(
-          catalogs: [
-            FakeCatalog(
-              id: 'previews',
-              name: 'Previews',
-              categories: const [],
-              items: [fakeItem(id: 'one', title: 'one')],
-              surface: CatalogSurface.preview,
-            ),
-          ],
-          previewFor: {
-            'one': const PreviewResponse(
-              sources: [
-                DirectPreviewSource(
-                  id: 'd1',
-                  stream: PlayableStream(url: 'https://cdn.example.com/1.mp4'),
-                ),
-              ],
-            ),
-          },
-        ),
-      ]);
+  testWidgets('Shorts full-screen fit extends the nav bar over the video, and '
+      'switching away resets it', (tester) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        catalogs: [
+          FakeCatalog(
+            id: 'previews',
+            name: 'Previews',
+            categories: const [],
+            items: [fakeItem(id: 'one', title: 'one')],
+            surface: CatalogSurface.preview,
+          ),
+        ],
+        previewFor: {
+          'one': const PreviewResponse(
+            sources: [
+              DirectPreviewSource(
+                id: 'd1',
+                stream: PlayableStream(url: 'https://cdn.example.com/1.mp4'),
+              ),
+            ],
+          ),
+        },
+      ),
+    ]);
 
-      await tester.pumpWidget(
-        wrapApp(child: const HomeShell(), registry: registry),
-      );
-      await tester.tap(find.text('Shorts'));
-      await tester.pump();
-      await tester.pump();
+    await tester.pumpWidget(
+      wrapApp(child: const HomeShell(), registry: registry),
+    );
+    await tester.tap(find.text('Shorts'));
+    await tester.pump();
+    await tester.pump();
 
-      Scaffold shellScaffold() => tester
-          .widgetList<Scaffold>(find.byType(Scaffold))
-          .firstWhere((s) => s.bottomNavigationBar != null);
-      NavigationBar navBar() => tester.widget<NavigationBar>(find.byType(NavigationBar));
+    Scaffold shellScaffold() => tester
+        .widgetList<Scaffold>(find.byType(Scaffold))
+        .firstWhere((s) => s.bottomNavigationBar != null);
+    NavigationBar navBar() =>
+        tester.widget<NavigationBar>(find.byType(NavigationBar));
 
-      expect(shellScaffold().extendBody, isFalse);
-      expect(navBar().backgroundColor, isNull);
+    expect(shellScaffold().extendBody, isFalse);
+    expect(navBar().backgroundColor, isNull);
 
-      await tester.tap(find.byTooltip('Fit screen'));
-      await tester.pump();
+    await tester.tap(find.byTooltip('Fit screen'));
+    await tester.pump();
 
-      expect(shellScaffold().extendBody, isTrue);
-      expect(navBar().backgroundColor, isNotNull);
+    expect(shellScaffold().extendBody, isTrue);
+    expect(navBar().backgroundColor, isNotNull);
 
-      // Leaving Shorts drops the immersive state even though the fit
-      // toggle itself is session-local to the (now discarded) page.
-      await tester.tap(find.text('Home'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Shorts'));
-      await tester.pump();
-      await tester.pump();
+    // Leaving Shorts drops the immersive state even though the fit
+    // toggle itself is session-local to the (now discarded) page.
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Shorts'));
+    await tester.pump();
+    await tester.pump();
 
-      expect(shellScaffold().extendBody, isFalse);
-      expect(navBar().backgroundColor, isNull);
-    },
-  );
+    expect(shellScaffold().extendBody, isFalse);
+    expect(navBar().backgroundColor, isNull);
+  });
 
   testWidgets('settings is a real destination', (tester) async {
     await tester.pumpWidget(
@@ -167,13 +177,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('home-catalog-content')),
-          matching: find.text('Some Match'),
-        ),
-        findsOneWidget,
-      );
+      await revealCatalog(tester);
+      expect(catalogItemText('Some Match'), findsOneWidget);
 
       // Addons is reachable from Settings now, not a bottom-nav destination
       // itself — not find.widgetWithText(NavigationBar, ...): that resolves
@@ -194,13 +199,7 @@ void main() {
       // The registry's own state changed in place — HomePage only reflects
       // it because HomeShell listens to the same AddonsController and
       // rebuilds whichever tab is showing.
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('home-catalog-content')),
-          matching: find.text('Some Match'),
-        ),
-        findsNothing,
-      );
+      expect(catalogItemText('Some Match'), findsNothing);
     },
   );
 
@@ -218,30 +217,29 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('a tablet-sized handheld window gets a rail instead of a bottom bar', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'a tablet-sized handheld window gets a rail instead of a bottom bar',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      wrapApp(
-        child: const HomeShell(),
-        registry: ExtensionRegistry([FakeExtension()]),
-        deviceClass: DeviceClass.handheld,
-      ),
-    );
-    await tester.pump();
+      await tester.pumpWidget(
+        wrapApp(
+          child: const HomeShell(),
+          registry: ExtensionRegistry([FakeExtension()]),
+          deviceClass: DeviceClass.handheld,
+        ),
+      );
+      await tester.pump();
 
-    expect(find.byType(AppNavRail), findsOneWidget);
-    expect(find.byType(NavigationBar), findsNothing);
-  });
+      expect(find.byType(AppNavRail), findsOneWidget);
+      expect(find.byType(NavigationBar), findsNothing);
+    },
+  );
 
-  testWidgets('a narrow handheld window keeps the bottom bar', (
-    tester,
-  ) async {
+  testWidgets('a narrow handheld window keeps the bottom bar', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -334,15 +332,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await revealCatalog(tester);
 
     expect(find.text('Section title'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Catalog item'),
-      ),
-      findsOneWidget,
-    );
+    expect(catalogItemText('Catalog item'), findsOneWidget);
   });
 
   testWidgets('groups service catalogs and switches the visible shelf', (
@@ -373,28 +366,17 @@ void main() {
       wrapApp(child: const HomeShell(), registry: registry),
     );
     await tester.pumpAndSettle();
+    await revealCatalog(tester);
 
     expect(find.text('Movies'), findsOneWidget);
     expect(find.text('Apple TV'), findsOneWidget);
     expect(find.text('Netflix'), findsNothing);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Apple movie'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Netflix movie'),
-      ),
-      findsNothing,
-    );
+    expect(catalogItemText('Apple movie'), findsOneWidget);
+    expect(catalogItemText('Netflix movie'), findsNothing);
 
     await tester.drag(
       find.byType(CustomScrollView).first,
-      const Offset(0, -200),
+      const Offset(0, 300),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Change service').first);
@@ -402,21 +384,10 @@ void main() {
     expect(find.text('Netflix'), findsOneWidget);
     await tester.tap(find.text('Netflix'));
     await tester.pumpAndSettle();
+    await revealCatalog(tester);
 
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Apple movie'),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Netflix movie'),
-      ),
-      findsOneWidget,
-    );
+    expect(catalogItemText('Apple movie'), findsNothing);
+    expect(catalogItemText('Netflix movie'), findsOneWidget);
   });
 
   testWidgets('groups service sections inside the all catalog', (tester) async {
@@ -460,28 +431,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await revealCatalog(tester);
 
     expect(find.text('Movies'), findsOneWidget);
     expect(find.text('Apple TV'), findsOneWidget);
     expect(find.text('Netflix'), findsNothing);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Apple movie'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Netflix movie'),
-      ),
-      findsNothing,
-    );
+    expect(catalogItemText('Apple movie'), findsOneWidget);
+    expect(catalogItemText('Netflix movie'), findsNothing);
 
     await tester.drag(
       find.byType(CustomScrollView).first,
-      const Offset(0, -200),
+      const Offset(0, 300),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Change service').first);
@@ -489,21 +449,10 @@ void main() {
     expect(find.text('Netflix'), findsOneWidget);
     await tester.tap(find.text('Netflix'));
     await tester.pumpAndSettle();
+    await revealCatalog(tester);
 
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Apple movie'),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-catalog-content')),
-        matching: find.text('Netflix movie'),
-      ),
-      findsOneWidget,
-    );
+    expect(catalogItemText('Apple movie'), findsNothing);
+    expect(catalogItemText('Netflix movie'), findsOneWidget);
   });
 }
 

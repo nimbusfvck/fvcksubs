@@ -6,6 +6,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import '../app_scope.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/centered_content.dart';
 import 'catalog_filter_bar.dart';
 import 'catalog_cache.dart';
 import 'media_grid_v2.dart';
@@ -193,7 +194,7 @@ class _CatalogViewState extends State<CatalogView> {
                 selected: _subCategory,
                 onSelected: _onSubCategorySelected,
               ),
-            Expanded(child: _body()),
+            Expanded(child: CenteredContent(child: _body())),
           ],
         );
       },
@@ -235,7 +236,10 @@ class _CatalogViewState extends State<CatalogView> {
               onTap: _open,
               onTapWithHero: _openWithHero,
               controller: _scrollController,
-              showSectionHeaders: true,
+              // The catalog title is already in the app bar. Keep this view
+              // flat so cards retain their year/rating metadata instead of
+              // treating section titles as a reason to hide it.
+              showSectionHeaders: false,
               columns: widget.binding.catalog.display == CatalogDisplay.list
                   ? 1
                   : null,

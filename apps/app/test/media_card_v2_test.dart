@@ -76,8 +76,8 @@ void main() {
     final image = tester.widget<CachedNetworkImage>(
       find.byType(CachedNetworkImage),
     );
-    expect(image.memCacheWidth, 600);
-    expect(image.memCacheHeight, isNotNull);
+    expect(image.memCacheWidth, 900);
+    expect(image.memCacheHeight, isNull);
   });
 
   testWidgets('long press opens the favorite action without tapping', (

@@ -1,7 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
+import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
+import '../widgets/centered_content.dart';
+import '../widgets/clickable.dart';
 import '../widgets/shimmer_placeholder.dart';
 
 class CatalogShimmer extends StatelessWidget {
@@ -18,6 +23,51 @@ class CatalogShimmer extends StatelessWidget {
         _CatalogShimmerSection(display: display),
     ],
   );
+}
+
+class CatalogShimmerSliver extends StatelessWidget {
+  const CatalogShimmerSliver({super.key, required this.display});
+
+  final CatalogDisplay display;
+
+  @override
+  Widget build(BuildContext context) {
+    if (display != CatalogDisplay.grid) {
+      return SliverToBoxAdapter(
+        child: CenteredContent(child: CatalogShimmer(display: display)),
+      );
+    }
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final sideInset = math.max(
+          0,
+          (constraints.crossAxisExtent - AppBreakpoints.maxContentWidth) / 2,
+        );
+        final horizontalPadding = AppSpacing.md + sideInset;
+        final contentWidth =
+            constraints.crossAxisExtent - horizontalPadding * 2;
+        final columns = (contentWidth ~/ 280).clamp(2, 6);
+        return SliverPadding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: Clickable.ringBleed,
+          ),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: AppSpacing.md,
+              mainAxisSpacing: AppSpacing.md,
+              mainAxisExtent: 172,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, _) => const _ShimmerCard(height: 172),
+              childCount: columns * 2,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _CatalogShimmerSection extends StatelessWidget {

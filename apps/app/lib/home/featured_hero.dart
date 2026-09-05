@@ -550,7 +550,6 @@ class _FeaturedTitle extends StatelessWidget {
               fit: BoxFit.contain,
               fadeInDuration: Duration.zero,
               memCacheWidth: artworkCacheDimension(context, 280),
-              memCacheHeight: artworkCacheDimension(context, 56),
               placeholder: (_, _) => Center(child: fallback),
               errorWidget: (_, _, _) => Center(child: fallback),
             ),

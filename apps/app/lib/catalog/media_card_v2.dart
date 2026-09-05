@@ -100,10 +100,6 @@ class _Poster extends StatelessWidget {
                     context,
                     constraints.maxWidth,
                   ),
-                  memCacheHeight: artworkCacheDimension(
-                    context,
-                    constraints.maxHeight,
-                  ),
                   placeholder: (_, _) =>
                       ArtworkPlaceholder(icon: _placeholderIcon(item)),
                   errorWidget: (_, _, _) =>
@@ -183,10 +179,6 @@ class _SingleEventArtwork extends StatelessWidget {
               memCacheWidth: artworkCacheDimension(
                 context,
                 constraints.maxWidth,
-              ),
-              memCacheHeight: artworkCacheDimension(
-                context,
-                constraints.maxHeight,
               ),
               placeholder: (_, _) => const _EventArtworkFallback(),
               errorWidget: (_, _, _) => const _EventArtworkFallback(),

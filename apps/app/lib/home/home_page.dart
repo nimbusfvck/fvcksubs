@@ -127,6 +127,39 @@ class _HomePageState extends State<HomePage> {
     setState(() => _generation++);
   }
 
+  Widget _catalogGroupSliver(HomeCatalogGroup group, String selected) {
+    final key = ValueKey(
+      '$_generation/$selected/${group.options.map((option) => '${option.binding.extensionId}/'
+          '${option.binding.extension.manifest.version}/'
+          '${option.binding.catalog.id}').join('|')}',
+    );
+    if (group.options.length > 1) {
+      return CatalogGroupShelf(
+        key: key,
+        group: group,
+        category: selected,
+        scrollController: _scrollController,
+        sliver: true,
+      );
+    }
+
+    final binding = group.options.single.binding;
+    if (binding.catalog.expanded) {
+      return CatalogGridSection(
+        key: key,
+        binding: binding,
+        category: selected,
+        scrollController: _scrollController,
+        sliver: true,
+      );
+    }
+    return SliverToBoxAdapter(
+      child: CenteredContent(
+        child: CatalogShelf(key: key, binding: binding, category: selected),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
@@ -184,6 +217,7 @@ class _HomePageState extends State<HomePage> {
           body: RefreshIndicator(
             onRefresh: _refresh,
             child: CustomScrollView(
+              key: bindings.isEmpty ? null : const Key('home-catalog-content'),
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -278,45 +312,12 @@ class _HomePageState extends State<HomePage> {
                   )
                 else
                   SliverPadding(
-                    key: const Key('home-catalog-content'),
                     padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate((context, i) {
-                        final group = groups[i];
-                        final key = ValueKey(
-                          '$_generation/$selected/${group.options.map((option) => '${option.binding.extensionId}/'
-                              '${option.binding.extension.manifest.version}/'
-                              '${option.binding.catalog.id}').join('|')}',
-                        );
-                        if (group.options.length > 1) {
-                          return CenteredContent(
-                            child: CatalogGroupShelf(
-                              key: key,
-                              group: group,
-                              category: selected,
-                              scrollController: _scrollController,
-                            ),
-                          );
-                        }
-                        final binding = group.options.single.binding;
-                        if (binding.catalog.expanded) {
-                          return CenteredContent(
-                            child: CatalogGridSection(
-                              key: key,
-                              binding: binding,
-                              category: selected,
-                              scrollController: _scrollController,
-                            ),
-                          );
-                        }
-                        return CenteredContent(
-                          child: CatalogShelf(
-                            key: key,
-                            binding: binding,
-                            category: selected,
-                          ),
-                        );
-                      }, childCount: groups.length),
+                    sliver: SliverMainAxisGroup(
+                      slivers: [
+                        for (final group in groups)
+                          _catalogGroupSliver(group, selected),
+                      ],
                     ),
                   ),
               ],

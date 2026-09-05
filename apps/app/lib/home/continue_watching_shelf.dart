@@ -158,10 +158,6 @@ class _ContinueCard extends StatelessWidget {
                   context,
                   constraints.maxWidth,
                 ),
-                memCacheHeight: artworkCacheDimension(
-                  context,
-                  constraints.maxHeight,
-                ),
                 placeholder: (_, _) =>
                     const ArtworkPlaceholder(icon: Icons.movie_outlined),
                 errorWidget: (_, _, _) =>

@@ -730,7 +730,6 @@ class _Crest extends StatelessWidget {
             filterQuality: FilterQuality.high,
             fadeInDuration: Duration.zero,
             memCacheWidth: artworkCacheDimension(context, size),
-            memCacheHeight: artworkCacheDimension(context, size),
             placeholder: (context, url) => showFallbackWhileLoading
                 ? _CrestFallback(
                     size: size,
@@ -770,7 +769,6 @@ class _BrandLogo extends StatelessWidget {
       filterQuality: FilterQuality.high,
       fadeInDuration: Duration.zero,
       memCacheWidth: artworkCacheDimension(context, height * 2.2),
-      memCacheHeight: artworkCacheDimension(context, height),
       placeholder: (_, _) => const SizedBox.shrink(),
       errorWidget: (_, _, _) => fallback,
     ),

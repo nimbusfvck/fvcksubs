@@ -9,6 +9,7 @@ import '../catalog/catalog_cache.dart';
 import '../catalog/media_grid_v2.dart';
 import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
+import '../widgets/centered_content.dart';
 import '../widgets/empty_state.dart';
 import 'catalog_shimmer.dart';
 
@@ -19,6 +20,7 @@ class CatalogGridSection extends StatefulWidget {
     required this.category,
     required this.scrollController,
     this.showCatalogTitle = true,
+    this.sliver = false,
   });
 
   final CatalogBinding binding;
@@ -28,6 +30,9 @@ class CatalogGridSection extends StatefulWidget {
   final ScrollController scrollController;
 
   final bool showCatalogTitle;
+
+  /// Renders directly into the caller's [CustomScrollView] when true.
+  final bool sliver;
 
   @override
   State<CatalogGridSection> createState() => _CatalogGridSectionState();
@@ -40,6 +45,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   bool _loadingMore = false;
   Object? _error;
   bool _started = false;
+  bool _startScheduled = false;
 
   @override
   void initState() {
@@ -50,6 +56,11 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_started || widget.sliver) return;
+    _startLoading();
+  }
+
+  void _startLoading() {
     if (_started) return;
     _started = true;
     final scope = AppScope.of(context);
@@ -65,6 +76,15 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
       return;
     }
     unawaited(_loadPersistedOrFresh());
+  }
+
+  void _scheduleStartLoading() {
+    if (_started || _startScheduled) return;
+    _startScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startScheduled = false;
+      if (mounted) _startLoading();
+    });
   }
 
   @override
@@ -182,8 +202,59 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
         contentRating: widget.binding.contentRating,
       );
 
+  Widget _buildSliver(BuildContext context) {
+    final page = _page;
+    if (_loading && _error == null && page == null) {
+      return CatalogShimmerSliver(display: widget.binding.catalog.display);
+    }
+    if (_error != null || page == null || page.items.isEmpty) {
+      return SliverToBoxAdapter(
+        child: CenteredContent(child: _buildBox(context)),
+      );
+    }
+
+    return SliverMainAxisGroup(
+      slivers: [
+        MediaGridV2(
+          sections: page.sections,
+          onTap: _open,
+          onTapWithHero: _openWithHero,
+          showSectionHeaders: page.sections.any(
+            (section) => section.title != null,
+          ),
+          sliver: true,
+        ),
+        if (_loadingMore)
+          const SliverToBoxAdapter(
+            child: CenteredContent(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.sliver) return _buildBox(context);
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        if (!_started && constraints.remainingCacheExtent > 0) {
+          _scheduleStartLoading();
+        }
+        return _buildSliver(context);
+      },
+    );
+  }
+
+  Widget _buildBox(BuildContext context) {
     if (_loading) {
       return CatalogShimmer(
         display: widget.binding.catalog.display,
