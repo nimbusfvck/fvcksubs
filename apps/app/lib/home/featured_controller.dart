@@ -8,6 +8,8 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import '../catalog/catalog_cache.dart';
 import '../catalog/plugin_controller.dart';
 
+const int maxFeaturedConcurrentLoads = 3;
+
 enum FeaturedStatus { initial, loading, success, failure }
 
 class FeaturedState {
@@ -48,34 +50,79 @@ class FeaturedController extends Cubit<FeaturedState> {
 
   int _request = 0;
 
-  Future<void> load({bool refresh = false}) async {
+  Future<void> load({bool refresh = false, String? priorityCategory}) async {
     final request = ++_request;
     emit(state.copyWith(status: FeaturedStatus.loading, clearError: true));
 
     final categories = registry.categories;
-    final futures = <Future<_FeaturedLoadResult>>[];
+    final requests = <_FeaturedLoadRequest>[];
     for (final category in categories) {
       final pluginId = pluginController.resolve([
         for (final plugin in registry.pluginsFor(category)) plugin.id,
       ]);
       if (pluginId == null) continue;
       for (final binding in registry.catalogsFor(category)) {
-        if (binding.extensionId != pluginId) continue;
-        futures.add(_loadPage(binding, category, refresh: refresh));
+        if (binding.extensionId == pluginId) {
+          requests.add(_FeaturedLoadRequest(binding, category));
+        }
       }
     }
-    final results = await Future.wait(futures);
+
+    final results = List<_FeaturedLoadResult?>.filled(requests.length, null);
+    final loadOrder = [
+      for (var index = 0; index < requests.length; index++)
+        if (requests[index].category == priorityCategory) index,
+      for (var index = 0; index < requests.length; index++)
+        if (requests[index].category != priorityCategory) index,
+    ];
+    var nextLoad = 0;
+    var completed = 0;
+    var hasPersistentCache = false;
+
+    Future<void> worker() async {
+      while (nextLoad < loadOrder.length) {
+        // This increment happens before the await, so one isolate cannot hand
+        // the same request to two workers.
+        final resultIndex = loadOrder[nextLoad++];
+        final requestSpec = requests[resultIndex];
+        final result = await _loadPage(
+          requestSpec.binding,
+          requestSpec.category,
+          refresh: refresh,
+        );
+        results[resultIndex] = result;
+        completed++;
+        hasPersistentCache = hasPersistentCache || result.fromPersistentCache;
+
+        if (isClosed || request != _request || result.page == null) continue;
+
+        // Publish the first usable pages immediately. The list stays in
+        // catalog order, even though requests finish in different orders, so
+        // completion timing never changes the extension's editorial signal.
+        final pages = [for (final entry in results) ?entry?.page];
+        emit(
+          FeaturedState(
+            status: FeaturedStatus.loading,
+            items: FeaturedAlgorithm.selectPages(pages),
+          ),
+        );
+      }
+    }
+
+    final workerCount = math.min(maxFeaturedConcurrentLoads, loadOrder.length);
+    await Future.wait([for (var i = 0; i < workerCount; i++) worker()]);
 
     if (isClosed || request != _request) return;
+    final completedResults = [for (final result in results) ?result];
     final pages = [
-      for (final result in results)
+      for (final result in completedResults)
         if (result.page != null) result.page!,
     ];
     final failures = [
-      for (final result in results)
+      for (final result in completedResults)
         if (result.error != null) result.error!,
     ];
-    if (results.isNotEmpty && failures.length == results.length) {
+    if (completed > 0 && failures.length == completed) {
       if (state.items.isNotEmpty) {
         emit(
           FeaturedState(
@@ -97,7 +144,7 @@ class FeaturedController extends Cubit<FeaturedState> {
     }
     final items = FeaturedAlgorithm.selectPages(pages);
     emit(FeaturedState(status: FeaturedStatus.success, items: items));
-    if (!refresh && results.any((result) => result.fromPersistentCache)) {
+    if (!refresh && hasPersistentCache) {
       // Keep the first paint instant, but do not leave a prior session's hero
       // feed stale until the viewer explicitly pulls to refresh.
       unawaited(load(refresh: true));
@@ -132,6 +179,13 @@ class FeaturedController extends Cubit<FeaturedState> {
       return _FeaturedLoadResult.error(error);
     }
   }
+}
+
+class _FeaturedLoadRequest {
+  const _FeaturedLoadRequest(this.binding, this.category);
+
+  final CatalogBinding binding;
+  final String category;
 }
 
 class _FeaturedLoadResult {

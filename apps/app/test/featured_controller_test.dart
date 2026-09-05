@@ -1,6 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/home/featured_controller.dart';
+import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+
+import 'support/harness.dart';
 
 void main() {
   final now = DateTime.utc(2026, 8, 20, 12);
@@ -213,6 +218,42 @@ void main() {
     expect(featured, hasLength(1));
     expect(featured.single.item.title, 'Second');
   });
+
+  test(
+    'publishes a priority category before slow background catalogs settle',
+    () async {
+      final priority = FakeExtension(
+        id: 'priority',
+        categories: const ['priority'],
+        items: [_video('priority-item', 'Priority item', rating: 8).item],
+      );
+      final slow = FakeExtension(
+        id: 'slow',
+        categories: const ['background'],
+        catalogDelay: const Duration(milliseconds: 100),
+        items: [_video('background-item', 'Background item', rating: 8).item],
+      );
+      final controller = FeaturedController(
+        registry: ExtensionRegistry([priority, slow]),
+        catalogCache: CatalogCache(),
+        pluginController: PluginController(store: FakePluginSelectionStore()),
+      );
+
+      final firstUsable = controller.stream.firstWhere(
+        (state) => state.items.isNotEmpty,
+      );
+      final load = controller.load(priorityCategory: 'priority');
+
+      final state = await firstUsable.timeout(const Duration(seconds: 1));
+      expect(state.isLoading, isTrue);
+      expect(state.items.single.item.title, 'Priority item');
+
+      await load;
+      expect(controller.state.status, FeaturedStatus.success);
+      expect(controller.state.items, hasLength(2));
+      await controller.close();
+    },
+  );
 }
 
 const _artwork = Artwork(

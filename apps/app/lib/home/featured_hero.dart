@@ -119,9 +119,25 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   @override
   void didUpdateWidget(covariant FeaturedHero oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.items.isEmpty || _page >= widget.items.length) {
+    final oldRef = _page < oldWidget.items.length
+        ? oldWidget.items[_page].item.ref
+        : null;
+    if (widget.items.isEmpty) {
       _page = 0;
       if (_pageController.hasClients) _pageController.jumpToPage(0);
+      return;
+    }
+
+    final matchingPage = oldRef == null
+        ? -1
+        : widget.items.indexWhere((entry) => entry.item.ref == oldRef);
+    final nextPage = matchingPage >= 0
+        ? matchingPage
+        : _page.clamp(0, widget.items.length - 1).toInt();
+    _page = nextPage;
+    if (_pageController.hasClients &&
+        _pageController.page?.round() != nextPage) {
+      _pageController.jumpToPage(nextPage);
     }
   }
 

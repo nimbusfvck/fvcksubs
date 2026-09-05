@@ -81,11 +81,20 @@ class _HomePageState extends State<HomePage> {
   void _selectPlugin(AppScope scope, String id) {
     scope.pluginController.select(id);
     _featuredSignature = null;
-    unawaited(_featuredController.load(refresh: true));
+    unawaited(
+      _featuredController.load(
+        refresh: true,
+        priorityCategory: _selectedCategory,
+      ),
+    );
   }
 
   void _ensureFeaturedLoaded(AppScope scope, List<String> categories) {
+    final priorityCategory = categories.contains(_selectedCategory)
+        ? _selectedCategory
+        : categories.first;
     final signature = [
+      'priority:$priorityCategory',
       for (final category in categories) ...[
         category,
         for (final binding in scope.registry.catalogsFor(category))
@@ -96,7 +105,7 @@ class _HomePageState extends State<HomePage> {
     ].join('|');
     if (signature == _featuredSignature) return;
     _featuredSignature = signature;
-    unawaited(_featuredController.load());
+    unawaited(_featuredController.load(priorityCategory: priorityCategory));
   }
 
   Future<void> _refresh() async {
@@ -106,7 +115,14 @@ class _HomePageState extends State<HomePage> {
     // serving a stale session cache indefinitely and never surface a newly
     // live event. The selected category's shelves are covered by the same
     // pass, so `_generation` can bump straight off this cache once it lands.
-    await _featuredController.load(refresh: true);
+    final categories = AppScope.of(context).registry.categories;
+    final priorityCategory = categories.contains(_selectedCategory)
+        ? _selectedCategory
+        : (categories.isEmpty ? null : categories.first);
+    await _featuredController.load(
+      refresh: true,
+      priorityCategory: priorityCategory,
+    );
     if (!mounted) return;
     setState(() => _generation++);
   }

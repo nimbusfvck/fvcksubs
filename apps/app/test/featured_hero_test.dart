@@ -260,6 +260,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('progressive updates keep the active featured item visible', (
+    tester,
+  ) async {
+    VersionedMediaItem event(String id, String title) => VersionedMediaItem(
+      item: EventItemV2(
+        ref: MediaRef(extensionId: 'live', providerId: 'live.catalog', id: id),
+        title: title,
+        schedule: Schedule(
+          startsAt: DateTime.utc(2026, 8, 20),
+          state: ScheduleState.live,
+        ),
+      ),
+    );
+
+    final first = event('first-update', 'First update');
+    final second = event('second-update', 'Second update');
+    final inserted = event('inserted-update', 'Inserted update');
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [first, second]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.drag(find.byType(PageView), const Offset(-300, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Second update'), findsOneWidget);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [inserted, first, second]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Second update'), findsOneWidget);
+    expect(find.text('Inserted update'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('refreshing index zero disposes the previous trailer preview', (
     tester,
   ) async {
