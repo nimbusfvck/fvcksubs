@@ -24,12 +24,60 @@ import 'settings/nsfw_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final deviceClass = await DeviceClassResolver.resolve();
 
+  // These reads do not depend on one another. Starting them together keeps
+  // the first frame from paying each storage/platform round-trip in series.
+  // Extension loading remains below this barrier because it needs the loaded
+  // settings and storage hub to establish the registry and its permissions.
   final settingsStore = SharedPreferencesAddonSettingsStore();
-  final settings = await settingsStore.load();
   final nsfwStore = SharedPreferencesNsfwSettingsStore();
-  final nsfwSettings = await nsfwStore.load();
+  final settingsFuture = settingsStore.load();
+  final nsfwSettingsFuture = nsfwStore.load();
+  final deviceClassFuture = DeviceClassResolver.resolve();
+
+  final extensionStorageFuture = ExtensionStorageHub.open();
+  final installedStore = SharedPreferencesInstalledExtensionStore();
+
+  final repoStore = SharedPreferencesRepoStore();
+  final repoUrlFuture = repoStore.load();
+
+  final libraryStore = SharedPreferencesLibraryStore();
+  final libraryFuture = _loadPersistedOrDefault(
+    name: 'library',
+    load: libraryStore.load,
+    fallback: const <String, UserMediaState>{},
+  );
+
+  const pluginStore = SharedPreferencesPluginSelectionStore();
+  final pluginSelectionFuture = pluginStore.load();
+
+  final subtitleStore = SharedPreferencesSubtitlePreferenceStore();
+  final subtitleLanguageFuture = subtitleStore.load();
+  final subtitleAppearanceFuture = subtitleStore.loadAppearance();
+  final subtitleSelectionsFuture = subtitleStore.loadExternalSelections();
+
+  const qualityStore = SharedPreferencesQualityPreferenceStore();
+  final qualityFuture = qualityStore.load();
+
+  const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
+  final sourcePriorityFuture = sourcePriorityStore.load();
+
+  final sourceListStore = SharedPreferencesSourceListStore();
+  final sourceCacheFuture = _loadPersistedOrDefault(
+    name: 'source lists',
+    load: sourceListStore.load,
+    fallback: const <String, CachedSourceList>{},
+  );
+
+  final catalogCacheFuture = _loadPersistedOrDefault(
+    name: 'catalog cache',
+    load: () async => CatalogCache(store: await SembastCatalogPageStore.open()),
+    fallback: CatalogCache(),
+  );
+
+  final deviceClass = await deviceClassFuture;
+  final settings = await settingsFuture;
+  final nsfwSettings = await nsfwSettingsFuture;
   final registry = buildRegistry(
     disabledExtensionIds: settings.disabledExtensionIds,
     disabledProviderIds: settings.disabledProviderIds,
@@ -45,19 +93,17 @@ Future<void> main() async {
     showNsfw: nsfwSettings.showNsfw,
   );
 
-  final installedStore = SharedPreferencesInstalledExtensionStore();
-  final extensionStorage = await ExtensionStorageHub.open();
+  final extensionStorage = await extensionStorageFuture;
   await loadInstalledExtensions(registry, installedStore, extensionStorage);
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
-  final repoStore = SharedPreferencesRepoStore();
   final installerController = InstallerController(
     registry: registry,
     installer: ExtensionInstaller(),
     installedStore: installedStore,
     repoStore: repoStore,
-    repoUrl: await repoStore.load(),
+    repoUrl: await repoUrlFuture,
     loadExtension: (manifest, source) => JsExtension.load(
       manifest: manifest,
       source: source,
@@ -71,57 +117,39 @@ Future<void> main() async {
     },
   );
 
-  final libraryStore = SharedPreferencesLibraryStore();
   final libraryController = LibraryController(
     store: libraryStore,
-    initial: await _loadPersistedOrDefault(
-      name: 'library',
-      load: libraryStore.load,
-      fallback: const <String, UserMediaState>{},
-    ),
+    initial: await libraryFuture,
   );
 
-  const pluginStore = SharedPreferencesPluginSelectionStore();
   final pluginController = PluginController(
     store: pluginStore,
-    initial: await pluginStore.load(),
+    initial: await pluginSelectionFuture,
   );
 
-  final subtitleStore = SharedPreferencesSubtitlePreferenceStore();
   final subtitlePreferenceController = SubtitlePreferenceController(
     store: subtitleStore,
-    initial: await subtitleStore.load(),
-    initialAppearance: await subtitleStore.loadAppearance(),
-    initialExternalSelections: await subtitleStore.loadExternalSelections(),
+    initial: await subtitleLanguageFuture,
+    initialAppearance: await subtitleAppearanceFuture,
+    initialExternalSelections: await subtitleSelectionsFuture,
   );
 
-  const qualityStore = SharedPreferencesQualityPreferenceStore();
   final qualityPreferenceController = QualityPreferenceController(
     store: qualityStore,
-    initial: await qualityStore.load(),
+    initial: await qualityFuture,
   );
 
-  const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityController = SourcePriorityController(
     registry: registry,
     store: sourcePriorityStore,
-    initial: await sourcePriorityStore.load(),
+    initial: await sourcePriorityFuture,
   );
 
-  final sourceListStore = SharedPreferencesSourceListStore();
   final sourceCache = SourceCache(
     sourceListStore: sourceListStore,
-    initial: await _loadPersistedOrDefault(
-      name: 'source lists',
-      load: sourceListStore.load,
-      fallback: const <String, CachedSourceList>{},
-    ),
+    initial: await sourceCacheFuture,
   );
-  final catalogCache = await _loadPersistedOrDefault(
-    name: 'catalog cache',
-    load: () async => CatalogCache(store: await SembastCatalogPageStore.open()),
-    fallback: CatalogCache(),
-  );
+  final catalogCache = await catalogCacheFuture;
 
   runApp(
     FvcksubsApp(
