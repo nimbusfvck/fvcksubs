@@ -151,6 +151,48 @@ void main() {
     );
   });
 
+  testWidgets('an initial error waits for a late source before showing error', (
+    tester,
+  ) async {
+    final player = _FailingPlayer();
+    final first = _resolvedSource('first', 'Source A');
+    final later = _resolvedSource('later', 'Source B');
+    final pending = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'movie-1',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [first],
+          pendingSources: pending.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    player.controllers.single.emitError(StateError('source rejected'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Finding another source…'), findsOneWidget);
+
+    pending.add(later);
+    await tester.pump();
+    await tester.pump();
+
+    expect(player.played, later.stream);
+    expect(find.text('Finding another source…'), findsNothing);
+    await pending.close();
+  });
+
   // First play resolves nothing from cache: the player opens on the first
   // source that lands and the slower providers arrive afterwards on
   // `pendingSources`. Kora consistently settles about a second after Cricfy,

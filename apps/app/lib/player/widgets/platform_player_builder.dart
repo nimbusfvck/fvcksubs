@@ -38,6 +38,7 @@ Widget platformPlayerBuilder(
   return VideoPlayerVodView(
     key: key,
     stream: stream,
+    isLive: isLive,
     onControllerCreated: onControllerCreated,
     onPlaybackReady: onPlaybackReady,
     preferredSubtitleLanguage: preferredSubtitleLanguage,

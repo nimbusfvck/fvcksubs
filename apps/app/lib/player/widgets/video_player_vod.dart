@@ -15,11 +15,15 @@ import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 
+const _playbackDiagnosticsInterval = Duration(seconds: 2);
+const _startupHealthTimeout = Duration(seconds: 8);
+
 /// Video player backend for AVFoundation-compatible playback on iOS and macOS.
 class VideoPlayerVodView extends StatefulWidget {
   const VideoPlayerVodView({
     super.key,
     required this.stream,
+    this.isLive = false,
     this.onControllerCreated,
     this.onPlaybackReady,
     this.preferredSubtitleLanguage,
@@ -35,6 +39,7 @@ class VideoPlayerVodView extends StatefulWidget {
   });
 
   final PlayableStream stream;
+  final bool isLive;
   final void Function(Object? controller)? onControllerCreated;
   final void Function(Object? controller)? onPlaybackReady;
   final String? preferredSubtitleLanguage;
@@ -96,6 +101,9 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
   bool _nativePlayingReported = false;
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
+  Timer? _playbackDiagnosticsTimer;
+  DateTime? _startupHealthStartedAt;
+  bool _startupHealthPassed = false;
 
   @override
   void initState() {
@@ -187,13 +195,11 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
         _logOpenStage('play_start', stopwatch);
         await _player.play();
         _logOpenStage('play_done', stopwatch);
+        _startPlaybackDiagnostics(stopwatch);
       } else {
         _logOpenStage('play_skipped', stopwatch);
+        _reportPlaybackReady(stopwatch);
       }
-      if (!mounted) return;
-      _readyReported = true;
-      _logOpenStage('ready_reported', stopwatch);
-      widget.onPlaybackReady?.call(_adapter);
     } catch (error) {
       _logOpenStage(
         'failed',
@@ -211,6 +217,70 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
       'elapsed=${stopwatch.elapsedMilliseconds}ms'
       '${details == null ? '' : ' $details'}',
     );
+  }
+
+  void _startPlaybackDiagnostics(Stopwatch stopwatch) {
+    _startupHealthStartedAt = DateTime.now();
+    _playbackDiagnosticsTimer?.cancel();
+    _playbackDiagnosticsTimer = Timer.periodic(
+      _playbackDiagnosticsInterval,
+      (_) => _samplePlaybackHealth(stopwatch),
+    );
+    _samplePlaybackHealth(stopwatch);
+  }
+
+  void _samplePlaybackHealth(Stopwatch stopwatch) {
+    if (!mounted) return;
+    final value = _player.value;
+    final bufferedPosition = value.buffered.fold<Duration>(
+      Duration.zero,
+      (latest, range) => range.end > latest ? range.end : latest,
+    );
+    final ahead = bufferedPosition > value.position
+        ? bufferedPosition - value.position
+        : Duration.zero;
+    _logOpenStage(
+      'playback_state',
+      stopwatch,
+      details:
+          'live=${widget.isLive} '
+          'position_ms=${value.position.inMilliseconds} '
+          'buffered_ms=${bufferedPosition.inMilliseconds} '
+          'ahead_ms=${ahead.inMilliseconds} '
+          'is_playing=${value.isPlaying} '
+          'is_buffering=${value.isBuffering} '
+          'duration_ms=${value.duration.inMilliseconds}',
+    );
+
+    if (!_startupHealthPassed) {
+      final hasMediaProgress =
+          value.position > Duration.zero || bufferedPosition > Duration.zero;
+      if (value.isPlaying && !value.isBuffering && hasMediaProgress) {
+        _startupHealthPassed = true;
+        _reportPlaybackReady(stopwatch);
+        return;
+      }
+      final startedAt = _startupHealthStartedAt;
+      if (startedAt != null &&
+          DateTime.now().difference(startedAt) >= _startupHealthTimeout) {
+        _startupHealthPassed = true;
+        _logOpenStage(
+          'startup_health_failed',
+          stopwatch,
+          details: 'reason=no_media_progress timeout_s=8',
+        );
+        _adapter.reportError(
+          StateError('Playback made no media progress during startup.'),
+        );
+      }
+    }
+  }
+
+  void _reportPlaybackReady(Stopwatch stopwatch) {
+    if (!mounted || _readyReported) return;
+    _readyReported = true;
+    _logOpenStage('ready_reported', stopwatch);
+    widget.onPlaybackReady?.call(_adapter);
   }
 
   Future<void> _refreshTracksAfterMetadata(Stopwatch stopwatch) async {
@@ -303,10 +373,6 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
     if (value.isCompleted) {
       _adapter.reportCompleted();
     }
-    if (value.isInitialized && !_readyReported) {
-      _readyReported = true;
-      widget.onPlaybackReady?.call(_adapter);
-    }
   }
 
   @override
@@ -333,6 +399,7 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
 
   @override
   void dispose() {
+    _playbackDiagnosticsTimer?.cancel();
     _wakelockRefreshTimer?.cancel();
     if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.removeObserver(this);
@@ -598,6 +665,15 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
         );
       }
       final captionDownload = await _downloadCaptionFile(track.url);
+      if (kDebugMode) {
+        final captions = captionDownload.captionFile.captions;
+        debugPrint(
+          '[VideoPlayerVOD] subtitle_clock '
+          'video_duration_ms=${_player.value.duration.inMilliseconds} '
+          'first_cue_ms=${captions.firstOrNull?.start.inMilliseconds ?? '-'} '
+          'last_cue_ms=${captions.lastOrNull?.end.inMilliseconds ?? '-'}',
+        );
+      }
       if (captionDownload.captionFile.captions.isEmpty) {
         throw _UnsupportedCaptionFormat(
           format: captionDownload.format,
@@ -697,6 +773,20 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
 }
 
 Future<_DownloadedCaptionFile> _downloadCaptionFile(String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri?.scheme == 'file' ||
+      (uri?.scheme.isEmpty ?? true) && url.startsWith('/')) {
+    final bytes = await (uri?.scheme == 'file' ? File.fromUri(uri!) : File(url))
+        .readAsBytes();
+    final text = utf8.decode(bytes, allowMalformed: true);
+    final parsedCaptions = _parseCaptions(text);
+    _logSubtitlePayload(text, parsedCaptions, null);
+    return _DownloadedCaptionFile(
+      captionFile: _CaptionFile(parsedCaptions),
+      format: _captionContentFormat(text, null),
+      contentType: null,
+    );
+  }
   final client = HttpClient();
   try {
     final request = await client.getUrl(Uri.parse(url));
@@ -721,12 +811,13 @@ Future<_DownloadedCaptionFile> _downloadCaptionFile(String url) async {
           .split(RegExp(r'\r?\n'))
           .where((line) => line.contains('-->'))
           .firstOrNull;
-      debugPrint(
-        '[VideoPlayerVOD] subtitle_payload '
-        'chars=${text.length} line_ending=$lineEnding '
-        'timing_markers=$timingMarkers '
-        'timing_shape=${_timingShape(firstTimingLine)} '
-        'parsed_cues=${parsedCaptions.length}',
+      _logSubtitlePayload(
+        text,
+        parsedCaptions,
+        contentType,
+        lineEnding: lineEnding,
+        timingMarkers: timingMarkers,
+        timingShape: _timingShape(firstTimingLine),
       );
     }
     return _DownloadedCaptionFile(
@@ -774,6 +865,26 @@ class _UnsupportedCaptionFormat implements Exception {
 
   final String format;
   final String? contentType;
+}
+
+void _logSubtitlePayload(
+  String text,
+  List<vp.Caption> captions,
+  String? contentType, {
+  String? lineEnding,
+  int? timingMarkers,
+  String? timingShape,
+}) {
+  if (!kDebugMode) return;
+  debugPrint(
+    '[VideoPlayerVOD] subtitle_payload '
+    'chars=${text.length} '
+    'content_type=${contentType ?? 'local'} '
+    'line_ending=${lineEnding ?? 'unknown'} '
+    'timing_markers=${timingMarkers ?? RegExp(r'-->').allMatches(text).length} '
+    'timing_shape=${timingShape ?? 'unknown'} '
+    'parsed_cues=${captions.length}',
+  );
 }
 
 List<vp.Caption> _parseCaptions(String raw) {
