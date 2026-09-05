@@ -10,11 +10,12 @@ import 'package:video_player/video_player.dart' as vp;
 
 import '../diagnostics/player_diagnostics.dart';
 import '../models/app_player_controller.dart';
+import '../state/player_wakelock.dart';
 import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 
-/// Video player backend for on-demand playback on iOS and macOS.
+/// Video player backend for AVFoundation-compatible playback on iOS and macOS.
 class VideoPlayerVodView extends StatefulWidget {
   const VideoPlayerVodView({
     super.key,
@@ -29,6 +30,8 @@ class VideoPlayerVodView extends StatefulWidget {
     this.looping = false,
     this.playing = true,
     this.fit = BoxFit.contain,
+    this.preview = false,
+    this.wakelock,
   });
 
   final PlayableStream stream;
@@ -42,6 +45,8 @@ class VideoPlayerVodView extends StatefulWidget {
   final bool looping;
   final bool playing;
   final BoxFit fit;
+  final bool preview;
+  final bool? wakelock;
 
   @override
   State<VideoPlayerVodView> createState() => _VideoPlayerVodViewState();
@@ -80,7 +85,8 @@ Rect subtitleOverlayRect({
   );
 }
 
-class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
+class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
+    with WidgetsBindingObserver {
   late final vp.VideoPlayerController _player;
   late final _VideoPlayerControllerAdapter _adapter;
   late PlayerFitMode _fitMode;
@@ -88,6 +94,8 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
   bool _preferredQualitySelectionDone = false;
   Stopwatch? _openStopwatch;
   bool _nativePlayingReported = false;
+  Timer? _wakelockRefreshTimer;
+  PlayerWakelockLease? _wakelock;
 
   @override
   void initState() {
@@ -95,6 +103,14 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
     _fitMode = widget.fit == BoxFit.contain
         ? PlayerFitMode.contain
         : PlayerFitMode.cover;
+    if (widget.wakelock ?? !widget.preview) {
+      WidgetsBinding.instance.addObserver(this);
+      _wakelock = PlayerWakelockLease.acquire();
+      _wakelockRefreshTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _wakelock?.refresh(),
+      );
+    }
     _player = vp.VideoPlayerController.networkUrl(
       Uri.parse(widget.stream.url),
       httpHeaders: widget.stream.headers,
@@ -311,7 +327,17 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _wakelock?.refresh();
+  }
+
+  @override
   void dispose() {
+    _wakelockRefreshTimer?.cancel();
+    if (widget.wakelock ?? !widget.preview) {
+      WidgetsBinding.instance.removeObserver(this);
+      _wakelock?.release();
+    }
     _player.removeListener(_onValueChanged);
     _adapter.dispose();
     unawaited(_player.dispose());

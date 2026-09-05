@@ -270,25 +270,21 @@ flowchart TB
 - **Capability gating** is a positive list per platform: a stream is playable only if this
   platform is known to handle its container and its protection scheme. A newly-encountered
   combination is dropped rather than optimistically attempted, and the user is told when
-  nothing survives. Android uses BetterPlayer/ExoPlayer. macOS and iOS use the official
-  `video_player`/AVFoundation backend for clear VOD, forwarding extension-provided HTTP headers
-  and external subtitles. Live event and channel playback stays on MediaKit/libmpv because
-  several live providers mislabel MPEG-TS segments. Clear DASH VOD remains on MediaKit because
-  AVFoundation does not provide a DASH backend. A VOD source carrying a separate `audioUrl` also
-  stays on MediaKit, whose external-audio composition preserves the source contract. All DRM is
-  intentionally rejected on both until a tested platform-specific license flow exists.
-- **Live iOS/macOS playback runs on libmpv rather than AVFoundation** because several live
-  providers serve MPEG-TS mislabelled as `text/plain` or `application/zstd`; ExoPlayer and
-  libmpv sniff the container and play them, while AVFoundation buffers until it reports a stall.
-  VOD uses AVFoundation so its native seek and HLS track-selection path can be optimized without
-  carrying a second MDK payload.
+  nothing survives. The current buffering investigation routes every supported clear source on
+  Android, macOS, and iOS through the official `video_player` backend, forwarding
+  extension-provided HTTP headers and external subtitles. This is a temporary diagnostic route:
+  DASH, a separate `audioUrl`, and non-HLS containers can fail on a platform whose native
+  video_player implementation does not support them. DRM remains intentionally rejected until a
+  tested platform-specific license flow exists.
+- **Live routing temporarily has no backend fallback.** This isolates native player behavior for
+  a source: if video_player stalls or rejects it, the app reports that failure rather than silently
+  retrying it through MediaKit or BetterPlayer.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
   arrow keys seek five seconds, F toggles fullscreen, and Escape exits it. This
   keeps source, subtitle, quality, retry, and Up Next controls available across player backends. MediaKit's
   fullscreen route uses its desktop controls, which own pointer input and keyboard focus while fullscreen.
-- **Audio tracks** are exposed through the shared player contract whenever video_player's
-  AVFoundation backend (Apple VOD), MediaKit (Apple live/DASH), or BetterPlayer's HLS/DASH parser
-  (Android) reports more than one track. The same picker and selection UI is used on every backend.
+- **Audio tracks** are exposed through the shared player contract whenever video_player reports
+  more than one track. The same picker and selection UI is used on every backend.
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame
   out against a narrower fallback, and text that sizes tightly to its content stays clipped
   once the real font arrives.

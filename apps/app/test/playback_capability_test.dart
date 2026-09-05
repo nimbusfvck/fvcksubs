@@ -15,13 +15,13 @@ void main() {
       expect(PlaybackTarget.detect(), PlaybackTarget.ios);
     });
 
-    test('maps macOS to its native MediaKit target', () {
+    test('maps macOS to its native target', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       expect(PlaybackTarget.detect(), PlaybackTarget.macos);
     });
   });
 
-  group('PlaybackTarget.canPlay — android (ExoPlayer)', () {
+  group('PlaybackTarget.canPlay — Android', () {
     const target = PlaybackTarget.android;
 
     test('plain HLS plays', () {
@@ -33,7 +33,7 @@ void main() {
       );
     });
 
-    test('plain DASH plays — Android has no iOS-style format gate', () {
+    test('plain DASH remains eligible for the native backend to try', () {
       expect(
         target.canPlay(
           const PlayableStream(url: 'x', format: StreamFormat.dash),
@@ -42,7 +42,7 @@ void main() {
       );
     });
 
-    test('ClearKey and Widevine both play', () {
+    test('all DRM is refused by the unified video_player route', () {
       for (final scheme in [DrmScheme.clearKey, DrmScheme.widevine]) {
         expect(
           target.canPlay(
@@ -52,13 +52,14 @@ void main() {
               drm: DrmConfig(scheme: scheme),
             ),
           ),
-          isTrue,
-          reason: '$scheme should play on Android',
+          isFalse,
+          reason:
+              '$scheme requires a DRM license flow video_player does not provide',
         );
       }
     });
 
-    test('an unsupported DRM scheme is refused', () {
+    test('an unsupported DRM scheme is refused too', () {
       expect(
         target.canPlay(
           const PlayableStream(
@@ -72,7 +73,7 @@ void main() {
     });
   });
 
-  group('PlaybackTarget.canPlay — iOS (libmpv, clear containers)', () {
+  group('PlaybackTarget.canPlay — iOS', () {
     const target = PlaybackTarget.ios;
 
     test('plain HLS plays', () {
@@ -84,9 +85,7 @@ void main() {
       );
     });
 
-    // iOS moved off AVPlayer, which refused DASH outright and trusted a
-    // segment's declared MIME type. libmpv reads both containers.
-    test('clear DASH plays now that iOS runs on libmpv', () {
+    test('clear DASH remains eligible for the native backend to try', () {
       expect(
         target.canPlay(
           const PlayableStream(url: 'x', format: StreamFormat.dash),
@@ -104,7 +103,11 @@ void main() {
         for (final format in [StreamFormat.hls, StreamFormat.dash]) {
           expect(
             target.canPlay(
-              PlayableStream(url: 'x', format: format, drm: DrmConfig(scheme: scheme)),
+              PlayableStream(
+                url: 'x',
+                format: format,
+                drm: DrmConfig(scheme: scheme),
+              ),
             ),
             isFalse,
             reason: 'DRM scheme $scheme should never play on iOS — no CDM',
@@ -113,7 +116,7 @@ void main() {
       }
     });
 
-    test('matches macOS exactly — both run the same player', () {
+    test('matches macOS exactly — both use the same route', () {
       for (final stream in [
         const PlayableStream(url: 'x', format: StreamFormat.hls),
         const PlayableStream(url: 'x', format: StreamFormat.dash),
@@ -127,7 +130,7 @@ void main() {
         expect(
           target.canPlay(stream),
           PlaybackTarget.macos.canPlay(stream),
-          reason: 'iOS and macOS share a backend, so they must agree',
+          reason: 'iOS and macOS share the same diagnostic route',
         );
       }
     });
@@ -151,10 +154,10 @@ void main() {
     });
   });
 
-  group('PlaybackTarget.canPlay — macOS (MediaKit)', () {
+  group('PlaybackTarget.canPlay — macOS', () {
     const target = PlaybackTarget.macos;
 
-    test('clear HLS and DASH play, while DRM is refused', () {
+    test('clear HLS and DASH are eligible, while DRM is refused', () {
       expect(
         target.canPlay(
           const PlayableStream(url: 'x', format: StreamFormat.hls),

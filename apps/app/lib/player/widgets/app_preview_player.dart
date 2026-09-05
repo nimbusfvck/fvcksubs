@@ -35,8 +35,7 @@ typedef PreviewNativePlayerBuilder =
     });
 
 /// Default [PreviewNativePlayerBuilder]: the same platform player builder
-/// full playback uses (BetterPlayer on Android, video_player for Apple VOD,
-/// MediaKit for Apple live),
+/// full playback uses (video_player on every supported platform),
 /// fixed to preview mode rather than a second player stack.
 Widget defaultPreviewNativePlayerBuilder(
   BuildContext context,
