@@ -602,6 +602,24 @@ void main() {
                     (ByteData? data) {},
                   );
 
+              // Both one-field events were emitted by an intermediate native
+              // fork. Keep the Dart parser tolerant while clients upgrade.
+              await TestDefaultBinaryMessengerBinding
+                  .instance
+                  .defaultBinaryMessenger
+                  .handlePlatformMessage(
+                    mockChannel,
+                    const StandardMethodCodec().encodeSuccessEnvelope(
+                      <String, dynamic>{
+                        'event': 'bufferingUpdate',
+                        'seekableValues': <List<dynamic>>[
+                          <int>[9001, 1000],
+                        ],
+                      },
+                    ),
+                    (ByteData? data) {},
+                  );
+
               await TestDefaultBinaryMessengerBinding
                   .instance
                   .defaultBinaryMessenger
@@ -697,6 +715,15 @@ void main() {
             eventType: VideoEventType.initialized,
             duration: const Duration(milliseconds: 98765),
             size: const Size(1920, 1080),
+          ),
+          VideoEvent(
+            eventType: VideoEventType.bufferingUpdate,
+            seekable: <DurationRange>[
+              DurationRange(
+                const Duration(milliseconds: 9001),
+                const Duration(milliseconds: 10001),
+              ),
+            ],
           ),
           VideoEvent(eventType: VideoEventType.completed),
           VideoEvent(

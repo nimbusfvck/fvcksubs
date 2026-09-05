@@ -29,6 +29,12 @@
 /// set up.
 @property(nonatomic) NSMutableArray<NSObject *> *queuedEvents;
 
+/// Retain the latest ranges so every buffering event carries both fields.
+/// This keeps the wire format compatible with older Dart clients that require
+/// `values` on every bufferingUpdate event.
+@property(nonatomic, nullable) NSArray<NSArray<NSNumber *> *> *bufferedRegions;
+@property(nonatomic, nullable) NSArray<NSArray<NSNumber *> *> *seekableRegions;
+
 @end
 
 @implementation FVPEventBridge
@@ -96,11 +102,13 @@
 }
 
 - (void)videoPlayerDidUpdateBufferRegions:(NSArray<NSArray<NSNumber *> *> *)regions {
-  [self sendOrQueue:@{@"event" : @"bufferingUpdate", @"values" : regions}];
+  self.bufferedRegions = regions;
+  [self sendBufferingUpdate];
 }
 
 - (void)videoPlayerDidUpdateSeekableTimeRanges:(NSArray<NSArray<NSNumber *> *> *)regions {
-  [self sendOrQueue:@{@"event" : @"bufferingUpdate", @"seekableValues" : regions}];
+  self.seekableRegions = regions;
+  [self sendBufferingUpdate];
 }
 
 - (void)videoPlayerDidSetPlaying:(BOOL)playing {
@@ -112,6 +120,15 @@
 }
 
 #pragma mark Private methods
+
+- (void)sendBufferingUpdate {
+  [self sendOrQueue:@{
+    @"event" : @"bufferingUpdate",
+    // Keep this field present for older Dart clients that cast it directly.
+    @"values" : self.bufferedRegions ?: @[],
+    @"seekableValues" : self.seekableRegions ?: @[],
+  }];
+}
 
 /// Sends the given event to the event sink if it is ready to receive events, or enqueues it to send
 /// later if not.
