@@ -1052,6 +1052,9 @@ class _MediaKitPlayerViewState extends State<MediaKitPlayerView>
         : const Color(0xFF000000),
     subtitleViewConfiguration: SubtitleViewConfiguration(
       style: widget.subtitleAppearance?.textStyle ?? playerSubtitleTextStyle,
+      // The app preference is already expressed in logical pixels. Do not
+      // apply media_kit's viewport-area scaler on top of it.
+      textScaler: TextScaler.noScaling,
     ),
     // MediaKit moves only the Video widget into its fullscreen route. Use its
     // desktop controls there so pointer input and keyboard focus stay inside

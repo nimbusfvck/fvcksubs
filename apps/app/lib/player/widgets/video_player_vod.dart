@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -44,6 +45,39 @@ class VideoPlayerVodView extends StatefulWidget {
 
   @override
   State<VideoPlayerVodView> createState() => _VideoPlayerVodViewState();
+}
+
+/// Returns the visible video area where a fixed-size subtitle should be
+/// placed. The subtitle must not be a child of the [FittedBox], otherwise its
+/// font size is scaled with the source video's intrinsic resolution.
+@visibleForTesting
+Rect subtitleOverlayRect({
+  required Size videoSize,
+  required Size viewportSize,
+  required BoxFit fit,
+}) {
+  if (!videoSize.width.isFinite ||
+      !videoSize.height.isFinite ||
+      videoSize.width <= 0 ||
+      videoSize.height <= 0 ||
+      !viewportSize.width.isFinite ||
+      !viewportSize.height.isFinite ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0) {
+    return Offset.zero & viewportSize;
+  }
+  if (fit != BoxFit.contain) return Offset.zero & viewportSize;
+
+  final scale = math.min(
+    viewportSize.width / videoSize.width,
+    viewportSize.height / videoSize.height,
+  );
+  final displayedSize = Size(videoSize.width * scale, videoSize.height * scale);
+  return Rect.fromCenter(
+    center: viewportSize.center(Offset.zero),
+    width: displayedSize.width,
+    height: displayedSize.height,
+  );
 }
 
 class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
@@ -293,34 +327,48 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView> {
             return const ColoredBox(color: Colors.black);
           }
           final videoSize = value.size;
-          final child = SizedBox(
-            width: videoSize.width,
-            height: videoSize.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                vp.VideoPlayer(_player),
-                vp.ClosedCaption(
-                  text: value.caption.text,
-                  textStyle:
-                      widget.subtitleAppearance?.textStyle ??
-                      playerSubtitleTextStyle,
-                ),
-              ],
-            ),
-          );
+          final fit = _fitMode == PlayerFitMode.contain
+              ? BoxFit.contain
+              : BoxFit.cover;
           return ColoredBox(
             color: Colors.black,
             child: ClipRect(
-              child: SizedBox.expand(
-                child: FittedBox(
-                  fit: _fitMode == PlayerFitMode.contain
-                      ? BoxFit.contain
-                      : BoxFit.cover,
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.hardEdge,
-                  child: child,
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewportSize = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  final subtitleRect = subtitleOverlayRect(
+                    videoSize: videoSize,
+                    viewportSize: viewportSize,
+                    fit: fit,
+                  );
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      FittedBox(
+                        fit: fit,
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.hardEdge,
+                        child: SizedBox(
+                          width: videoSize.width,
+                          height: videoSize.height,
+                          child: vp.VideoPlayer(_player),
+                        ),
+                      ),
+                      Positioned.fromRect(
+                        rect: subtitleRect,
+                        child: vp.ClosedCaption(
+                          text: value.caption.text,
+                          textStyle:
+                              widget.subtitleAppearance?.textStyle ??
+                              playerSubtitleTextStyle,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           );
