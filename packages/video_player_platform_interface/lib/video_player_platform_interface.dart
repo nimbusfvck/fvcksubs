@@ -508,6 +508,7 @@ class VideoPlayerOptions {
     this.preventsDisplaySleepDuringVideoPlayback = true,
     this.webOptions,
     this.backBufferDurationMs,
+    this.liveConfiguration,
   }) : assert(
          backBufferDurationMs == null || backBufferDurationMs >= 0,
          'backBufferDurationMs must be zero or greater',
@@ -539,6 +540,93 @@ class VideoPlayerOptions {
   ///
   /// Ignored on platforms that do not support controlling the back buffer.
   final int? backBufferDurationMs;
+
+  /// Optional live playback tuning passed to native backends when
+  /// [VideoCreationOptions.isLive] is true.
+  final VideoPlayerLiveOptions? liveConfiguration;
+}
+
+/// Tuning values for an unbounded live stream.
+///
+/// These values are expressed in milliseconds so the platform interface stays
+/// independent of Flutter. A native backend ignores this configuration for
+/// on-demand sources or when it does not support a setting.
+@immutable
+class VideoPlayerLiveOptions {
+  /// Creates live playback tuning values.
+  const VideoPlayerLiveOptions({
+    /// Desired distance behind the live edge when playback starts or catches up.
+    this.targetOffsetMs = 5000,
+
+    /// Smallest allowed distance behind the live edge.
+    this.minOffsetMs = 3000,
+
+    /// Largest allowed distance behind the live edge.
+    this.maxOffsetMs = 10000,
+
+    /// Lowest playback speed used while correcting live latency.
+    this.minPlaybackSpeed = 0.98,
+
+    /// Highest playback speed used while correcting live latency.
+    this.maxPlaybackSpeed = 1.02,
+
+    /// Preferred AVPlayer read-ahead buffer duration.
+    this.preferredForwardBufferDurationMs = 5000,
+
+    /// Minimum Android load-control buffer duration.
+    this.minBufferDurationMs = 5000,
+
+    /// Maximum Android load-control buffer duration.
+    this.maxBufferDurationMs = 15000,
+
+    /// Android buffer required before initial playback.
+    this.bufferForPlaybackMs = 1500,
+
+    /// Android buffer required after a rebuffer.
+    this.bufferForPlaybackAfterRebufferMs = 2500,
+  }) : assert(targetOffsetMs >= 0),
+       assert(minOffsetMs >= 0),
+       assert(maxOffsetMs >= 0),
+       assert(minOffsetMs <= targetOffsetMs),
+       assert(targetOffsetMs <= maxOffsetMs),
+       assert(minPlaybackSpeed > 0),
+       assert(maxPlaybackSpeed > 0),
+       assert(minPlaybackSpeed <= maxPlaybackSpeed),
+       assert(preferredForwardBufferDurationMs >= 0),
+       assert(minBufferDurationMs >= 0),
+       assert(maxBufferDurationMs >= minBufferDurationMs),
+       assert(bufferForPlaybackMs >= 0),
+       assert(bufferForPlaybackAfterRebufferMs >= 0);
+
+  /// Desired distance behind the live edge when playback starts or catches up.
+  final int targetOffsetMs;
+
+  /// Smallest allowed distance behind the live edge.
+  final int minOffsetMs;
+
+  /// Largest allowed distance behind the live edge.
+  final int maxOffsetMs;
+
+  /// Lowest playback speed used while correcting live latency.
+  final double minPlaybackSpeed;
+
+  /// Highest playback speed used while correcting live latency.
+  final double maxPlaybackSpeed;
+
+  /// Preferred AVPlayer read-ahead buffer duration.
+  final int preferredForwardBufferDurationMs;
+
+  /// Minimum Android load-control buffer duration.
+  final int minBufferDurationMs;
+
+  /// Maximum Android load-control buffer duration.
+  final int maxBufferDurationMs;
+
+  /// Android buffer required before initial playback.
+  final int bufferForPlaybackMs;
+
+  /// Android buffer required after a rebuffer.
+  final int bufferForPlaybackAfterRebufferMs;
 }
 
 /// [VideoPlayerWebOptions] can be optionally used to set additional web settings
@@ -642,6 +730,7 @@ class VideoCreationOptions {
     required this.dataSource,
     required this.viewType,
     this.videoPlayerOptions,
+    this.isLive = false,
   });
 
   /// The data source used to create the player.
@@ -652,6 +741,12 @@ class VideoCreationOptions {
 
   /// Additional configuration options for the video player.
   final VideoPlayerOptions? videoPlayerOptions;
+
+  /// Whether the source is an unbounded live stream.
+  ///
+  /// Native backends may use this to select live-specific buffering and
+  /// latency behavior. The default keeps the existing on-demand behavior.
+  final bool isLive;
 }
 
 /// Represents an audio track in a video with its metadata.

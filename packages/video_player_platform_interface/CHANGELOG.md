@@ -1,3 +1,8 @@
+## Unreleased
+
+* Adds optional `VideoPlayerLiveOptions` with AVPlayer and Media3-compatible
+  defaults for configuring live latency and buffering.
+
 ## 6.9.0
 
 * Adds `backBufferDurationMs` to `VideoPlayerOptions` to support configuring the back buffer duration.

@@ -95,6 +95,33 @@ public abstract class VideoAsset {
   public abstract MediaItem getMediaItem();
 
   /**
+   * Returns the configured media item, adding conservative live playback
+   * settings when the caller has identified the source as live.
+   *
+   * @param liveConfiguration optional live playback tuning.
+   * @return media item.
+   */
+  @NonNull
+  public MediaItem getMediaItem(@Nullable LivePlaybackOptions liveConfiguration) {
+    MediaItem mediaItem = getMediaItem();
+    if (liveConfiguration == null) {
+      return mediaItem;
+    }
+
+    return mediaItem
+        .buildUpon()
+        .setLiveConfiguration(
+            new MediaItem.LiveConfiguration.Builder()
+                .setTargetOffsetMs(liveConfiguration.targetOffsetMs)
+                .setMinOffsetMs(liveConfiguration.minOffsetMs)
+                .setMaxOffsetMs(liveConfiguration.maxOffsetMs)
+                .setMinPlaybackSpeed(liveConfiguration.minPlaybackSpeed)
+                .setMaxPlaybackSpeed(liveConfiguration.maxPlaybackSpeed)
+                .build())
+        .build();
+  }
+
+  /**
    * Returns the configured media source factory, if needed for this asset type.
    *
    * @param context application context.

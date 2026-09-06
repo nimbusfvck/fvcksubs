@@ -75,7 +75,6 @@ bool _deepEquals(Object? a, Object? b) {
   }
   return a == b;
 }
-
 int _deepHash(Object? value) {
   if (value is List) {
     return Object.hashAll(value.map(_deepHash));
@@ -97,6 +96,7 @@ int _deepHash(Object? value) {
   }
   return value.hashCode;
 }
+
 
 /// Information passed to the platform view creation.
 class PlatformVideoViewCreationParams {
@@ -199,17 +199,134 @@ class PlatformFairPlayDrmConfiguration {
   }
 }
 
+/// Pigeon equivalent of video_player_platform_interface's
+/// VideoPlayerLiveOptions.
+class PlatformLiveConfiguration {
+  PlatformLiveConfiguration({
+    required this.targetOffsetMs,
+    required this.minOffsetMs,
+    required this.maxOffsetMs,
+    required this.minPlaybackSpeed,
+    required this.maxPlaybackSpeed,
+    required this.preferredForwardBufferDurationMs,
+    required this.minBufferDurationMs,
+    required this.maxBufferDurationMs,
+    required this.bufferForPlaybackMs,
+    required this.bufferForPlaybackAfterRebufferMs,
+  });
+
+  /// Desired distance behind the live edge when playback starts or catches up.
+  int targetOffsetMs;
+  /// Smallest allowed distance behind the live edge.
+  int minOffsetMs;
+  /// Largest allowed distance behind the live edge.
+  int maxOffsetMs;
+  /// Lowest playback speed used while correcting live latency.
+  double minPlaybackSpeed;
+  /// Highest playback speed used while correcting live latency.
+  double maxPlaybackSpeed;
+  /// Preferred AVPlayer read-ahead buffer duration.
+  int preferredForwardBufferDurationMs;
+  /// Minimum Android load-control buffer duration, unused on Darwin.
+  int minBufferDurationMs;
+  /// Maximum Android load-control buffer duration, unused on Darwin.
+  int maxBufferDurationMs;
+  /// Android buffer required before initial playback, unused on Darwin.
+  int bufferForPlaybackMs;
+  /// Android buffer required after a rebuffer, unused on Darwin.
+  int bufferForPlaybackAfterRebufferMs;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      targetOffsetMs,
+      minOffsetMs,
+      maxOffsetMs,
+      minPlaybackSpeed,
+      maxPlaybackSpeed,
+      preferredForwardBufferDurationMs,
+      minBufferDurationMs,
+      maxBufferDurationMs,
+      bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static PlatformLiveConfiguration decode(Object result) {
+    result as List<Object?>;
+    return PlatformLiveConfiguration(
+      targetOffsetMs: result[0]! as int,
+      minOffsetMs: result[1]! as int,
+      maxOffsetMs: result[2]! as int,
+      minPlaybackSpeed: result[3]! as double,
+      maxPlaybackSpeed: result[4]! as double,
+      preferredForwardBufferDurationMs: result[5]! as int,
+      minBufferDurationMs: result[6]! as int,
+      maxBufferDurationMs: result[7]! as int,
+      bufferForPlaybackMs: result[8]! as int,
+      bufferForPlaybackAfterRebufferMs: result[9]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PlatformLiveConfiguration ||
+        other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(targetOffsetMs, other.targetOffsetMs) &&
+        _deepEquals(minOffsetMs, other.minOffsetMs) &&
+        _deepEquals(maxOffsetMs, other.maxOffsetMs) &&
+        _deepEquals(minPlaybackSpeed, other.minPlaybackSpeed) &&
+        _deepEquals(maxPlaybackSpeed, other.maxPlaybackSpeed) &&
+        _deepEquals(
+          preferredForwardBufferDurationMs,
+          other.preferredForwardBufferDurationMs,
+        ) &&
+        _deepEquals(minBufferDurationMs, other.minBufferDurationMs) &&
+        _deepEquals(maxBufferDurationMs, other.maxBufferDurationMs) &&
+        _deepEquals(bufferForPlaybackMs, other.bufferForPlaybackMs) &&
+        _deepEquals(
+          bufferForPlaybackAfterRebufferMs,
+          other.bufferForPlaybackAfterRebufferMs,
+        );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class CreationOptions {
-  CreationOptions({required this.uri, required this.httpHeaders, this.fairPlayDrm});
+  CreationOptions({
+    required this.uri,
+    required this.httpHeaders,
+    this.fairPlayDrm,
+    this.isLive,
+    this.liveConfiguration,
+  });
 
   String uri;
+
+  /// Whether the source is an unbounded live stream.
+  bool? isLive;
 
   Map<String, String> httpHeaders;
 
   PlatformFairPlayDrmConfiguration? fairPlayDrm;
 
+  /// Optional live playback tuning.
+  PlatformLiveConfiguration? liveConfiguration;
+
   List<Object?> _toList() {
-    return <Object?>[uri, httpHeaders, fairPlayDrm];
+    return <Object?>[uri, isLive, httpHeaders, fairPlayDrm, liveConfiguration];
   }
 
   Object encode() {
@@ -220,8 +337,10 @@ class CreationOptions {
     result as List<Object?>;
     return CreationOptions(
       uri: result[0]! as String,
-      httpHeaders: (result[1]! as Map<Object?, Object?>).cast<String, String>(),
-      fairPlayDrm: result[2] as PlatformFairPlayDrmConfiguration?,
+      isLive: result[1] as bool?,
+      httpHeaders: (result[2]! as Map<Object?, Object?>).cast<String, String>(),
+      fairPlayDrm: result[3] as PlatformFairPlayDrmConfiguration?,
+      liveConfiguration: result[4] as PlatformLiveConfiguration?,
     );
   }
 
@@ -236,7 +355,9 @@ class CreationOptions {
     }
     return _deepEquals(uri, other.uri) &&
         _deepEquals(httpHeaders, other.httpHeaders) &&
-        _deepEquals(fairPlayDrm, other.fairPlayDrm);
+        _deepEquals(fairPlayDrm, other.fairPlayDrm) &&
+        _deepEquals(isLive, other.isLive) &&
+        _deepEquals(liveConfiguration, other.liveConfiguration);
   }
 
   @override
@@ -245,7 +366,7 @@ class CreationOptions {
 
   @override
   String toString() {
-    return 'CreationOptions(uri: $uri, httpHeaders: $httpHeaders, fairPlayDrm: $fairPlayDrm)';
+    return 'CreationOptions(uri: $uri, httpHeaders: $httpHeaders, fairPlayDrm: $fairPlayDrm, isLive: $isLive, liveConfiguration: $liveConfiguration)';
   }
 }
 
@@ -268,7 +389,6 @@ class TexturePlayerIds {
     result as List<Object?>;
     return TexturePlayerIds(playerId: result[0]! as int, textureId: result[1]! as int);
   }
-
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
@@ -291,6 +411,7 @@ class TexturePlayerIds {
   }
 }
 
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -304,11 +425,14 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PlatformFairPlayDrmConfiguration) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
-    } else if (value is CreationOptions) {
+    } else if (value is PlatformLiveConfiguration) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    } else if (value is TexturePlayerIds) {
+    } else if (value is CreationOptions) {
       buffer.putUint8(132);
+      writeValue(buffer, value.encode());
+    } else if (value is TexturePlayerIds) {
+      buffer.putUint8(133);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -323,8 +447,10 @@ class _PigeonCodec extends StandardMessageCodec {
       case 130:
         return PlatformFairPlayDrmConfiguration.decode(readValue(buffer)!);
       case 131:
-        return CreationOptions.decode(readValue(buffer)!);
+        return PlatformLiveConfiguration.decode(readValue(buffer)!);
       case 132:
+        return CreationOptions.decode(readValue(buffer)!);
+      case 133:
         return TexturePlayerIds.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

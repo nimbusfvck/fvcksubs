@@ -82,6 +82,30 @@
                            resourceLoaderDelegate:self.resourceLoaderDelegate];
 }
 
+- (NSTimeInterval)preferredForwardBufferDuration {
+  return self.playerItem.preferredForwardBufferDuration;
+}
+
+- (void)setPreferredForwardBufferDuration:(NSTimeInterval)duration {
+  self.playerItem.preferredForwardBufferDuration = duration;
+}
+
+- (CMTime)configuredTimeOffsetFromLive {
+  return self.playerItem.configuredTimeOffsetFromLive;
+}
+
+- (void)setConfiguredTimeOffsetFromLive:(CMTime)offset {
+  self.playerItem.configuredTimeOffsetFromLive = offset;
+}
+
+- (BOOL)automaticallyPreservesTimeOffsetFromLive {
+  return self.playerItem.automaticallyPreservesTimeOffsetFromLive;
+}
+
+- (void)setAutomaticallyPreservesTimeOffsetFromLive:(BOOL)preserve {
+  self.playerItem.automaticallyPreservesTimeOffsetFromLive = preserve;
+}
+
 - (AVVideoComposition *)videoComposition {
   return self.playerItem.videoComposition;
 }

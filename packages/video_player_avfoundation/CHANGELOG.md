@@ -1,3 +1,8 @@
+## Unreleased
+
+* Supports configurable live latency and forward-buffer options through
+  `VideoPlayerLiveOptions`.
+
 ## 2.11.1
 
 * Updates pigeon dev_dependency to ^27.3.2 for analyzer 14 compatibility.

@@ -22,6 +22,7 @@ export 'package:video_player_platform_interface/video_player_platform_interface.
         VideoDrmConfiguration,
         VideoFormat,
         VideoPlayerOptions,
+        VideoPlayerLiveOptions,
         VideoPlayerWebOptions,
         VideoPlayerWebOptionsControls,
         VideoViewType;
@@ -669,6 +670,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       dataSource: dataSourceDescription,
       viewType: viewType,
       videoPlayerOptions: videoPlayerOptions,
+      isLive: isLive,
     );
 
     if (videoPlayerOptions?.mixWithOthers != null) {

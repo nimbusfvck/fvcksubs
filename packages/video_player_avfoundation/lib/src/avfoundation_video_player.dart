@@ -70,6 +70,8 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
 
     final PlatformFairPlayDrmConfiguration? fairPlayDrm =
         _fairPlayDrmFromDataSource(dataSource);
+    final VideoPlayerLiveOptions? liveOptions =
+        options.videoPlayerOptions?.liveConfiguration;
 
     String? uri;
     switch (dataSource.sourceType) {
@@ -99,8 +101,25 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     }
     final pigeonCreationOptions = CreationOptions(
       uri: uri,
+      isLive: options.isLive,
       httpHeaders: dataSource.httpHeaders,
       fairPlayDrm: fairPlayDrm,
+      liveConfiguration: liveOptions == null
+          ? null
+          : PlatformLiveConfiguration(
+              targetOffsetMs: liveOptions.targetOffsetMs,
+              minOffsetMs: liveOptions.minOffsetMs,
+              maxOffsetMs: liveOptions.maxOffsetMs,
+              minPlaybackSpeed: liveOptions.minPlaybackSpeed,
+              maxPlaybackSpeed: liveOptions.maxPlaybackSpeed,
+              preferredForwardBufferDurationMs:
+                  liveOptions.preferredForwardBufferDurationMs,
+              minBufferDurationMs: liveOptions.minBufferDurationMs,
+              maxBufferDurationMs: liveOptions.maxBufferDurationMs,
+              bufferForPlaybackMs: liveOptions.bufferForPlaybackMs,
+              bufferForPlaybackAfterRebufferMs:
+                  liveOptions.bufferForPlaybackAfterRebufferMs,
+            ),
     );
 
     final int playerId;

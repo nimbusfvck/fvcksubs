@@ -638,6 +638,39 @@ void main() {
       },
     );
 
+    test('createWithOptions passes live playback configuration', () async {
+      final (AndroidVideoPlayer player, MockAndroidVideoPlayerApi api, _) =
+          setUpMockPlayer(playerId: 1, textureId: 100);
+      when(
+        api.createForTextureView(any),
+      ).thenAnswer((_) async => TexturePlayerIds(playerId: 2, textureId: 100));
+
+      await player.createWithOptions(
+        VideoCreationOptions(
+          dataSource: DataSource(
+            sourceType: DataSourceType.network,
+            uri: 'https://example.com/live.m3u8',
+          ),
+          viewType: VideoViewType.textureView,
+          isLive: true,
+          videoPlayerOptions: VideoPlayerOptions(
+            liveConfiguration: const VideoPlayerLiveOptions(
+              targetOffsetMs: 7000,
+            ),
+          ),
+        ),
+      );
+
+      final VerificationResult verification = verify(
+        api.createForTextureView(captureAny),
+      );
+      final creationOptions = verification.captured[0] as CreationOptions;
+      expect(creationOptions.isLive, true);
+      expect(creationOptions.liveConfiguration?.targetOffsetMs, 7000);
+      expect(creationOptions.liveConfiguration?.minOffsetMs, 3000);
+      expect(creationOptions.liveConfiguration?.maxBufferDurationMs, 15000);
+    });
+
     test('setLooping', () async {
       final (
         AndroidVideoPlayer player,

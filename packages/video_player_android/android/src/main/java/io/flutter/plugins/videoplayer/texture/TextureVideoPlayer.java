@@ -19,6 +19,7 @@ import io.flutter.plugins.videoplayer.VideoAsset;
 import io.flutter.plugins.videoplayer.VideoPlayer;
 import io.flutter.plugins.videoplayer.VideoPlayerCallbacks;
 import io.flutter.plugins.videoplayer.VideoPlayerOptions;
+import io.flutter.plugins.videoplayer.LivePlaybackOptions;
 import io.flutter.view.TextureRegistry.SurfaceProducer;
 
 /**
@@ -54,25 +55,36 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
     return new TextureVideoPlayer(
         events,
         surfaceProducer,
-        asset.getMediaItem(),
+        asset.getMediaItem(options.liveConfiguration),
         options,
         () -> {
           ExoPlayer.Builder builder = new ExoPlayer.Builder(context);
-          if (options.backBufferDurationMs != null) {
-            if (options.backBufferDurationMs < 0) {
-              throw new IllegalArgumentException("backBufferDurationMs must be at least 0");
+          if (options.liveConfiguration != null || options.backBufferDurationMs != null) {
+            DefaultLoadControl.Builder loadControlBuilder = new DefaultLoadControl.Builder();
+            if (options.liveConfiguration != null) {
+              loadControlBuilder
+                  .setBufferDurationsMs(
+                      LivePlaybackOptions.asInt(options.liveConfiguration.minBufferDurationMs),
+                      LivePlaybackOptions.asInt(options.liveConfiguration.maxBufferDurationMs),
+                      LivePlaybackOptions.asInt(options.liveConfiguration.bufferForPlaybackMs),
+                      LivePlaybackOptions.asInt(
+                          options.liveConfiguration.bufferForPlaybackAfterRebufferMs))
+                  .setPrioritizeTimeOverSizeThresholds(true);
             }
-            if (options.backBufferDurationMs > 0) {
+            if (options.backBufferDurationMs != null) {
+              if (options.backBufferDurationMs < 0) {
+                throw new IllegalArgumentException("backBufferDurationMs must be at least 0");
+              }
+            }
+            if (options.backBufferDurationMs != null && options.backBufferDurationMs > 0) {
               // Clamp the value to ensure it fits within the int range expected by
               // DefaultLoadControl.
               int backBufferInt =
                   (int) Math.min(options.backBufferDurationMs.longValue(), Integer.MAX_VALUE);
-              DefaultLoadControl loadControl =
-                  new DefaultLoadControl.Builder()
-                      .setBackBuffer(backBufferInt, /* retainBackBufferFromKeyframe= */ true)
-                      .build();
-              builder.setLoadControl(loadControl);
+              loadControlBuilder.setBackBuffer(
+                  backBufferInt, /* retainBackBufferFromKeyframe= */ true);
             }
+            builder.setLoadControl(loadControlBuilder.build());
           }
           androidx.media3.exoplayer.trackselection.DefaultTrackSelector trackSelector =
               new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context);

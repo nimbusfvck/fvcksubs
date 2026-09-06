@@ -95,15 +95,57 @@ class PlatformClearKeyDrmConfiguration {
   String clearKeyJson;
 }
 
+/// Pigeon equivalent of video_player_platform_interface's
+/// VideoPlayerLiveOptions.
+class PlatformLiveConfiguration {
+  PlatformLiveConfiguration({
+    required this.targetOffsetMs,
+    required this.minOffsetMs,
+    required this.maxOffsetMs,
+    required this.minPlaybackSpeed,
+    required this.maxPlaybackSpeed,
+    required this.preferredForwardBufferDurationMs,
+    required this.minBufferDurationMs,
+    required this.maxBufferDurationMs,
+    required this.bufferForPlaybackMs,
+    required this.bufferForPlaybackAfterRebufferMs,
+  });
+
+  /// Desired distance behind the live edge when playback starts or catches up.
+  int targetOffsetMs;
+  /// Smallest allowed distance behind the live edge.
+  int minOffsetMs;
+  /// Largest allowed distance behind the live edge.
+  int maxOffsetMs;
+  /// Lowest playback speed used while correcting live latency.
+  double minPlaybackSpeed;
+  /// Highest playback speed used while correcting live latency.
+  double maxPlaybackSpeed;
+  /// Preferred AVPlayer read-ahead buffer duration, unused on Android.
+  int preferredForwardBufferDurationMs;
+  /// Minimum Android load-control buffer duration.
+  int minBufferDurationMs;
+  /// Maximum Android load-control buffer duration.
+  int maxBufferDurationMs;
+  /// Android buffer required before initial playback.
+  int bufferForPlaybackMs;
+  /// Android buffer required after a rebuffer.
+  int bufferForPlaybackAfterRebufferMs;
+}
+
 class CreationOptions {
   CreationOptions({required this.uri, required this.httpHeaders});
   String uri;
+  /// Whether the source is an unbounded live stream.
+  bool? isLive;
   PlatformVideoFormat? formatHint;
   Map<String, String> httpHeaders;
   String? userAgent;
   int? backBufferDurationMs;
   PlatformWidevineDrmConfiguration? widevineDrm;
   PlatformClearKeyDrmConfiguration? clearKeyDrm;
+  /// Optional live playback tuning.
+  PlatformLiveConfiguration? liveConfiguration;
 }
 
 class TexturePlayerIds {

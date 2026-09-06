@@ -16,7 +16,6 @@ import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.common.StandardMethodCodec
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
-
 private object MessagesPigeonUtils {
 
   fun wrapResult(result: Any?): List<Any?> {
@@ -33,12 +32,10 @@ private object MessagesPigeonUtils {
           "Cause: " + exception.cause + ", Stacktrace: " + Log.getStackTraceString(exception))
     }
   }
-
   fun doubleEquals(a: Double, b: Double): Boolean {
     // Normalize -0.0 to 0.0 and handle NaN equality.
     return (if (a == 0.0) 0.0 else a) == (if (b == 0.0) 0.0 else b) || (a.isNaN() && b.isNaN())
   }
-
   fun floatEquals(a: Float, b: Float): Boolean {
     // Normalize -0.0 to 0.0 and handle NaN equality.
     return (if (a == 0.0f) 0.0f else a) == (if (b == 0.0f) 0.0f else b) || (a.isNaN() && b.isNaN())
@@ -177,11 +174,11 @@ private object MessagesPigeonUtils {
       else -> value.hashCode()
     }
   }
+
 }
 
 /**
  * Error class for passing custom error details to Flutter via a thrown PlatformException.
- *
  * @property code The error code.
  * @property message The error message.
  * @property details The error details. Must be a datatype supported by the api codec.
@@ -252,7 +249,6 @@ data class InitializationEvent(
       return InitializationEvent(duration, width, height, rotationCorrection)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         duration,
@@ -261,7 +257,6 @@ data class InitializationEvent(
         rotationCorrection,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -284,7 +279,6 @@ data class InitializationEvent(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.rotationCorrection)
     return result
   }
-
   override fun toString(): String {
     return "InitializationEvent(duration=$duration, width=$width, height=$height, rotationCorrection=$rotationCorrection)"
   }
@@ -304,13 +298,11 @@ data class PlaybackStateChangeEvent(val state: PlatformPlaybackState) : Platform
       return PlaybackStateChangeEvent(state)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         state,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -327,7 +319,6 @@ data class PlaybackStateChangeEvent(val state: PlatformPlaybackState) : Platform
     result = 31 * result + MessagesPigeonUtils.deepHash(this.state)
     return result
   }
-
   override fun toString(): String {
     return "PlaybackStateChangeEvent(state=$state)"
   }
@@ -347,13 +338,11 @@ data class IsPlayingStateEvent(val isPlaying: Boolean) : PlatformVideoEvent() {
       return IsPlayingStateEvent(isPlaying)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         isPlaying,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -370,7 +359,6 @@ data class IsPlayingStateEvent(val isPlaying: Boolean) : PlatformVideoEvent() {
     result = 31 * result + MessagesPigeonUtils.deepHash(this.isPlaying)
     return result
   }
-
   override fun toString(): String {
     return "IsPlayingStateEvent(isPlaying=$isPlaying)"
   }
@@ -394,13 +382,11 @@ data class AudioTrackChangedEvent(
       return AudioTrackChangedEvent(selectedTrackId)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         selectedTrackId,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -417,7 +403,6 @@ data class AudioTrackChangedEvent(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.selectedTrackId)
     return result
   }
-
   override fun toString(): String {
     return "AudioTrackChangedEvent(selectedTrackId=$selectedTrackId)"
   }
@@ -444,13 +429,11 @@ data class VideoTrackChangedEvent(
       return VideoTrackChangedEvent(selectedTrackId)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         selectedTrackId,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -467,7 +450,6 @@ data class VideoTrackChangedEvent(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.selectedTrackId)
     return result
   }
-
   override fun toString(): String {
     return "VideoTrackChangedEvent(selectedTrackId=$selectedTrackId)"
   }
@@ -485,13 +467,11 @@ data class PlatformVideoViewCreationParams(val playerId: Long) {
       return PlatformVideoViewCreationParams(playerId)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         playerId,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -508,7 +488,6 @@ data class PlatformVideoViewCreationParams(val playerId: Long) {
     result = 31 * result + MessagesPigeonUtils.deepHash(this.playerId)
     return result
   }
-
   override fun toString(): String {
     return "PlatformVideoViewCreationParams(playerId=$playerId)"
   }
@@ -530,14 +509,12 @@ data class PlatformWidevineDrmConfiguration(
       return PlatformWidevineDrmConfiguration(licenseUri, licenseHeaders)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         licenseUri,
         licenseHeaders,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -568,13 +545,11 @@ data class PlatformClearKeyDrmConfiguration(
       return PlatformClearKeyDrmConfiguration(clearKeyJson)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         clearKeyJson,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -593,39 +568,71 @@ data class PlatformClearKeyDrmConfiguration(
   }
 }
 
-/** Generated class from Pigeon that represents data sent in messages. */
-data class CreationOptions(
-    val uri: String,
-    val formatHint: PlatformVideoFormat? = null,
-    val httpHeaders: Map<String, String>,
-    val userAgent: String? = null,
-    val backBufferDurationMs: Long? = null,
-    val widevineDrm: PlatformWidevineDrmConfiguration? = null,
-    val clearKeyDrm: PlatformClearKeyDrmConfiguration? = null
+/**
+ * Pigeon equivalent of video_player_platform_interface's VideoPlayerLiveOptions.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class PlatformLiveConfiguration(
+    /** Desired distance behind the live edge when playback starts or catches up. */
+    val targetOffsetMs: Long,
+    /** Smallest allowed distance behind the live edge. */
+    val minOffsetMs: Long,
+    /** Largest allowed distance behind the live edge. */
+    val maxOffsetMs: Long,
+    /** Lowest playback speed used while correcting live latency. */
+    val minPlaybackSpeed: Double,
+    /** Highest playback speed used while correcting live latency. */
+    val maxPlaybackSpeed: Double,
+    /** Preferred AVPlayer read-ahead duration, unused by Media3. */
+    val preferredForwardBufferDurationMs: Long,
+    /** Minimum Media3 load-control buffer duration. */
+    val minBufferDurationMs: Long,
+    /** Maximum Media3 load-control buffer duration. */
+    val maxBufferDurationMs: Long,
+    /** Media3 buffer required before initial playback. */
+    val bufferForPlaybackMs: Long,
+    /** Media3 buffer required after a rebuffer. */
+    val bufferForPlaybackAfterRebufferMs: Long
 ) {
   companion object {
-    fun fromList(pigeonVar_list: List<Any?>): CreationOptions {
-      val uri = pigeonVar_list[0] as String
-      val formatHint = pigeonVar_list[1] as PlatformVideoFormat?
-      val httpHeaders = pigeonVar_list[2] as Map<String, String>
-      val userAgent = pigeonVar_list[3] as String?
-      val backBufferDurationMs = pigeonVar_list[4] as Long?
-      val widevineDrm = pigeonVar_list[5] as PlatformWidevineDrmConfiguration?
-      val clearKeyDrm = pigeonVar_list[6] as PlatformClearKeyDrmConfiguration?
-      return CreationOptions(
-          uri, formatHint, httpHeaders, userAgent, backBufferDurationMs, widevineDrm, clearKeyDrm)
+    fun fromList(pigeonVar_list: List<Any?>): PlatformLiveConfiguration {
+      val targetOffsetMs = pigeonVar_list[0] as Long
+      val minOffsetMs = pigeonVar_list[1] as Long
+      val maxOffsetMs = pigeonVar_list[2] as Long
+      val minPlaybackSpeed = pigeonVar_list[3] as Double
+      val maxPlaybackSpeed = pigeonVar_list[4] as Double
+      val preferredForwardBufferDurationMs = pigeonVar_list[5] as Long
+      val minBufferDurationMs = pigeonVar_list[6] as Long
+      val maxBufferDurationMs = pigeonVar_list[7] as Long
+      val bufferForPlaybackMs = pigeonVar_list[8] as Long
+      val bufferForPlaybackAfterRebufferMs = pigeonVar_list[9] as Long
+      return PlatformLiveConfiguration(
+          targetOffsetMs,
+          minOffsetMs,
+          maxOffsetMs,
+          minPlaybackSpeed,
+          maxPlaybackSpeed,
+          preferredForwardBufferDurationMs,
+          minBufferDurationMs,
+          maxBufferDurationMs,
+          bufferForPlaybackMs,
+          bufferForPlaybackAfterRebufferMs)
     }
   }
 
   fun toList(): List<Any?> {
     return listOf(
-        uri,
-        formatHint,
-        httpHeaders,
-        userAgent,
-        backBufferDurationMs,
-        widevineDrm,
-        clearKeyDrm,
+        targetOffsetMs,
+        minOffsetMs,
+        maxOffsetMs,
+        minPlaybackSpeed,
+        maxPlaybackSpeed,
+        preferredForwardBufferDurationMs,
+        minBufferDurationMs,
+        maxBufferDurationMs,
+        bufferForPlaybackMs,
+        bufferForPlaybackAfterRebufferMs,
     )
   }
 
@@ -636,30 +643,121 @@ data class CreationOptions(
     if (this === other) {
       return true
     }
+    val other = other as PlatformLiveConfiguration
+    return MessagesPigeonUtils.deepEquals(this.targetOffsetMs, other.targetOffsetMs) &&
+        MessagesPigeonUtils.deepEquals(this.minOffsetMs, other.minOffsetMs) &&
+        MessagesPigeonUtils.deepEquals(this.maxOffsetMs, other.maxOffsetMs) &&
+        MessagesPigeonUtils.deepEquals(this.minPlaybackSpeed, other.minPlaybackSpeed) &&
+        MessagesPigeonUtils.deepEquals(this.maxPlaybackSpeed, other.maxPlaybackSpeed) &&
+        MessagesPigeonUtils.deepEquals(
+            this.preferredForwardBufferDurationMs, other.preferredForwardBufferDurationMs) &&
+        MessagesPigeonUtils.deepEquals(this.minBufferDurationMs, other.minBufferDurationMs) &&
+        MessagesPigeonUtils.deepEquals(this.maxBufferDurationMs, other.maxBufferDurationMs) &&
+        MessagesPigeonUtils.deepEquals(this.bufferForPlaybackMs, other.bufferForPlaybackMs) &&
+        MessagesPigeonUtils.deepEquals(
+            this.bufferForPlaybackAfterRebufferMs, other.bufferForPlaybackAfterRebufferMs)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.targetOffsetMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.minOffsetMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.maxOffsetMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.minPlaybackSpeed)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.maxPlaybackSpeed)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.preferredForwardBufferDurationMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.minBufferDurationMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.maxBufferDurationMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.bufferForPlaybackMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.bufferForPlaybackAfterRebufferMs)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class CreationOptions(
+    val uri: String,
+    /** Whether the source is an unbounded live stream. */
+    val isLive: Boolean? = null,
+    val formatHint: PlatformVideoFormat? = null,
+    val httpHeaders: Map<String, String>,
+    val userAgent: String? = null,
+    val backBufferDurationMs: Long? = null,
+    val widevineDrm: PlatformWidevineDrmConfiguration? = null,
+    val clearKeyDrm: PlatformClearKeyDrmConfiguration? = null,
+    /** Optional live playback tuning. */
+    val liveConfiguration: PlatformLiveConfiguration? = null
+) {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): CreationOptions {
+      val uri = pigeonVar_list[0] as String
+      val isLive = pigeonVar_list[1] as Boolean?
+      val formatHint = pigeonVar_list[2] as PlatformVideoFormat?
+      val httpHeaders = pigeonVar_list[3] as Map<String, String>
+      val userAgent = pigeonVar_list[4] as String?
+      val backBufferDurationMs = pigeonVar_list[5] as Long?
+      val widevineDrm = pigeonVar_list[6] as PlatformWidevineDrmConfiguration?
+      val clearKeyDrm = pigeonVar_list[7] as PlatformClearKeyDrmConfiguration?
+      val liveConfiguration = pigeonVar_list[8] as PlatformLiveConfiguration?
+      return CreationOptions(
+          uri,
+          isLive,
+          formatHint,
+          httpHeaders,
+          userAgent,
+          backBufferDurationMs,
+          widevineDrm,
+          clearKeyDrm,
+          liveConfiguration)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+        uri,
+        isLive,
+        formatHint,
+        httpHeaders,
+        userAgent,
+        backBufferDurationMs,
+        widevineDrm,
+        clearKeyDrm,
+        liveConfiguration,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
     val other = other as CreationOptions
     return MessagesPigeonUtils.deepEquals(this.uri, other.uri) &&
+        MessagesPigeonUtils.deepEquals(this.isLive, other.isLive) &&
         MessagesPigeonUtils.deepEquals(this.formatHint, other.formatHint) &&
         MessagesPigeonUtils.deepEquals(this.httpHeaders, other.httpHeaders) &&
         MessagesPigeonUtils.deepEquals(this.userAgent, other.userAgent) &&
         MessagesPigeonUtils.deepEquals(this.backBufferDurationMs, other.backBufferDurationMs) &&
         MessagesPigeonUtils.deepEquals(this.widevineDrm, other.widevineDrm) &&
-        MessagesPigeonUtils.deepEquals(this.clearKeyDrm, other.clearKeyDrm)
+        MessagesPigeonUtils.deepEquals(this.clearKeyDrm, other.clearKeyDrm) &&
+        MessagesPigeonUtils.deepEquals(this.liveConfiguration, other.liveConfiguration)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + MessagesPigeonUtils.deepHash(this.uri)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.isLive)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.formatHint)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.httpHeaders)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.userAgent)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.backBufferDurationMs)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.widevineDrm)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.clearKeyDrm)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.liveConfiguration)
     return result
   }
-
   override fun toString(): String {
-    return "CreationOptions(uri=$uri, formatHint=$formatHint, httpHeaders=$httpHeaders, userAgent=$userAgent, backBufferDurationMs=$backBufferDurationMs)"
+    return "CreationOptions(uri=$uri, isLive=$isLive, formatHint=$formatHint, httpHeaders=$httpHeaders, userAgent=$userAgent, backBufferDurationMs=$backBufferDurationMs, widevineDrm=$widevineDrm, clearKeyDrm=$clearKeyDrm, liveConfiguration=$liveConfiguration)"
   }
 }
 
@@ -672,14 +770,12 @@ data class TexturePlayerIds(val playerId: Long, val textureId: Long) {
       return TexturePlayerIds(playerId, textureId)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         playerId,
         textureId,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -698,7 +794,6 @@ data class TexturePlayerIds(val playerId: Long, val textureId: Long) {
     result = 31 * result + MessagesPigeonUtils.deepHash(this.textureId)
     return result
   }
-
   override fun toString(): String {
     return "TexturePlayerIds(playerId=$playerId, textureId=$textureId)"
   }
@@ -718,14 +813,12 @@ data class PlaybackState(
       return PlaybackState(playPosition, bufferPosition)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         playPosition,
         bufferPosition,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -744,7 +837,6 @@ data class PlaybackState(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.bufferPosition)
     return result
   }
-
   override fun toString(): String {
     return "PlaybackState(playPosition=$playPosition, bufferPosition=$bufferPosition)"
   }
@@ -779,7 +871,6 @@ data class AudioTrackMessage(
           id, label, language, isSelected, bitrate, sampleRate, channelCount, codec)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         id,
@@ -792,7 +883,6 @@ data class AudioTrackMessage(
         codec,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -823,7 +913,6 @@ data class AudioTrackMessage(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.codec)
     return result
   }
-
   override fun toString(): String {
     return "AudioTrackMessage(id=$id, label=$label, language=$language, isSelected=$isSelected, bitrate=$bitrate, sampleRate=$sampleRate, channelCount=$channelCount, codec=$codec)"
   }
@@ -868,7 +957,6 @@ data class ExoPlayerAudioTrackData(
           codec)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         groupIndex,
@@ -882,7 +970,6 @@ data class ExoPlayerAudioTrackData(
         codec,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -915,7 +1002,6 @@ data class ExoPlayerAudioTrackData(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.codec)
     return result
   }
-
   override fun toString(): String {
     return "ExoPlayerAudioTrackData(groupIndex=$groupIndex, trackIndex=$trackIndex, label=$label, language=$language, isSelected=$isSelected, bitrate=$bitrate, sampleRate=$sampleRate, channelCount=$channelCount, codec=$codec)"
   }
@@ -936,13 +1022,11 @@ data class NativeAudioTrackData(
       return NativeAudioTrackData(exoPlayerTracks)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         exoPlayerTracks,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -959,7 +1043,6 @@ data class NativeAudioTrackData(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.exoPlayerTracks)
     return result
   }
-
   override fun toString(): String {
     return "NativeAudioTrackData(exoPlayerTracks=$exoPlayerTracks)"
   }
@@ -996,7 +1079,6 @@ data class ExoPlayerVideoTrackData(
           groupIndex, trackIndex, label, isSelected, bitrate, width, height, frameRate, codec)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         groupIndex,
@@ -1010,7 +1092,6 @@ data class ExoPlayerVideoTrackData(
         codec,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -1043,7 +1124,6 @@ data class ExoPlayerVideoTrackData(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.codec)
     return result
   }
-
   override fun toString(): String {
     return "ExoPlayerVideoTrackData(groupIndex=$groupIndex, trackIndex=$trackIndex, label=$label, isSelected=$isSelected, bitrate=$bitrate, width=$width, height=$height, frameRate=$frameRate, codec=$codec)"
   }
@@ -1064,13 +1144,11 @@ data class NativeVideoTrackData(
       return NativeVideoTrackData(exoPlayerTracks)
     }
   }
-
   fun toList(): List<Any?> {
     return listOf(
         exoPlayerTracks,
     )
   }
-
   override fun equals(other: Any?): Boolean {
     if (other == null || other.javaClass != javaClass) {
       return false
@@ -1087,12 +1165,10 @@ data class NativeVideoTrackData(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.exoPlayerTracks)
     return result
   }
-
   override fun toString(): String {
     return "NativeVideoTrackData(exoPlayerTracks=$exoPlayerTracks)"
   }
 }
-
 private open class MessagesPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -1133,27 +1209,32 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         }
       }
       139.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { CreationOptions.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PlatformLiveConfiguration.fromList(it)
+        }
       }
       140.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { TexturePlayerIds.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { CreationOptions.fromList(it) }
       }
       141.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { PlaybackState.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { TexturePlayerIds.fromList(it) }
       }
       142.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { AudioTrackMessage.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { PlaybackState.fromList(it) }
       }
       143.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerAudioTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { AudioTrackMessage.fromList(it) }
       }
       144.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { NativeAudioTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerAudioTrackData.fromList(it) }
       }
       145.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerVideoTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { NativeAudioTrackData.fromList(it) }
       }
       146.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerVideoTrackData.fromList(it) }
+      }
+      147.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let { NativeVideoTrackData.fromList(it) }
       }
       else -> super.readValueOfType(type, buffer)
@@ -1202,36 +1283,40 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is CreationOptions -> {
+      is PlatformLiveConfiguration -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is TexturePlayerIds -> {
+      is CreationOptions -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is PlaybackState -> {
+      is TexturePlayerIds -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is AudioTrackMessage -> {
+      is PlaybackState -> {
         stream.write(142)
         writeValue(stream, value.toList())
       }
-      is ExoPlayerAudioTrackData -> {
+      is AudioTrackMessage -> {
         stream.write(143)
         writeValue(stream, value.toList())
       }
-      is NativeAudioTrackData -> {
+      is ExoPlayerAudioTrackData -> {
         stream.write(144)
         writeValue(stream, value.toList())
       }
-      is ExoPlayerVideoTrackData -> {
+      is NativeAudioTrackData -> {
         stream.write(145)
         writeValue(stream, value.toList())
       }
-      is NativeVideoTrackData -> {
+      is ExoPlayerVideoTrackData -> {
         stream.write(146)
+        writeValue(stream, value.toList())
+      }
+      is NativeVideoTrackData -> {
+        stream.write(147)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -1244,15 +1329,10 @@ val MessagesPigeonMethodCodec = StandardMethodCodec(MessagesPigeonCodec())
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface AndroidVideoPlayerApi {
   fun initialize()
-
   fun createForPlatformView(options: CreationOptions): Long
-
   fun createForTextureView(options: CreationOptions): TexturePlayerIds
-
   fun dispose(playerId: Long)
-
   fun setMixWithOthers(mixWithOthers: Boolean)
-
   fun getLookupKeyForAsset(asset: String, packageName: String?): String
 
   companion object {

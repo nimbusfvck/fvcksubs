@@ -92,6 +92,8 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
         _widevineDrmFromDataSource(dataSource);
     final PlatformClearKeyDrmConfiguration? clearKeyDrm =
         _clearKeyDrmFromDataSource(dataSource);
+    final VideoPlayerLiveOptions? liveOptions =
+        options.videoPlayerOptions?.liveConfiguration;
     switch (dataSource.sourceType) {
       case DataSourceType.asset:
         final String? asset = dataSource.asset;
@@ -117,12 +119,29 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
     }
     final pigeonCreationOptions = CreationOptions(
       uri: uri,
+      isLive: options.isLive,
       httpHeaders: httpHeaders,
       userAgent: userAgent,
       formatHint: formatHint,
       backBufferDurationMs: options.videoPlayerOptions?.backBufferDurationMs,
       widevineDrm: widevineDrm,
       clearKeyDrm: clearKeyDrm,
+      liveConfiguration: liveOptions == null
+          ? null
+          : PlatformLiveConfiguration(
+              targetOffsetMs: liveOptions.targetOffsetMs,
+              minOffsetMs: liveOptions.minOffsetMs,
+              maxOffsetMs: liveOptions.maxOffsetMs,
+              minPlaybackSpeed: liveOptions.minPlaybackSpeed,
+              maxPlaybackSpeed: liveOptions.maxPlaybackSpeed,
+              preferredForwardBufferDurationMs:
+                  liveOptions.preferredForwardBufferDurationMs,
+              minBufferDurationMs: liveOptions.minBufferDurationMs,
+              maxBufferDurationMs: liveOptions.maxBufferDurationMs,
+              bufferForPlaybackMs: liveOptions.bufferForPlaybackMs,
+              bufferForPlaybackAfterRebufferMs:
+                  liveOptions.bufferForPlaybackAfterRebufferMs,
+            ),
     );
 
     final int playerId;

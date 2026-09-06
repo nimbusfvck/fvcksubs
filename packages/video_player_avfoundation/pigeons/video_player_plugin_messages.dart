@@ -36,12 +36,54 @@ class PlatformFairPlayDrmConfiguration {
   String? contentId;
 }
 
+/// Pigeon equivalent of video_player_platform_interface's
+/// VideoPlayerLiveOptions.
+class PlatformLiveConfiguration {
+  PlatformLiveConfiguration({
+    required this.targetOffsetMs,
+    required this.minOffsetMs,
+    required this.maxOffsetMs,
+    required this.minPlaybackSpeed,
+    required this.maxPlaybackSpeed,
+    required this.preferredForwardBufferDurationMs,
+    required this.minBufferDurationMs,
+    required this.maxBufferDurationMs,
+    required this.bufferForPlaybackMs,
+    required this.bufferForPlaybackAfterRebufferMs,
+  });
+
+  /// Desired distance behind the live edge when playback starts or catches up.
+  int targetOffsetMs;
+  /// Smallest allowed distance behind the live edge.
+  int minOffsetMs;
+  /// Largest allowed distance behind the live edge.
+  int maxOffsetMs;
+  /// Lowest playback speed used while correcting live latency.
+  double minPlaybackSpeed;
+  /// Highest playback speed used while correcting live latency.
+  double maxPlaybackSpeed;
+  /// Preferred AVPlayer read-ahead buffer duration.
+  int preferredForwardBufferDurationMs;
+  /// Minimum Android load-control buffer duration, unused on Darwin.
+  int minBufferDurationMs;
+  /// Maximum Android load-control buffer duration, unused on Darwin.
+  int maxBufferDurationMs;
+  /// Android buffer required before initial playback, unused on Darwin.
+  int bufferForPlaybackMs;
+  /// Android buffer required after a rebuffer, unused on Darwin.
+  int bufferForPlaybackAfterRebufferMs;
+}
+
 class CreationOptions {
   CreationOptions({required this.uri, required this.httpHeaders});
 
   String uri;
+  /// Whether the source is an unbounded live stream.
+  bool? isLive;
   Map<String, String> httpHeaders;
   PlatformFairPlayDrmConfiguration? fairPlayDrm;
+  /// Optional live playback tuning.
+  PlatformLiveConfiguration? liveConfiguration;
 }
 
 class TexturePlayerIds {

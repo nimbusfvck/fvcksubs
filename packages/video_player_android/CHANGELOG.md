@@ -1,3 +1,8 @@
+## Unreleased
+
+* Supports configurable live latency and buffering options through
+  `VideoPlayerLiveOptions`.
+
 ## 2.13.0
 
 * Adds `WidevineDrmConfiguration`, allowing playback of Widevine-protected

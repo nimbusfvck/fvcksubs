@@ -352,6 +352,47 @@ void main() {
       expect(playerId, newPlayerId);
     });
 
+    test('createWithOptions passes live playback configuration', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        MockAVFoundationVideoPlayerApi api,
+        _,
+      ) = setUpMockPlayer(
+        playerId: 1,
+        textureId: 101,
+      );
+      when(
+        api.createForTextureView(any),
+      ).thenAnswer((_) async => TexturePlayerIds(playerId: 2, textureId: 102));
+
+      await player.createWithOptions(
+        VideoCreationOptions(
+          dataSource: DataSource(
+            sourceType: DataSourceType.network,
+            uri: 'https://example.com/live.m3u8',
+          ),
+          viewType: VideoViewType.textureView,
+          isLive: true,
+          videoPlayerOptions: VideoPlayerOptions(
+            liveConfiguration: const VideoPlayerLiveOptions(
+              preferredForwardBufferDurationMs: 7000,
+            ),
+          ),
+        ),
+      );
+
+      final VerificationResult verification = verify(
+        api.createForTextureView(captureAny),
+      );
+      final creationOptions = verification.captured[0] as CreationOptions;
+      expect(creationOptions.isLive, true);
+      expect(
+        creationOptions.liveConfiguration?.preferredForwardBufferDurationMs,
+        7000,
+      );
+      expect(creationOptions.liveConfiguration?.targetOffsetMs, 5000);
+    });
+
     test('createWithOptions with file', () async {
       final (
         AVFoundationVideoPlayer player,

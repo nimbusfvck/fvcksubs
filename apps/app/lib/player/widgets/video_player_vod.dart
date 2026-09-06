@@ -125,6 +125,11 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
       Uri.parse(widget.stream.url),
       httpHeaders: widget.stream.headers,
       isLive: widget.isLive,
+      videoPlayerOptions: widget.isLive
+          ? vp.VideoPlayerOptions(
+              liveConfiguration: const vp.VideoPlayerLiveOptions(),
+            )
+          : null,
       drmConfiguration: videoPlayerDrmConfiguration(widget.stream),
       viewType: widget.stream.isProtected
           ? vp.VideoViewType.platformView

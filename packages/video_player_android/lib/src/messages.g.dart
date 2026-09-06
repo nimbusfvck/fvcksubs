@@ -77,7 +77,6 @@ bool _deepEquals(Object? a, Object? b) {
   }
   return a == b;
 }
-
 int _deepHash(Object? value) {
   if (value is List) {
     return Object.hashAll(value.map(_deepHash));
@@ -99,6 +98,7 @@ int _deepHash(Object? value) {
   }
   return value.hashCode;
 }
+
 
 /// Pigeon equivalent of video_platform_interface's VideoFormat.
 enum PlatformVideoFormat { dash, hls, ss }
@@ -477,18 +477,137 @@ class PlatformClearKeyDrmConfiguration {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+/// Pigeon equivalent of video_player_platform_interface's
+/// VideoPlayerLiveOptions.
+class PlatformLiveConfiguration {
+  PlatformLiveConfiguration({
+    required this.targetOffsetMs,
+    required this.minOffsetMs,
+    required this.maxOffsetMs,
+    required this.minPlaybackSpeed,
+    required this.maxPlaybackSpeed,
+    required this.preferredForwardBufferDurationMs,
+    required this.minBufferDurationMs,
+    required this.maxBufferDurationMs,
+    required this.bufferForPlaybackMs,
+    required this.bufferForPlaybackAfterRebufferMs,
+  });
+
+  /// Desired distance behind the live edge when playback starts or catches up.
+  int targetOffsetMs;
+
+  /// Smallest allowed distance behind the live edge.
+  int minOffsetMs;
+
+  /// Largest allowed distance behind the live edge.
+  int maxOffsetMs;
+
+  /// Lowest playback speed used while correcting live latency.
+  double minPlaybackSpeed;
+
+  /// Highest playback speed used while correcting live latency.
+  double maxPlaybackSpeed;
+
+  /// Preferred AVPlayer read-ahead buffer duration, unused on Android.
+  int preferredForwardBufferDurationMs;
+
+  /// Minimum Android load-control buffer duration.
+  int minBufferDurationMs;
+
+  /// Maximum Android load-control buffer duration.
+  int maxBufferDurationMs;
+
+  /// Android buffer required before initial playback.
+  int bufferForPlaybackMs;
+
+  /// Android buffer required after a rebuffer.
+  int bufferForPlaybackAfterRebufferMs;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      targetOffsetMs,
+      minOffsetMs,
+      maxOffsetMs,
+      minPlaybackSpeed,
+      maxPlaybackSpeed,
+      preferredForwardBufferDurationMs,
+      minBufferDurationMs,
+      maxBufferDurationMs,
+      bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static PlatformLiveConfiguration decode(Object result) {
+    result as List<Object?>;
+    return PlatformLiveConfiguration(
+      targetOffsetMs: result[0]! as int,
+      minOffsetMs: result[1]! as int,
+      maxOffsetMs: result[2]! as int,
+      minPlaybackSpeed: result[3]! as double,
+      maxPlaybackSpeed: result[4]! as double,
+      preferredForwardBufferDurationMs: result[5]! as int,
+      minBufferDurationMs: result[6]! as int,
+      maxBufferDurationMs: result[7]! as int,
+      bufferForPlaybackMs: result[8]! as int,
+      bufferForPlaybackAfterRebufferMs: result[9]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PlatformLiveConfiguration ||
+        other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(targetOffsetMs, other.targetOffsetMs) &&
+        _deepEquals(minOffsetMs, other.minOffsetMs) &&
+        _deepEquals(maxOffsetMs, other.maxOffsetMs) &&
+        _deepEquals(minPlaybackSpeed, other.minPlaybackSpeed) &&
+        _deepEquals(maxPlaybackSpeed, other.maxPlaybackSpeed) &&
+        _deepEquals(
+          preferredForwardBufferDurationMs,
+          other.preferredForwardBufferDurationMs,
+        ) &&
+        _deepEquals(minBufferDurationMs, other.minBufferDurationMs) &&
+        _deepEquals(maxBufferDurationMs, other.maxBufferDurationMs) &&
+        _deepEquals(bufferForPlaybackMs, other.bufferForPlaybackMs) &&
+        _deepEquals(
+          bufferForPlaybackAfterRebufferMs,
+          other.bufferForPlaybackAfterRebufferMs,
+        );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class CreationOptions {
   CreationOptions({
     required this.uri,
+    this.isLive,
     this.formatHint,
     required this.httpHeaders,
     this.userAgent,
     this.backBufferDurationMs,
     this.widevineDrm,
     this.clearKeyDrm,
+    this.liveConfiguration,
   });
 
   String uri;
+
+  /// Whether the source is an unbounded live stream.
+  bool? isLive;
 
   PlatformVideoFormat? formatHint;
 
@@ -502,15 +621,20 @@ class CreationOptions {
 
   PlatformClearKeyDrmConfiguration? clearKeyDrm;
 
+  /// Optional live playback tuning.
+  PlatformLiveConfiguration? liveConfiguration;
+
   List<Object?> _toList() {
     return <Object?>[
       uri,
+      isLive,
       formatHint,
       httpHeaders,
       userAgent,
       backBufferDurationMs,
       widevineDrm,
       clearKeyDrm,
+      liveConfiguration,
     ];
   }
 
@@ -522,12 +646,14 @@ class CreationOptions {
     result as List<Object?>;
     return CreationOptions(
       uri: result[0]! as String,
-      formatHint: result[1] as PlatformVideoFormat?,
-      httpHeaders: (result[2]! as Map<Object?, Object?>).cast<String, String>(),
-      userAgent: result[3] as String?,
-      backBufferDurationMs: result[4] as int?,
-      widevineDrm: result[5] as PlatformWidevineDrmConfiguration?,
-      clearKeyDrm: result[6] as PlatformClearKeyDrmConfiguration?,
+      isLive: result[1] as bool?,
+      formatHint: result[2] as PlatformVideoFormat?,
+      httpHeaders: (result[3]! as Map<Object?, Object?>).cast<String, String>(),
+      userAgent: result[4] as String?,
+      backBufferDurationMs: result[5] as int?,
+      widevineDrm: result[6] as PlatformWidevineDrmConfiguration?,
+      clearKeyDrm: result[7] as PlatformClearKeyDrmConfiguration?,
+      liveConfiguration: result[8] as PlatformLiveConfiguration?,
     );
   }
 
@@ -541,12 +667,14 @@ class CreationOptions {
       return true;
     }
     return _deepEquals(uri, other.uri) &&
+        _deepEquals(isLive, other.isLive) &&
         _deepEquals(formatHint, other.formatHint) &&
         _deepEquals(httpHeaders, other.httpHeaders) &&
         _deepEquals(userAgent, other.userAgent) &&
         _deepEquals(backBufferDurationMs, other.backBufferDurationMs) &&
         _deepEquals(widevineDrm, other.widevineDrm) &&
-        _deepEquals(clearKeyDrm, other.clearKeyDrm);
+        _deepEquals(clearKeyDrm, other.clearKeyDrm) &&
+        _deepEquals(liveConfiguration, other.liveConfiguration);
   }
 
   @override
@@ -555,7 +683,7 @@ class CreationOptions {
 
   @override
   String toString() {
-    return 'CreationOptions(uri: $uri, formatHint: $formatHint, httpHeaders: $httpHeaders, userAgent: $userAgent, backBufferDurationMs: $backBufferDurationMs)';
+    return 'CreationOptions(uri: $uri, isLive: $isLive, formatHint: $formatHint, httpHeaders: $httpHeaders, userAgent: $userAgent, backBufferDurationMs: $backBufferDurationMs, widevineDrm: $widevineDrm, clearKeyDrm: $clearKeyDrm, liveConfiguration: $liveConfiguration)';
   }
 }
 
@@ -999,7 +1127,6 @@ class NativeVideoTrackData {
           ?.cast<ExoPlayerVideoTrackData>(),
     );
   }
-
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
@@ -1021,6 +1148,7 @@ class NativeVideoTrackData {
     return 'NativeVideoTrackData(exoPlayerTracks: $exoPlayerTracks)';
   }
 }
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -1059,29 +1187,32 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PlatformClearKeyDrmConfiguration) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is CreationOptions) {
+    } else if (value is PlatformLiveConfiguration) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is TexturePlayerIds) {
+    } else if (value is CreationOptions) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is PlaybackState) {
+    } else if (value is TexturePlayerIds) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is AudioTrackMessage) {
+    } else if (value is PlaybackState) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is ExoPlayerAudioTrackData) {
+    } else if (value is AudioTrackMessage) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is NativeAudioTrackData) {
+    } else if (value is ExoPlayerAudioTrackData) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is ExoPlayerVideoTrackData) {
+    } else if (value is NativeAudioTrackData) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is NativeVideoTrackData) {
+    } else if (value is ExoPlayerVideoTrackData) {
       buffer.putUint8(146);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeVideoTrackData) {
+      buffer.putUint8(147);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1114,20 +1245,22 @@ class _PigeonCodec extends StandardMessageCodec {
       case 138:
         return PlatformClearKeyDrmConfiguration.decode(readValue(buffer)!);
       case 139:
-        return CreationOptions.decode(readValue(buffer)!);
+        return PlatformLiveConfiguration.decode(readValue(buffer)!);
       case 140:
-        return TexturePlayerIds.decode(readValue(buffer)!);
+        return CreationOptions.decode(readValue(buffer)!);
       case 141:
-        return PlaybackState.decode(readValue(buffer)!);
+        return TexturePlayerIds.decode(readValue(buffer)!);
       case 142:
-        return AudioTrackMessage.decode(readValue(buffer)!);
+        return PlaybackState.decode(readValue(buffer)!);
       case 143:
-        return ExoPlayerAudioTrackData.decode(readValue(buffer)!);
+        return AudioTrackMessage.decode(readValue(buffer)!);
       case 144:
-        return NativeAudioTrackData.decode(readValue(buffer)!);
+        return ExoPlayerAudioTrackData.decode(readValue(buffer)!);
       case 145:
-        return ExoPlayerVideoTrackData.decode(readValue(buffer)!);
+        return NativeAudioTrackData.decode(readValue(buffer)!);
       case 146:
+        return ExoPlayerVideoTrackData.decode(readValue(buffer)!);
+      case 147:
         return NativeVideoTrackData.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

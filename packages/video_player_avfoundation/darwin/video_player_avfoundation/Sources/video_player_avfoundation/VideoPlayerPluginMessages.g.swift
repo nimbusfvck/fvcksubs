@@ -82,14 +82,12 @@ enum VideoPlayerPluginMessagesPigeonInternal {
       hasher.combine(value == 0 ? 0 : value)
     }
   }
-
   static func deepEquals(_ lhs: Any?, _ rhs: Any?) -> Bool {
     let cleanLhs = nilOrValue(lhs) as Any?
     let cleanRhs = nilOrValue(rhs) as Any?
     switch (cleanLhs, cleanRhs) {
     case (nil, nil):
       return true
-
     case (nil, _), (_, nil):
       return false
 
@@ -186,11 +184,13 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
   return value as! T?
 }
 
+
 /// Information passed to the platform view creation.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct PlatformVideoViewCreationParams: Hashable, CustomStringConvertible {
   var playerId: Int64
+
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> PlatformVideoViewCreationParams? {
@@ -282,22 +282,118 @@ struct PlatformFairPlayDrmConfiguration: Hashable, CustomStringConvertible {
   }
 }
 
+/// Pigeon equivalent of video_player_platform_interface's VideoPlayerLiveOptions.
+struct PlatformLiveConfiguration: Hashable, CustomStringConvertible {
+  var targetOffsetMs: Int64
+  var minOffsetMs: Int64
+  var maxOffsetMs: Int64
+  var minPlaybackSpeed: Double
+  var maxPlaybackSpeed: Double
+  var preferredForwardBufferDurationMs: Int64
+  var minBufferDurationMs: Int64
+  var maxBufferDurationMs: Int64
+  var bufferForPlaybackMs: Int64
+  var bufferForPlaybackAfterRebufferMs: Int64
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> PlatformLiveConfiguration? {
+    let targetOffsetMs = pigeonVar_list[0] as! Int64
+    let minOffsetMs = pigeonVar_list[1] as! Int64
+    let maxOffsetMs = pigeonVar_list[2] as! Int64
+    let minPlaybackSpeed = pigeonVar_list[3] as! Double
+    let maxPlaybackSpeed = pigeonVar_list[4] as! Double
+    let preferredForwardBufferDurationMs = pigeonVar_list[5] as! Int64
+    let minBufferDurationMs = pigeonVar_list[6] as! Int64
+    let maxBufferDurationMs = pigeonVar_list[7] as! Int64
+    let bufferForPlaybackMs = pigeonVar_list[8] as! Int64
+    let bufferForPlaybackAfterRebufferMs = pigeonVar_list[9] as! Int64
+
+    return PlatformLiveConfiguration(
+      targetOffsetMs: targetOffsetMs,
+      minOffsetMs: minOffsetMs,
+      maxOffsetMs: maxOffsetMs,
+      minPlaybackSpeed: minPlaybackSpeed,
+      maxPlaybackSpeed: maxPlaybackSpeed,
+      preferredForwardBufferDurationMs: preferredForwardBufferDurationMs,
+      minBufferDurationMs: minBufferDurationMs,
+      maxBufferDurationMs: maxBufferDurationMs,
+      bufferForPlaybackMs: bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs: bufferForPlaybackAfterRebufferMs
+    )
+  }
+
+  func toList() -> [Any?] {
+    return [
+      targetOffsetMs,
+      minOffsetMs,
+      maxOffsetMs,
+      minPlaybackSpeed,
+      maxPlaybackSpeed,
+      preferredForwardBufferDurationMs,
+      minBufferDurationMs,
+      maxBufferDurationMs,
+      bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs,
+    ]
+  }
+
+  static func == (lhs: PlatformLiveConfiguration, rhs: PlatformLiveConfiguration) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.targetOffsetMs, rhs.targetOffsetMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.minOffsetMs, rhs.minOffsetMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.maxOffsetMs, rhs.maxOffsetMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.minPlaybackSpeed, rhs.minPlaybackSpeed)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.maxPlaybackSpeed, rhs.maxPlaybackSpeed)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.preferredForwardBufferDurationMs, rhs.preferredForwardBufferDurationMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.minBufferDurationMs, rhs.minBufferDurationMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.maxBufferDurationMs, rhs.maxBufferDurationMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.bufferForPlaybackMs, rhs.bufferForPlaybackMs)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.bufferForPlaybackAfterRebufferMs, rhs.bufferForPlaybackAfterRebufferMs)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("PlatformLiveConfiguration")
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: targetOffsetMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: minOffsetMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: maxOffsetMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: minPlaybackSpeed, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: maxPlaybackSpeed, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: preferredForwardBufferDurationMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: minBufferDurationMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: maxBufferDurationMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: bufferForPlaybackMs, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: bufferForPlaybackAfterRebufferMs, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "PlatformLiveConfiguration(targetOffsetMs: \(String(describing: targetOffsetMs)), minOffsetMs: \(String(describing: minOffsetMs)), maxOffsetMs: \(String(describing: maxOffsetMs)), minPlaybackSpeed: \(String(describing: minPlaybackSpeed)), maxPlaybackSpeed: \(String(describing: maxPlaybackSpeed)), preferredForwardBufferDurationMs: \(String(describing: preferredForwardBufferDurationMs)), minBufferDurationMs: \(String(describing: minBufferDurationMs)), maxBufferDurationMs: \(String(describing: maxBufferDurationMs)), bufferForPlaybackMs: \(String(describing: bufferForPlaybackMs)), bufferForPlaybackAfterRebufferMs: \(String(describing: bufferForPlaybackAfterRebufferMs)))"
+  }
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct CreationOptions: Hashable, CustomStringConvertible {
   var uri: String
+  var isLive: Bool? = nil
   var httpHeaders: [String: String]
   var fairPlayDrm: PlatformFairPlayDrmConfiguration? = nil
+  var liveConfiguration: PlatformLiveConfiguration? = nil
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> CreationOptions? {
     let uri = pigeonVar_list[0] as! String
-    let httpHeaders = pigeonVar_list[1] as! [String: String]
-    let fairPlayDrm: PlatformFairPlayDrmConfiguration? = nilOrValue(pigeonVar_list[2])
+    let isLive: Bool? = nilOrValue(pigeonVar_list[1])
+    let httpHeaders = pigeonVar_list[2] as! [String: String]
+    let fairPlayDrm: PlatformFairPlayDrmConfiguration? = nilOrValue(pigeonVar_list[3])
+    let liveConfiguration: PlatformLiveConfiguration? = nilOrValue(pigeonVar_list[4])
 
     return CreationOptions(
       uri: uri,
+      isLive: isLive,
       httpHeaders: httpHeaders,
-      fairPlayDrm: fairPlayDrm
+      fairPlayDrm: fairPlayDrm,
+      liveConfiguration: liveConfiguration
     )
   }
   func toList() -> [Any?] {
@@ -305,6 +401,8 @@ struct CreationOptions: Hashable, CustomStringConvertible {
       uri,
       httpHeaders,
       fairPlayDrm,
+      isLive,
+      liveConfiguration,
     ]
   }
   static func == (lhs: CreationOptions, rhs: CreationOptions) -> Bool {
@@ -314,6 +412,8 @@ struct CreationOptions: Hashable, CustomStringConvertible {
     return VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.uri, rhs.uri)
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.httpHeaders, rhs.httpHeaders)
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.fairPlayDrm, rhs.fairPlayDrm)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.isLive, rhs.isLive)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.liveConfiguration, rhs.liveConfiguration)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -321,18 +421,20 @@ struct CreationOptions: Hashable, CustomStringConvertible {
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: uri, hasher: &hasher)
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: httpHeaders, hasher: &hasher)
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: fairPlayDrm, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: isLive, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: liveConfiguration, hasher: &hasher)
   }
 
   public var description: String {
     return
-      "CreationOptions(uri: \(String(describing: uri)), httpHeaders: \(String(describing: httpHeaders)), fairPlayDrm: \(String(describing: fairPlayDrm)))"
+      "CreationOptions(uri: \(String(describing: uri)), httpHeaders: \(String(describing: httpHeaders)), fairPlayDrm: \(String(describing: fairPlayDrm)), isLive: \(String(describing: isLive)), liveConfiguration: \(String(describing: liveConfiguration)))"
   }
 }
-
 /// Generated class from Pigeon that represents data sent in messages.
 struct TexturePlayerIds: Hashable, CustomStringConvertible {
   var playerId: Int64
   var textureId: Int64
+
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> TexturePlayerIds? {
@@ -378,8 +480,10 @@ private class VideoPlayerPluginMessagesPigeonCodecReader: FlutterStandardReader 
     case 130:
       return PlatformFairPlayDrmConfiguration.fromList(self.readValue() as! [Any?])
     case 131:
-      return CreationOptions.fromList(self.readValue() as! [Any?])
+      return PlatformLiveConfiguration.fromList(self.readValue() as! [Any?])
     case 132:
+      return CreationOptions.fromList(self.readValue() as! [Any?])
+    case 133:
       return TexturePlayerIds.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -395,11 +499,14 @@ private class VideoPlayerPluginMessagesPigeonCodecWriter: FlutterStandardWriter 
     } else if let value = value as? PlatformFairPlayDrmConfiguration {
       super.writeByte(130)
       super.writeValue(value.toList())
-    } else if let value = value as? CreationOptions {
+    } else if let value = value as? PlatformLiveConfiguration {
       super.writeByte(131)
       super.writeValue(value.toList())
-    } else if let value = value as? TexturePlayerIds {
+    } else if let value = value as? CreationOptions {
       super.writeByte(132)
+      super.writeValue(value.toList())
+    } else if let value = value as? TexturePlayerIds {
+      super.writeByte(133)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)

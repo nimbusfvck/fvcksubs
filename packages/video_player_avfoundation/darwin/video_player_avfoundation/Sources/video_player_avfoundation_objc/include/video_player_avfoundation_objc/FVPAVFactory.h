@@ -60,6 +60,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Wraps the underlying playerItem's asset property.
 @property(nonatomic, readonly) NSObject<FVPAVAsset> *asset;
 
+/// The preferred amount of media to buffer ahead of the playhead, in seconds.
+@property(nonatomic) NSTimeInterval preferredForwardBufferDuration;
+
+/// The live offset to use when starting or resuming a live item.
+@property(nonatomic) CMTime configuredTimeOffsetFromLive;
+
+/// Whether to preserve the live offset after buffering.
+@property(nonatomic) BOOL automaticallyPreservesTimeOffsetFromLive;
+
 /// Wraps the underlying playerItem's videoComposition property.
 @property(nonatomic, copy, nullable) AVVideoComposition *videoComposition;
 @end

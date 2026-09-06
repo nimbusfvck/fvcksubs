@@ -88,7 +88,9 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     long id = nextPlayerIdentifier++;
     final String streamInstance = Long.toString(id);
     VideoPlayerOptions playerOptions = new VideoPlayerOptions(sharedOptions);
+    playerOptions.isLive = Boolean.TRUE.equals(options.isLive());
     playerOptions.backBufferDurationMs = options.getBackBufferDurationMs();
+    playerOptions.liveConfiguration = livePlaybackOptions(options);
 
     VideoPlayer videoPlayer =
         PlatformViewVideoPlayer.create(
@@ -110,7 +112,9 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     final String streamInstance = Long.toString(id);
     TextureRegistry.SurfaceProducer handle = flutterState.textureRegistry.createSurfaceProducer();
     VideoPlayerOptions playerOptions = new VideoPlayerOptions(sharedOptions);
+    playerOptions.isLive = Boolean.TRUE.equals(options.isLive());
     playerOptions.backBufferDurationMs = options.getBackBufferDurationMs();
+    playerOptions.liveConfiguration = livePlaybackOptions(options);
 
     VideoPlayer videoPlayer =
         TextureVideoPlayer.create(
@@ -166,6 +170,31 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
           widevineDrm,
           clearKeyDrm);
     }
+  }
+
+  /**
+   * Converts Flutter live playback options into the native representation.
+   *
+   * @param options Pigeon creation options received from Flutter.
+   * @return native live playback options, or null for on-demand playback.
+   */
+  @Nullable
+  private LivePlaybackOptions livePlaybackOptions(@NonNull CreationOptions options) {
+    if (!Boolean.TRUE.equals(options.isLive()) || options.getLiveConfiguration() == null) {
+      return null;
+    }
+    final PlatformLiveConfiguration configuration = options.getLiveConfiguration();
+    return new LivePlaybackOptions(
+        configuration.getTargetOffsetMs(),
+        configuration.getMinOffsetMs(),
+        configuration.getMaxOffsetMs(),
+        configuration.getMinPlaybackSpeed(),
+        configuration.getMaxPlaybackSpeed(),
+        configuration.getPreferredForwardBufferDurationMs(),
+        configuration.getMinBufferDurationMs(),
+        configuration.getMaxBufferDurationMs(),
+        configuration.getBufferForPlaybackMs(),
+        configuration.getBufferForPlaybackAfterRebufferMs());
   }
 
   private void registerPlayerInstance(VideoPlayer player, long id) {

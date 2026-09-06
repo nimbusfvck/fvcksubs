@@ -281,7 +281,15 @@ public final class VideoPlayerPlugin: NSObject, FlutterPlugin, AVFoundationVideo
       options: itemOptions,
       resourceLoaderDelegate: try options.fairPlayDrm.map(fairPlayResourceLoaderDelegate(for:))
     )
-    return avFactory.playerItem(with: asset)
+    let playerItem = avFactory.playerItem(with: asset)
+    if options.isLive == true, let liveConfiguration = options.liveConfiguration {
+      playerItem.preferredForwardBufferDuration =
+        Double(liveConfiguration.preferredForwardBufferDurationMs) / 1000
+      playerItem.configuredTimeOffsetFromLive = CMTime(
+        value: liveConfiguration.targetOffsetMs, timescale: 1000)
+      playerItem.automaticallyPreservesTimeOffsetFromLive = true
+    }
+    return playerItem
   }
 
   private func fairPlayResourceLoaderDelegate(
