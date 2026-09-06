@@ -101,6 +101,9 @@ Future<void> _playMedia(
       )
       .toList();
   if (enabledCached != null && enabledCached.isNotEmpty) {
+    final pendingSources = scope.sourceCache.isStale(item.ref)
+        ? _sourcesFromFuture(_revalidate(scope, item))
+        : null;
     await _openPlayer(
       navigator,
       scope,
@@ -109,13 +112,11 @@ Future<void> _playMedia(
       replaceCurrent,
       contentRating: contentRating,
       episodeGuide: episodeGuide,
+      pendingSources: pendingSources,
       externalSubtitles: externalSubtitles,
       playbackSegments: playbackSegments,
       returnToDetail: returnToDetail,
     );
-    if (scope.sourceCache.isStale(item.ref)) {
-      unawaited(_revalidate(scope, item));
-    }
     return;
   }
 

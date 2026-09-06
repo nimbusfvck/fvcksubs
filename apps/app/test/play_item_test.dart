@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
+import 'package:fvcksubs_app/player/models/resolved_source.dart';
+import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/player/workflow/play_item.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -142,4 +144,60 @@ void main() {
     await tester.pumpAndSettle();
     expect(player.played?.url, 'https://edge/fast.m3u8');
   });
+
+  testWidgets(
+    'stale cached playback publishes refreshed sources to the picker',
+    (tester) async {
+      const staleItem = PlaybackMedia(
+        VideoItemV2(
+          ref: MediaRef(
+            extensionId: 'fake',
+            providerId: 'fake.p',
+            id: 'movie-stale-cache',
+          ),
+          title: 'Movie',
+        ),
+      );
+      var now = DateTime(2026);
+      final sourceCache = SourceCache(now: () => now);
+      const cachedSource = StreamSource(id: 'hydrax', label: 'HYDRAX');
+      const refreshedSource = StreamSource(id: 'cast', label: 'CAST');
+      const stream = PlayableStream(
+        url: 'https://stream.example/movie.m3u8',
+        format: StreamFormat.hls,
+      );
+      sourceCache.store(staleItem.ref, const [
+        ResolvedSource(source: cachedSource, stream: stream),
+      ]);
+      now = now.add(const Duration(minutes: 4));
+
+      final extension = FakeExtension(
+        sourceList: const [cachedSource, refreshedSource],
+        resolved: stream,
+      );
+      final player = RecordingPlayer();
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => unawaited(playItemV2(context, staleItem.item)),
+              child: const Text('Play'),
+            ),
+          ),
+          registry: ExtensionRegistry([extension]),
+          player: player,
+          sourceCache: sourceCache,
+        ),
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('HYDRAX'));
+      await tester.pump();
+
+      expect(find.text('CAST'), findsOneWidget);
+    },
+  );
 }
