@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -8,6 +9,7 @@ import '../addons/installer_controller.dart';
 import '../app_scope.dart';
 import '../player/state/source_priority_controller.dart';
 import '../player/state/subtitle_preference_controller.dart';
+import '../player/drm_test_page.dart';
 import 'quality_preference.dart';
 import 'nsfw_controller.dart';
 import '../theme/tokens.dart';
@@ -55,11 +57,35 @@ class SettingsPage extends StatelessWidget {
                 showNsfw: state.showNsfw,
               ),
             ),
+            if (kDebugMode) ...[
+              const SizedBox(height: AppSpacing.md),
+              const _DrmTestEntry(),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+class _DrmTestEntry extends StatelessWidget {
+  const _DrmTestEntry();
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceDarkElevated,
+    borderRadius: AppRadius.lg,
+    clipBehavior: Clip.antiAlias,
+    child: ListTile(
+      leading: const Icon(Icons.security_outlined),
+      title: const Text('DRM test streams'),
+      subtitle: const Text('Open hardcoded Widevine or FairPlay test content.'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const DrmTestPage())),
+    ),
+  );
 }
 
 class _NsfwPreference extends StatelessWidget {
