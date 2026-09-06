@@ -115,6 +115,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   Timer? _playbackDiagnosticsTimer;
   DateTime? _startupHealthStartedAt;
   bool _startupHealthPassed = false;
+  bool _disposed = false;
+
+  bool get _isActive => mounted && !_disposed;
 
   @override
   void initState() {
@@ -187,6 +190,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             'format=${widget.stream.format.name}',
       );
       await _player.initialize();
+      if (!_isActive) return;
       _logOpenStage(
         'initialize_done',
         stopwatch,
@@ -195,9 +199,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             'size=${_player.value.size.width}x${_player.value.size.height}',
       );
       await _player.setLooping(widget.looping);
+      if (!_isActive) return;
       await _player.setVolume(widget.muted ? 0 : 1);
+      if (!_isActive) return;
       _logOpenStage('player_configured', stopwatch);
       await _adapter.refreshTracks();
+      if (!_isActive) return;
       _logOpenStage(
         'tracks_initial_done',
         stopwatch,
@@ -206,6 +213,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             'video=${_adapter.qualityTracks.length}',
       );
       await _applyPreferredQuality();
+      if (!_isActive) return;
       _logOpenStage(
         'quality_initial_done',
         stopwatch,
@@ -228,6 +236,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         } catch (_) {
           // An external caption must not make an otherwise playable video fail.
         }
+        if (!_isActive) return;
         _logOpenStage('subtitle_done', stopwatch);
       } else {
         _logOpenStage('subtitle_skipped', stopwatch);
@@ -235,6 +244,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       if (widget.playing) {
         _logOpenStage('play_start', stopwatch);
         await _player.play();
+        if (!_isActive) return;
         _logOpenStage('play_done', stopwatch);
         _startPlaybackDiagnostics(stopwatch);
       } else {
@@ -242,6 +252,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         _reportPlaybackReady(stopwatch);
       }
     } catch (error) {
+      if (!_isActive) return;
       _logOpenStage(
         'failed',
         stopwatch,
@@ -339,6 +350,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       await Future<void>.delayed(delay);
       if (!mounted) return;
       attempt++;
+      if (!_isActive) return;
       _logOpenStage(
         'tracks_retry_start',
         stopwatch,
@@ -346,7 +358,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       );
       try {
         await _adapter.refreshTracks();
+        if (!_isActive) return;
         await _applyPreferredQuality();
+        if (!_isActive) return;
         _logOpenStage(
           'tracks_retry_done',
           stopwatch,
@@ -378,6 +392,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     }
     try {
       await _adapter.setQuality(track);
+      if (!_isActive) return;
       _preferredQualitySelectionDone = true;
     } catch (error) {
       if (kDebugMode) {
@@ -417,6 +432,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       _adapter.reportError(value.errorDescription!);
     }
     if (value.isCompleted) {
+      _playbackDiagnosticsTimer?.cancel();
+      _playbackDiagnosticsTimer = null;
       _adapter.reportCompleted();
     }
   }
@@ -445,6 +462,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   @override
   void dispose() {
+    _disposed = true;
     _playbackDiagnosticsTimer?.cancel();
     _wakelockRefreshTimer?.cancel();
     if (widget.wakelock ?? !widget.preview) {

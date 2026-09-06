@@ -785,6 +785,24 @@ void main() {
     });
 
     group('seekTo', () {
+      test('does not update a controller disposed while seeking', () async {
+        final controller = VideoPlayerController.networkUrl(_localhostUri);
+        await controller.initialize();
+        final seekCompleted = Completer<void>();
+        fakeVideoPlayerPlatform.seekToCompleter = seekCompleted;
+
+        final pendingSeek = controller.seekTo(
+          const Duration(milliseconds: 500),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(fakeVideoPlayerPlatform.calls, contains('seekTo'));
+
+        await controller.dispose();
+        seekCompleted.complete();
+
+        await expectLater(pendingSeek, completes);
+      });
+
       test('works', () async {
         final controller = VideoPlayerController.networkUrl(_localhostUri);
         addTearDown(controller.dispose);
@@ -2280,6 +2298,7 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   List<VideoPlayerOptions?> videoPlayerOptions = <VideoPlayerOptions?>[];
   bool forceInitError = false;
   int nextPlayerId = 0;
+  Completer<void>? seekToCompleter;
   final Map<int, Duration> _positions = <int, Duration>{};
   final Map<int, VideoPlayerWebOptions> webOptions =
       <int, VideoPlayerWebOptions>{};
@@ -2371,6 +2390,7 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   @override
   Future<void> seekTo(int playerId, Duration position) async {
     calls.add('seekTo');
+    await seekToCompleter?.future;
     _positions[playerId] = position;
   }
 

@@ -16,6 +16,7 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   String? _requestedVideoId;
   bool _reportedCompletion = false;
   String? _reportedError;
+  bool _disposed = false;
 
   @override
   ValueListenable<AppPlayerValue> get value => _value;
@@ -67,9 +68,12 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   bool get isFullScreen => false;
 
   Future<void> refreshTracks() async {
+    if (_disposed) return;
     try {
       if (_player.isAudioTrackSupportAvailable()) {
-        _nativeAudioTracks = await _player.getAudioTracks();
+        final tracks = await _player.getAudioTracks();
+        if (_disposed) return;
+        _nativeAudioTracks = tracks;
       }
     } catch (error) {
       _nativeAudioTracks = const [];
@@ -77,7 +81,9 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
     }
     try {
       if (_player.isVideoTrackSupportAvailable()) {
-        _nativeVideoTracks = await _player.getVideoTracks();
+        final tracks = await _player.getVideoTracks();
+        if (_disposed) return;
+        _nativeVideoTracks = tracks;
       }
     } catch (error) {
       _nativeVideoTracks = const [];
@@ -97,7 +103,7 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
         'quality_target=${_videoTrackDescription(_selectedNativeVideo)}',
       );
     }
-    _value.value = _value.value.copyWith();
+    if (!_disposed) _value.value = _value.value.copyWith();
   }
 
   void _logTrackError(String kind, Object error) {
@@ -129,12 +135,13 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   }
 
   void reportCompleted() {
-    if (_reportedCompletion) return;
+    if (_disposed || _reportedCompletion) return;
     _reportedCompletion = true;
     _events.add(const AppPlayerEvent(AppPlayerEventType.completed));
   }
 
   void reportError(Object error) {
+    if (_disposed) return;
     final text = error.toString();
     if (_reportedError == text) return;
     _reportedError = text;
@@ -303,6 +310,7 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   }
 
   void dispose() {
+    _disposed = true;
     _value.dispose();
     unawaited(_events.close());
   }

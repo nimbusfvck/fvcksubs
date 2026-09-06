@@ -804,8 +804,17 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
   /// has been sent to the platform, not when playback itself is totally
   /// finished.
   Future<void> play() async {
+    if (_isDisposed) {
+      return;
+    }
     if (!isLive && value.position == value.duration) {
       await seekTo(Duration.zero);
+      if (_isDisposed) {
+        return;
+      }
+    }
+    if (_isDisposed) {
+      return;
     }
     value = value.copyWith(isPlaying: true);
     await _applyPlayPause();
@@ -930,6 +939,9 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       position = Duration.zero;
     }
     await _videoPlayerPlatform.seekTo(_playerId, position);
+    if (_isDisposed) {
+      return;
+    }
     _updatePosition(position);
   }
 
