@@ -260,6 +260,7 @@ flowchart TB
 | Playback speed | The top-right Settings action opens an app-owned popup with 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x presets. The selected speed is applied through the shared player contract across native backends and remains active when the current player controller is replaced. |
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
+| Picture in Picture | On iOS, system Back first asks the native AVFoundation player to enter Picture in Picture. After PiP starts, the Player widget moves into an app-level host outside the Navigator, while the Player route is removed. The real route underneath remains visible and interactive: VOD can stay on its existing Detail page, while live playback can return to Home or its actual caller. Expanding PiP restores the same Player widget and native controller above the active route; playback resumes only when it was playing before PiP. Unsupported or unavailable PiP falls back to ordinary dismissal. PiP renders the native video layer only; Flutter controls and subtitles are not part of the PiP surface. |
 | Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
 | Errors | If the first source fails before playback initializes, mark it failed and try the next resolved source, including one that arrives through the active background fan-out. After playback starts, never auto-advance; keep retry and source switching available. |
 
@@ -281,6 +282,14 @@ flowchart TB
 - **Native playback has one backend.** If video_player stalls or rejects a source, the app reports
   that failure and keeps retry/source-switch controls available; it does not silently switch to a
   second player implementation.
+- **Picture in Picture** is currently an iOS-only capability exposed by the shared player contract.
+  Full iOS playback uses the native platform-view path so AVKit has an AVPlayerLayer source; the
+  app requests PiP on system or player Back, moves the keyed Player widget into the app-level
+  PiP host, and removes the Player route. The actual route below it—Detail, Home, or the
+  caller—stays visible and interactive, so the viewer can browse while PiP floats. AVKit restores
+  the same Player widget and native controller above the active route when PiP expands.
+  Other platforms return unsupported and use the normal player dismissal. Flutter-rendered controls
+  and subtitles are not available inside the native PiP window.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
   arrow keys seek five seconds, F toggles fullscreen, and Escape exits it. This
   keeps source, subtitle, quality, retry, and Up Next controls available across platforms.

@@ -10,6 +10,7 @@ import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
@@ -602,6 +603,12 @@ class FakeAppPlayerController implements AppPlayerController {
 
   @override
   Future<void> exitFullScreen() async {}
+
+  @override
+  Future<bool> startPictureInPicture() async => false;
+
+  @override
+  Future<void> stopPictureInPicture() async {}
 }
 
 /// A [PreviewNativePlayerBuilder] fake that records the stream/flags it was
@@ -854,6 +861,7 @@ Widget wrapApp({
   CategorySelectionStore? homeCategoryStore,
   SourceCache? sourceCache,
   NsfwController? nsfwController,
+  PictureInPictureSession? pictureInPictureSession,
 }) => AppScope(
   registry: registry,
   deviceClass: deviceClass,
@@ -889,6 +897,7 @@ Widget wrapApp({
       ),
   homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
+  pictureInPictureSession: pictureInPictureSession ?? PictureInPictureSession(),
   nsfwController:
       nsfwController ??
       NsfwController(
@@ -896,7 +905,26 @@ Widget wrapApp({
         store: FakeNsfwSettingsStore(),
         showNsfw: registry.showNsfw,
       ),
-  child: MaterialApp(home: Scaffold(body: child)),
+  child: MaterialApp(
+    builder: (context, routeChild) => Stack(
+      fit: StackFit.expand,
+      children: [
+        routeChild ?? const SizedBox.shrink(),
+        Positioned.fill(
+          child: Overlay(
+            initialEntries: [
+              OverlayEntry(
+                builder: (_) => PictureInPictureHost(
+                  session: AppScope.of(context).pictureInPictureSession,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+    home: Scaffold(body: child),
+  ),
 );
 
 class _FakeLibraryStoreV2 implements LibraryStore {

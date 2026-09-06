@@ -16,6 +16,7 @@ import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'player/state/source_cache.dart';
+import 'player/state/picture_in_picture_session.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
@@ -165,6 +166,7 @@ Future<void> main() async {
       sourcePriorityController: sourcePriorityController,
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
+      pictureInPictureSession: PictureInPictureSession(),
       nsfwController: nsfwController,
       navigatorKey: navigatorKey,
     ),

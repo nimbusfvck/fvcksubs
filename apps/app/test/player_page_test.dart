@@ -329,7 +329,52 @@ void main() {
             ),
             title: 'Movie',
           ),
+          returnToDetail: true,
           resolvedSources: [_resolvedSource('pip', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.pictureInPictureResult = true;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 25),
+        duration: Duration(hours: 1),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(controller.pictureInPictureCalls, 1);
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(find.byType(DetailPageV2), findsNothing);
+
+    controller.emitPictureInPictureRestore();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(controller.playCalls, 1);
+  });
+
+  testWidgets('live player Back enters PiP without creating a detail route', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          key: GlobalKey(),
+          item: fakeItem(id: 'live-pip'),
+          resolvedSources: [_resolvedSource('pip-live', 'Live source')],
         ),
         registry: ExtensionRegistry([]),
         player: player,
@@ -344,14 +389,71 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.pictureInPictureCalls, 1);
-    expect(find.byType(PlayerPage), findsNothing);
-    expect(find.byType(DetailPageV2), findsOneWidget);
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(find.byType(DetailPageV2), findsNothing);
+    expect(find.text('Playing in Picture in Picture'), findsNothing);
 
     controller.emitPictureInPictureRestore();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(DetailPageV2), findsNothing);
+    expect(find.text('Playing in Picture in Picture'), findsNothing);
     expect(find.byType(PlayerPage), findsOneWidget);
+  });
+
+  testWidgets('PiP player leaves the navigator while the caller stays usable', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Navigator(
+          key: navigatorKey,
+          onGenerateRoute: (_) => MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Caller route')),
+          ),
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+    unawaited(navigatorKey.currentState!.push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PlayerPage(
+          key: GlobalKey(),
+          item: fakeItem(id: 'detached-pip'),
+          resolvedSources: [_resolvedSource('detached', 'Source')],
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.pictureInPictureResult = true;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 10),
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(navigatorKey.currentState!.canPop(), isFalse);
+    expect(find.text('Caller route'), findsOneWidget);
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(player.controllers, hasLength(1));
+
+    controller.emitPictureInPictureRestore();
+    await tester.pump();
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(controller.playCalls, 1);
   });
 
   testWidgets('an external track stands in only where the source has none', (
@@ -536,9 +638,14 @@ class _FakePlayerController implements AppPlayerController {
   Duration? lastSeekPosition;
   bool pictureInPictureResult = false;
   int pictureInPictureCalls = 0;
+  int playCalls = 0;
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
+  }
+
+  void emitValue(AppPlayerValue value) {
+    _value.value = value;
   }
 
   void emitPictureInPictureRestore() {
@@ -574,7 +681,7 @@ class _FakePlayerController implements AppPlayerController {
   bool get isFullScreen => false;
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async => playCalls++;
 
   @override
   Future<void> pause() async {}

@@ -9,6 +9,7 @@ import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
+import 'player/state/picture_in_picture_session.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
@@ -33,6 +34,7 @@ class AppScope extends InheritedWidget {
     required this.sourcePriorityController,
     required this.homeCategoryStore,
     required this.sourceCache,
+    required this.pictureInPictureSession,
     required this.nsfwController,
     required super.child,
   });
@@ -65,6 +67,8 @@ class AppScope extends InheritedWidget {
 
   final SourceCache sourceCache;
 
+  final PictureInPictureSession pictureInPictureSession;
+
   final NsfwController nsfwController;
 
   static AppScope of(BuildContext context) {
@@ -89,5 +93,6 @@ class AppScope extends InheritedWidget {
       sourcePriorityController != oldWidget.sourcePriorityController ||
       homeCategoryStore != oldWidget.homeCategoryStore ||
       sourceCache != oldWidget.sourceCache ||
+      pictureInPictureSession != oldWidget.pictureInPictureSession ||
       nsfwController != oldWidget.nsfwController;
 }

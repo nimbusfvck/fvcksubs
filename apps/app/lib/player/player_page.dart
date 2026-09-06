@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
-import '../detail/detail_page_v2.dart';
 import '../detail/episode_target_v2.dart';
 import 'diagnostics/player_diagnostics.dart';
 import '../library/library_controller.dart';
@@ -19,6 +18,7 @@ import 'models/app_player_controller.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
+import 'state/picture_in_picture_session.dart';
 import 'state/source_fallback_policy.dart';
 import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
@@ -162,7 +162,10 @@ class _PlayerPageState extends State<PlayerPage> {
   bool? _landscape;
   bool _allowPop = false;
   bool _backInFlight = false;
-  bool _pipDetailShown = false;
+  bool _pipBackground = false;
+  bool _pipDetachedFromRoute = false;
+  bool _resumeAfterPictureInPicture = false;
+  PictureInPictureSession? _pictureInPictureSession;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
@@ -203,6 +206,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _library = AppScope.of(context).libraryController;
+    _pictureInPictureSession = AppScope.of(context).pictureInPictureSession;
     _syncSystemUi();
     _progressTimer ??= Timer.periodic(
       _progressInterval,
@@ -283,6 +287,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
+    _pictureInPictureSession?.detach(widget);
     _progressTimer?.cancel();
     _stallTimer?.cancel();
     _renewalTimer?.cancel();
@@ -790,15 +795,36 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
     }
+    final wasPlaying = initialized && controller!.value.value.isPlaying;
     final started = initialized
         ? await _requestPictureInPicture(controller!)
         : false;
     if (!mounted) return;
     _backInFlight = false;
     if (started) {
-      _showPictureInPictureDetail();
+      _resumeAfterPictureInPicture = wasPlaying;
+      setState(() => _pipBackground = true);
+      final navigator = Navigator.of(context);
+      if (!_pipDetachedFromRoute && navigator.canPop()) {
+        // The keyed widget moves to the app-level host in the same frame that
+        // this route is removed, keeping the native controller alive while
+        // the caller's navigation stack becomes active again.
+        _pipDetachedFromRoute = true;
+        final session = AppScope.of(context).pictureInPictureSession;
+        session.attach(widget);
+        final route = ModalRoute.of(context);
+        if (route != null) {
+          navigator.removeRoute(route);
+        }
+      }
     } else {
-      _popRoute();
+      _resumeAfterPictureInPicture = false;
+      if (_pipDetachedFromRoute) {
+        _pipDetachedFromRoute = false;
+        AppScope.of(context).pictureInPictureSession.detach(widget);
+      } else {
+        _popRoute();
+      }
     }
   }
 
@@ -813,38 +839,16 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  void _showPictureInPictureDetail() {
-    if (_pipDetailShown || !mounted) return;
-    _pipDetailShown = true;
-    unawaited(
-      Navigator.of(context)
-          .push<void>(
-            MaterialPageRoute<void>(
-              builder: (_) => _PictureInPictureDetailPage(
-                item: widget.media.item,
-                onExit: _closePictureInPictureDetail,
-              ),
-            ),
-          )
-          .whenComplete(() => _pipDetailShown = false),
-    );
-  }
-
   void _restorePictureInPicturePlayer() {
-    if (!_pipDetailShown || !mounted) return;
-    _pipDetailShown = false;
-    Navigator.of(context).pop();
-  }
-
-  void _closePictureInPictureDetail() {
-    if (!_pipDetailShown || !mounted) return;
-    _pipDetailShown = false;
-    final navigator = Navigator.of(context);
-    unawaited(_controller?.stopPictureInPicture());
-    navigator.pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && navigator.canPop()) navigator.pop();
-    });
+    if (!_pipBackground || !mounted) return;
+    final shouldResume = _resumeAfterPictureInPicture;
+    _resumeAfterPictureInPicture = false;
+    setState(() => _pipBackground = false);
+    if (shouldResume) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_controller?.play());
+      });
+    }
   }
 
   void _togglePlayback() {
@@ -1115,79 +1119,65 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope<void>(
-    canPop: _allowPop,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) unawaited(_handleBack());
-    },
-    child: CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.space): _togglePlayback,
-        const SingleActivator(LogicalKeyboardKey.keyJ): () =>
-            _seekBy(const Duration(seconds: -10)),
-        const SingleActivator(LogicalKeyboardKey.keyL): () =>
-            _seekBy(const Duration(seconds: 10)),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-            _seekBy(const Duration(seconds: -5)),
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-            _seekBy(const Duration(seconds: 5)),
-        if (_supportsFullScreen)
-          const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            unawaited(_controller?.exitFullScreen()),
+  Widget build(BuildContext context) {
+    if (_pipBackground) {
+      return const IgnorePointer(child: SizedBox.expand());
+    }
+    return PopScope<void>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_handleBack());
       },
-      child: Focus(
-        autofocus: true,
-        child: PlayerDragToClose(
-          onDismiss: _handleBack,
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            body: Stack(
-              children: [
-                _playerViewport(context),
-                if (!_waitingForFallback)
-                  Positioned.fill(child: _controlsFor(_controller)),
-                if (_waitingForFallback)
-                  Positioned.fill(
-                    child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
-                  ),
-                if (_playbackError != null)
-                  Positioned.fill(
-                    child: PlayerPlaybackErrorOverlay(
-                      message: _playbackError!,
-                      retrying: _retrying,
-                      onRetry: _retryPlayback,
-                      onChangeSource: _resolvedSources.length > 1
-                          ? _changeSource
-                          : null,
-                      onBack: _handleBack,
-                      onHide: () => setState(() => _playbackError = null),
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.space): _togglePlayback,
+          const SingleActivator(LogicalKeyboardKey.keyJ): () =>
+              _seekBy(const Duration(seconds: -10)),
+          const SingleActivator(LogicalKeyboardKey.keyL): () =>
+              _seekBy(const Duration(seconds: 10)),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _seekBy(const Duration(seconds: -5)),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _seekBy(const Duration(seconds: 5)),
+          if (_supportsFullScreen)
+            const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              unawaited(_controller?.exitFullScreen()),
+        },
+        child: Focus(
+          autofocus: true,
+          child: PlayerDragToClose(
+            onDismiss: _handleBack,
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              body: Stack(
+                children: [
+                  _playerViewport(context),
+                  if (!_waitingForFallback)
+                    Positioned.fill(child: _controlsFor(_controller)),
+                  if (_waitingForFallback)
+                    Positioned.fill(
+                      child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
                     ),
-                  ),
-              ],
+                  if (_playbackError != null)
+                    Positioned.fill(
+                      child: PlayerPlaybackErrorOverlay(
+                        message: _playbackError!,
+                        retrying: _retrying,
+                        onRetry: _retryPlayback,
+                        onChangeSource: _resolvedSources.length > 1
+                            ? _changeSource
+                            : null,
+                        onBack: _handleBack,
+                        onHide: () => setState(() => _playbackError = null),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
-
-/// Keeps the Player route alive underneath Detail while the native PiP window
-/// is active. Expanding PiP then only needs to pop this temporary detail route
-/// to reveal the original player and its still-live native view.
-class _PictureInPictureDetailPage extends StatelessWidget {
-  const _PictureInPictureDetailPage({required this.item, required this.onExit});
-
-  final MediaItemV2 item;
-  final VoidCallback onExit;
-
-  @override
-  Widget build(BuildContext context) => PopScope<void>(
-    canPop: false,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) onExit();
-    },
-    child: DetailPageV2(item: item),
-  );
+    );
+  }
 }

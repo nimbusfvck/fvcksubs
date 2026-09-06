@@ -368,6 +368,7 @@ Future<void> _openPlayer(
     contentRating: effectiveRating,
   );
   final player = PlayerPage(
+    key: GlobalKey(),
     item: item.item,
     resolvedSources: resolved,
     pendingSources: pendingSources,

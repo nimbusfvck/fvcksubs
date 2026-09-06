@@ -11,6 +11,7 @@ import 'library/library_controller.dart';
 import 'navigation/app_route_observer.dart';
 import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
+import 'player/state/picture_in_picture_session.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
@@ -36,6 +37,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.sourcePriorityController,
     required this.homeCategoryStore,
     required this.sourceCache,
+    required this.pictureInPictureSession,
     required this.nsfwController,
     this.navigatorKey,
     this.playerBuilder = defaultPlayerBuilder,
@@ -66,6 +68,8 @@ class FvcksubsApp extends StatelessWidget {
 
   final SourceCache sourceCache;
 
+  final PictureInPictureSession pictureInPictureSession;
+
   final NsfwController nsfwController;
 
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -90,6 +94,7 @@ class FvcksubsApp extends StatelessWidget {
     sourcePriorityController: sourcePriorityController,
     homeCategoryStore: homeCategoryStore,
     sourceCache: sourceCache,
+    pictureInPictureSession: pictureInPictureSession,
     nsfwController: nsfwController,
     child: MaterialApp(
       navigatorKey: navigatorKey,
@@ -97,8 +102,28 @@ class FvcksubsApp extends StatelessWidget {
       title: 'fvcksubs',
       debugShowCheckedModeBanner: false,
       theme: buildDarkTheme(),
-      builder: (context, child) =>
-          SystemUiVisibility(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) {
+        final scope = AppScope.of(context);
+        return SystemUiVisibility(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child ?? const SizedBox.shrink(),
+              Positioned.fill(
+                child: Overlay(
+                  initialEntries: [
+                    OverlayEntry(
+                      builder: (_) => PictureInPictureHost(
+                        session: scope.pictureInPictureSession,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
       home: const HomeShell(),
     ),
   );
