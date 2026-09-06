@@ -130,6 +130,45 @@ class PlayerPlaybackErrorOverlay extends StatelessWidget {
   );
 }
 
+/// Keeps a pre-start source fallback visually neutral until another source
+/// resolves. A fallback in progress is not a terminal playback error.
+class PlayerFallbackLoadingOverlay extends StatelessWidget {
+  const PlayerFallbackLoadingOverlay({super.key, required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: Colors.black.withValues(alpha: 0.45),
+    child: SafeArea(
+      child: Stack(
+        children: [
+          Positioned(
+            top: AppSpacing.xxs,
+            left: AppSpacing.xs,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              color: AppColors.onDark,
+              iconSize: 22,
+              tooltip: 'Back',
+              onPressed: onBack,
+            ),
+          ),
+          Center(
+            child: Semantics(
+              label: 'Loading playback',
+              child: const CircularProgressIndicator(
+                key: ValueKey<String>('player-fallback-loading-indicator'),
+                color: AppColors.onDark,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class PlayerDragToClose extends StatefulWidget {
   const PlayerDragToClose({
     super.key,

@@ -146,6 +146,7 @@ class _PlayerPageState extends State<PlayerPage> {
   AppPlayerController? _pendingFitController;
   String? _playbackError;
   bool _retrying = false;
+  bool _waitingForFallback = false;
   int _sourceRevision = 0;
   int _playbackAttempt = 0;
   final Set<String> _failedSourceIds = <String>{};
@@ -158,6 +159,8 @@ class _PlayerPageState extends State<PlayerPage> {
   double? _appliedViewportAspectRatio;
   bool? _systemUiImmersive;
   bool? _landscape;
+  bool _allowPop = false;
+  bool _backInFlight = false;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
@@ -431,7 +434,8 @@ class _PlayerPageState extends State<PlayerPage> {
       _pendingFallbackSourceId = _current.source.id;
       _pendingFallbackError = message;
       setState(() {
-        _playbackError = 'Finding another source…';
+        _waitingForFallback = true;
+        _playbackError = null;
         _retrying = true;
       });
       return;
@@ -479,6 +483,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _showInitialPlaybackError(String? message) {
     setState(() {
+      _waitingForFallback = false;
       _playbackError = (message == null || message.isEmpty)
           ? 'Playback failed.'
           : message;
@@ -496,6 +501,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _consecutiveRenewals = 0;
     _sourceStarted = false;
     setState(() {
+      _waitingForFallback = false;
       _retrying = true;
       _playbackError = null;
     });
@@ -755,11 +761,46 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  void _dismiss(AppPlayerController? controller) {
+  void _popRoute() {
+    if (!mounted) return;
+    if (_allowPop) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  Future<void> _handleBack() async {
+    if (_backInFlight) return;
+    _backInFlight = true;
+    final controller = _controller;
+    final initialized = controller?.value.value.initialized == true;
+    if (kDebugMode) {
+      debugPrint('[PlayerPiP] back_request initialized=$initialized');
+    }
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
     }
-    Navigator.of(context).pop();
+    if (initialized) {
+      unawaited(_requestPictureInPicture(controller!));
+    }
+    if (!mounted) return;
+    _backInFlight = false;
+    _popRoute();
+  }
+
+  Future<void> _requestPictureInPicture(AppPlayerController controller) async {
+    try {
+      final started = await controller.startPictureInPicture();
+      if (kDebugMode) debugPrint('[PlayerPiP] start_result=$started');
+    } catch (error) {
+      if (kDebugMode) debugPrint('[PlayerPiP] start_error=$error');
+      // PiP is optional. The route has already been dismissed, so a native
+      // capability or state failure simply leaves the viewer on the detail.
+    }
   }
 
   void _togglePlayback() {
@@ -858,6 +899,7 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_eventSubscription?.cancel());
     _eventSubscription = null;
     setState(() {
+      _waitingForFallback = false;
       _pendingSwitchPosition = position;
       _currentIndex = index;
       _playbackAttempt++;
@@ -918,7 +960,7 @@ class _PlayerPageState extends State<PlayerPage> {
         resolvedSources: _resolvedSources,
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
-        onBack: () => _dismiss(controller),
+        onBack: _handleBack,
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
         isLive: _isLive,
@@ -1029,46 +1071,57 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   @override
-  Widget build(BuildContext context) => CallbackShortcuts(
-    bindings: {
-      const SingleActivator(LogicalKeyboardKey.space): _togglePlayback,
-      const SingleActivator(LogicalKeyboardKey.keyJ): () =>
-          _seekBy(const Duration(seconds: -10)),
-      const SingleActivator(LogicalKeyboardKey.keyL): () =>
-          _seekBy(const Duration(seconds: 10)),
-      const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-          _seekBy(const Duration(seconds: -5)),
-      const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-          _seekBy(const Duration(seconds: 5)),
-      if (_supportsFullScreen)
-        const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
-      const SingleActivator(LogicalKeyboardKey.escape): () =>
-          unawaited(_controller?.exitFullScreen()),
+  Widget build(BuildContext context) => PopScope<void>(
+    canPop: _allowPop,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) unawaited(_handleBack());
     },
-    child: Focus(
-      autofocus: true,
-      child: PlayerDragToClose(
-        onDismiss: () => _dismiss(_controller),
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            children: [
-              _playerViewport(context),
-              Positioned.fill(child: _controlsFor(_controller)),
-              if (_playbackError != null)
-                Positioned.fill(
-                  child: PlayerPlaybackErrorOverlay(
-                    message: _playbackError!,
-                    retrying: _retrying,
-                    onRetry: _retryPlayback,
-                    onChangeSource: _resolvedSources.length > 1
-                        ? _changeSource
-                        : null,
-                    onBack: () => _dismiss(_controller),
-                    onHide: () => setState(() => _playbackError = null),
+    child: CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.space): _togglePlayback,
+        const SingleActivator(LogicalKeyboardKey.keyJ): () =>
+            _seekBy(const Duration(seconds: -10)),
+        const SingleActivator(LogicalKeyboardKey.keyL): () =>
+            _seekBy(const Duration(seconds: 10)),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _seekBy(const Duration(seconds: -5)),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _seekBy(const Duration(seconds: 5)),
+        if (_supportsFullScreen)
+          const SingleActivator(LogicalKeyboardKey.keyF): _toggleFullScreen,
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            unawaited(_controller?.exitFullScreen()),
+      },
+      child: Focus(
+        autofocus: true,
+        child: PlayerDragToClose(
+          onDismiss: _handleBack,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              children: [
+                _playerViewport(context),
+                if (!_waitingForFallback)
+                  Positioned.fill(child: _controlsFor(_controller)),
+                if (_waitingForFallback)
+                  Positioned.fill(
+                    child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
                   ),
-                ),
-            ],
+                if (_playbackError != null)
+                  Positioned.fill(
+                    child: PlayerPlaybackErrorOverlay(
+                      message: _playbackError!,
+                      retrying: _retrying,
+                      onRetry: _retryPlayback,
+                      onChangeSource: _resolvedSources.length > 1
+                          ? _changeSource
+                          : null,
+                      onBack: _handleBack,
+                      onHide: () => setState(() => _playbackError = null),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

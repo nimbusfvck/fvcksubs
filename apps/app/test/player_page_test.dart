@@ -179,7 +179,7 @@ void main() {
     );
   });
 
-  testWidgets('an initial error waits for a late source before showing error', (
+  testWidgets('an initial error waits silently for a late source', (
     tester,
   ) async {
     final player = _FailingPlayer();
@@ -210,7 +210,11 @@ void main() {
     player.controllers.single.emitError(StateError('source rejected'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('Finding another source…'), findsOneWidget);
+    expect(find.text('Finding another source…'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsOneWidget,
+    );
 
     pending.add(later);
     await tester.pump();
@@ -218,6 +222,10 @@ void main() {
 
     expect(player.played, later.stream);
     expect(find.text('Finding another source…'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsNothing,
+    );
     await pending.close();
   });
 
@@ -302,6 +310,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bein Sport 1'), findsOneWidget);
     await controller.close();
+  });
+
+  testWidgets('player Back requests Picture in Picture before dismissing', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'movie-pip',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [_resolvedSource('pip', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.pictureInPictureResult = true;
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(controller.pictureInPictureCalls, 1);
+    expect(find.byType(PlayerPage), findsNothing);
   });
 
   testWidgets('an external track stands in only where the source has none', (
@@ -484,6 +526,8 @@ class _FakePlayerController implements AppPlayerController {
   final StreamController<AppPlayerEvent> _events =
       StreamController<AppPlayerEvent>.broadcast(sync: true);
   Duration? lastSeekPosition;
+  bool pictureInPictureResult = false;
+  int pictureInPictureCalls = 0;
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
@@ -547,4 +591,12 @@ class _FakePlayerController implements AppPlayerController {
 
   @override
   Future<void> exitFullScreen() async {}
+  @override
+  Future<bool> startPictureInPicture() async {
+    pictureInPictureCalls++;
+    return pictureInPictureResult;
+  }
+
+  @override
+  Future<void> stopPictureInPicture() async {}
 }
