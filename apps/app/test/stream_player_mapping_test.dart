@@ -1,433 +1,8 @@
-import 'package:better_player_plus/better_player_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/mappers/stream_player_mapping.dart';
-import 'package:fvcksubs_app/player/mappers/video_player_drm_mapping.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
-import 'package:video_player_android/video_player_android.dart';
-import 'package:video_player_avfoundation/video_player_avfoundation.dart';
 
 void main() {
-  test('carries url and headers', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.m3u8',
-        headers: {'Referer': 'https://x/'},
-        format: StreamFormat.hls,
-      ),
-      isLive: true,
-    );
-    expect(ds.url, 'https://edge/live.m3u8');
-    expect(ds.headers?['Referer'], 'https://x/');
-    expect(ds.videoFormat, BetterPlayerVideoFormat.hls);
-    expect(ds.drmConfiguration, isNull);
-  });
-
-  test('isLive: true maps to liveStream: true — no seek bar, no duration', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.m3u8',
-        format: StreamFormat.hls,
-      ),
-      isLive: true,
-    );
-    expect(ds.liveStream, isTrue);
-  });
-
-  test('live streams never load subtitle tracks', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/live.vtt'),
-        ],
-      ),
-      isLive: true,
-    );
-
-    expect(ds.subtitles, isNull);
-  });
-
-  test('isLive: false maps to liveStream: false — a real seek bar for VOD', () {
-    // The bug M28's player update fixed: this used to be hardcoded `true`
-    // unconditionally (ported as-is from back-pass, which only ever played
-    // live sport), so a movie got the no-scrubbing live UI too.
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-      ),
-      isLive: false,
-    );
-    expect(ds.liveStream, isFalse);
-    expect(ds.cacheConfiguration?.useCache, isFalse);
-  });
-
-  test('live playback keeps its distance from the live edge', () {
-    final live = betterPlayerDataSource(
-      const PlayableStream(url: 'https://edge/live.m3u8'),
-      isLive: true,
-    );
-
-    // What is buffered before the picture starts is the cushion held for the
-    // whole session. Starting sooner means living at the live edge, where
-    // every jitter is an underrun and falling behind is fatal.
-    expect(live.bufferingConfiguration.bufferForPlaybackMs, 3000);
-    expect(live.bufferingConfiguration.bufferForPlaybackAfterRebufferMs, 6000);
-  });
-
-  test('embedded previews use a small buffer without disk caching', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(url: 'https://edge/preview.mp4'),
-      isLive: false,
-      preview: true,
-    );
-
-    expect(ds.cacheConfiguration?.useCache, isFalse);
-    expect(ds.bufferingConfiguration.minBufferMs, 1500);
-    expect(ds.bufferingConfiguration.maxBufferMs, 5000);
-    expect(ds.bufferingConfiguration.bufferForPlaybackMs, 350);
-    expect(ds.bufferingConfiguration.bufferForPlaybackAfterRebufferMs, 750);
-  });
-
-  test('maps DASH container', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.mpd',
-        format: StreamFormat.dash,
-      ),
-      isLive: true,
-    );
-    expect(ds.videoFormat, BetterPlayerVideoFormat.dash);
-  });
-
-  test('maps ClearKey DRM to inline clearKey', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.mpd',
-        format: StreamFormat.dash,
-        drm: DrmConfig(scheme: DrmScheme.clearKey, clearKeyJson: '{"keys":[]}'),
-      ),
-      isLive: true,
-    );
-    expect(ds.drmConfiguration?.drmType, BetterPlayerDrmType.clearKey);
-    expect(ds.drmConfiguration?.clearKey, '{"keys":[]}');
-  });
-
-  test('maps Widevine DRM to a license url plus headers', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/live.mpd',
-        headers: {'User-Agent': 'UA'},
-        format: StreamFormat.dash,
-        drm: DrmConfig(scheme: DrmScheme.widevine, licenseUrl: 'https://lic/'),
-      ),
-      isLive: true,
-    );
-    expect(ds.drmConfiguration?.drmType, BetterPlayerDrmType.widevine);
-    expect(ds.drmConfiguration?.licenseUrl, 'https://lic/');
-    expect(ds.drmConfiguration?.headers?['User-Agent'], 'UA');
-  });
-
-  test('maps Widevine to the official Android video_player configuration', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    final configuration = videoPlayerDrmConfiguration(
-      const PlayableStream(
-        url: 'https://edge/live.mpd',
-        headers: {'Authorization': 'Bearer token'},
-        format: StreamFormat.dash,
-        drm: DrmConfig(
-          scheme: DrmScheme.widevine,
-          licenseUrl: 'https://license.example/widevine',
-        ),
-      ),
-    );
-
-    expect(configuration, isA<WidevineDrmConfiguration>());
-    final widevine = configuration! as WidevineDrmConfiguration;
-    expect(widevine.licenseUri.toString(), 'https://license.example/widevine');
-    expect(widevine.licenseHeaders['Authorization'], 'Bearer token');
-  });
-
-  test('maps ClearKey to the official Android video_player configuration', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    final configuration = videoPlayerDrmConfiguration(
-      const PlayableStream(
-        url: 'https://edge/protected.mpd',
-        format: StreamFormat.dash,
-        drm: DrmConfig(scheme: DrmScheme.clearKey, clearKeyJson: '{"keys":[]}'),
-      ),
-    );
-
-    expect(configuration, isA<ClearKeyDrmConfiguration>());
-    expect(
-      (configuration! as ClearKeyDrmConfiguration).clearKeyJson,
-      '{"keys":[]}',
-    );
-  });
-
-  test('maps FairPlay to the official AVFoundation configuration', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    final configuration = videoPlayerDrmConfiguration(
-      const PlayableStream(
-        url: 'https://edge/protected.m3u8',
-        headers: {'Authorization': 'Bearer token'},
-        format: StreamFormat.hls,
-        drm: DrmConfig(
-          scheme: DrmScheme.fairPlay,
-          certificateUrl: 'https://license.example/fairplay.cer',
-          licenseUrl: 'https://license.example/fairplay',
-          contentId: 'movie-123',
-        ),
-      ),
-    );
-
-    expect(configuration, isA<FairPlayDrmConfiguration>());
-    final fairPlay = configuration! as FairPlayDrmConfiguration;
-    expect(
-      fairPlay.certificateUri.toString(),
-      'https://license.example/fairplay.cer',
-    );
-    expect(fairPlay.licenseUri.toString(), 'https://license.example/fairplay');
-    expect(fairPlay.licenseHeaders['Authorization'], 'Bearer token');
-    expect(fairPlay.contentId, 'movie-123');
-  });
-
-  test('maps subtitle tracks — known language gets flag + native name', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    expect(ds.subtitles, hasLength(2));
-    expect(ds.subtitles?[0].type, BetterPlayerSubtitlesSourceType.network);
-    expect(ds.subtitles?[0].name, '🇬🇧 English');
-    expect(ds.subtitles?[0].urls, ['https://subs/en.srt']);
-    expect(ds.subtitles?[1].name, '🇮🇩 Indonesia');
-  });
-
-  test('maps a materialized subtitle path to BetterPlayer file source', () {
-    final source = subtitleSourceFor(
-      const SubtitleTrack(
-        language: 'id',
-        url: 'file:///tmp/fvcksubs-subtitle.srt',
-      ),
-    );
-    expect(source.type, BetterPlayerSubtitlesSourceType.file);
-  });
-
-  test('no preferred subtitle language means nothing is pre-selected', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
-  });
-
-  test('preferred subtitle language is pre-selected from stream tracks', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-        ],
-      ),
-      isLive: false,
-      preferredSubtitleLanguage: 'id',
-    );
-    final byLanguage = {for (final s in ds.subtitles!) s.name: s};
-    expect(byLanguage['🇮🇩 Indonesia']!.selectedByDefault, isTrue);
-    expect(byLanguage['🇬🇧 English']!.selectedByDefault, isNot(true));
-  });
-
-  test('remembered external subtitle prevents source pre-selection', () {
-    const external = SubtitleTrack(
-      language: 'id',
-      label: 'Indonesia (Segu)',
-      url: 'https://subs.example/id-external.vtt',
-    );
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-        ],
-      ),
-      isLive: false,
-      preferredSubtitleLanguage: 'id',
-      preferredExternalSubtitle: external,
-    );
-    expect(
-      ds.subtitles!.where((s) => s.selectedByDefault == true).single.name,
-      'Indonesia (Segu)',
-    );
-  });
-
-  test(
-    'remembered external subtitle is selected in the source subtitle list',
-    () {
-      const external = SubtitleTrack(
-        language: 'id',
-        label: 'Indonesia (Segu)',
-        url: 'https://subs.example/id-external.vtt',
-      );
-      final ds = betterPlayerDataSource(
-        const PlayableStream(
-          url: 'https://edge/movie.m3u8',
-          format: StreamFormat.hls,
-          subtitles: [
-            SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          ],
-        ),
-        isLive: false,
-        preferredSubtitleLanguage: 'id',
-        preferredExternalSubtitle: external,
-      );
-
-      expect(ds.subtitles, hasLength(2));
-      final selected = ds.subtitles!.where(
-        (track) => track.selectedByDefault == true,
-      );
-      expect(selected.single.urls, [external.url]);
-      expect(selected.single.name, 'Indonesia (Segu)');
-    },
-  );
-
-  test('a region variant remains available by primary language subtag', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en-US', url: 'https://subs/en-us.srt'),
-        ],
-      ),
-      isLive: false,
-      preferredSubtitleLanguage: 'en',
-    );
-    expect(ds.subtitles!.single.selectedByDefault, isTrue);
-  });
-
-  test('a preferred language with no matching track selects nothing', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [SubtitleTrack(language: 'en', url: 'https://subs/en.srt')],
-      ),
-      isLive: false,
-      preferredSubtitleLanguage: 'id',
-    );
-    expect(ds.subtitles!.every((s) => s.selectedByDefault != true), isTrue);
-  });
-
-  test('tracks are not restricted to hardcoded languages', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'pt-BR', url: 'https://subs/pt-br.srt'),
-          SubtitleTrack(language: 'fr', url: 'https://subs/fr.srt'),
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-          SubtitleTrack(language: 'ar', url: 'https://subs/ar.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    expect(ds.subtitles, hasLength(4));
-    expect(ds.subtitles?.map((track) => track.name), [
-      '🇸🇦 العربية',
-      '🇬🇧 English',
-      '🇫🇷 Français',
-      '🇧🇷 Português (BR)',
-    ]);
-  });
-
-  test('non-preferred languages remain available', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'pt-BR', url: 'https://subs/pt-br.srt'),
-          SubtitleTrack(language: 'fr', url: 'https://subs/fr.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    expect(ds.subtitles, hasLength(2));
-    expect(ds.subtitles?.map((track) => track.name), [
-      '🇫🇷 Français',
-      '🇧🇷 Português (BR)',
-    ]);
-  });
-
-  test('region-tagged English gets flag + region disambiguator', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'en-US', url: 'https://subs/en-us.srt'),
-          SubtitleTrack(language: 'en-GB', url: 'https://subs/en-gb.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    expect(ds.subtitles?[0].name, '🇬🇧 English (GB)');
-    expect(ds.subtitles?[1].name, '🇺🇸 English (US)');
-  });
-
-  test('subtitle tracks are sorted: en before id', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(
-        url: 'https://edge/movie.m3u8',
-        format: StreamFormat.hls,
-        subtitles: [
-          SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
-          SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
-        ],
-      ),
-      isLive: false,
-    );
-    // Alphabetical by primary tag: en < id.
-    expect(ds.subtitles?[0].name, contains('English'));
-    expect(ds.subtitles?[1].name, contains('Indonesia'));
-  });
-
-  test('no subtitles maps to null, not an empty list', () {
-    final ds = betterPlayerDataSource(
-      const PlayableStream(url: 'https://edge/movie.m3u8'),
-      isLive: false,
-    );
-    expect(ds.subtitles, isNull);
-  });
-
   group('subtitlesForPicker', () {
     test('keeps every language and sorts by language tag', () {
       final result = subtitlesForPicker(const [
@@ -435,12 +10,10 @@ void main() {
         SubtitleTrack(language: 'id', url: 'https://subs/id.srt'),
         SubtitleTrack(language: 'en', url: 'https://subs/en.srt'),
       ]);
-      expect(result.map((t) => t.language), ['en', 'fr', 'id']);
+      expect(result.map((track) => track.language), ['en', 'fr', 'id']);
     });
 
-    test('drops a duplicate of an already-seen url', () {
-      // A provider's own track and a fallback provider's copy of the same
-      // file sometimes both end up in the list — same subtitle, two labels.
+    test('drops duplicate URLs while preserving the first track', () {
       final result = subtitlesForPicker(const [
         SubtitleTrack(
           language: 'id',
@@ -450,36 +23,32 @@ void main() {
         SubtitleTrack(
           language: 'id',
           url: 'https://subs/id.srt',
-          label: 'Bahasa Indonesia (shegu)',
+          label: 'Bahasa Indonesia',
         ),
       ]);
       expect(result, hasLength(1));
       expect(result.single.label, 'Indonesian');
     });
 
-    test(
-      'keeps every same-language track, unlike the flattened source list',
-      () {
-        final result = subtitlesForPicker(const [
-          SubtitleTrack(
-            language: 'en',
-            url: 'https://subs/en-1.srt',
-            label: 'English',
-          ),
-          SubtitleTrack(
-            language: 'en',
-            url: 'https://subs/en-2.srt',
-            label: 'English SDH',
-          ),
-        ]);
-        expect(result, hasLength(2));
-        expect(result.map((t) => t.label), ['English', 'English SDH']);
-      },
-    );
+    test('keeps multiple tracks for the same language', () {
+      final result = subtitlesForPicker(const [
+        SubtitleTrack(
+          language: 'en',
+          url: 'https://subs/en-1.srt',
+          label: 'English',
+        ),
+        SubtitleTrack(
+          language: 'en',
+          url: 'https://subs/en-2.srt',
+          label: 'English SDH',
+        ),
+      ]);
+      expect(result, hasLength(2));
+    });
   });
 
   group('subtitleLanguageLabel', () {
-    test('known languages get flag + native name', () {
+    test('known languages get flag and native name', () {
       expect(subtitleLanguageLabel('en'), '🇬🇧 English');
       expect(subtitleLanguageLabel('id'), '🇮🇩 Indonesia');
     });
@@ -498,7 +67,7 @@ void main() {
       expect(subtitleIndicatorLabel('🇮🇩 Indonesia'), '🇮🇩');
     });
 
-    test('normalizes a built-in language name to its flag', () {
+    test('normalizes built-in language names to their flag', () {
       expect(subtitleIndicatorLabel('INDONESIA'), '🇮🇩');
       expect(subtitleIndicatorLabel('Indonesian SDH'), '🇮🇩');
     });

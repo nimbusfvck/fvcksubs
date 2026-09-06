@@ -25,10 +25,10 @@ const Duration _bufferingProgressTolerance = Duration(milliseconds: 250);
 /// How long the stall watchdog is held off after the viewer swaps a track on
 /// demand.
 ///
-/// A swap throws libmpv's cushion away and refills from the current point,
-/// which on a slow upstream outlasts [PlaybackStallDetector.threshold] — and
-/// a watchdog that fires there re-resolves the source, restarting playback
-/// and undoing the switch that was asked for.
+/// A swap can throw the native player's cushion away and refill from the
+/// current point, which on a slow upstream outlasts
+/// [PlaybackStallDetector.threshold]. A watchdog that fires there re-resolves
+/// the source, restarting playback and undoing the requested switch.
 const Duration _trackSwitchSettleGrace = Duration(seconds: 20);
 
 /// The same, for a seek — deliberately much shorter.
@@ -42,10 +42,9 @@ const Duration _seekSettleGrace = Duration(seconds: 8);
 /// The same grace on a live stream, where it has to stay small.
 ///
 /// A live URL is signed, short-lived and per-edge, so the re-resolve this
-/// defers is the recovery that live depends on most — and a live refill
-/// cannot take twenty seconds anyway: the playlist window holds only a few
-/// segments, and libmpv resumes after `cache-pause-wait`. Enough room for
-/// that refill, and no more.
+/// defers is the recovery that live depends on most. A live refill cannot take
+/// twenty seconds anyway: the playlist window holds only a few segments.
+/// Enough room for that refill, and no more.
 const Duration _liveSettleGrace = Duration(seconds: 6);
 
 /// The grace a deliberate interruption earns on this kind of stream.

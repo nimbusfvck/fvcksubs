@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
-import 'package:fvcksubs_app/player/widgets/stream_player.dart';
+import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -360,7 +360,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(BetterPlayerView), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsOneWidget);
 
     await tester.pumpWidget(
       wrapApp(
@@ -375,7 +375,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(BetterPlayerView), findsNothing);
+    expect(find.byType(VideoPlayerView), findsNothing);
     expect(find.byKey(const Key('featured-title-text')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

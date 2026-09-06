@@ -480,7 +480,7 @@ class RecordingPlayer {
   SubtitleTrack? playedPreferredExternalSubtitle;
 
   // [key] is accepted (real callers, `PlayerPage` in particular, rely on it
-  // to force better_player's controller to be recreated on a source switch)
+  // to recreate the native player on a source switch)
   // but not used for the returned widget's own identity — this fake has no
   // internal state for a key to matter to, and tests find it by the one
   // stable `Key('fake-player')` regardless of which source is "playing".

@@ -105,36 +105,50 @@ void main() {
     expect(stream.audioUrl, isNull);
   });
 
-  test(
-    'among several HLS qualities, picks the highest at or under 480p — '
-    'a Shorts card is a small tile, not a full-screen player',
-    () {
-      final manifest = StreamManifest([
-        _hlsMuxed('https://example.com/1080p.m3u8', tag: 1, resolution: const VideoResolution(1920, 1080)),
-        _hlsMuxed('https://example.com/480p.m3u8', tag: 2, resolution: const VideoResolution(854, 480)),
-        _hlsMuxed('https://example.com/360p.m3u8', tag: 3, resolution: const VideoResolution(640, 360)),
-      ]);
+  test('among several HLS qualities, picks the highest at or under 480p — '
+      'a Shorts card is a small tile, not a full-screen player', () {
+    final manifest = StreamManifest([
+      _hlsMuxed(
+        'https://example.com/1080p.m3u8',
+        tag: 1,
+        resolution: const VideoResolution(1920, 1080),
+      ),
+      _hlsMuxed(
+        'https://example.com/480p.m3u8',
+        tag: 2,
+        resolution: const VideoResolution(854, 480),
+      ),
+      _hlsMuxed(
+        'https://example.com/360p.m3u8',
+        tag: 3,
+        resolution: const VideoResolution(640, 360),
+      ),
+    ]);
 
-      final stream = selectPreviewStream(manifest, videoId: _videoId);
+    final stream = selectPreviewStream(manifest, videoId: _videoId);
 
-      expect(stream.url, 'https://example.com/480p.m3u8');
-    },
-  );
+    expect(stream.url, 'https://example.com/480p.m3u8');
+  });
 
-  test(
-    'falls back to the lowest available quality when nothing is at or '
-    'under 480p',
-    () {
-      final manifest = StreamManifest([
-        _hlsMuxed('https://example.com/1080p.m3u8', tag: 1, resolution: const VideoResolution(1920, 1080)),
-        _hlsMuxed('https://example.com/720p.m3u8', tag: 2, resolution: const VideoResolution(1280, 720)),
-      ]);
+  test('falls back to the lowest available quality when nothing is at or '
+      'under 480p', () {
+    final manifest = StreamManifest([
+      _hlsMuxed(
+        'https://example.com/1080p.m3u8',
+        tag: 1,
+        resolution: const VideoResolution(1920, 1080),
+      ),
+      _hlsMuxed(
+        'https://example.com/720p.m3u8',
+        tag: 2,
+        resolution: const VideoResolution(1280, 720),
+      ),
+    ]);
 
-      final stream = selectPreviewStream(manifest, videoId: _videoId);
+    final stream = selectPreviewStream(manifest, videoId: _videoId);
 
-      expect(stream.url, 'https://example.com/720p.m3u8');
-    },
-  );
+    expect(stream.url, 'https://example.com/720p.m3u8');
+  });
 
   test('a muxed MP4 wins when no HLS muxed stream exists', () {
     final manifest = StreamManifest([
@@ -150,21 +164,17 @@ void main() {
     expect(stream.audioUrl, isNull);
   });
 
-  test(
-    'separate video+audio is the last resort, carrying audioUrl',
-    () {
-      final manifest = StreamManifest([
-        _videoOnly('https://example.com/video.mp4'),
-        _audioOnly('https://example.com/audio.mp4'),
-      ]);
+  test('separate video and audio tracks are rejected explicitly', () {
+    final manifest = StreamManifest([
+      _videoOnly('https://example.com/video.mp4'),
+      _audioOnly('https://example.com/audio.mp4'),
+    ]);
 
-      final stream = selectPreviewStream(manifest, videoId: _videoId);
-
-      expect(stream.url, 'https://example.com/video.mp4');
-      expect(stream.audioUrl, 'https://example.com/audio.mp4');
-      expect(stream.format, StreamFormat.other);
-    },
-  );
+    expect(
+      () => selectPreviewStream(manifest, videoId: _videoId),
+      throwsUnsupportedError,
+    );
+  });
 
   test('no usable stream at all throws', () {
     final manifest = StreamManifest(const []);
@@ -176,7 +186,9 @@ void main() {
   });
 
   test('video-only without a matching audio-only stream throws', () {
-    final manifest = StreamManifest([_videoOnly('https://example.com/video.mp4')]);
+    final manifest = StreamManifest([
+      _videoOnly('https://example.com/video.mp4'),
+    ]);
 
     expect(
       () => selectPreviewStream(manifest, videoId: _videoId),

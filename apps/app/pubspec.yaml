@@ -18,27 +18,6 @@ dependencies:
     path: ../../packages/fvcksubs_extension_host
   fvcksubs_storage:
     path: ../../packages/fvcksubs_storage
-  better_player_plus: ^1.3.5
-  # The libmpv player used on macOS and iOS. Android keeps BetterPlayer and
-  # embeds none of this payload.
-  media_kit: ^1.2.6
-  media_kit_video:
-    git:
-      url: https://github.com/mdikcinar/media-kit.git
-      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
-      path: media_kit_video
-  # A/B Darwin libmpv v0.7.0 from the maintained fork. Keep the Dart player
-  # API unchanged so the native playback result is isolated on both platforms.
-  media_kit_libs_macos_video:
-    git:
-      url: https://github.com/mdikcinar/media-kit.git
-      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
-      path: libs/macos/media_kit_libs_macos_video
-  media_kit_libs_ios_video:
-    git:
-      url: https://github.com/mdikcinar/media-kit.git
-      ref: 7762e2cf540d6f14e7b1fe8f4e62e0680cb5f48f
-      path: libs/ios/media_kit_libs_ios_video
   # Local fork: preserve the official API while exposing AVFoundation's live
   # seekable ranges and allowing live seeks beyond the 1ms indefinite duration.
   video_player:

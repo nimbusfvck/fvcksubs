@@ -1,138 +1,40 @@
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../state/subtitle_preference_controller.dart';
 
-BetterPlayerDataSource betterPlayerDataSource(
-  PlayableStream stream, {
-  required bool isLive,
-  String? preferredSubtitleLanguage,
-  SubtitleTrack? preferredExternalSubtitle,
-  bool preview = false,
-}) => BetterPlayerDataSource(
-  BetterPlayerDataSourceType.network,
-  stream.url,
-  headers: stream.headers,
-  liveStream: isLive,
-  videoFormat: _format(stream.format),
-  drmConfiguration: _drm(stream),
-  subtitles: isLive
-      ? null
-      : _subtitles(
-          stream.subtitles,
-          preferredLanguage: preferredSubtitleLanguage,
-          preferredExternalSubtitle: preferredExternalSubtitle,
-        ),
-  // Keep signed and header-authenticated streams on the native network path.
-  cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
-  bufferingConfiguration: preview
-      ? const BetterPlayerBufferingConfiguration(
-          minBufferMs: 1500,
-          maxBufferMs: 5000,
-          bufferForPlaybackMs: 350,
-          bufferForPlaybackAfterRebufferMs: 750,
-        )
-      // Live keeps ExoPlayer's defaults on purpose. They read like a lot for
-      // a playlist only twelve seconds long, but on a live stream the media
-      // buffered before the picture starts *is* the distance held from the
-      // live edge for the rest of the session. Lowering them to "about one
-      // segment" was measured on a Kora channel that had been running an hour
-      // without a single rebuffer: it started playback 1.6s from the edge,
-      // ran dry every few seconds, and inside half a minute had fallen out of
-      // the window into a fatal ExoPlayer source error.
-      : const BetterPlayerBufferingConfiguration(),
-);
-
-BetterPlayerVideoFormat _format(StreamFormat format) => switch (format) {
-  StreamFormat.dash => BetterPlayerVideoFormat.dash,
-  StreamFormat.hls => BetterPlayerVideoFormat.hls,
-  StreamFormat.other => BetterPlayerVideoFormat.other,
-};
-
-List<BetterPlayerSubtitlesSource>? _subtitles(
-  List<SubtitleTrack> tracks, {
-  String? preferredLanguage,
-  SubtitleTrack? preferredExternalSubtitle,
-}) {
-  final sorted = subtitlesForPicker([?preferredExternalSubtitle, ...tracks]);
-  if (sorted.isEmpty) return null;
-
-  final BetterPlayerSubtitlesSource? preferred =
-      preferredExternalSubtitle == null
-      ? preferredSubtitleSource(tracks, preferredLanguage)
-      : subtitleSourceFor(preferredExternalSubtitle);
-
-  return [
-    for (final track in sorted)
-      subtitleSourceFor(
-        track,
-        selectedByDefault: preferred?.urls?.first == track.url,
-      ),
-  ];
-}
-
-BetterPlayerSubtitlesSource? preferredSubtitleSource(
-  List<SubtitleTrack> tracks,
-  String? preferredLanguage,
-) {
-  if (preferredLanguage == null) return null;
-  for (final track in subtitlesForPicker(tracks)) {
-    if (subtitleLanguageKey(track.language) ==
-        subtitleLanguageKey(preferredLanguage)) {
-      return subtitleSourceFor(track, selectedByDefault: true);
-    }
-  }
-  return null;
-}
-
-BetterPlayerSubtitlesSource subtitleSourceFor(
-  SubtitleTrack track, {
-  bool selectedByDefault = false,
-}) => BetterPlayerSubtitlesSource(
-  type: _isLocalSubtitleUrl(track.url)
-      ? BetterPlayerSubtitlesSourceType.file
-      : BetterPlayerSubtitlesSourceType.network,
-  name: _subtitleLabel(track),
-  urls: [track.url],
-  selectedByDefault: selectedByDefault,
-);
-
-bool _isLocalSubtitleUrl(String value) {
-  final uri = Uri.tryParse(value);
-  return uri?.scheme == 'file' ||
-      ((uri?.scheme.isEmpty ?? true) && value.startsWith('/'));
-}
-
+/// Returns subtitle tracks in a stable picker order without duplicate URLs.
 List<SubtitleTrack> subtitlesForPicker(List<SubtitleTrack> tracks) {
-  final filtered = tracks.toList();
-
-  filtered.sort((a, b) {
-    final pa = _primary(a.language);
-    final pb = _primary(b.language);
-    final c = pa.compareTo(pb);
-    if (c != 0) return c;
-    final d = a.language.compareTo(b.language);
-    if (d != 0) return d;
-    return a.url.compareTo(b.url);
-  });
+  final sorted = tracks.toList()
+    ..sort((a, b) {
+      final primaryComparison = _primary(
+        a.language,
+      ).compareTo(_primary(b.language));
+      if (primaryComparison != 0) return primaryComparison;
+      final languageComparison = a.language.compareTo(b.language);
+      if (languageComparison != 0) return languageComparison;
+      return a.url.compareTo(b.url);
+    });
 
   final seenUrls = <String>{};
   return [
-    for (final track in filtered)
+    for (final track in sorted)
       if (seenUrls.add(track.url)) track,
   ];
 }
 
-String _primary(String lang) {
-  final dash = lang.indexOf('-');
-  return dash == -1
-      ? lang.toLowerCase()
-      : lang.substring(0, dash).toLowerCase();
-}
-
-String _subtitleLabel(SubtitleTrack track) {
-  final custom = track.label.trim();
-  return custom.isEmpty ? subtitleLanguageLabel(track.language) : custom;
+/// Returns the human-readable label used in subtitle pickers.
+String subtitleLanguageLabel(String languageCode) {
+  final lang = languageCode.toLowerCase();
+  final entry =
+      _kLangMap[lang] ??
+      _kLangMap[_primary(lang)] ??
+      _kLangMap[subtitleLanguageKey(lang)];
+  if (entry == null) return languageCode.toUpperCase();
+  final (flag, name) = entry;
+  final region = lang.contains('-')
+      ? ' (${lang.split('-').last.toUpperCase()})'
+      : '';
+  return '$flag $name$region';
 }
 
 /// Returns the compact label used for the active subtitle control.
@@ -160,18 +62,11 @@ String subtitleIndicatorLabel(String? sourceName) {
   return 'CC';
 }
 
-String subtitleLanguageLabel(String languageCode) {
-  final lang = languageCode.toLowerCase();
-  final entry =
-      _kLangMap[lang] ??
-      _kLangMap[_primary(lang)] ??
-      _kLangMap[subtitleLanguageKey(lang)];
-  if (entry == null) return languageCode.toUpperCase();
-  final (flag, name) = entry;
-  final region = lang.contains('-')
-      ? ' (${lang.split('-').last.toUpperCase()})'
-      : '';
-  return '$flag $name$region';
+String _primary(String lang) {
+  final dash = lang.indexOf('-');
+  return dash == -1
+      ? lang.toLowerCase()
+      : lang.substring(0, dash).toLowerCase();
 }
 
 const _kLangMap = <String, (String, String)>{
@@ -179,7 +74,7 @@ const _kLangMap = <String, (String, String)>{
   'ar': ('🇸🇦', 'العربية'),
   'bg': ('🇧🇬', 'Български'),
   'bn': ('🇧🇩', 'বাংলা'),
-  'ca': ('🏴󠁥󠁳󠁣󠁴󠁿', 'Català'),
+  'ca': ('🏴', 'Català'),
   'cs': ('🇨🇿', 'Čeština'),
   'da': ('🇩🇰', 'Dansk'),
   'de': ('🇩🇪', 'Deutsch'),
@@ -226,21 +121,3 @@ const _kLangMap = <String, (String, String)>{
   'zh-tw': ('🇹🇼', '中文'),
   'zh-hk': ('🇭🇰', '中文'),
 };
-
-BetterPlayerDrmConfiguration? _drm(PlayableStream stream) {
-  final drm = stream.drm;
-  if (drm == null) return null;
-  return switch (drm.scheme) {
-    DrmScheme.clearKey => BetterPlayerDrmConfiguration(
-      drmType: BetterPlayerDrmType.clearKey,
-      clearKey: drm.clearKeyJson,
-    ),
-    DrmScheme.widevine => BetterPlayerDrmConfiguration(
-      drmType: BetterPlayerDrmType.widevine,
-      licenseUrl: drm.licenseUrl,
-      headers: stream.headers,
-    ),
-    DrmScheme.fairPlay => null,
-    DrmScheme.unsupported => null,
-  };
-}

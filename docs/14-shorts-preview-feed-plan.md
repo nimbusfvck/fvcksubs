@@ -212,7 +212,7 @@ returned `403` with `content-type: application/vnd.yt-ump` for both video and
 audio — YouTube now serves all formats through the SABR/UMP delivery
 protocol, which rejects plain HTTP range requests. This is a YouTube
 platform-side change, not a library defect, and it means the resolved URLs
-cannot be handed to `BetterPlayer`/`MediaKit` as a `DirectPreviewSource`
+cannot be handed to the native player as a `DirectPreviewSource`
 regardless of which Dart extractor library performs the resolution.
 
 `darttubefix` was removed from `apps/app/pubspec.yaml` after this result; it
@@ -258,7 +258,7 @@ failed. Two caveats remain before promoting this into `AppPreviewPlayer`:
   Depending on it means pinning a `git` dependency to someone else's branch,
   which YouTube's ongoing anti-extraction changes could break without
   warning, same as any reverse-engineered client spoof.
-- Physical-device audio/video playback through `BetterPlayer`/`MediaKit`
+- Physical-device audio/video playback through the native `video_player` route
   (the remaining item in the §7 reliability gate) has not been tested — only
   CLI-level metadata/manifest/byte-range checks have run.
 
@@ -267,7 +267,7 @@ until this is either promoted (pin to a specific commit, not a mutable
 branch) or abandoned in favor of the official iframe path.
 
 Feature widgets depend on an injected app preview-player entry point rather
-than constructing BetterPlayer, MediaKit, or a YouTube controller directly:
+than constructing a native player or a YouTube controller directly:
 
 ```text
 existing player module
@@ -277,8 +277,7 @@ existing player module
     │       └── PlayableStream
     └── direct PlayableStream
         └── existing platform player builder
-            ├── BetterPlayer on Android
-            └── MediaKit on iOS and macOS
+            └── video_player on Android, iOS, and macOS
 ```
 
 `AppPreviewPlayer` is a small dispatcher inside `apps/app/lib/player`, not a

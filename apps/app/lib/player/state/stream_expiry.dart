@@ -2,11 +2,11 @@
 ///
 /// Live providers hand out URLs that are only valid until a wall-clock
 /// instant baked into the query string, not for a span measured from when
-/// playback starts. Once that instant passes, every playlist reload and
-/// every segment answers 403 — and libmpv reacts by sitting in
-/// `paused-for-cache` forever rather than failing, so nothing downstream
-/// notices. Reading the deadline out of the URL lets playback re-resolve
-/// *before* the stream dies instead of recovering after it.
+/// playback starts. Once that instant passes, every playlist reload and every
+/// segment answers 403. Some native players keep retrying instead of
+/// surfacing a terminal error, so nothing downstream notices. Reading the
+/// deadline out of the URL lets playback re-resolve *before* the stream dies
+/// instead of recovering after it.
 ///
 /// Only absolute deadlines are understood. A relative lifetime (AWS SigV4's
 /// `X-Amz-Expires`) is combined with its `X-Amz-Date` issue time; on its own

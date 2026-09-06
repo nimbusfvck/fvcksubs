@@ -17,10 +17,9 @@
 # and its generated implementation. It has to keep the class (its *name* is
 # what the lookup is built from) as well as the constructor.
 #
-# Reaches this app through `better_player_plus`, which depends on
-# `androidx.work:work-runtime` for its download queue — the crash happens on
-# startup regardless of whether anything is ever downloaded, because
-# WorkManager initializes itself through androidx.startup.
+# Some Android runtime dependencies reach WorkManager's Room implementation
+# through reflection. The crash happens at startup before the app uses it,
+# because WorkManager initializes itself through androidx.startup.
 -keep class * extends androidx.room.RoomDatabase { <init>(); }
 
 # Room resolves these by name from the generated code as well.

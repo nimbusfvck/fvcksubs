@@ -156,9 +156,8 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
       if (!mounted) return;
       final track = SubtitleTrack(
         language: result.language,
-        // BetterPlayer's file subtitle source expects a filesystem path
-        // (rather than a file:// URI); the Darwin backend accepts the same
-        // path through libmpv.
+        // The native video_player backend accepts a local filesystem path for
+        // captions; keep the materialized path rather than a file:// URI.
         url: path,
         label: '${result.source} · ${result.name}',
       );

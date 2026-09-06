@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
-import 'video_player_vod.dart';
+import 'video_player_view.dart';
 import '../state/subtitle_preference_controller.dart';
 
-/// Routes every supported playback source through the official video_player
-/// backend while investigating live buffering across native player engines.
+/// Routes every supported playback source through the app's native player.
 @visibleForTesting
 bool usesVideoPlayer() => true;
 
@@ -35,7 +34,7 @@ Widget platformPlayerBuilder(
   Key? key,
 }) {
   assert(usesVideoPlayer());
-  return VideoPlayerVodView(
+  return VideoPlayerView(
     key: key,
     stream: stream,
     isLive: isLive,

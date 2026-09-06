@@ -254,7 +254,7 @@ flowchart TB
 
 | Concern | Decision |
 |---|---|
-| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. Native live latency and buffering are configured through optional `VideoPlayerLiveOptions`, whose defaults are conservative for AVPlayer and Media3; the configuration is ignored for on-demand sources. On libmpv platforms, live streams use an in-memory stability buffer and wait briefly for it before first frame or after an underrun; this deliberately stays a little behind the edge to avoid repeated rebuffering. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
+| Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. Native live latency and buffering are configured through optional `VideoPlayerLiveOptions`, whose defaults are conservative for AVPlayer and Media3; the configuration is ignored for on-demand sources. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
 | Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
 | Episode list | Episodic playback exposes the loaded guide as an app-owned horizontal rail above the timeline. The current episode is centered and highlighted; selecting another available episode replaces the current player route through the normal playback workflow. Unreleased episodes remain visible but disabled. |
 | Playback speed | The top-right Settings action opens an app-owned popup with 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x presets. The selected speed is applied through the shared player contract across native backends and remains active when the current player controller is replaced. |
@@ -272,19 +272,18 @@ flowchart TB
   combination is dropped rather than optimistically attempted, and the user is told when
   nothing survives. The current buffering investigation routes every supported clear source on
   Android, macOS, and iOS through the official `video_player` backend, forwarding
-  extension-provided HTTP headers and external subtitles. This is a temporary diagnostic route:
-  DASH, a separate `audioUrl`, and non-HLS containers can fail on a platform whose native
-  video_player implementation does not support them. Widevine now routes through Media3 on
+  extension-provided HTTP headers and external subtitles. Unsupported combinations—including
+  separate `audioUrl` tracks and containers not handled by the native implementation—are
+  rejected explicitly rather than silently dropping media. Widevine routes through Media3 on
   Android and FairPlay through AVFoundation on iOS/macOS; both require a platform view and a
-  network source. ClearKey uses an inline JSON key set on Android; unsupported
-  or incomplete DRM declarations remain rejected.
-- **Live routing temporarily has no backend fallback.** This isolates native player behavior for
-  a source: if video_player stalls or rejects it, the app reports that failure rather than silently
-  retrying it through MediaKit or BetterPlayer.
+  network source. ClearKey uses an inline JSON key set on Android; unsupported or incomplete
+  DRM declarations remain rejected.
+- **Native playback has one backend.** If video_player stalls or rejects a source, the app reports
+  that failure and keeps retry/source-switch controls available; it does not silently switch to a
+  second player implementation.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
   arrow keys seek five seconds, F toggles fullscreen, and Escape exits it. This
-  keeps source, subtitle, quality, retry, and Up Next controls available across player backends. MediaKit's
-  fullscreen route uses its desktop controls, which own pointer input and keyboard focus while fullscreen.
+  keeps source, subtitle, quality, retry, and Up Next controls available across platforms.
 - **Audio tracks** are exposed through the shared player contract whenever video_player reports
   more than one track. The same picker and selection UI is used on every backend.
 - **Fonts are bundled, not fetched at runtime.** A runtime font fetch lays the first frame

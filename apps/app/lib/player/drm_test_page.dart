@@ -4,7 +4,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
-import 'widgets/video_player_vod.dart';
+import 'widgets/video_player_view.dart';
 
 const _widevineTestStream = PlayableStream(
   url:
@@ -121,7 +121,7 @@ class _DrmTestPageState extends State<DrmTestPage> {
                   ),
                 ),
                 Expanded(
-                  child: VideoPlayerVodView(
+                  child: VideoPlayerView(
                     key: ValueKey<String>(stream.url),
                     stream: stream,
                   ),

@@ -60,9 +60,10 @@ Not allowed in the shell:
 
 - `Participant.score` is in the protocol but not rendered. Remove it unless a
   general event-result UI is part of v2.
-- `audioUrl` is promised by the current protocol. Keep and implement it unless
-  supported native players cannot consume separate audio; in that case reject
-  it explicitly and remove it only in a documented breaking release.
+- `audioUrl` is promised by the current protocol. The app's native player accepts
+  one media URL, so the current preview resolver rejects separate audio/video
+  results explicitly rather than dropping the audio silently. A future breaking
+  protocol release can remove the field once all producers migrate.
 - Generic `facts` must remain display-only. Routing, playback, availability,
   identity, and resume data may not be hidden inside it.
 

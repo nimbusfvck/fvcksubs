@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fvcksubs_app/player/widgets/video_player_vod.dart';
+import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 
 void main() {
   test('subtitle overlay keeps the same viewport rect across resolutions', () {

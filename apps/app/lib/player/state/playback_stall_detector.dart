@@ -1,10 +1,9 @@
 /// Notices playback that has stopped moving without reporting a failure.
 ///
-/// A dead signed URL does not surface as an error on either backend. libmpv
-/// keeps the file open and flips to `paused-for-cache`; ExoPlayer retries the
-/// load. Both leave the app watching a spinner with no event to react to, so
-/// the only reliable signal is the one the user sees: buffering, and a
-/// position that has stopped advancing.
+/// A dead signed URL does not always surface as an error from the native
+/// player. It can leave the app watching a spinner with no event to react to,
+/// so the reliable signal is the one the user sees: buffering, and a position
+/// that has stopped advancing.
 library;
 
 /// Confirms a stall once [threshold] passes with playback wanted but frozen.
@@ -16,9 +15,8 @@ class PlaybackStallDetector {
 
   /// How long a frozen position must persist before it counts as a stall.
   ///
-  /// Comfortably past one aborted request and its retry — libmpv is given an
-  /// eight-second network timeout — so an ordinary hiccup resolves itself
-  /// rather than costing a re-resolve, while a dead URL is caught quickly.
+  /// Long enough for an aborted request and its retry to resolve without
+  /// costing a re-resolve, while a dead URL is still caught quickly.
   final Duration threshold;
 
   Duration? _lastPosition;
@@ -34,12 +32,11 @@ class PlaybackStallDetector {
   /// until playback makes progress again, so a caller can act without
   /// debouncing.
   ///
-  /// A rebuffer is progress. libmpv holds the picture until it has rebuilt
-  /// its cushion, and on a live stream that cushion only refills as the
-  /// broadcast produces it — the position is frozen for as long as it takes,
-  /// while [bufferedPosition] climbs the whole time. Re-resolving there
-  /// destroys a stream that was seconds from resuming and starts the wait
-  /// over. Only a player fetching nothing *and* showing nothing has stalled.
+  /// A rebuffer is progress. The native player can hold the picture while it
+  /// rebuilds its cushion, and on a live stream that cushion only refills as
+  /// the broadcast produces it. Re-resolving there destroys a stream that was
+  /// seconds from resuming and starts the wait over. Only a player fetching
+  /// nothing *and* showing nothing has stalled.
   bool sample({
     required Duration position,
     required Duration bufferedPosition,
@@ -105,8 +102,8 @@ class PlaybackStallDetector {
   /// Holds the watchdog off for [grace] after a deliberate interruption.
   ///
   /// A seek and an audio-track switch both freeze the position on purpose:
-  /// libmpv throws its cushion away and refills from the new point, and on a
-  /// slow upstream that takes longer than [threshold]. Nothing in the signals
+  /// The native player throws its cushion away and refills from the new point,
+  /// and on a slow upstream that takes longer than [threshold]. Nothing in the signals
   /// available tells that apart from a source that died, so the viewer's own
   /// action is what says so — without it, asking for another audio track
   /// re-resolves the source, restarts playback and drops the track that was

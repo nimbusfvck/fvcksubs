@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../navigation/app_route_observer.dart';
-import 'stream_player.dart';
+import 'platform_player_builder.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.
 class TrailerPreview extends StatefulWidget {
@@ -73,21 +73,19 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
         duration: const Duration(milliseconds: 180),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final aspectRatio = constraints.maxHeight <= 0
-                ? 16 / 9
-                : constraints.maxWidth / constraints.maxHeight;
-            return BetterPlayerView(
-              stream: PlayableStream(
+            return platformPlayerBuilder(
+              context,
+              PlayableStream(
                 url: widget.trailer.url,
                 label: widget.trailer.url,
               ),
-              aspectRatio: aspectRatio,
-              looping: true,
-              muted: true,
-              fit: BoxFit.cover,
+              isLive: false,
               playing: widget.playing,
               preview: true,
-              isLive: false,
+              muted: true,
+              looping: true,
+              fit: BoxFit.cover,
+              wakelock: false,
               onPlaybackReady: _onPlaybackReady,
             );
           },

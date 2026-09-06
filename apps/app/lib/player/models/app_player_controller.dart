@@ -135,9 +135,9 @@ class AppAudioTrack {
   final String? language;
   final String? details;
 
-  /// The backend's own id for this track — libmpv's `aid`, ExoPlayer's track
-  /// index. Kept alongside [id] because [id] is built for the picker and is
-  /// not what the backend answers with when asked what is playing.
+  /// The native backend's own id for this track. Kept alongside [id] because
+  /// [id] is built for the picker and is not what the backend answers with
+  /// when asked what is playing.
   final String? nativeId;
 
   final Object? platformTrack;
