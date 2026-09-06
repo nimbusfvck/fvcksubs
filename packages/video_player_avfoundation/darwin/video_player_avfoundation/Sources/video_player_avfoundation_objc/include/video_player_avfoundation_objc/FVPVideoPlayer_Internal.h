@@ -33,6 +33,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// again.
 @property(nonatomic, readonly) BOOL isInitialized;
 
+#if TARGET_OS_IOS
+/// The layer used as the source for Picture in Picture.
+///
+/// Texture and platform-view players may provide their own presentation layer;
+/// the base player owns a detached layer as a fallback.
+@property(nonatomic, readonly, nullable) AVPlayerLayer *pictureInPicturePlayerLayer;
+
+/// Creates and arms the AVKit controller for automatic inline PiP.
+- (void)armPictureInPicture;
+#endif
+
 /// Updates the playing state of the video player.
 - (void)updatePlayingState;
 @end

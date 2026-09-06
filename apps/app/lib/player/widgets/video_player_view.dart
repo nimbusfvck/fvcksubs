@@ -113,6 +113,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
   Timer? _playbackDiagnosticsTimer;
+  StreamSubscription<vp.VideoEvent>? _videoEventSubscription;
   DateTime? _startupHealthStartedAt;
   bool _startupHealthPassed = false;
   bool _disposed = false;
@@ -133,6 +134,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         (_) => _wakelock?.refresh(),
       );
     }
+    // iOS PiP needs a native AVPlayerLayer. Full playback therefore uses the
+    // platform view on iOS; previews remain texture-backed because they never
+    // enter the PiP workflow.
+    final usePlatformView =
+        widget.stream.isProtected || (Platform.isIOS && !widget.preview);
     _player = vp.VideoPlayerController.networkUrl(
       Uri.parse(widget.stream.url),
       httpHeaders: widget.stream.headers,
@@ -143,7 +149,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             )
           : null,
       drmConfiguration: videoPlayerDrmConfiguration(widget.stream),
-      viewType: widget.stream.isProtected
+      viewType: usePlatformView
           ? vp.VideoViewType.platformView
           : vp.VideoViewType.textureView,
     );
@@ -154,6 +160,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       },
     );
     _player.addListener(_onValueChanged);
+    _videoEventSubscription = _player.videoEvents.listen((event) {
+      if (event.eventType == vp.VideoEventType.pictureInPictureRestore) {
+        _adapter.reportPictureInPictureRestore();
+      }
+    });
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
   }
@@ -470,6 +481,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       _wakelock?.release();
     }
     _player.removeListener(_onValueChanged);
+    unawaited(_videoEventSubscription?.cancel());
     _adapter.dispose();
     unawaited(_player.dispose());
     super.dispose();

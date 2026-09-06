@@ -148,6 +148,13 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
   }
 
+  void reportPictureInPictureRestore() {
+    if (_disposed) return;
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureRestore),
+    );
+  }
+
   @override
   Future<void> play() => _player.play();
   @override
@@ -180,6 +187,10 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   Future<void> toggleFullScreen() async {}
   @override
   Future<void> exitFullScreen() async {}
+  @override
+  Future<bool> startPictureInPicture() => _player.startPictureInPicture();
+  @override
+  Future<void> stopPictureInPicture() => _player.stopPictureInPicture();
   @override
   Future<void> setFit(PlayerFitMode mode) async => onSetFit(mode);
 

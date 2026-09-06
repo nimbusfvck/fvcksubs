@@ -8,6 +8,10 @@
 #import <CoreMedia/CoreMedia.h>
 #import <GLKit/GLKit.h>
 
+#if TARGET_OS_IOS
+@import AVKit;
+#endif
+
 #import "./include/video_player_avfoundation_objc/AVAssetTrackUtils.h"
 
 static void *timeRangeContext = &timeRangeContext;
@@ -20,6 +24,15 @@ static void *rateContext = &rateContext;
 /// AVURLAsset.variants is documented via Apple's current async-loading API docs:
 /// https://developer.apple.com/documentation/avfoundation/avpartialasyncproperty/variants
 static NSString *const kFVPAssetVariantsKey = @"variants";
+
+#if TARGET_OS_IOS
+@interface FVPVideoPlayer () <AVPictureInPictureControllerDelegate>
+@property(nonatomic, strong, nullable) AVPictureInPictureController *pictureInPictureController;
+@property(nonatomic, copy, nullable) void (^pictureInPictureStartCompletion)(NSNumber *, FlutterError *);
+@property(nonatomic) BOOL pictureInPictureStartPending;
+@property(nonatomic) BOOL disposeRequestedWhilePictureInPicture;
+@end
+#endif
 
 /// Registers KVO observers on 'object' for each entry in 'observations', which must be a
 /// dictionary mapping KVO keys to NSValue-wrapped context pointers.
@@ -80,6 +93,10 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   // Whether or not player and player item listeners have ever been registered.
   BOOL _listenersRegistered;
 }
+
+#if TARGET_OS_IOS
+@synthesize pictureInPicturePlayerLayer = _pictureInPicturePlayerLayer;
+#endif
 
 - (instancetype)initWithPlayerItem:(NSObject<FVPAVPlayerItem> *)item
                          avFactory:(id<FVPAVFactory>)avFactory
@@ -148,6 +165,11 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 
   _player = [avFactory playerWithPlayerItem:item];
   _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+#if TARGET_OS_IOS
+  _pictureInPicturePlayerLayer = [AVPlayerLayer playerLayerWithPlayer:_player];
+  _pictureInPicturePlayerLayer.opacity = 0.0f;
+  _pictureInPicturePlayerLayer.frame = viewProvider.viewController.view.bounds;
+#endif
 
   // Configure output. AVVideoColorPropertiesKey must be declared on the output settings (not on
   // pixel buffer attributes, where AVFoundation silently ignores it) so that HDR sources are
@@ -178,6 +200,17 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)disposeWithError:(FlutterError *_Nullable *_Nonnull)error {
+#if TARGET_OS_IOS
+  if (self.pictureInPictureController.pictureInPictureActive ||
+      self.pictureInPictureStartPending) {
+    self.disposeRequestedWhilePictureInPicture = YES;
+    return;
+  }
+#endif
+  [self finishDisposeWithError:error];
+}
+
+- (void)finishDisposeWithError:(FlutterError *_Nullable *_Nonnull)error {
   // In some hot restart scenarios, dispose can be called twice, so no-op after the first time.
   if (_disposed) {
     return;
@@ -198,6 +231,187 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
   [self.eventListener videoPlayerWasDisposed];
 }
+
+#if TARGET_OS_IOS
+- (AVPlayerLayer *)pictureInPicturePlayerLayer {
+  return _pictureInPicturePlayerLayer;
+}
+
+- (void)setPictureInPicturePlayerLayer:(AVPlayerLayer *)playerLayer {
+  if (_pictureInPicturePlayerLayer == playerLayer) {
+    return;
+  }
+  if (self.pictureInPictureController.pictureInPictureActive ||
+      self.pictureInPictureStartPending) {
+    NSLog(@"[FVPVideoPlayer] ignoring PiP layer replacement during active request");
+    return;
+  }
+  [_pictureInPicturePlayerLayer removeFromSuperlayer];
+  _pictureInPicturePlayerLayer = playerLayer;
+  [self armPictureInPicture];
+}
+
+- (void)armPictureInPicture {
+  if (![AVPictureInPictureController isPictureInPictureSupported]) {
+    return;
+  }
+
+  AVPlayerLayer *playerLayer = self.pictureInPicturePlayerLayer;
+  if (playerLayer == nil) {
+    return;
+  }
+
+  if (self.pictureInPictureController == nil ||
+      self.pictureInPictureController.playerLayer != playerLayer) {
+    AVPictureInPictureController *controller =
+        [[AVPictureInPictureController alloc] initWithPlayerLayer:playerLayer];
+    if (controller == nil) {
+      NSLog(@"[FVPVideoPlayer] PiP controller creation failed while arming layer=%@",
+            playerLayer);
+      return;
+    }
+    self.pictureInPictureController = controller;
+    self.pictureInPictureController.delegate = self;
+  }
+
+  if (@available(iOS 14.2, *)) {
+    self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = YES;
+  }
+}
+
+- (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion {
+  if (![AVPictureInPictureController isPictureInPictureSupported]) {
+    NSLog(@"[FVPVideoPlayer] PiP unsupported");
+    completion(@NO, nil);
+    return;
+  }
+
+  AVPlayerLayer *playerLayer = self.pictureInPicturePlayerLayer;
+  if (playerLayer == nil) {
+    NSLog(@"[FVPVideoPlayer] PiP missing player layer");
+    completion(@NO, nil);
+    return;
+  }
+  if (CGRectIsEmpty(playerLayer.bounds)) {
+    if (playerLayer.superlayer != nil) {
+      playerLayer.frame = playerLayer.superlayer.bounds;
+    } else {
+      playerLayer.frame = self.viewProvider.viewController.view.bounds;
+    }
+  }
+
+  if (self.pictureInPictureController == nil ||
+      self.pictureInPictureController.playerLayer != playerLayer) {
+    [self armPictureInPicture];
+    if (self.pictureInPictureController == nil ||
+        self.pictureInPictureController.playerLayer != playerLayer) {
+      completion(@NO, nil);
+      return;
+    }
+  }
+
+  if (self.pictureInPictureController.pictureInPictureActive) {
+    NSLog(@"[FVPVideoPlayer] PiP already active");
+    completion(@YES, nil);
+    return;
+  }
+
+  if (!self.pictureInPictureController.pictureInPicturePossible) {
+    NSLog(@"[FVPVideoPlayer] PiP not possible status=%ld rate=%f layer_frame=%@ has_superlayer=%d",
+          (long)self.player.currentItem.status, self.player.rate,
+          NSStringFromCGRect(playerLayer.frame), playerLayer.superlayer != nil);
+    completion(@NO, nil);
+    return;
+  }
+
+  NSLog(@"[FVPVideoPlayer] PiP start requested");
+  self.pictureInPictureStartPending = YES;
+  self.pictureInPictureStartCompletion = completion;
+  [self.pictureInPictureController startPictureInPicture];
+
+  __weak FVPVideoPlayer *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+                   FVPVideoPlayer *strongSelf = weakSelf;
+                   if (strongSelf == nil || !strongSelf.pictureInPictureStartPending) {
+                     return;
+                   }
+                   NSLog(@"[FVPVideoPlayer] PiP start timed out");
+                   strongSelf.pictureInPictureStartPending = NO;
+                   void (^pendingCompletion)(NSNumber *, FlutterError *) =
+                       strongSelf.pictureInPictureStartCompletion;
+                   strongSelf.pictureInPictureStartCompletion = nil;
+                   if (pendingCompletion != nil) {
+                     pendingCompletion(@NO, nil);
+                   }
+                   if (strongSelf.disposeRequestedWhilePictureInPicture) {
+                     strongSelf.disposeRequestedWhilePictureInPicture = NO;
+                     FlutterError *disposeError;
+                     [strongSelf finishDisposeWithError:&disposeError];
+                   }
+                 });
+}
+
+- (void)stopPictureInPicture:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.pictureInPictureController.pictureInPictureActive) {
+    [self.pictureInPictureController stopPictureInPicture];
+  }
+}
+
+- (void)pictureInPictureControllerDidStartPictureInPicture:
+    (AVPictureInPictureController *)pictureInPictureController {
+  NSLog(@"[FVPVideoPlayer] PiP did start");
+  self.pictureInPictureStartPending = NO;
+  void (^completion)(NSNumber *, FlutterError *) = self.pictureInPictureStartCompletion;
+  self.pictureInPictureStartCompletion = nil;
+  if (completion != nil) {
+    completion(@YES, nil);
+  }
+}
+
+- (void)pictureInPictureController:
+            (AVPictureInPictureController *)pictureInPictureController
+    failedToStartPictureInPictureWithError:(NSError *)error {
+  NSLog(@"[FVPVideoPlayer] PiP failed to start: %@", error);
+  self.pictureInPictureStartPending = NO;
+  void (^completion)(NSNumber *, FlutterError *) = self.pictureInPictureStartCompletion;
+  self.pictureInPictureStartCompletion = nil;
+  if (completion != nil) {
+    completion(@NO, nil);
+  }
+  if (self.disposeRequestedWhilePictureInPicture) {
+    self.disposeRequestedWhilePictureInPicture = NO;
+    FlutterError *disposeError;
+    [self finishDisposeWithError:&disposeError];
+  }
+}
+
+- (void)pictureInPictureControllerDidStopPictureInPicture:
+    (AVPictureInPictureController *)pictureInPictureController {
+  NSLog(@"[FVPVideoPlayer] PiP did stop");
+  self.pictureInPictureStartPending = NO;
+  if (self.disposeRequestedWhilePictureInPicture) {
+    self.disposeRequestedWhilePictureInPicture = NO;
+    FlutterError *error;
+    [self finishDisposeWithError:&error];
+  }
+}
+
+- (void)pictureInPictureController:
+            (AVPictureInPictureController *)pictureInPictureController
+    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler:
+        (void (^)(BOOL success))completionHandler {
+  [self.eventListener videoPlayerDidRequestPictureInPictureRestore];
+  completionHandler(YES);
+}
+#else
+- (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion {
+  completion(@NO, nil);
+}
+
+- (void)stopPictureInPicture:(FlutterError *_Nullable *_Nonnull)error {
+}
+#endif
 
 - (void)setEventListener:(NSObject<FVPVideoEventListener> *)eventListener {
   _eventListener = eventListener;

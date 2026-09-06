@@ -15,7 +15,8 @@ import 'package:pigeon/pigeon.dart';
         'darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.m',
     objcOptions: ObjcOptions(
       prefix: 'FVP',
-      headerIncludePath: './include/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.h',
+      headerIncludePath:
+          './include/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.h',
     ),
     copyrightHeader: 'pigeons/copyright.txt',
   ),
@@ -124,5 +125,15 @@ abstract class VideoPlayerInstanceApi {
   void selectVideoTrack(int bitrate);
 
   @ObjCSelector('setPreventsDisplaySleepDuringVideoPlayback:')
-  void setPreventsDisplaySleepDuringVideoPlayback(bool preventsDisplaySleepDuringVideoPlayback);
+  void setPreventsDisplaySleepDuringVideoPlayback(
+    bool preventsDisplaySleepDuringVideoPlayback,
+  );
+
+  /// Starts PiP and completes only after AVKit reports that it started.
+  @async
+  @ObjCSelector('startPictureInPicture')
+  bool startPictureInPicture();
+
+  @ObjCSelector('stopPictureInPicture')
+  void stopPictureInPicture();
 }

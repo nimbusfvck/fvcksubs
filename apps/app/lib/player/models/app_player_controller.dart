@@ -43,7 +43,7 @@ class AppPlayerValue {
   );
 }
 
-enum AppPlayerEventType { completed, error }
+enum AppPlayerEventType { completed, error, pictureInPictureRestore }
 
 class AppPlayerEvent {
   const AppPlayerEvent(this.type, {this.error});
@@ -334,4 +334,6 @@ abstract interface class AppPlayerController {
   Future<void> setViewportAspectRatio(double ratio);
   Future<void> toggleFullScreen();
   Future<void> exitFullScreen();
+  Future<bool> startPictureInPicture();
+  Future<void> stopPictureInPicture();
 }

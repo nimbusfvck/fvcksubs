@@ -115,6 +115,10 @@
   [self sendOrQueue:@{@"event" : @"isPlayingStateUpdate", @"isPlaying" : @(playing)}];
 }
 
+- (void)videoPlayerDidRequestPictureInPictureRestore {
+  [self sendOrQueue:@{@"event" : @"pictureInPictureRestore"}];
+}
+
 - (void)videoPlayerWasDisposed {
   [self.eventChannel setStreamHandler:nil];
 }

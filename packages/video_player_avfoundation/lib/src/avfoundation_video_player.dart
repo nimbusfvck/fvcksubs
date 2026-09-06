@@ -242,6 +242,16 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
   }
 
   @override
+  Future<bool> startPictureInPicture(int playerId) {
+    return _playerWith(id: playerId).startPictureInPicture();
+  }
+
+  @override
+  Future<void> stopPictureInPicture(int playerId) {
+    return _playerWith(id: playerId).stopPictureInPicture();
+  }
+
+  @override
   Future<List<VideoAudioTrack>> getAudioTracks(int playerId) async {
     final List<MediaSelectionAudioTrackData> nativeData = await _playerWith(
       id: playerId,
@@ -429,6 +439,10 @@ class _PlayerInstance {
     preventsDisplaySleepDuringVideoPlayback,
   );
 
+  Future<bool> startPictureInPicture() => _api.startPictureInPicture();
+
+  Future<void> stopPictureInPicture() => _api.stopPictureInPicture();
+
   Future<void> seekTo(Duration position) {
     return _api.seekTo(position.inMilliseconds);
   }
@@ -491,6 +505,9 @@ class _PlayerInstance {
       'isPlayingStateUpdate' => VideoEvent(
         eventType: VideoEventType.isPlayingStateUpdate,
         isPlaying: map['isPlaying'] as bool,
+      ),
+      'pictureInPictureRestore' => VideoEvent(
+        eventType: VideoEventType.pictureInPictureRestore,
       ),
       _ => VideoEvent(eventType: VideoEventType.unknown),
     });

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
+import '../detail/detail_page_v2.dart';
 import '../detail/episode_target_v2.dart';
 import 'diagnostics/player_diagnostics.dart';
 import '../library/library_controller.dart';
@@ -161,6 +162,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool? _landscape;
   bool _allowPop = false;
   bool _backInFlight = false;
+  bool _pipDetailShown = false;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
@@ -363,6 +365,10 @@ class _PlayerPageState extends State<PlayerPage> {
     AppPlayerEvent event,
   ) {
     if (attempt != _playbackAttempt) return;
+    if (event.type == AppPlayerEventType.pictureInPictureRestore) {
+      _restorePictureInPicturePlayer();
+      return;
+    }
     if (event.type == AppPlayerEventType.completed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
@@ -784,23 +790,61 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
     }
-    if (initialized) {
-      unawaited(_requestPictureInPicture(controller!));
-    }
+    final started = initialized
+        ? await _requestPictureInPicture(controller!)
+        : false;
     if (!mounted) return;
     _backInFlight = false;
-    _popRoute();
+    if (started) {
+      _showPictureInPictureDetail();
+    } else {
+      _popRoute();
+    }
   }
 
-  Future<void> _requestPictureInPicture(AppPlayerController controller) async {
+  Future<bool> _requestPictureInPicture(AppPlayerController controller) async {
     try {
       final started = await controller.startPictureInPicture();
       if (kDebugMode) debugPrint('[PlayerPiP] start_result=$started');
+      return started;
     } catch (error) {
       if (kDebugMode) debugPrint('[PlayerPiP] start_error=$error');
-      // PiP is optional. The route has already been dismissed, so a native
-      // capability or state failure simply leaves the viewer on the detail.
+      return false;
     }
+  }
+
+  void _showPictureInPictureDetail() {
+    if (_pipDetailShown || !mounted) return;
+    _pipDetailShown = true;
+    unawaited(
+      Navigator.of(context)
+          .push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => _PictureInPictureDetailPage(
+                item: widget.media.item,
+                onExit: _closePictureInPictureDetail,
+              ),
+            ),
+          )
+          .whenComplete(() => _pipDetailShown = false),
+    );
+  }
+
+  void _restorePictureInPicturePlayer() {
+    if (!_pipDetailShown || !mounted) return;
+    _pipDetailShown = false;
+    Navigator.of(context).pop();
+  }
+
+  void _closePictureInPictureDetail() {
+    if (!_pipDetailShown || !mounted) return;
+    _pipDetailShown = false;
+    final navigator = Navigator.of(context);
+    unawaited(_controller?.stopPictureInPicture());
+    navigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && navigator.canPop()) navigator.pop();
+    });
   }
 
   void _togglePlayback() {
@@ -1126,5 +1170,24 @@ class _PlayerPageState extends State<PlayerPage> {
         ),
       ),
     ),
+  );
+}
+
+/// Keeps the Player route alive underneath Detail while the native PiP window
+/// is active. Expanding PiP then only needs to pop this temporary detail route
+/// to reveal the original player and its still-live native view.
+class _PictureInPictureDetailPage extends StatelessWidget {
+  const _PictureInPictureDetailPage({required this.item, required this.onExit});
+
+  final MediaItemV2 item;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) => PopScope<void>(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) onExit();
+    },
+    child: DetailPageV2(item: item),
   );
 }

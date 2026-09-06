@@ -35,6 +35,12 @@
 
 @implementation FVPTextureBasedVideoPlayer
 
+#if TARGET_OS_IOS
+- (AVPlayerLayer *)pictureInPicturePlayerLayer {
+  return self.playerLayer;
+}
+#endif
+
 - (instancetype)initWithPlayerItem:(NSObject<FVPAVPlayerItem> *)item
                       frameUpdater:(FVPFrameUpdater *)frameUpdater
                        displayLink:(NSObject<FVPDisplayLink> *)displayLink
@@ -59,7 +65,12 @@
 #else
     CALayer *flutterLayer = viewProvider.view.layer;
 #endif
+    self.playerLayer.opacity = 0.0f;
+    self.playerLayer.frame = flutterLayer.bounds;
     [flutterLayer addSublayer:self.playerLayer];
+#if TARGET_OS_IOS
+    [self armPictureInPicture];
+#endif
   }
   return self;
 }

@@ -34,6 +34,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)videoPlayerDidUpdateSeekableTimeRanges:(NSArray<NSArray<NSNumber *> *> *)regions;
 /// Called when the player starts or stops playing.
 - (void)videoPlayerDidSetPlaying:(BOOL)playing;
+/// Called when AVKit asks the app to restore its UI after PiP expansion.
+- (void)videoPlayerDidRequestPictureInPictureRestore;
 /// Called when the video player has been disposed on the Dart side.
 - (void)videoPlayerWasDisposed;
 @end

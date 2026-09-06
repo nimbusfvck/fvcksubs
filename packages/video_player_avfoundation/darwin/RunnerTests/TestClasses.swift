@@ -294,6 +294,7 @@ final class StubEventListener: NSObject, FVPVideoEventListener {
     initializationSize = size
   }
   func videoPlayerDidSetPlaying(_ playing: Bool) {}
+  func videoPlayerDidRequestPictureInPictureRestore() {}
   func videoPlayerDidStartBuffering() {}
   func videoPlayerDidUpdateBufferRegions(_ regions: [[NSNumber]]!) {}
 

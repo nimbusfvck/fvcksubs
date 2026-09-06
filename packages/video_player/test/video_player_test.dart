@@ -81,6 +81,15 @@ class FakeController extends ValueNotifier<VideoPlayerValue>
   ) async {}
 
   @override
+  Future<bool> startPictureInPicture() async => false;
+
+  @override
+  Future<void> stopPictureInPicture() async {}
+
+  @override
+  Stream<VideoEvent> get videoEvents => const Stream<VideoEvent>.empty();
+
+  @override
   VideoFormat? get formatHint => null;
 
   @override

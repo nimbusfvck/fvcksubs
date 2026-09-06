@@ -133,6 +133,17 @@ abstract class VideoPlayerPlatform extends PlatformInterface {
     bool preventsDisplaySleepDuringVideoPlayback,
   ) async {}
 
+  /// Starts Picture in Picture for the player when the platform supports it.
+  ///
+  /// Returns `true` only after the platform has accepted and started PiP.
+  /// Unsupported platforms return `false`.
+  Future<bool> startPictureInPicture(int playerId) async => false;
+
+  /// Stops Picture in Picture when it is active.
+  ///
+  /// Unsupported platforms ignore this call.
+  Future<void> stopPictureInPicture(int playerId) async {}
+
   /// Sets additional options on web.
   Future<void> setWebOptions(int playerId, VideoPlayerWebOptions options) {
     throw UnimplementedError('setWebOptions() has not been implemented.');
@@ -424,6 +435,9 @@ enum VideoEventType {
   /// This event is fired when the video starts or pauses due to user actions or
   /// phone calls, or other app media such as music players.
   isPlayingStateUpdate,
+
+  /// AVKit requested that the app restore its inline player after PiP expands.
+  pictureInPictureRestore,
 
   /// An unknown event has been received.
   unknown,

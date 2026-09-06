@@ -61,6 +61,10 @@ final class NativeVideoViewFactory: NSObject, FlutterPlatformViewFactory {
     // The Dart code should never attempt to create a platform view for a player that doesn't exist,
     // and there's no mechanism to report an error, so just force-unwrap.
     let player = playerByIdentifierProvider(args.playerId)!
-    return FVPNativeVideoView(player: player.player)
+    let nativeView = FVPNativeVideoView(player: player.player)
+    #if os(iOS)
+      player.setPictureInPicturePlayerLayer(nativeView.playerLayer)
+    #endif
+    return nativeView
   }
 }

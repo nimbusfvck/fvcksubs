@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/detail/detail_page_v2.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
@@ -312,7 +313,7 @@ void main() {
     await controller.close();
   });
 
-  testWidgets('player Back requests Picture in Picture before dismissing', (
+  testWidgets('player Back enters PiP and restores the player on expand', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -344,6 +345,13 @@ void main() {
 
     expect(controller.pictureInPictureCalls, 1);
     expect(find.byType(PlayerPage), findsNothing);
+    expect(find.byType(DetailPageV2), findsOneWidget);
+
+    controller.emitPictureInPictureRestore();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailPageV2), findsNothing);
+    expect(find.byType(PlayerPage), findsOneWidget);
   });
 
   testWidgets('an external track stands in only where the source has none', (
@@ -531,6 +539,12 @@ class _FakePlayerController implements AppPlayerController {
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
+  }
+
+  void emitPictureInPictureRestore() {
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureRestore),
+    );
   }
 
   bool get hasListener => _events.hasListener;

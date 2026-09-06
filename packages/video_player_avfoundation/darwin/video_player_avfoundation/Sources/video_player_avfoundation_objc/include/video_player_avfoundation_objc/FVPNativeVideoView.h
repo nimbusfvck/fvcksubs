@@ -16,6 +16,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// This class wraps an AVPlayer instance and displays its video content.
 #if TARGET_OS_IOS
 @interface FVPNativeVideoView : NSObject <FlutterPlatformView>
+/// The AVPlayerLayer that is actually embedded in the Flutter platform view.
+///
+/// Picture in Picture must use the visible presentation layer rather than a
+/// detached fallback layer.
+@property(nonatomic, readonly) AVPlayerLayer *playerLayer;
 #else
 @interface FVPNativeVideoView : NSView
 #endif

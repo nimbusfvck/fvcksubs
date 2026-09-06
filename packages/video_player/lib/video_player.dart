@@ -25,6 +25,8 @@ export 'package:video_player_platform_interface/video_player_platform_interface.
         VideoPlayerLiveOptions,
         VideoPlayerWebOptions,
         VideoPlayerWebOptionsControls,
+        VideoEvent,
+        VideoEventType,
         VideoViewType;
 
 export 'src/closed_caption_file.dart';
@@ -615,6 +617,8 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
   bool _isDisposed = false;
   Completer<void>? _creatingCompleter;
   StreamSubscription<dynamic>? _eventSubscription;
+  final StreamController<platform_interface.VideoEvent> _platformEventStream =
+      StreamController<platform_interface.VideoEvent>.broadcast();
   _VideoAppLifeCycleObserver? _lifeCycleObserver;
 
   /// The id of a player that hasn't been initialized.
@@ -626,6 +630,14 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
   /// on the plugin.
   @visibleForTesting
   int get playerId => _playerId;
+
+  /// Low-level platform events that do not always change [value].
+  ///
+  /// This is primarily useful for native UI lifecycle events such as iOS PiP
+  /// restore requests. Playback state continues to be exposed through the
+  /// controller value and listeners.
+  Stream<platform_interface.VideoEvent> get videoEvents =>
+      _platformEventStream.stream;
 
   /// Attempts to open the given [dataSource] and load metadata about the video.
   Future<void> initialize() async {
@@ -702,6 +714,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       if (_isDisposed) {
         return;
       }
+      _platformEventStream.add(event);
 
       switch (event.eventType) {
         case platform_interface.VideoEventType.initialized:
@@ -752,6 +765,9 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
           } else {
             value = value.copyWith(isPlaying: event.isPlaying);
           }
+        case platform_interface.VideoEventType.pictureInPictureRestore:
+          // UI lifecycle event; playback value remains unchanged.
+          break;
         case platform_interface.VideoEventType.unknown:
           break;
       }
@@ -793,6 +809,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       _lifeCycleObserver?.dispose();
     }
     _isDisposed = true;
+    await _platformEventStream.close();
     super.dispose();
   }
 
@@ -861,6 +878,22 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       _playerId,
       value.preventsDisplaySleepDuringVideoPlayback,
     );
+  }
+
+  /// Starts Picture in Picture when the current platform and player support it.
+  ///
+  /// Returns `true` after the native player has entered Picture in Picture.
+  /// Returns `false` when the feature is unavailable or cannot start for the
+  /// current player state.
+  Future<bool> startPictureInPicture() async {
+    if (_isDisposedOrNotInitialized) return false;
+    return _videoPlayerPlatform.startPictureInPicture(_playerId);
+  }
+
+  /// Stops Picture in Picture when it is active.
+  Future<void> stopPictureInPicture() async {
+    if (_isDisposed) return;
+    await _videoPlayerPlatform.stopPictureInPicture(_playerId);
   }
 
   Future<void> _applyPlayPause() async {

@@ -76,6 +76,21 @@ void main() {
       verify(playerApi.dispose());
     });
 
+    test('starts and stops Picture in Picture', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(playerId: 1, textureId: 101);
+      when(playerApi.startPictureInPicture()).thenAnswer((_) async => true);
+
+      expect(await player.startPictureInPicture(1), isTrue);
+      await player.stopPictureInPicture(1);
+
+      verify(playerApi.startPictureInPicture());
+      verify(playerApi.stopPictureInPicture());
+    });
+
     test('create with asset', () async {
       final (
         AVFoundationVideoPlayer player,

@@ -36,6 +36,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// A block that will be called when dispose is called.
 @property(nonatomic, nullable, copy) void (^onDisposed)(void);
 
+#if TARGET_OS_IOS
+/// Supplies the visible platform-view layer as the source for Picture in Picture.
+///
+/// The native platform view is created after the player, so the view factory
+/// wires its presentation layer back into the player once both objects exist.
+- (void)setPictureInPicturePlayerLayer:(AVPlayerLayer *)playerLayer;
+#endif
+
 /// Initializes a new instance of FVPVideoPlayer with the given AVPlayerItem, AV factory, and view
 /// provider.
 - (instancetype)initWithPlayerItem:(NSObject<FVPAVPlayerItem> *)item

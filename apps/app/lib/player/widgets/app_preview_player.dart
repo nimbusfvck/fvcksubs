@@ -191,6 +191,8 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
           widget.onError?.call(event.error ?? StateError('Playback failed'));
         case AppPlayerEventType.completed:
           widget.onCompleted?.call();
+        case AppPlayerEventType.pictureInPictureRestore:
+          break;
       }
     });
   }

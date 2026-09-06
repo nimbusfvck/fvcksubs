@@ -37,6 +37,9 @@ let package = Package(
       ],
       cSettings: [
         .headerSearchPath("include/video_player_avfoundation")
+      ],
+      linkerSettings: [
+        .linkedFramework("AVKit", .when(platforms: [.iOS]))
       ]
     ),
     .target(
