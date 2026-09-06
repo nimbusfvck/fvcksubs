@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/models/resolved_source.dart';
@@ -24,6 +25,8 @@ Future<void> _showSheet(
   WidgetTester tester, {
   required List<ResolvedSource> sources,
   Future<List<ResolvedSource>> Function()? onRefresh,
+  ValueListenable<bool>? backgroundSourceLoading,
+  ValueListenable<List<ResolvedSource>>? resolvedSourcesListenable,
 }) => tester.pumpWidget(
   MaterialApp(
     home: Scaffold(
@@ -31,6 +34,8 @@ Future<void> _showSheet(
         resolvedSources: sources,
         current: sources.first,
         onRefresh: onRefresh,
+        backgroundSourceLoading: backgroundSourceLoading,
+        resolvedSourcesListenable: resolvedSourcesListenable,
       ),
     ),
   ),
@@ -88,6 +93,46 @@ void main() {
     expect(find.text('Bein Sport 1'), findsNothing);
     expect(find.text('Kora'), findsOneWidget, reason: 'grouped by provider');
     expect(find.text('Cricfy'), findsOneWidget, reason: 'nothing is lost');
+  });
+
+  testWidgets('background discovery shows progress instead of refresh', (
+    tester,
+  ) async {
+    final loading = ValueNotifier<bool>(true);
+    addTearDown(loading.dispose);
+    await _showSheet(
+      tester,
+      sources: [cricfy],
+      onRefresh: () async => [cricfy, kora],
+      backgroundSourceLoading: loading,
+    );
+
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    loading.value = false;
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.refresh), findsOneWidget);
+  });
+
+  testWidgets('sources arriving while the sheet is open appear immediately', (
+    tester,
+  ) async {
+    final sources = ValueNotifier<List<ResolvedSource>>([cricfy]);
+    addTearDown(sources.dispose);
+    await _showSheet(
+      tester,
+      sources: [cricfy],
+      resolvedSourcesListenable: sources,
+    );
+
+    expect(find.text('Kora'), findsNothing);
+    sources.value = [cricfy, kora];
+    await tester.pump();
+
+    expect(find.text('Kora'), findsOneWidget);
   });
 
   testWidgets('provider variants are expanded like subtitle variants', (

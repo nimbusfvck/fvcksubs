@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../theme/tokens.dart';
 import '../models/resolved_source.dart';
@@ -31,6 +32,8 @@ class PlayerSourcePickerSheet extends StatefulWidget {
     required this.current,
     this.providerNames = const {},
     this.onRefresh,
+    this.backgroundSourceLoading,
+    this.resolvedSourcesListenable,
   });
 
   final List<ResolvedSource> resolvedSources;
@@ -43,15 +46,50 @@ class PlayerSourcePickerSheet extends StatefulWidget {
   /// gets no second chance on its own — this is how the user asks for one.
   final Future<List<ResolvedSource>> Function()? onRefresh;
 
+  /// Tracks source discovery that started before this sheet was opened.
+  ///
+  /// This is separate from [onRefresh]: background discovery must not expose
+  /// a second fan-out while the player is still collecting its first result.
+  final ValueListenable<bool>? backgroundSourceLoading;
+
+  /// Publishes sources that resolve while this sheet is already visible.
+  final ValueListenable<List<ResolvedSource>>? resolvedSourcesListenable;
+
   @override
   State<PlayerSourcePickerSheet> createState() =>
       _PlayerSourcePickerSheetState();
 }
 
 class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
-  late List<ResolvedSource> _sources = widget.resolvedSources;
+  late List<ResolvedSource> _sources;
   bool _refreshing = false;
   _SourceGroup? _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    final listenable = widget.resolvedSourcesListenable;
+    _sources = listenable?.value ?? widget.resolvedSources;
+    listenable?.addListener(_handleResolvedSourcesChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.resolvedSourcesListenable?.removeListener(
+      _handleResolvedSourcesChanged,
+    );
+    super.dispose();
+  }
+
+  void _handleResolvedSourcesChanged() {
+    final listenable = widget.resolvedSourcesListenable;
+    if (!mounted || listenable == null) return;
+    final expandedKey = _expanded?.key;
+    setState(() {
+      _sources = List<ResolvedSource>.of(listenable.value);
+      _expanded = expandedKey == null ? null : _groupForKey(expandedKey);
+    });
+  }
 
   Future<void> _refresh() async {
     final onRefresh = widget.onRefresh;
@@ -91,10 +129,66 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
           : source.source.provider.isNotEmpty
           ? source.source.provider
           : source.source.id;
-      groups.putIfAbsent(key, () => _SourceGroup(label: label, sources: []));
+      groups.putIfAbsent(
+        key,
+        () => _SourceGroup(key: key, label: label, sources: []),
+      );
       groups[key]!.sources.add(source);
     }
     return groups.values.toList();
+  }
+
+  _SourceGroup? _groupForKey(String key) {
+    for (final group in _groupedSources()) {
+      if (group.key == key) return group;
+    }
+    return null;
+  }
+
+  Widget _refreshControl(_SourceGroup? expanded) {
+    if (expanded != null) {
+      return const SizedBox(
+        width: _refreshControlSize,
+        height: _refreshControlSize,
+      );
+    }
+
+    final loading = widget.backgroundSourceLoading;
+    if (loading == null) {
+      return _refreshControlForState(backgroundLoading: false);
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: loading,
+      builder: (context, backgroundLoading, child) =>
+          _refreshControlForState(backgroundLoading: backgroundLoading),
+    );
+  }
+
+  Widget _refreshControlForState({required bool backgroundLoading}) {
+    return SizedBox(
+      width: _refreshControlSize,
+      height: _refreshControlSize,
+      child: backgroundLoading || _refreshing
+          ? const Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.onDarkSoft,
+                ),
+              ),
+            )
+          : widget.onRefresh == null
+          ? null
+          : IconButton(
+              icon: const Icon(Icons.refresh),
+              color: AppColors.onDark,
+              iconSize: 20,
+              tooltip: 'Look for more sources',
+              onPressed: _refresh,
+            ),
+    );
   }
 
   @override
@@ -141,30 +235,7 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: _refreshControlSize,
-                  height: _refreshControlSize,
-                  child: expanded != null || widget.onRefresh == null
-                      ? null
-                      : _refreshing
-                      ? const Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.refresh),
-                          color: AppColors.onDark,
-                          iconSize: 20,
-                          tooltip: 'Look for more sources',
-                          onPressed: _refresh,
-                        ),
-                ),
+                _refreshControl(expanded),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -238,8 +309,13 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
 }
 
 class _SourceGroup {
-  const _SourceGroup({required this.label, required this.sources});
+  const _SourceGroup({
+    required this.key,
+    required this.label,
+    required this.sources,
+  });
 
+  final String key;
   final String label;
   final List<ResolvedSource> sources;
 }

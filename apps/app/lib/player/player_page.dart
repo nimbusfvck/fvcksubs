@@ -113,6 +113,7 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late int _currentIndex;
   late List<ResolvedSource> _resolvedSources;
+  late final ValueNotifier<List<ResolvedSource>> _resolvedSourcesListenable;
   Future<List<ResolvedSource>>? _refetch;
   late final NextEpisodeV2? _nextEpisode;
   bool _showUpNext = false;
@@ -152,6 +153,9 @@ class _PlayerPageState extends State<PlayerPage> {
   int _playbackAttempt = 0;
   final Set<String> _failedSourceIds = <String>{};
   bool _pendingSourcesSettled = true;
+  final ValueNotifier<bool> _backgroundSourceLoading = ValueNotifier<bool>(
+    false,
+  );
   String? _pendingFallbackSourceId;
   String? _pendingFallbackError;
   bool _sourceStarted = false;
@@ -179,6 +183,9 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     _currentIndex = 0;
     _resolvedSources = widget.resolvedSources;
+    _resolvedSourcesListenable = ValueNotifier<List<ResolvedSource>>(
+      _resolvedSources,
+    );
     final item = widget.media.item;
     _nextEpisode = item is EpisodeItemV2 && widget.episodeGuide != null
         ? nextEpisodeOfV2(item, widget.episodeGuide!)
@@ -186,6 +193,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final pending = widget.pendingSources;
     if (pending != null) {
       _pendingSourcesSettled = false;
+      _backgroundSourceLoading.value = true;
       unawaited(_addPendingSources(pending));
     }
     final pendingSegments = widget.pendingSegments;
@@ -236,6 +244,7 @@ class _PlayerPageState extends State<PlayerPage> {
           );
           if (_currentIndex < 0) _currentIndex = 0;
         });
+        _resolvedSourcesListenable.value = merged;
         _continuePendingFallback();
       }
     } catch (_) {
@@ -244,6 +253,7 @@ class _PlayerPageState extends State<PlayerPage> {
     } finally {
       if (mounted) {
         _pendingSourcesSettled = true;
+        _backgroundSourceLoading.value = false;
         _continuePendingFallback();
       }
     }
@@ -282,6 +292,7 @@ class _PlayerPageState extends State<PlayerPage> {
       );
       if (_currentIndex < 0) _currentIndex = 0;
     });
+    _resolvedSourcesListenable.value = merged;
     return merged;
   }
 
@@ -293,6 +304,8 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer?.cancel();
     _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
+    _backgroundSourceLoading.dispose();
+    _resolvedSourcesListenable.dispose();
     _reportProgress();
     final landscape = _landscape == true;
     unawaited(
@@ -991,6 +1004,8 @@ class _PlayerPageState extends State<PlayerPage> {
           current: _current,
           providerNames: providerNames,
           onRefresh: _refetchSources,
+          backgroundSourceLoading: _backgroundSourceLoading,
+          resolvedSourcesListenable: _resolvedSourcesListenable,
         );
       },
     );
