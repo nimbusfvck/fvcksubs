@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Global subtitle appearance preferences used during playback.
 class SubtitleAppearancePreferences {
+  /// Creates subtitle appearance preferences.
   const SubtitleAppearancePreferences({
     this.fontSize = 16,
     this.textColorValue = 0xffffffff,
@@ -11,9 +13,16 @@ class SubtitleAppearancePreferences {
     this.outline = false,
   });
 
+  /// The subtitle font size in logical pixels.
   final double fontSize;
+
+  /// The subtitle text color as an ARGB integer value.
   final int textColorValue;
+
+  /// The subtitle background color as an ARGB integer value.
   final int backgroundColorValue;
+
+  /// Whether the subtitle should render with an outline.
   final bool outline;
 
   @override
