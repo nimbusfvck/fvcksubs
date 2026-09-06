@@ -112,10 +112,11 @@ flowchart LR
 | `StreamSource` | Just enough to list and pick: an id, a label, and which provider it came from | Stable enough to persist |
 | `PlayableStream` | A final URL, the headers playback must send, the container format, optional DRM, an optional separate audio track, and any subtitle tracks | Often minutes; frequently bound to time and IP |
 
-DRM fields are provider-supplied protocol data: `widevine` uses `licenseUrl`,
-while `fairPlay` uses `certificateUrl` and `licenseUrl`, with optional
-`contentId`. The official `video_player` backend accepts Widevine on Android
-and FairPlay on iOS/macOS; protected playback uses a platform view.
+DRM fields are provider-supplied protocol data: `clearKey` uses inline
+`clearKeyJson` on Android, `widevine` uses `licenseUrl`, while `fairPlay` uses
+`certificateUrl` and `licenseUrl`, with optional `contentId`. The official
+`video_player` backend accepts ClearKey and Widevine on Android and FairPlay on
+iOS/macOS; protected playback uses a platform view.
 
 `headers` matters: many edges redirect away from, or reject, playback requests that lack a
 `User-Agent` or `Referer`. Whatever the upstream needs must be returned here.

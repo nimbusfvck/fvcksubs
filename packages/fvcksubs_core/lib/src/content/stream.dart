@@ -17,11 +17,11 @@ enum StreamFormat {
 /// DRM scheme the app understands.
 ///
 /// [widevine] reaches Android's Media3/ExoPlayer path and [fairPlay] reaches
-/// Apple's AVFoundation path. [clearKey] and [unsupported] remain represented
-/// for compatibility, but are not eligible for the official video_player
-/// backend.
+/// Apple's AVFoundation path. [clearKey] is supported by the Android
+/// implementation when [DrmConfig.clearKeyJson] contains an inline key set.
+/// [unsupported] remains represented so the UI can report it.
 enum DrmScheme {
-  /// EME ClearKey; keys arrive inline as JSON, no license server.
+  /// EME ClearKey; keys arrive inline as JSON, with no license server.
   clearKey,
 
   /// Widevine; needs a license server URL.

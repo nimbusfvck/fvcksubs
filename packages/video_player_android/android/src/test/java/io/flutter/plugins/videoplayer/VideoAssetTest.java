@@ -171,6 +171,27 @@ public final class VideoAssetTest {
   }
 
   @Test
+  public void remoteVideoAddsClearKeyDrmConfiguration() {
+    final String clearKeyJson = "{\"keys\":[]}";
+    VideoAsset asset =
+        VideoAsset.fromRemoteUrl(
+            "https://flutter.dev/video.mpd",
+            VideoAsset.StreamingFormat.DYNAMIC_ADAPTIVE,
+            new HashMap<>(),
+            null,
+            null,
+            new ClearKeyDrmConfiguration(clearKeyJson));
+
+    MediaItem mediaItem = asset.getMediaItem();
+
+    assertNotNull(mediaItem.localConfiguration);
+    MediaItem.DrmConfiguration drmConfiguration = mediaItem.localConfiguration.drmConfiguration;
+    assertNotNull(drmConfiguration);
+    assertEquals(C.CLEARKEY_UUID, drmConfiguration.scheme);
+    assertNull(drmConfiguration.licenseUri);
+  }
+
+  @Test
   public void rtspVideoRequiresRtspUrl() {
     assertThrows(
         IllegalArgumentException.class, () -> VideoAsset.fromRtspUrl("https://not.rtsp/video.mp4"));

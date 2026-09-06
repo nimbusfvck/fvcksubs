@@ -17,8 +17,13 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManager;
+import androidx.media3.exoplayer.drm.DrmSessionManager;
+import androidx.media3.exoplayer.drm.FrameworkMediaDrm;
+import androidx.media3.exoplayer.drm.LocalMediaDrmCallback;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 final class HttpVideoAsset extends VideoAsset {
@@ -26,6 +31,7 @@ final class HttpVideoAsset extends VideoAsset {
   @NonNull private final Map<String, String> httpHeaders;
   @Nullable private final String userAgent;
   @Nullable private final WidevineDrmConfiguration widevineDrm;
+  @Nullable private final ClearKeyDrmConfiguration clearKeyDrm;
 
   HttpVideoAsset(
       @Nullable String assetUrl,
@@ -33,11 +39,22 @@ final class HttpVideoAsset extends VideoAsset {
       @NonNull Map<String, String> httpHeaders,
       @Nullable String userAgent,
       @Nullable WidevineDrmConfiguration widevineDrm) {
+    this(assetUrl, streamingFormat, httpHeaders, userAgent, widevineDrm, null);
+  }
+
+  HttpVideoAsset(
+      @Nullable String assetUrl,
+      @NonNull StreamingFormat streamingFormat,
+      @NonNull Map<String, String> httpHeaders,
+      @Nullable String userAgent,
+      @Nullable WidevineDrmConfiguration widevineDrm,
+      @Nullable ClearKeyDrmConfiguration clearKeyDrm) {
     super(assetUrl);
     this.streamingFormat = streamingFormat;
     this.httpHeaders = httpHeaders;
     this.userAgent = userAgent;
     this.widevineDrm = widevineDrm;
+    this.clearKeyDrm = clearKeyDrm;
   }
 
   @NonNull
@@ -89,7 +106,18 @@ final class HttpVideoAsset extends VideoAsset {
       Context context, DefaultHttpDataSource.Factory initialFactory) {
     unstableUpdateDataSourceFactory(initialFactory, httpHeaders, userAgent);
     DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, initialFactory);
-    return new DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory);
+    final DefaultMediaSourceFactory mediaSourceFactory =
+        new DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory);
+    if (clearKeyDrm != null) {
+      final DrmSessionManager clearKeySessionManager =
+          new DefaultDrmSessionManager.Builder()
+              .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+              .build(
+                  new LocalMediaDrmCallback(
+                      clearKeyDrm.clearKeyJson.getBytes(StandardCharsets.UTF_8)));
+      mediaSourceFactory.setDrmSessionManagerProvider(mediaItem -> clearKeySessionManager);
+    }
+    return mediaSourceFactory;
   }
 
   // TODO: Migrate to stable API, see https://github.com/flutter/flutter/issues/147039.

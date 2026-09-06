@@ -58,7 +58,26 @@ void main() {
       );
     });
 
-    test('other DRM schemes and incomplete Widevine are refused', () {
+    test(
+      'ClearKey with inline keys and Widevine with a license are eligible',
+      () {
+        expect(
+          target.canPlay(
+            const PlayableStream(
+              url: 'x',
+              format: StreamFormat.dash,
+              drm: DrmConfig(
+                scheme: DrmScheme.clearKey,
+                clearKeyJson: '{"keys":[]}',
+              ),
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('other DRM schemes and incomplete DRM are refused', () {
       for (final stream in [
         const PlayableStream(
           url: 'x',

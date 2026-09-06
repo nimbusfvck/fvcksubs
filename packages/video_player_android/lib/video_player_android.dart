@@ -3,4 +3,5 @@
 // found in the LICENSE file.
 
 export 'src/android_video_player.dart';
+export 'src/clear_key_drm_configuration.dart';
 export 'src/widevine_drm_configuration.dart';

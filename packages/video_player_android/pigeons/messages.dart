@@ -7,7 +7,8 @@ import 'package:pigeon/pigeon.dart';
 @ConfigurePigeon(
   PigeonOptions(
     dartOut: 'lib/src/messages.g.dart',
-    kotlinOut: 'android/src/main/kotlin/io/flutter/plugins/videoplayer/Messages.kt',
+    kotlinOut:
+        'android/src/main/kotlin/io/flutter/plugins/videoplayer/Messages.kt',
     kotlinOptions: KotlinOptions(package: 'io.flutter.plugins.videoplayer'),
     copyrightHeader: 'pigeons/copyright.txt',
   ),
@@ -78,10 +79,20 @@ class PlatformVideoViewCreationParams {
 
 /// Pigeon equivalent of video_player_android's WidevineDrmConfiguration.
 class PlatformWidevineDrmConfiguration {
-  PlatformWidevineDrmConfiguration({required this.licenseUri, required this.licenseHeaders});
+  PlatformWidevineDrmConfiguration({
+    required this.licenseUri,
+    required this.licenseHeaders,
+  });
 
   String licenseUri;
   Map<String, String> licenseHeaders;
+}
+
+/// Pigeon equivalent of video_player_android's ClearKeyDrmConfiguration.
+class PlatformClearKeyDrmConfiguration {
+  PlatformClearKeyDrmConfiguration({required this.clearKeyJson});
+
+  String clearKeyJson;
 }
 
 class CreationOptions {
@@ -92,6 +103,7 @@ class CreationOptions {
   String? userAgent;
   int? backBufferDurationMs;
   PlatformWidevineDrmConfiguration? widevineDrm;
+  PlatformClearKeyDrmConfiguration? clearKeyDrm;
 }
 
 class TexturePlayerIds {

@@ -153,8 +153,18 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
             new WidevineDrmConfiguration(
                 drmOptions.getLicenseUri(), drmOptions.getLicenseHeaders());
       }
+      ClearKeyDrmConfiguration clearKeyDrm = null;
+      PlatformClearKeyDrmConfiguration clearKeyOptions = options.getClearKeyDrm();
+      if (clearKeyOptions != null) {
+        clearKeyDrm = new ClearKeyDrmConfiguration(clearKeyOptions.getClearKeyJson());
+      }
       return VideoAsset.fromRemoteUrl(
-          uri, streamingFormat, options.getHttpHeaders(), options.getUserAgent(), widevineDrm);
+          uri,
+          streamingFormat,
+          options.getHttpHeaders(),
+          options.getUserAgent(),
+          widevineDrm,
+          clearKeyDrm);
     }
   }
 

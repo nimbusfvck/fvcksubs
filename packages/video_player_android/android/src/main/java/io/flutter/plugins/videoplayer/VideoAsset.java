@@ -34,7 +34,8 @@ public abstract class VideoAsset {
    * @param remoteUrl remote asset, i.e. typically beginning with {@code https://} or similar.
    * @param streamingFormat which streaming format, provided as a hint if able.
    * @param httpHeaders HTTP headers to set for a request.
-   * @param widevineDrm Widevine DRM configuration, or null for unprotected content.
+   * @param widevineDrm Widevine DRM configuration, or null when not used.
+   * @param clearKeyDrm inline ClearKey DRM configuration, or null when not used.
    * @return the asset.
    */
   @NonNull
@@ -44,8 +45,25 @@ public abstract class VideoAsset {
       @NonNull Map<String, String> httpHeaders,
       @Nullable String userAgent,
       @Nullable WidevineDrmConfiguration widevineDrm) {
+    return fromRemoteUrl(
+        remoteUrl, streamingFormat, httpHeaders, userAgent, widevineDrm, null);
+  }
+
+  @NonNull
+  static VideoAsset fromRemoteUrl(
+      @Nullable String remoteUrl,
+      @NonNull StreamingFormat streamingFormat,
+      @NonNull Map<String, String> httpHeaders,
+      @Nullable String userAgent,
+      @Nullable WidevineDrmConfiguration widevineDrm,
+      @Nullable ClearKeyDrmConfiguration clearKeyDrm) {
     return new HttpVideoAsset(
-        remoteUrl, streamingFormat, new HashMap<>(httpHeaders), userAgent, widevineDrm);
+        remoteUrl,
+        streamingFormat,
+        new HashMap<>(httpHeaders),
+        userAgent,
+        widevineDrm,
+        clearKeyDrm);
   }
 
   /**

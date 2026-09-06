@@ -21,7 +21,9 @@ enum PlaybackTarget {
     PlaybackTarget.android =>
       stream.drm == null ||
           (stream.drm!.scheme == DrmScheme.widevine &&
-              stream.drm!.licenseUrl?.isNotEmpty == true),
+              stream.drm!.licenseUrl?.isNotEmpty == true) ||
+          (stream.drm!.scheme == DrmScheme.clearKey &&
+              stream.drm!.clearKeyJson?.isNotEmpty == true),
     PlaybackTarget.ios || PlaybackTarget.macos =>
       stream.drm == null ||
           (stream.drm!.scheme == DrmScheme.fairPlay &&

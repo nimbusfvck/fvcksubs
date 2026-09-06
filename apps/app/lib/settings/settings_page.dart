@@ -79,7 +79,9 @@ class _DrmTestEntry extends StatelessWidget {
     child: ListTile(
       leading: const Icon(Icons.security_outlined),
       title: const Text('DRM test streams'),
-      subtitle: const Text('Open hardcoded Widevine or FairPlay test content.'),
+      subtitle: const Text(
+        'Open hardcoded Widevine, ClearKey, or FairPlay test content.',
+      ),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.of(
         context,

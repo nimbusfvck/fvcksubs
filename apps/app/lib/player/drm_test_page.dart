@@ -17,6 +17,17 @@ const _widevineTestStream = PlayableStream(
   label: 'Shaka Sintel Widevine',
 );
 
+const _clearKeyTestStream = PlayableStream(
+  url:
+      'https://raw.githubusercontent.com/tinusneethling/betterplayer/ClearKeySupport/example/assets/testvideo_encrypt.mp4',
+  drm: DrmConfig(
+    scheme: DrmScheme.clearKey,
+    clearKeyJson:
+        '{"type":"temporary","keys":[{"kty":"oct","kid":"88XgNh5mVLKPgEnHeLI5Rg","k":"pGMaFTpEPfnu0FkwQ9t1GQ"},{"kty":"oct","kid":"q7onHovPVSu9LoakNKml2Q","k":"aeqoAqZ2Ovl56NGUD7iDkg"}]}',
+  ),
+  label: 'ClearKey',
+);
+
 const _fairPlayTestStream = PlayableStream(
   url:
       'https://pbs.github.io/test-streams/pbs/test-pattern-drm/pbs-bars_avc.m3u8',
@@ -33,9 +44,16 @@ const _fairPlayTestStream = PlayableStream(
   label: 'PBS AVC FairPlay',
 );
 
-/// Debug-only page for exercising the native Widevine/FairPlay integrations.
-class DrmTestPage extends StatelessWidget {
+/// Debug-only page for exercising the native Android and Apple DRM integrations.
+class DrmTestPage extends StatefulWidget {
   const DrmTestPage({super.key});
+
+  @override
+  State<DrmTestPage> createState() => _DrmTestPageState();
+}
+
+class _DrmTestPageState extends State<DrmTestPage> {
+  int _selectedStreamIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +61,17 @@ class DrmTestPage extends StatelessWidget {
     final isApple =
         defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
-    final stream = isAndroid
-        ? _widevineTestStream
+    final streams = isAndroid
+        ? const [_widevineTestStream, _clearKeyTestStream]
         : isApple
-        ? _fairPlayTestStream
-        : null;
+        ? const [_fairPlayTestStream]
+        : const <PlayableStream>[];
+    final selectedIndex = _selectedStreamIndex < streams.length
+        ? _selectedStreamIndex
+        : 0;
+    final stream = streams.isEmpty ? null : streams[selectedIndex];
     final implementation = isAndroid
-        ? 'Android Widevine'
+        ? 'Android DRM'
         : isApple
         ? 'Apple FairPlay'
         : 'Unsupported platform';
@@ -69,17 +91,41 @@ class DrmTestPage extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '$implementation · ${stream.label}',
-                      style: AppTypography.bodyMd.copyWith(
-                        color: AppColors.onDarkSoft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$implementation · ${stream.label}',
+                        style: AppTypography.bodyMd.copyWith(
+                          color: AppColors.onDarkSoft,
+                        ),
                       ),
-                    ),
+                      if (streams.length > 1) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        DropdownButton<int>(
+                          value: _selectedStreamIndex,
+                          items: [
+                            for (var i = 0; i < streams.length; i++)
+                              DropdownMenuItem<int>(
+                                value: i,
+                                child: Text(streams[i].label),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => _selectedStreamIndex = value);
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                Expanded(child: VideoPlayerVodView(stream: stream)),
+                Expanded(
+                  child: VideoPlayerVodView(
+                    key: ValueKey<String>(stream.url),
+                    stream: stream,
+                  ),
+                ),
               ],
             ),
     );

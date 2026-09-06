@@ -152,6 +152,25 @@ void main() {
     expect(widevine.licenseHeaders['Authorization'], 'Bearer token');
   });
 
+  test('maps ClearKey to the official Android video_player configuration', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final configuration = videoPlayerDrmConfiguration(
+      const PlayableStream(
+        url: 'https://edge/protected.mpd',
+        format: StreamFormat.dash,
+        drm: DrmConfig(scheme: DrmScheme.clearKey, clearKeyJson: '{"keys":[]}'),
+      ),
+    );
+
+    expect(configuration, isA<ClearKeyDrmConfiguration>());
+    expect(
+      (configuration! as ClearKeyDrmConfiguration).clearKeyJson,
+      '{"keys":[]}',
+    );
+  });
+
   test('maps FairPlay to the official AVFoundation configuration', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

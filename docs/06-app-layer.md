@@ -276,7 +276,8 @@ flowchart TB
   DASH, a separate `audioUrl`, and non-HLS containers can fail on a platform whose native
   video_player implementation does not support them. Widevine now routes through Media3 on
   Android and FairPlay through AVFoundation on iOS/macOS; both require a platform view and a
-  network source. Unsupported or incomplete DRM declarations remain rejected.
+  network source. ClearKey uses an inline JSON key set on Android; unsupported
+  or incomplete DRM declarations remain rejected.
 - **Live routing temporarily has no backend fallback.** This isolates native player behavior for
   a source: if video_player stalls or rejects it, the app reports that failure rather than silently
   retrying it through MediaKit or BetterPlayer.

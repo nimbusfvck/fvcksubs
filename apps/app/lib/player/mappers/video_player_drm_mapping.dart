@@ -20,6 +20,12 @@ vp.VideoDrmConfiguration? videoPlayerDrmConfiguration(PlayableStream stream) {
     );
   }
 
+  if (defaultTargetPlatform == TargetPlatform.android &&
+      drm.scheme == DrmScheme.clearKey &&
+      drm.clearKeyJson != null) {
+    return android.ClearKeyDrmConfiguration(clearKeyJson: drm.clearKeyJson!);
+  }
+
   if ((defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS) &&
       drm.scheme == DrmScheme.fairPlay &&

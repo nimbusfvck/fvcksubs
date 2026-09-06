@@ -559,13 +559,49 @@ data class PlatformWidevineDrmConfiguration(
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
+data class PlatformClearKeyDrmConfiguration(
+    val clearKeyJson: String
+) {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PlatformClearKeyDrmConfiguration {
+      val clearKeyJson = pigeonVar_list[0] as String
+      return PlatformClearKeyDrmConfiguration(clearKeyJson)
+    }
+  }
+
+  fun toList(): List<Any?> {
+    return listOf(
+        clearKeyJson,
+    )
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PlatformClearKeyDrmConfiguration
+    return MessagesPigeonUtils.deepEquals(this.clearKeyJson, other.clearKeyJson)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.clearKeyJson)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
 data class CreationOptions(
     val uri: String,
     val formatHint: PlatformVideoFormat? = null,
     val httpHeaders: Map<String, String>,
     val userAgent: String? = null,
     val backBufferDurationMs: Long? = null,
-    val widevineDrm: PlatformWidevineDrmConfiguration? = null
+    val widevineDrm: PlatformWidevineDrmConfiguration? = null,
+    val clearKeyDrm: PlatformClearKeyDrmConfiguration? = null
 ) {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): CreationOptions {
@@ -575,8 +611,9 @@ data class CreationOptions(
       val userAgent = pigeonVar_list[3] as String?
       val backBufferDurationMs = pigeonVar_list[4] as Long?
       val widevineDrm = pigeonVar_list[5] as PlatformWidevineDrmConfiguration?
+      val clearKeyDrm = pigeonVar_list[6] as PlatformClearKeyDrmConfiguration?
       return CreationOptions(
-          uri, formatHint, httpHeaders, userAgent, backBufferDurationMs, widevineDrm)
+          uri, formatHint, httpHeaders, userAgent, backBufferDurationMs, widevineDrm, clearKeyDrm)
     }
   }
 
@@ -588,6 +625,7 @@ data class CreationOptions(
         userAgent,
         backBufferDurationMs,
         widevineDrm,
+        clearKeyDrm,
     )
   }
 
@@ -604,7 +642,8 @@ data class CreationOptions(
         MessagesPigeonUtils.deepEquals(this.httpHeaders, other.httpHeaders) &&
         MessagesPigeonUtils.deepEquals(this.userAgent, other.userAgent) &&
         MessagesPigeonUtils.deepEquals(this.backBufferDurationMs, other.backBufferDurationMs) &&
-        MessagesPigeonUtils.deepEquals(this.widevineDrm, other.widevineDrm)
+        MessagesPigeonUtils.deepEquals(this.widevineDrm, other.widevineDrm) &&
+        MessagesPigeonUtils.deepEquals(this.clearKeyDrm, other.clearKeyDrm)
   }
 
   override fun hashCode(): Int {
@@ -615,6 +654,7 @@ data class CreationOptions(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.userAgent)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.backBufferDurationMs)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.widevineDrm)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.clearKeyDrm)
     return result
   }
 
@@ -1088,27 +1128,32 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         }
       }
       138.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { CreationOptions.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PlatformClearKeyDrmConfiguration.fromList(it)
+        }
       }
       139.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { TexturePlayerIds.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { CreationOptions.fromList(it) }
       }
       140.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { PlaybackState.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { TexturePlayerIds.fromList(it) }
       }
       141.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { AudioTrackMessage.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { PlaybackState.fromList(it) }
       }
       142.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerAudioTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { AudioTrackMessage.fromList(it) }
       }
       143.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { NativeAudioTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerAudioTrackData.fromList(it) }
       }
       144.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerVideoTrackData.fromList(it) }
+        return (readValue(buffer) as? List<Any?>)?.let { NativeAudioTrackData.fromList(it) }
       }
       145.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let { ExoPlayerVideoTrackData.fromList(it) }
+      }
+      146.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let { NativeVideoTrackData.fromList(it) }
       }
       else -> super.readValueOfType(type, buffer)
@@ -1153,36 +1198,40 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is CreationOptions -> {
+      is PlatformClearKeyDrmConfiguration -> {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is TexturePlayerIds -> {
+      is CreationOptions -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is PlaybackState -> {
+      is TexturePlayerIds -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is AudioTrackMessage -> {
+      is PlaybackState -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is ExoPlayerAudioTrackData -> {
+      is AudioTrackMessage -> {
         stream.write(142)
         writeValue(stream, value.toList())
       }
-      is NativeAudioTrackData -> {
+      is ExoPlayerAudioTrackData -> {
         stream.write(143)
         writeValue(stream, value.toList())
       }
-      is ExoPlayerVideoTrackData -> {
+      is NativeAudioTrackData -> {
         stream.write(144)
         writeValue(stream, value.toList())
       }
-      is NativeVideoTrackData -> {
+      is ExoPlayerVideoTrackData -> {
         stream.write(145)
+        writeValue(stream, value.toList())
+      }
+      is NativeVideoTrackData -> {
+        stream.write(146)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
