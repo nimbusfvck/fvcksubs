@@ -28,6 +28,7 @@ class VideoPlayerView extends StatefulWidget {
     super.key,
     required this.stream,
     this.isLive = false,
+    this.liveOptions,
     this.onControllerCreated,
     this.onPlaybackReady,
     this.preferredSubtitleLanguage,
@@ -44,6 +45,12 @@ class VideoPlayerView extends StatefulWidget {
 
   final PlayableStream stream;
   final bool isLive;
+
+  /// Optional live latency and buffering tuning passed to the native player.
+  ///
+  /// When omitted, Apple platforms use a more tolerant live default while
+  /// Android keeps the Media3/ExoPlayer package defaults.
+  final vp.VideoPlayerLiveOptions? liveOptions;
   final void Function(Object? controller)? onControllerCreated;
   final void Function(Object? controller)? onPlaybackReady;
   final String? preferredSubtitleLanguage;
@@ -129,7 +136,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       isLive: widget.isLive,
       videoPlayerOptions: widget.isLive
           ? vp.VideoPlayerOptions(
-              liveConfiguration: const vp.VideoPlayerLiveOptions(),
+              liveConfiguration: widget.liveOptions ?? _defaultLiveOptions(),
             )
           : null,
       drmConfiguration: videoPlayerDrmConfiguration(widget.stream),
@@ -146,6 +153,20 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     _player.addListener(_onValueChanged);
     widget.onControllerCreated?.call(_adapter);
     unawaited(_open());
+  }
+
+  /// Selects app-level live defaults without changing the shared package API.
+  vp.VideoPlayerLiveOptions _defaultLiveOptions() {
+    final isApple =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+    if (!isApple) return const vp.VideoPlayerLiveOptions();
+    return const vp.VideoPlayerLiveOptions(
+      targetOffsetMs: 8000,
+      minOffsetMs: 5000,
+      maxOffsetMs: 15000,
+      preferredForwardBufferDurationMs: 10000,
+    );
   }
 
   Future<void> _open() async {

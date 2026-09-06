@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:video_player/video_player.dart' as vp;
 
 import 'video_player_view.dart';
 import '../state/subtitle_preference_controller.dart';
@@ -12,6 +13,7 @@ Widget platformPlayerBuilder(
   BuildContext context,
   PlayableStream stream, {
   required bool isLive,
+  vp.VideoPlayerLiveOptions? liveOptions,
   void Function(Object? controller)? onControllerCreated,
   void Function(Object? controller)? onPlaybackReady,
   Widget Function(
@@ -38,6 +40,7 @@ Widget platformPlayerBuilder(
     key: key,
     stream: stream,
     isLive: isLive,
+    liveOptions: liveOptions,
     onControllerCreated: onControllerCreated,
     onPlaybackReady: onPlaybackReady,
     preferredSubtitleLanguage: preferredSubtitleLanguage,

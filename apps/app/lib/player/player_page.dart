@@ -40,6 +40,7 @@ const Duration _stallSampleInterval = Duration(seconds: 2);
 /// still healthy. Only a sustained empty forward window is strong enough to
 /// discard the native player and resolve a fresh stream.
 const Duration _liveBufferingRecoveryThreshold = Duration(seconds: 8);
+const Duration _liveForwardBufferThreshold = Duration(seconds: 1);
 
 /// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
@@ -61,6 +62,29 @@ Duration? sourceSwitchSeekPosition({
   }
   return previousPosition > duration ? duration : previousPosition;
 }
+
+/// Returns the media buffered ahead of the current live playback position.
+@visibleForTesting
+Duration liveForwardBuffer({
+  required Duration position,
+  required Duration bufferedPosition,
+}) {
+  if (bufferedPosition <= position) return Duration.zero;
+  return bufferedPosition - position;
+}
+
+/// Reports whether a live player is buffering with no usable forward cushion.
+@visibleForTesting
+bool liveBufferingNeedsRecovery({
+  required Duration position,
+  required Duration bufferedPosition,
+  required bool isPlaying,
+  required bool isBuffering,
+}) =>
+    isPlaying &&
+    isBuffering &&
+    liveForwardBuffer(position: position, bufferedPosition: bufferedPosition) <=
+        _liveForwardBufferThreshold;
 
 class PlayerPage extends StatefulWidget {
   PlayerPage({
@@ -549,8 +573,12 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _sampleLiveBuffering(AppPlayerValue value) {
-    final hasNoForwardBuffer = value.bufferedPosition <= Duration.zero;
-    final stalled = value.isPlaying && hasNoForwardBuffer;
+    final stalled = liveBufferingNeedsRecovery(
+      position: value.position,
+      bufferedPosition: value.bufferedPosition,
+      isPlaying: value.isPlaying,
+      isBuffering: value.isBuffering,
+    );
     if (!stalled) {
       _liveBufferingSince = null;
       return;

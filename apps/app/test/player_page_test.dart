@@ -13,6 +13,34 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'support/harness.dart';
 
 void main() {
+  test('live buffering uses forward buffer instead of absolute buffer end', () {
+    expect(
+      liveForwardBuffer(
+        position: const Duration(milliseconds: 107750),
+        bufferedPosition: const Duration(milliseconds: 107839),
+      ),
+      const Duration(milliseconds: 89),
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(milliseconds: 107750),
+        bufferedPosition: const Duration(milliseconds: 107839),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(milliseconds: 106323),
+        bufferedPosition: const Duration(milliseconds: 107839),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isFalse,
+    );
+  });
+
   test('source switch keeps VOD position and does not seek live streams', () {
     expect(
       sourceSwitchSeekPosition(
