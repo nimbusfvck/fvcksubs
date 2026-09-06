@@ -137,6 +137,89 @@ class SubtitleTrack extends Equatable {
   List<Object?> get props => [language, url, label];
 }
 
+/// One alternate rendition of a [PlayableStream].
+///
+/// Variants are session-scoped: providers may return signed URLs here, so a
+/// caller should use them for the current playback session and resolve the
+/// source again after they expire.
+class StreamVariant extends Equatable {
+  /// Creates an alternate rendition.
+  const StreamVariant({
+    required this.id,
+    required this.url,
+    this.headers = const {},
+    this.format = StreamFormat.other,
+    this.label = '',
+    this.width,
+    this.height,
+    this.bitrate,
+  });
+
+  /// Builds a variant from decoded JSON.
+  factory StreamVariant.fromJson(Map<String, Object?> json) => StreamVariant(
+    id: json['id'] as String,
+    url: json['url'] as String,
+    headers: stringMap(json['headers']),
+    format: enumByName(
+      StreamFormat.values,
+      json['format'],
+      orElse: StreamFormat.other,
+    ),
+    label: (json['label'] as String?) ?? '',
+    width: (json['width'] as num?)?.toInt(),
+    height: (json['height'] as num?)?.toInt(),
+    bitrate: (json['bitrate'] as num?)?.toInt(),
+  );
+
+  /// Stable only within the current resolve response.
+  final String id;
+
+  /// Final URL for this rendition.
+  final String url;
+
+  /// HTTP headers required by this rendition.
+  final Map<String, String> headers;
+
+  /// Container format.
+  final StreamFormat format;
+
+  /// Display label, normally `360p`, `720p`, or `1080p`.
+  final String label;
+
+  /// Frame width, when known.
+  final int? width;
+
+  /// Frame height, when known.
+  final int? height;
+
+  /// Bitrate in bits per second, when known.
+  final int? bitrate;
+
+  /// Encodes to a JSON map.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'url': url,
+    if (headers.isNotEmpty) 'headers': headers,
+    'format': format.name,
+    if (label.isNotEmpty) 'label': label,
+    if (width != null) 'width': width,
+    if (height != null) 'height': height,
+    if (bitrate != null) 'bitrate': bitrate,
+  };
+
+  @override
+  List<Object?> get props => [
+    id,
+    url,
+    headers,
+    format,
+    label,
+    width,
+    height,
+    bitrate,
+  ];
+}
+
 /// One playable stream produced by resolving a [StreamSource].
 ///
 /// [headers] must be sent with playback (`User-Agent`, `Referer`): many edges
@@ -152,6 +235,7 @@ class PlayableStream extends Equatable {
     this.audioUrl,
     this.label = '',
     this.subtitles = const [],
+    this.variants = const [],
   });
 
   /// Builds a [PlayableStream] from decoded JSON.
@@ -168,6 +252,9 @@ class PlayableStream extends Equatable {
     label: (json['label'] as String?) ?? '',
     subtitles: ((json['subtitles'] as List?) ?? const [])
         .map((e) => SubtitleTrack.fromJson((e as Map).cast<String, Object?>()))
+        .toList(),
+    variants: ((json['variants'] as List?) ?? const [])
+        .map((e) => StreamVariant.fromJson((e as Map).cast<String, Object?>()))
         .toList(),
   );
 
@@ -193,6 +280,9 @@ class PlayableStream extends Equatable {
   /// — most sources carry none.
   final List<SubtitleTrack> subtitles;
 
+  /// Alternate renditions offered alongside this stream.
+  final List<StreamVariant> variants;
+
   /// Whether this stream is DRM-protected.
   bool get isProtected => drm != null;
 
@@ -206,6 +296,8 @@ class PlayableStream extends Equatable {
     if (label.isNotEmpty) 'label': label,
     if (subtitles.isNotEmpty)
       'subtitles': subtitles.map((s) => s.toJson()).toList(),
+    if (variants.isNotEmpty)
+      'variants': variants.map((variant) => variant.toJson()).toList(),
   };
 
   @override
@@ -217,6 +309,7 @@ class PlayableStream extends Equatable {
     audioUrl,
     label,
     subtitles,
+    variants,
   ];
 }
 

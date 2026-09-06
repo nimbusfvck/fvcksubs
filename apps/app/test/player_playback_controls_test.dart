@@ -827,4 +827,8 @@ class _RecoveryController implements AppPlayerController {
   Future<void> toggleFullScreen() async {}
   @override
   Future<void> exitFullScreen() async {}
+  @override
+  Future<bool> startPictureInPicture() async => false;
+  @override
+  Future<void> stopPictureInPicture() async {}
 }

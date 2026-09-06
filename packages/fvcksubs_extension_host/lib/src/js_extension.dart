@@ -56,6 +56,8 @@ class JsExtension extends ContentExtension {
     required Manifest manifest,
     required String source,
     String? prelude,
+    JsCloudflareSolver? cloudflareSolver,
+    JsWebViewResolver? webViewResolver,
     Duration? scriptTimeout,
     Duration? fetchTimeout,
     Duration? maxFetchTimeout,
@@ -63,6 +65,8 @@ class JsExtension extends ContentExtension {
   }) {
     final engine = JsEngine(
       allowedHosts: manifest.permissions.hosts.toSet(),
+      cloudflareSolver: cloudflareSolver,
+      webViewResolver: webViewResolver,
       // Deliberately well under the app's whole-discovery budget. A role call
       // fans out across every provider in one `sources()`, so a single host
       // that accepts a connection and then stalls would otherwise spend most

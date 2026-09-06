@@ -22,3 +22,11 @@ workspace:
 
 dev_dependencies:
   analyzer: ^12.1.0
+
+dependency_overrides:
+  # Local fork: the upstream macOS package declares 10.14 while implementing
+  # an ASWebAuthenticationSession protocol requirement introduced in 10.15.
+  flutter_inappwebview:
+    path: packages/flutter_inappwebview/flutter_inappwebview
+  flutter_inappwebview_macos:
+    path: packages/flutter_inappwebview/flutter_inappwebview_macos

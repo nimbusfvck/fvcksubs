@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import '../addons/addons_page.dart';
 import '../addons/installer_controller.dart';
@@ -43,6 +44,8 @@ class SettingsPage extends StatelessWidget {
             const _AddonsEntry(),
             const SizedBox(height: AppSpacing.md),
             const _SourcePriorityEntry(),
+            const SizedBox(height: AppSpacing.md),
+            const _SourceLocaleEntry(),
             const SizedBox(height: AppSpacing.md),
             QualityPreferenceEntry(controller: qualityController),
             const SizedBox(height: AppSpacing.md),
@@ -239,6 +242,97 @@ class _SourcePriorityEntry extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SourceLocaleEntry extends StatelessWidget {
+  const _SourceLocaleEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppScope.of(context).sourcePriorityController;
+    return BlocBuilder<SourcePriorityController, SourcePriorityState>(
+      bloc: controller,
+      builder: (context, state) => Material(
+        color: AppColors.surfaceDarkElevated,
+        borderRadius: AppRadius.lg,
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          leading: const Icon(Icons.public_outlined),
+          title: const Text('Preferred source locale'),
+          subtitle: Text(_labelFor(state.sourceLocale)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showPicker(context, controller, state.sourceLocale),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPicker(
+    BuildContext context,
+    SourcePriorityController controller,
+    SourceLocalePreference current,
+  ) async {
+    final selected = await showDialog<SourceLocalePreference>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Preferred source locale'),
+        children: [
+          _SourceLocaleOption(
+            value: SourceLocalePreference.auto,
+            current: current,
+            title: 'Auto',
+            subtitle: 'Use the device locale',
+          ),
+          _SourceLocaleOption(
+            value: SourceLocalePreference.indonesia,
+            current: current,
+            title: 'Indonesia',
+            subtitle: 'Prefer Indonesian providers',
+          ),
+          _SourceLocaleOption(
+            value: SourceLocalePreference.english,
+            current: current,
+            title: 'English',
+            subtitle: 'Prefer English-language providers',
+          ),
+        ],
+      ),
+    );
+    if (selected != null) controller.setSourceLocale(selected);
+  }
+
+  static String _labelFor(SourceLocalePreference preference) {
+    if (preference.isAuto) return 'Auto · device locale';
+    if (preference == SourceLocalePreference.indonesia) return 'Indonesia';
+    if (preference == SourceLocalePreference.english) return 'English';
+    return 'Custom';
+  }
+}
+
+class _SourceLocaleOption extends StatelessWidget {
+  const _SourceLocaleOption({
+    required this.value,
+    required this.current,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final SourceLocalePreference value;
+  final SourceLocalePreference current;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(
+      value == current
+          ? Icons.radio_button_checked
+          : Icons.radio_button_unchecked,
+    ),
+    title: Text(title),
+    subtitle: Text(subtitle),
+    onTap: () => Navigator.of(context).pop(value),
+  );
 }
 
 class SourcePriorityPage extends StatelessWidget {

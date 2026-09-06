@@ -298,7 +298,11 @@ const _preferredSourceGrace = Duration(milliseconds: 750);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
 const _sourceDiscoveryTimeout = Duration(seconds: 20);
-const _sourceResolveTimeout = Duration(seconds: 20);
+// Browser-backed providers can spend up to 25 seconds acquiring a
+// Cloudflare cookie before the JS resolver can continue its extractor chain.
+// Resolution runs in parallel and the first fast source still opens the
+// player immediately, so this only keeps slow fallback sources alive.
+const _sourceResolveTimeout = Duration(seconds: 35);
 
 /// A live event can be visible before a provider's event feed or stream
 /// endpoint has settled. Give that transient window one automatic retry so a

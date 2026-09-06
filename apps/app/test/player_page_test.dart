@@ -79,6 +79,7 @@ void main() {
     await tester.pumpWidget(
       wrapApp(
         child: PlayerPage(
+          key: GlobalKey(),
           item: const VideoItemV2(
             ref: MediaRef(
               extensionId: 'test',
@@ -119,6 +120,7 @@ void main() {
     await tester.pumpWidget(
       wrapApp(
         child: PlayerPage(
+          key: GlobalKey(),
           item: const VideoItemV2(
             ref: MediaRef(
               extensionId: 'test',
@@ -230,6 +232,59 @@ void main() {
     await pending.close();
   });
 
+  testWidgets('a recovered source hides the fallback loading overlay', (
+    tester,
+  ) async {
+    final player = _FailingPlayer();
+    final first = _resolvedSource('first', 'Source A');
+    final pending = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'movie-recovered',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [first],
+          pendingSources: pending.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitError(StateError('source temporarily unavailable'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsOneWidget,
+    );
+
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(seconds: 1),
+        duration: Duration(minutes: 10),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsNothing,
+    );
+    await pending.close();
+  });
+
   // First play resolves nothing from cache: the player opens on the first
   // source that lands and the slower providers arrive afterwards on
   // `pendingSources`. Kora consistently settles about a second after Cricfy,
@@ -266,7 +321,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Server 3'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(
       find.text('Bein Sport 1'),
       findsOneWidget,
@@ -308,7 +363,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Server 3'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Bein Sport 1'), findsOneWidget);
     await controller.close();
   });
@@ -420,15 +475,17 @@ void main() {
       ),
     );
     await tester.pump();
-    unawaited(navigatorKey.currentState!.push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => PlayerPage(
-          key: GlobalKey(),
-          item: fakeItem(id: 'detached-pip'),
-          resolvedSources: [_resolvedSource('detached', 'Source')],
+    unawaited(
+      navigatorKey.currentState!.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => PlayerPage(
+            key: GlobalKey(),
+            item: fakeItem(id: 'detached-pip'),
+            resolvedSources: [_resolvedSource('detached', 'Source')],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pump();
 
     final controller = player.controllers.single;
@@ -453,6 +510,7 @@ void main() {
     controller.emitPictureInPictureRestore();
     await tester.pump();
     expect(find.byType(PlayerPage), findsOneWidget);
+    expect(navigatorKey.currentState!.canPop(), isTrue);
     expect(controller.playCalls, 1);
   });
 
@@ -566,6 +624,7 @@ class _FailingPlayer extends RecordingPlayer {
       final controller = _FakePlayerController();
       controllers.add(controller);
       onControllerCreated?.call(controller);
+      onPlaybackReady?.call(controller);
     }
     return widget;
   }

@@ -209,6 +209,7 @@ class ProviderDecl extends Equatable {
     required this.id,
     required this.roles,
     this.name,
+    this.locales = const ProviderLocales(),
     this.catalogs = const [],
     this.searchCategories = const [],
   });
@@ -220,6 +221,7 @@ class ProviderDecl extends Equatable {
         .map((r) => enumByNameStrict(ProviderRole.values, r))
         .toList(),
     name: json['name'] as String?,
+    locales: ProviderLocales.fromJson(json['locales']),
     catalogs: ((json['catalogs'] as List?) ?? const [])
         .map((c) => CatalogDecl.fromJson(c as Map<String, Object?>))
         .toList(),
@@ -235,6 +237,12 @@ class ProviderDecl extends Equatable {
   /// Optional user-facing name. The stable [id] remains the routing identity.
   final String? name;
 
+  /// Optional market and language hints used for generic source ranking.
+  ///
+  /// These describe the provider's intended market and supported playback
+  /// languages, not the country or original language of a title.
+  final ProviderLocales locales;
+
   /// Catalogs this provider exposes (empty unless it fills [ProviderRole.catalog]).
   final List<CatalogDecl> catalogs;
 
@@ -247,19 +255,59 @@ class ProviderDecl extends Equatable {
   /// from the unscoped chip.
   final List<String> searchCategories;
 
-
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'id': id,
     'roles': roles.map((r) => r.name).toList(),
     if (name != null) 'name': name,
+    if (!locales.isEmpty) 'locales': locales.toJson(),
     if (catalogs.isNotEmpty)
       'catalogs': catalogs.map((c) => c.toJson()).toList(),
     if (searchCategories.isNotEmpty) 'searchCategories': searchCategories,
   };
 
   @override
-  List<Object?> get props => [id, roles, name, catalogs, searchCategories];
+  List<Object?> get props => [
+    id,
+    roles,
+    name,
+    locales,
+    catalogs,
+    searchCategories,
+  ];
+}
+
+/// Locale metadata declared by a provider for source preference ranking.
+class ProviderLocales extends Equatable {
+  /// Creates locale metadata from ISO country and language codes.
+  const ProviderLocales({this.countries = const [], this.languages = const []});
+
+  /// Decodes optional locale metadata from a manifest value.
+  factory ProviderLocales.fromJson(Object? value) {
+    if (value is! Map) return const ProviderLocales();
+    return ProviderLocales(
+      countries: stringList(value['countries']),
+      languages: stringList(value['languages']),
+    );
+  }
+
+  /// ISO 3166-1 alpha-2 market codes, e.g. `ID`.
+  final List<String> countries;
+
+  /// ISO 639-1 language codes, e.g. `id`.
+  final List<String> languages;
+
+  /// Whether this declaration carries no ranking hints.
+  bool get isEmpty => countries.isEmpty && languages.isEmpty;
+
+  /// Encodes the non-empty locale fields for a manifest.
+  Map<String, Object?> toJson() => {
+    if (countries.isNotEmpty) 'countries': countries,
+    if (languages.isNotEmpty) 'languages': languages,
+  };
+
+  @override
+  List<Object?> get props => [countries, languages];
 }
 
 /// What an extension is allowed to do. Enforced by the host, not documentation.

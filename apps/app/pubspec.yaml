@@ -16,6 +16,8 @@ dependencies:
     path: ../../packages/fvcksubs_core
   fvcksubs_extension_host:
     path: ../../packages/fvcksubs_extension_host
+  fvcksubs_js_runtime:
+    path: ../../packages/fvcksubs_js_runtime
   fvcksubs_storage:
     path: ../../packages/fvcksubs_storage
   # Local fork: preserve the official API while exposing AVFoundation's live
@@ -30,6 +32,11 @@ dependencies:
   cached_network_image: ^3.4.1
   html: ^0.15.6
   archive: ^4.1.0
+  dio: ^5.11.0
+  # 6.1.5 still references the removed proguard-android.txt API and cannot
+  # evaluate with this project's current Android Gradle Plugin. The beta
+  # carries the compatible Android implementation used by CloudflareKiller.
+  flutter_inappwebview: 6.2.0-beta.3
   envied: ^1.3.8
   device_info_plus: ^13.2.0
   flutter_bloc: ^9.1.1

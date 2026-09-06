@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/data/online_subtitle_service.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
 import 'package:fvcksubs_app/player/sheets/subtitle_picker_sheet.dart';
+import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -133,6 +134,100 @@ void main() {
       find.descendant(of: resultTile, matching: find.byIcon(Icons.check)),
       findsOneWidget,
     );
+  });
+
+  testWidgets('offers translation when the preferred language is absent', (
+    tester,
+  ) async {
+    final preference = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+      initial: 'id',
+    );
+    const english = SubtitleTrack(
+      language: 'en',
+      url: 'https://subs.example/en.srt',
+      label: 'English Full',
+    );
+    const forced = SubtitleTrack(
+      language: 'en',
+      url: 'https://subs.example/en-forced.srt',
+      label: 'English Forced',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        subtitlePreferenceController: preference,
+        child: Scaffold(
+          body: PlayerSubtitlePickerSheet(
+            media: const PlaybackMedia(
+              VideoItemV2(
+                ref: MediaRef(
+                  extensionId: 'test',
+                  providerId: 'test.provider',
+                  id: 'movie-1',
+                ),
+                title: 'Movie',
+              ),
+            ),
+            tracks: const [],
+            translationSourceTracks: const [english, forced],
+            current: null,
+            filterTracks: (tracks) => tracks,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Translate'), findsOneWidget);
+    await tester.tap(find.textContaining('Translate'));
+    await tester.pump();
+    expect(find.text('English Full'), findsOneWidget);
+    expect(find.text('English Forced'), findsOneWidget);
+  });
+
+  testWidgets('does not offer translation when the preferred track exists', (
+    tester,
+  ) async {
+    final preference = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+      initial: 'id',
+    );
+    const indonesian = SubtitleTrack(
+      language: 'id',
+      url: 'https://subs.example/id.srt',
+    );
+    const english = SubtitleTrack(
+      language: 'en',
+      url: 'https://subs.example/en.srt',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        subtitlePreferenceController: preference,
+        child: Scaffold(
+          body: PlayerSubtitlePickerSheet(
+            media: const PlaybackMedia(
+              VideoItemV2(
+                ref: MediaRef(
+                  extensionId: 'test',
+                  providerId: 'test.provider',
+                  id: 'movie-1',
+                ),
+                title: 'Movie',
+              ),
+            ),
+            tracks: const [indonesian],
+            translationSourceTracks: const [indonesian, english],
+            current: indonesian,
+            filterTracks: (tracks) => tracks,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Translate'), findsNothing);
   });
 }
 

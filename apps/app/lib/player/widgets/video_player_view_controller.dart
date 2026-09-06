@@ -1,10 +1,19 @@
 part of 'video_player_view.dart';
 
 class _VideoPlayerControllerAdapter implements AppPlayerController {
-  _VideoPlayerControllerAdapter(this._player, {required this.onSetFit});
+  _VideoPlayerControllerAdapter(
+    this._player, {
+    required this.onSetFit,
+    required this.onSelectVariant,
+    required String streamUrl,
+    this.variants = const [],
+  }) : _activeUrl = streamUrl;
 
-  final vp.VideoPlayerController _player;
+  vp.VideoPlayerController _player;
   final void Function(PlayerFitMode mode) onSetFit;
+  final Future<void> Function(StreamVariant? variant) onSelectVariant;
+  final List<StreamVariant> variants;
+  String _activeUrl;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
   );
@@ -14,6 +23,7 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   SubtitleTrack? _activeSubtitle;
   String? _selectedAudioId;
   String? _requestedVideoId;
+  String? _selectedVariantId;
   bool _reportedCompletion = false;
   String? _reportedError;
   bool _disposed = false;
@@ -33,11 +43,34 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
           bitrate: track.bitrate,
           platformTrack: track,
         ),
+    for (final variant in variants)
+      if ((variant.height ?? 0) > 0)
+        AppQualityTrack(
+          id: variant.id,
+          height: variant.height!,
+          width: variant.width,
+          bitrate: variant.bitrate,
+          variant: variant,
+        ),
   ];
   @override
   AppQualityTrack? get activeQuality {
+    final variantId = _selectedVariantId;
+    if (variantId != null) {
+      return qualityTracks.where((track) => track.id == variantId).firstOrNull;
+    }
     final id = _selectedNativeVideoId ?? _requestedVideoId;
-    if (id == null) return null;
+    if (id == null) {
+      final matching = variants
+          .where((variant) => variant.url == _activeUrl)
+          .firstOrNull;
+      if (matching != null) {
+        return qualityTracks
+            .where((track) => track.id == matching.id)
+            .firstOrNull;
+      }
+      return null;
+    }
     for (final track in qualityTracks) {
       if (track.id == id) return track;
     }
@@ -106,6 +139,22 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
     if (!_disposed) _value.value = _value.value.copyWith();
   }
 
+  /// Rebinds the adapter after the app swaps the network URL for a provider
+  /// rendition. The provider selection remains active across the native
+  /// controller replacement.
+  void attachPlayer(vp.VideoPlayerController player) {
+    _player = player;
+    _nativeAudioTracks = const [];
+    _nativeVideoTracks = const [];
+    _selectedAudioId = null;
+    _requestedVideoId = null;
+    _reportedCompletion = false;
+    _reportedError = null;
+    if (!_disposed) _value.value = _value.value.copyWith();
+  }
+
+  void setActiveUrl(String url) => _activeUrl = url;
+
   void _logTrackError(String kind, Object error) {
     if (!kDebugMode) return;
     debugPrint(
@@ -166,7 +215,21 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
       _player.setPlaybackSpeed(speed);
   @override
   Future<void> setQuality(AppQualityTrack? track) async {
-    final native = track?.platformTrack as vp.VideoTrack?;
+    final variant = track?.variant;
+    if (variant != null) {
+      _selectedVariantId = variant.id;
+      if (kDebugMode) {
+        debugPrint('[VideoPlayerVOD] quality_request variant=${variant.label}');
+      }
+      await onSelectVariant(variant);
+      return;
+    }
+    if (track == null || track.id == 'auto') {
+      _selectedVariantId = null;
+      await onSelectVariant(null);
+      return;
+    }
+    final native = track.platformTrack as vp.VideoTrack?;
     if (kDebugMode) {
       debugPrint(
         '[VideoPlayerVOD] quality_request '

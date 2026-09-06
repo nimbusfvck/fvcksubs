@@ -53,6 +53,7 @@ class FakeExtension extends ContentExtension {
     String? description,
     String? author,
     String version = '1.0.0',
+    ProviderLocales providerLocales = const ProviderLocales(),
     this.contentRating = ContentRating.unknown,
     ContentRating? catalogContentRating,
     this.catalogs = const [],
@@ -72,6 +73,7 @@ class FakeExtension extends ContentExtension {
              'id': '$id.p',
              'name': ?providerName,
              'roles': ['catalog', 'stream', if (searchable) 'search'],
+             if (!providerLocales.isEmpty) 'locales': providerLocales.toJson(),
              // One catalog listing every category it serves — the shape the
              // protocol expects, with the taxonomy inside the catalog rather
              // than a near-duplicate catalog per category.
@@ -782,6 +784,17 @@ class FakeSourcePriorityStore implements SourcePriorityStore {
 
   @override
   Future<void> save(List<String> providerIds) async => saved = providerIds;
+}
+
+class FakeSourceLocalePreferenceStore implements SourceLocalePreferenceStore {
+  SourceLocalePreference saved = SourceLocalePreference.auto;
+
+  @override
+  Future<SourceLocalePreference> load() async => saved;
+
+  @override
+  Future<void> save(SourceLocalePreference preference) async =>
+      saved = preference;
 }
 
 /// In-memory [QualityPreferenceStore].

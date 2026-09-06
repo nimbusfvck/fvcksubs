@@ -17,6 +17,18 @@ void main() {
     expect(await store.load(), ['nimora.cricfy', 'nimora.kora']);
   });
 
+  test('source locale defaults to Auto and round-trips overrides', () async {
+    const store = SharedPreferencesSourceLocalePreferenceStore();
+
+    expect(await store.load(), SourceLocalePreference.auto);
+    await store.save(SourceLocalePreference.indonesia);
+    expect(await store.load(), SourceLocalePreference.indonesia);
+    await store.save(SourceLocalePreference.english);
+    expect(await store.load(), SourceLocalePreference.english);
+    await store.save(SourceLocalePreference.auto);
+    expect(await store.load(), SourceLocalePreference.auto);
+  });
+
   test('quality preference defaults to Auto and round-trips', () async {
     const store = SharedPreferencesQualityPreferenceStore();
 

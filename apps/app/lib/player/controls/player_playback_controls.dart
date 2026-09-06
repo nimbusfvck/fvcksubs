@@ -534,6 +534,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         tracks: tracks,
         current: currentSub,
         filterTracks: subtitlePreference.tracksForPicker,
+        translationSourceTracks: _current.stream.subtitles,
         initialExternalTracks: subtitlePreference.rememberedExternalSubtitles(
           widget.media.ref,
         ),

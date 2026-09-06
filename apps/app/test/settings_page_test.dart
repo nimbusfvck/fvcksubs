@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/settings_page.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -26,7 +28,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Indonesia'));
+    final indonesia = find.widgetWithText(RadioListTile<String?>, 'Indonesia');
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    await tester.tap(indonesia);
     await tester.pumpAndSettle();
 
     expect(controller.languageCode, 'id');
@@ -95,6 +100,34 @@ void main() {
     expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
   });
 
+  testWidgets('source region override is selected and persisted', (
+    tester,
+  ) async {
+    final localeStore = FakeSourceLocalePreferenceStore();
+    final controller = SourcePriorityController(
+      registry: ExtensionRegistry([]),
+      store: FakeSourcePriorityStore(),
+      localeStore: localeStore,
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SettingsPage(),
+        registry: ExtensionRegistry([]),
+        sourcePriorityController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Preferred source locale'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prefer Indonesian providers'));
+    await tester.pumpAndSettle();
+
+    expect(controller.sourceLocale, SourceLocalePreference.indonesia);
+    expect(localeStore.saved, SourceLocalePreference.indonesia);
+  });
+
   testWidgets('NSFW toggle changes the saved content preference', (
     tester,
   ) async {
@@ -115,7 +148,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch));
     await tester.pump();
@@ -152,7 +185,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();

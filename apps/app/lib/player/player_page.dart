@@ -169,6 +169,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _pipBackground = false;
   bool _pipDetachedFromRoute = false;
   bool _resumeAfterPictureInPicture = false;
+  NavigatorState? _pipNavigator;
   PictureInPictureSession? _pictureInPictureSession;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
@@ -343,6 +344,12 @@ class _PlayerPageState extends State<PlayerPage> {
       _sourceStarted = true;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
+      if (_waitingForFallback) {
+        setState(() {
+          _waitingForFallback = false;
+          _retrying = false;
+        });
+      }
       // Only once the stream is actually running: arming on the resolved URL
       // alone would schedule renewals for a source that never played.
       _armRenewalTimer();
@@ -823,6 +830,7 @@ class _PlayerPageState extends State<PlayerPage> {
         // this route is removed, keeping the native controller alive while
         // the caller's navigation stack becomes active again.
         _pipDetachedFromRoute = true;
+        _pipNavigator = navigator;
         final session = AppScope.of(context).pictureInPictureSession;
         session.attach(widget);
         final route = ModalRoute.of(context);
@@ -857,6 +865,22 @@ class _PlayerPageState extends State<PlayerPage> {
     final shouldResume = _resumeAfterPictureInPicture;
     _resumeAfterPictureInPicture = false;
     setState(() => _pipBackground = false);
+    final navigator = _pipNavigator;
+    final session = _pictureInPictureSession;
+    if (_pipDetachedFromRoute &&
+        navigator?.mounted == true &&
+        session != null) {
+      // PiP was detached from the route so Home could remain usable. Put the
+      // same keyed PlayerPage back above that route when iOS expands PiP.
+      // Push before detaching from the host so the platform view can reparent
+      // without disposing the native player between the two locations.
+      unawaited(
+        navigator!.push<void>(MaterialPageRoute<void>(builder: (_) => widget)),
+      );
+      session.detach(widget);
+      _pipDetachedFromRoute = false;
+      _pipNavigator = null;
+    }
     if (shouldResume) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_controller?.play());

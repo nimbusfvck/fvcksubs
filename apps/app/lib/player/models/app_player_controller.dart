@@ -59,6 +59,7 @@ class AppQualityTrack {
     this.width,
     this.bitrate,
     this.platformTrack,
+    this.variant,
   });
 
   final String id;
@@ -70,6 +71,10 @@ class AppQualityTrack {
 
   final int? bitrate;
   final Object? platformTrack;
+
+  /// Provider-supplied rendition. Unlike [platformTrack], selecting this
+  /// replaces the network URL when the provider returned fixed renditions.
+  final StreamVariant? variant;
 }
 
 /// Names a rendition the way viewers meet it elsewhere: 720p, 1080p, 4K.

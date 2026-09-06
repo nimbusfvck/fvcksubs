@@ -346,3 +346,82 @@ class SharedPreferencesSourcePriorityStore implements SourcePriorityStore {
     await prefs.setStringList(_key, providerIds);
   }
 }
+
+/// The market/language override used when ranking stream providers.
+class SourceLocalePreference {
+  /// Creates a source locale preference. Null codes mean device locale.
+  const SourceLocalePreference({this.countryCode, this.languageCode});
+
+  /// Use the device locale.
+  static const auto = SourceLocalePreference();
+
+  /// Prefer Indonesian providers.
+  static const indonesia = SourceLocalePreference(
+    countryCode: 'ID',
+    languageCode: 'id',
+  );
+
+  /// Prefer English-language providers regardless of country.
+  static const english = SourceLocalePreference(languageCode: 'en');
+
+  /// ISO 3166-1 alpha-2 country code override.
+  final String? countryCode;
+
+  /// ISO 639-1 language code override.
+  final String? languageCode;
+
+  /// Whether the device locale should be used.
+  bool get isAuto => countryCode == null && languageCode == null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SourceLocalePreference &&
+      other.countryCode == countryCode &&
+      other.languageCode == languageCode;
+
+  @override
+  int get hashCode => Object.hash(countryCode, languageCode);
+}
+
+/// Persists the optional source market/language override.
+abstract class SourceLocalePreferenceStore {
+  /// Loads the saved preference, defaulting to device locale.
+  Future<SourceLocalePreference> load();
+
+  /// Saves the source locale preference.
+  Future<void> save(SourceLocalePreference preference);
+}
+
+/// [SourceLocalePreferenceStore] backed by `shared_preferences`.
+class SharedPreferencesSourceLocalePreferenceStore
+    implements SourceLocalePreferenceStore {
+  /// Creates the shared-preferences-backed store.
+  const SharedPreferencesSourceLocalePreferenceStore();
+
+  static const String _countryKey = 'playback.sourceLocaleCountry';
+  static const String _languageKey = 'playback.sourceLocaleLanguage';
+
+  @override
+  Future<SourceLocalePreference> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return SourceLocalePreference(
+      countryCode: prefs.getString(_countryKey),
+      languageCode: prefs.getString(_languageKey),
+    );
+  }
+
+  @override
+  Future<void> save(SourceLocalePreference preference) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (preference.countryCode == null) {
+      await prefs.remove(_countryKey);
+    } else {
+      await prefs.setString(_countryKey, preference.countryCode!);
+    }
+    if (preference.languageCode == null) {
+      await prefs.remove(_languageKey);
+    } else {
+      await prefs.setString(_languageKey, preference.languageCode!);
+    }
+  }
+}

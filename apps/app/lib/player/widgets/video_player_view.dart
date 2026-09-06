@@ -103,7 +103,8 @@ Rect subtitleOverlayRect({
 
 class _VideoPlayerViewState extends State<VideoPlayerView>
     with WidgetsBindingObserver {
-  late final vp.VideoPlayerController _player;
+  late vp.VideoPlayerController _player;
+  late PlayableStream _activeStream;
   late final _VideoPlayerControllerAdapter _adapter;
   late PlayerFitMode _fitMode;
   bool _readyReported = false;
@@ -134,39 +135,88 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         (_) => _wakelock?.refresh(),
       );
     }
+    _activeStream = widget.stream;
+    _player = _createPlayer(_activeStream);
+    _adapter = _VideoPlayerControllerAdapter(
+      _player,
+      onSetFit: (mode) {
+        if (mounted) setState(() => _fitMode = mode);
+      },
+      onSelectVariant: _selectVariant,
+      streamUrl: _activeStream.url,
+      variants: _activeStream.variants,
+    );
+    _bindPlayer();
+    widget.onControllerCreated?.call(_adapter);
+    unawaited(_open());
+  }
+
+  vp.VideoPlayerController _createPlayer(PlayableStream stream) {
     // iOS PiP needs a native AVPlayerLayer. Full playback therefore uses the
     // platform view on iOS; previews remain texture-backed because they never
     // enter the PiP workflow.
     final usePlatformView =
-        widget.stream.isProtected || (Platform.isIOS && !widget.preview);
-    _player = vp.VideoPlayerController.networkUrl(
-      Uri.parse(widget.stream.url),
-      httpHeaders: widget.stream.headers,
+        stream.isProtected || (Platform.isIOS && !widget.preview);
+    return vp.VideoPlayerController.networkUrl(
+      Uri.parse(stream.url),
+      httpHeaders: stream.headers,
       isLive: widget.isLive,
       videoPlayerOptions: widget.isLive
           ? vp.VideoPlayerOptions(
               liveConfiguration: widget.liveOptions ?? _defaultLiveOptions(),
             )
           : null,
-      drmConfiguration: videoPlayerDrmConfiguration(widget.stream),
+      drmConfiguration: videoPlayerDrmConfiguration(stream),
       viewType: usePlatformView
           ? vp.VideoViewType.platformView
           : vp.VideoViewType.textureView,
     );
-    _adapter = _VideoPlayerControllerAdapter(
-      _player,
-      onSetFit: (mode) {
-        if (mounted) setState(() => _fitMode = mode);
-      },
-    );
+  }
+
+  void _bindPlayer() {
     _player.addListener(_onValueChanged);
     _videoEventSubscription = _player.videoEvents.listen((event) {
       if (event.eventType == vp.VideoEventType.pictureInPictureRestore) {
         _adapter.reportPictureInPictureRestore();
       }
     });
-    widget.onControllerCreated?.call(_adapter);
-    unawaited(_open());
+  }
+
+  Future<void> _selectVariant(StreamVariant? variant) async {
+    if (!_isActive) return;
+    final oldPlayer = _player;
+    final restorePosition = oldPlayer.value.position;
+    final restorePlaying = oldPlayer.value.isPlaying;
+    await _videoEventSubscription?.cancel();
+    _videoEventSubscription = null;
+    oldPlayer.removeListener(_onValueChanged);
+    await oldPlayer.dispose();
+    if (!_isActive) return;
+
+    _activeStream = variant == null
+        ? widget.stream
+        : PlayableStream(
+            url: variant.url,
+            headers: variant.headers.isEmpty
+                ? widget.stream.headers
+                : variant.headers,
+            format: variant.format,
+            drm: widget.stream.drm,
+            audioUrl: widget.stream.audioUrl,
+            label: variant.label,
+            subtitles: widget.stream.subtitles,
+            variants: widget.stream.variants,
+          );
+    _player = _createPlayer(_activeStream);
+    _adapter.attachPlayer(_player);
+    _adapter.setActiveUrl(_activeStream.url);
+    _bindPlayer();
+    if (mounted) setState(() {});
+    await _open(
+      restorePosition: restorePosition,
+      restorePlaying: restorePlaying,
+      applyPreferredQuality: false,
+    );
   }
 
   /// Selects app-level live defaults without changing the shared package API.
@@ -183,11 +233,15 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     );
   }
 
-  Future<void> _open() async {
+  Future<void> _open({
+    Duration? restorePosition,
+    bool? restorePlaying,
+    bool applyPreferredQuality = true,
+  }) async {
     final stopwatch = Stopwatch()..start();
     _openStopwatch = stopwatch;
     try {
-      final audioUrl = widget.stream.audioUrl;
+      final audioUrl = _activeStream.audioUrl;
       if (audioUrl != null && audioUrl.isNotEmpty) {
         throw UnsupportedError(
           'The native player does not support a separate audio URL.',
@@ -197,8 +251,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         'initialize_start',
         stopwatch,
         details:
-            'url=${safePlaybackUrlForLog(widget.stream.url)} '
-            'format=${widget.stream.format.name}',
+            'url=${safePlaybackUrlForLog(_activeStream.url)} '
+            'format=${_activeStream.format.name}',
       );
       await _player.initialize();
       if (!_isActive) return;
@@ -213,6 +267,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       if (!_isActive) return;
       await _player.setVolume(widget.muted ? 0 : 1);
       if (!_isActive) return;
+      if (restorePosition != null && restorePosition > Duration.zero) {
+        final duration = _player.value.duration;
+        final target = duration > Duration.zero && restorePosition > duration
+            ? duration
+            : restorePosition;
+        await _player.seekTo(target);
+        if (!_isActive) return;
+      }
       _logOpenStage('player_configured', stopwatch);
       await _adapter.refreshTracks();
       if (!_isActive) return;
@@ -223,7 +285,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             'audio=${_adapter.audioTracks.length} '
             'video=${_adapter.qualityTracks.length}',
       );
-      await _applyPreferredQuality();
+      if (applyPreferredQuality) await _applyPreferredQuality();
       if (!_isActive) return;
       _logOpenStage(
         'quality_initial_done',
@@ -252,7 +314,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       } else {
         _logOpenStage('subtitle_skipped', stopwatch);
       }
-      if (widget.playing) {
+      if (restorePlaying ?? widget.playing) {
         _logOpenStage('play_start', stopwatch);
         await _player.play();
         if (!_isActive) return;
@@ -420,7 +482,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     if (external != null) return external;
     final language = widget.preferredSubtitleLanguage;
     if (language == null) return null;
-    for (final track in widget.stream.subtitles) {
+    for (final track in _activeStream.subtitles) {
       if (subtitleLanguageKey(track.language) ==
           subtitleLanguageKey(language)) {
         return track;

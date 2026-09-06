@@ -17,8 +17,7 @@ void main() {
   var blockedHitCount = 0;
   late JsEngine engine;
 
-  String urlFor(String host, String path) =>
-      'http://$host:${server.port}$path';
+  String urlFor(String host, String path) => 'http://$host:${server.port}$path';
 
   setUp(() async {
     blockedHitCount = 0;
@@ -63,6 +62,32 @@ void main() {
               }),
             );
           await request.response.close();
+        case '/cloudflare':
+          if (request.headers.value('cookie') ==
+                  'cf_clearance=fixture-clearance' &&
+              request.headers.value('user-agent') == 'Fixture-WebView') {
+            request.response
+              ..statusCode = 200
+              ..write('challenge solved');
+          } else {
+            request.response
+              ..headers.set('server', 'cloudflare')
+              ..statusCode = 403
+              ..write('challenge');
+          }
+          await request.response.close();
+        case '/cloudflare-ua-only':
+          if (request.headers.value('user-agent') == 'Fixture-WebView') {
+            request.response
+              ..statusCode = 200
+              ..write('challenge solved with browser UA');
+          } else {
+            request.response
+              ..headers.set('server', 'cloudflare')
+              ..statusCode = 403
+              ..write('challenge');
+          }
+          await request.response.close();
         default:
           request.response.statusCode = 404;
           await request.response.close();
@@ -93,12 +118,127 @@ void main() {
     expect(decoded['header'], 'hello');
   });
 
-  test('a .then() chain (no top-level await) also runs to completion', () async {
-    final result = await engine.evalAsync(
-      'fetch(${jsonEncode(urlFor('127.0.0.1', '/ok'))}).then(r => r.status)',
+  test(
+    'a Cloudflare response is retried with host-solved cookies and UA',
+    () async {
+      var solverCalls = 0;
+      final challenged = JsEngine(
+        allowedHosts: {InternetAddress.loopbackIPv4.address},
+        cloudflareSolver: (url, {referer}) async {
+          expect(url, contains('/cloudflare'));
+          expect(referer, contains('/referrer'));
+          solverCalls++;
+          return const JsCloudflareChallenge(
+            cookies: {'cf_clearance': 'fixture-clearance'},
+            userAgent: 'Fixture-WebView',
+          );
+        },
+      );
+      try {
+        final result = await challenged.evalAsync(
+          'fetch(${jsonEncode(urlFor('127.0.0.1', '/cloudflare'))}, '
+          '{headers: {Referer: ${jsonEncode(urlFor('127.0.0.1', '/referrer'))}}})'
+          '.then((r) => ({status: r.status, body: r.body}))',
+        );
+        final decoded = jsonDecode(result) as Map;
+        expect(decoded['status'], 200);
+        expect(decoded['body'], 'challenge solved');
+        expect(solverCalls, 1);
+      } finally {
+        challenged.dispose();
+      }
+    },
+  );
+
+  test(
+    'a Cloudflare response can retry with a browser UA when no clearance cookie exists',
+    () async {
+      final challenged = JsEngine(
+        allowedHosts: {InternetAddress.loopbackIPv4.address},
+        cloudflareSolver: (url, {referer}) async {
+          expect(url, contains('/cloudflare-ua-only'));
+          return const JsCloudflareChallenge(
+            cookies: {},
+            userAgent: 'Fixture-WebView',
+          );
+        },
+      );
+      try {
+        final result = await challenged.evalAsync(
+          'fetch(${jsonEncode(urlFor('127.0.0.1', '/cloudflare-ua-only'))})'
+          '.then((r) => ({status: r.status, body: r.body}))',
+        );
+        final decoded = jsonDecode(result) as Map;
+        expect(decoded['status'], 200);
+        expect(decoded['body'], 'challenge solved with browser UA');
+      } finally {
+        challenged.dispose();
+      }
+    },
+  );
+
+  test('a Cloudflare POST does not launch a browser challenge', () async {
+    var solverCalls = 0;
+    final challenged = JsEngine(
+      allowedHosts: {InternetAddress.loopbackIPv4.address},
+      cloudflareSolver: (url, {referer}) async {
+        solverCalls++;
+        return const JsCloudflareChallenge(cookies: {});
+      },
     );
-    expect(result, '200');
+    try {
+      final result = await challenged.evalAsync(
+        'fetch(${jsonEncode(urlFor('127.0.0.1', '/cloudflare'))}, '
+        '{method: "POST"}).then((r) => r.status)',
+      );
+      expect(result, '403');
+      expect(solverCalls, 0);
+    } finally {
+      challenged.dispose();
+    }
   });
+
+  test(
+    'a WebView interception request returns only the captured media URL',
+    () async {
+      var resolverCalls = 0;
+      final webView = JsEngine(
+        allowedHosts: {InternetAddress.loopbackIPv4.address},
+        webViewResolver: (url, {referer, interceptPattern}) async {
+          resolverCalls++;
+          expect(url, contains('/ok'));
+          expect(referer, contains('/referrer'));
+          expect(interceptPattern, 'm3u8|master\\.txt');
+          return 'https://cdn.example.test/media/master.m3u8';
+        },
+      );
+      try {
+        final result = await webView.evalAsync(
+          'fetch(${jsonEncode(urlFor('127.0.0.1', '/ok'))}, '
+          '{headers: {Referer: ${jsonEncode(urlFor('127.0.0.1', '/referrer'))}, '
+          '"X-QJSR-WebView-Pattern": "m3u8|master\\\\.txt"}})'
+          '.then((r) => ({status: r.status, url: r.url, body: r.body}))',
+        );
+        final decoded = jsonDecode(result) as Map;
+        expect(decoded['status'], 200);
+        expect(decoded['url'], 'https://cdn.example.test/media/master.m3u8');
+        expect(decoded['body'], '');
+        expect(resolverCalls, 1);
+      } finally {
+        webView.dispose();
+      }
+    },
+  );
+
+  test(
+    'a .then() chain (no top-level await) also runs to completion',
+    () async {
+      final result = await engine.evalAsync(
+        'fetch(${jsonEncode(urlFor('127.0.0.1', '/ok'))}).then(r => r.status)',
+      );
+      expect(result, '200');
+    },
+  );
 
   test('a redirect within the allowlist is followed', () async {
     final result = await engine.evalAsync('''
@@ -188,39 +328,47 @@ void main() {
     }
   });
 
-  test('"*" as a label, not the whole entry, still matches one label', () async {
-    final open = JsEngine(allowedHosts: const {'*.0.0.1'});
-    try {
-      await expectLater(
-        open.evalAsync(
-          'await fetch(${jsonEncode(urlFor('localhost', '/blocked'))})',
-        ),
-        throwsA(isA<JsEvalException>()),
+  test(
+    '"*" as a label, not the whole entry, still matches one label',
+    () async {
+      final open = JsEngine(allowedHosts: const {'*.0.0.1'});
+      try {
+        await expectLater(
+          open.evalAsync(
+            'await fetch(${jsonEncode(urlFor('localhost', '/blocked'))})',
+          ),
+          throwsA(isA<JsEvalException>()),
+        );
+        expect(blockedHitCount, 0);
+      } finally {
+        open.dispose();
+      }
+    },
+  );
+
+  test(
+    'a fetch that settles after dispose is dropped, not delivered',
+    () async {
+      final doomed = JsEngine(
+        allowedHosts: {InternetAddress.loopbackIPv4.address},
+        fetchTimeout: const Duration(seconds: 5),
       );
-      expect(blockedHitCount, 0);
-    } finally {
-      open.dispose();
-    }
-  });
+      // Deliberately not awaited: the engine goes away while it is in flight,
+      // which is what an extension replaced by an update does to its own.
+      unawaited(
+        doomed
+            .evalAsync(
+              'await fetch(${jsonEncode(urlFor('127.0.0.1', '/slow'))})',
+            )
+            .catchError((Object _) => ''),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      doomed.dispose();
 
-  test('a fetch that settles after dispose is dropped, not delivered', () async {
-    final doomed = JsEngine(
-      allowedHosts: {InternetAddress.loopbackIPv4.address},
-      fetchTimeout: const Duration(seconds: 5),
-    );
-    // Deliberately not awaited: the engine goes away while it is in flight,
-    // which is what an extension replaced by an update does to its own.
-    unawaited(
-      doomed
-          .evalAsync('await fetch(${jsonEncode(urlFor('127.0.0.1', '/slow'))})')
-          .catchError((Object _) => ''),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    doomed.dispose();
-
-    // Long enough for the response to arrive at a disposed engine.
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-  });
+      // Long enough for the response to arrive at a disposed engine.
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+    },
+  );
 
   group('per-request timeoutMs', () {
     test('lets one call wait past the engine-wide fetch timeout', () async {

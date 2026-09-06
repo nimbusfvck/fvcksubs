@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -71,6 +72,82 @@ void main() {
           ])
           .map((source) => source.id),
       ['b', 'a'],
+    );
+  });
+
+  test(
+    'locale metadata prefers a matching provider when no manual order exists',
+    () {
+      final registry = ExtensionRegistry([
+        FakeExtension(
+          id: 'global',
+          providerLocales: const ProviderLocales(
+            countries: ['US'],
+            languages: ['en'],
+          ),
+        ),
+        FakeExtension(
+          id: 'local',
+          providerLocales: const ProviderLocales(
+            countries: ['ID'],
+            languages: ['id'],
+          ),
+        ),
+      ]);
+      final controller = SourcePriorityController(
+        registry: registry,
+        store: FakeSourcePriorityStore(),
+        sourceLocale: SourceLocalePreference.indonesia,
+      );
+
+      expect(
+        controller
+            .order(const [
+              StreamSource(
+                id: 'global',
+                label: 'Global',
+                providerId: 'global.p',
+              ),
+              StreamSource(id: 'local', label: 'Local', providerId: 'local.p'),
+            ])
+            .map((source) => source.id),
+        ['local', 'global'],
+      );
+    },
+  );
+
+  test('explicit provider order overrides locale ranking', () {
+    final registry = ExtensionRegistry([
+      FakeExtension(
+        id: 'global',
+        providerLocales: const ProviderLocales(
+          countries: ['US'],
+          languages: ['en'],
+        ),
+      ),
+      FakeExtension(
+        id: 'local',
+        providerLocales: const ProviderLocales(
+          countries: ['ID'],
+          languages: ['id'],
+        ),
+      ),
+    ]);
+    final controller = SourcePriorityController(
+      registry: registry,
+      store: FakeSourcePriorityStore(),
+      initial: const ['global.p'],
+      sourceLocale: SourceLocalePreference.indonesia,
+    );
+
+    expect(
+      controller
+          .order(const [
+            StreamSource(id: 'local', label: 'Local', providerId: 'local.p'),
+            StreamSource(id: 'global', label: 'Global', providerId: 'global.p'),
+          ])
+          .map((source) => source.id),
+      ['global', 'local'],
     );
   });
 }

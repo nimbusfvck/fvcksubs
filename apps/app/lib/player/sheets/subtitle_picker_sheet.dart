@@ -8,6 +8,8 @@ import '../mappers/stream_player_mapping.dart'
     show subtitleLanguageLabel, subtitlesForPicker;
 import '../models/app_player_controller.dart';
 import '../models/playback_media.dart';
+import '../state/subtitle_preference_controller.dart';
+import '../data/subtitle_translate_service.dart';
 
 class PlayerSubtitlePickerSheet extends StatefulWidget {
   const PlayerSubtitlePickerSheet({
@@ -22,6 +24,8 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
     this.initialOnlineResults = const [],
     this.selectedOnlineResultKey,
     this.onOnlineResultsFetched,
+    this.translationSourceTracks = const [],
+    this.subtitleTranslateService,
   });
 
   final PlaybackMedia media;
@@ -35,6 +39,8 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
   final String? selectedOnlineResultKey;
   final void Function(List<OnlineSubtitleSearchResult> results)?
   onOnlineResultsFetched;
+  final List<SubtitleTrack> translationSourceTracks;
+  final SubtitleTranslateService? subtitleTranslateService;
 
   @override
   State<PlayerSubtitlePickerSheet> createState() =>
@@ -52,7 +58,9 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   _OnlineSearchState _onlineState = _OnlineSearchState.idle;
   List<OnlineSubtitleSearchResult> _onlineResults = const [];
   String? _materializingId;
+  bool _translating = false;
   late final OnlineSubtitleSearchService _searchService;
+  late final SubtitleTranslateService _translateService;
   bool _ownsSearchService = false;
 
   @override
@@ -62,6 +70,8 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     _onlineResults = widget.initialOnlineResults;
     _searchService =
         widget.subtitleSearchService ?? OnlineSubtitleSearchService();
+    _translateService =
+        widget.subtitleTranslateService ?? SubtitleTranslateService.instance;
     _ownsSearchService = widget.subtitleSearchService == null;
   }
 
@@ -170,6 +180,52 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
       );
     } catch (_) {
       if (mounted) setState(() => _materializingId = null);
+    }
+  }
+
+  List<SubtitleTrack> get _translationSources {
+    final target = preferenceLanguageCode;
+    if (target == null || target.isEmpty) return const [];
+    final targetKey = subtitleLanguageKey(target);
+    final visibleTracks = subtitlesForPicker([
+      ...widget.tracks,
+      ..._externalTracks,
+    ]);
+    if (visibleTracks.any(
+      (track) => subtitleLanguageKey(track.language) == targetKey,
+    )) {
+      return const [];
+    }
+    final availableSourceTracks = [
+      ...widget.translationSourceTracks,
+      ...widget.tracks,
+      ..._externalTracks,
+    ];
+    final seenUrls = <String>{};
+    return [
+      for (final track in availableSourceTracks)
+        if (track.url.isNotEmpty &&
+            subtitleLanguageKey(track.language) != targetKey &&
+            seenUrls.add(track.url))
+          track,
+    ];
+  }
+
+  Future<void> _translateSource(SubtitleTrack source) async {
+    final target = preferenceLanguageCode;
+    if (target == null || target.isEmpty) return;
+    setState(() => _translating = true);
+    try {
+      final translated = await _translateService.translateTrack(
+        source,
+        targetIso: target,
+      );
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pop(PlayerSubtitleSelection.track(translated, isExternal: true));
+    } catch (_) {
+      if (mounted) setState(() => _translating = false);
     }
   }
 
@@ -296,6 +352,33 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
                               }
                             },
                           ),
+                        if (_translationSources.isNotEmpty)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.translate_rounded,
+                              color: AppColors.brandAccent,
+                            ),
+                            title: Text(
+                              'Translate to $preferenceLanguageLabel',
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onDark,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Choose which available subtitle to translate',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.onDarkSoft,
+                              ),
+                            ),
+                            enabled: _materializingId == null,
+                            onTap: () => setState(
+                              () => _expanded = _SubtitleGroup(
+                                label: 'Choose subtitle to translate',
+                                tracks: _translationSources,
+                                isTranslation: true,
+                              ),
+                            ),
+                          ),
                         const Divider(color: AppColors.hairlineDark, height: 1),
                         ListTile(
                           leading: _onlineState == _OnlineSearchState.loading
@@ -412,14 +495,28 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
                                 color: AppColors.onDark,
                               ),
                             ),
+                            subtitle: expanded.isTranslation
+                                ? Text(
+                                    subtitleLanguageLabel(track.language),
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.onDarkSoft,
+                                    ),
+                                  )
+                                : null,
                             trailing: _isSelected(track)
                                 ? const Icon(
                                     Icons.check,
                                     color: AppColors.brandAccent,
                                   )
                                 : null,
-                            onTap: () =>
-                                Navigator.of(context).pop(_sourceFor(track)),
+                            enabled: !_translating,
+                            onTap: () {
+                              if (expanded.isTranslation) {
+                                _translateSource(track);
+                              } else {
+                                Navigator.of(context).pop(_sourceFor(track));
+                              }
+                            },
                           ),
                       ],
               ),
@@ -448,8 +545,13 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
 }
 
 class _SubtitleGroup {
-  const _SubtitleGroup({required this.label, required this.tracks});
+  const _SubtitleGroup({
+    required this.label,
+    required this.tracks,
+    this.isTranslation = false,
+  });
 
   final String label;
   final List<SubtitleTrack> tracks;
+  final bool isTranslation;
 }

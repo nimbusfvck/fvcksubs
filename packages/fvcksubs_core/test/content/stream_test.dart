@@ -109,6 +109,31 @@ void main() {
     );
   });
 
+  test('PlayableStream with rendition variants round-trips', () {
+    const stream = PlayableStream(
+      url: 'https://cdn.example.com/movie-1080.mp4',
+      variants: [
+        StreamVariant(
+          id: 'quality-360p',
+          url: 'https://cdn.example.com/movie-360.mp4',
+          label: '360p',
+          height: 360,
+        ),
+        StreamVariant(
+          id: 'quality-1080p',
+          url: 'https://cdn.example.com/movie-1080.mp4',
+          label: '1080p',
+          height: 1080,
+        ),
+      ],
+    );
+    expectRoundTrips(
+      stream,
+      toJson: (s) => s.toJson(),
+      fromJson: PlayableStream.fromJson,
+    );
+  });
+
   test('a stream with no subtitles omits the field entirely', () {
     const stream = PlayableStream(url: 'https://cdn.example.com/movie.m3u8');
     expect(stream.toJson().containsKey('subtitles'), isFalse);

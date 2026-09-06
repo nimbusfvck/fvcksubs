@@ -18,6 +18,31 @@ class JsEvalException implements Exception {
   String toString() => 'JsEvalException: $message';
 }
 
+/// Cookies and headers returned by a host-side browser challenge solver.
+///
+/// The JS bundle never sees this object directly. The fetch bridge applies the
+/// values to one retry of the challenged request, which keeps anti-bot session
+/// state out of extension source ids and protocol payloads.
+class JsCloudflareChallenge {
+  const JsCloudflareChallenge({required this.cookies, this.userAgent});
+
+  final Map<String, String> cookies;
+  final String? userAgent;
+}
+
+/// Resolves a browser challenge and returns the cookie jar state for [url].
+typedef JsCloudflareSolver =
+    Future<JsCloudflareChallenge?> Function(String url, {String? referer});
+
+/// Resolves a media URL by loading a provider page in a host WebView and
+/// returning the first resource matching [interceptPattern].
+typedef JsWebViewResolver =
+    Future<String?> Function(
+      String url, {
+      String? referer,
+      String? interceptPattern,
+    });
+
 /// A function JS can call via the engine's `__host_call(name, argsJson)`.
 ///
 /// Runs synchronously, on the same call stack as [JsEngine.eval] — see
@@ -72,6 +97,8 @@ class JsEngine {
   /// consumed here, not sent.
   JsEngine({
     Set<String>? allowedHosts,
+    JsCloudflareSolver? cloudflareSolver,
+    JsWebViewResolver? webViewResolver,
     Duration? fetchTimeout,
     Duration? maxFetchTimeout,
     int? maxRedirects,
@@ -80,6 +107,8 @@ class JsEngine {
     Duration scriptTimeout = const Duration(seconds: 10),
   }) : _engine = bindings.qjsr_new_engine(),
        _allowedHosts = allowedHosts,
+       _cloudflareSolver = cloudflareSolver,
+       _webViewResolver = webViewResolver,
        _fetchTimeout = fetchTimeout ?? const Duration(seconds: 15),
        _maxFetchTimeout = maxFetchTimeout ?? const Duration(seconds: 45),
        _maxRedirects = maxRedirects ?? 10 {
@@ -98,6 +127,8 @@ class JsEngine {
 
   final ffi.Pointer<bindings.QjsrEngine> _engine;
   final Set<String>? _allowedHosts;
+  final JsCloudflareSolver? _cloudflareSolver;
+  final JsWebViewResolver? _webViewResolver;
   final Duration _fetchTimeout;
   final Duration _maxFetchTimeout;
   final int _maxRedirects;
@@ -206,7 +237,9 @@ class JsEngine {
 
   void _installFetch() {
     final callable =
-        ffi.NativeCallable<bindings.QjsrFetchStartCallbackFunction>.isolateLocal((
+        ffi.NativeCallable<
+          bindings.QjsrFetchStartCallbackFunction
+        >.isolateLocal((
           int requestId,
           ffi.Pointer<ffi.Char> urlPtr,
           ffi.Pointer<ffi.Char> methodPtr,
@@ -281,11 +314,37 @@ class JsEngine {
     required String? body,
   }) async {
     var currentUrl = url;
+    var cloudflareRetried = false;
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       final uri = Uri.parse(currentUrl);
       final allowed = _allowedHosts;
       if (allowed != null && !_hostAllowed(uri.host, allowed)) {
         throw StateError('host not allowed: ${uri.host}');
+      }
+
+      final webViewPattern = _takePrivateHeader(headers, _webViewPatternHeader);
+      final cloudflareDisabled =
+          _takePrivateHeader(headers, _cloudflareDisabledHeader) != null;
+      if (webViewPattern != null) {
+        if (method.toUpperCase() != 'GET' || _webViewResolver == null) {
+          return _FetchResult(
+            status: 501,
+            headers: const {},
+            url: currentUrl,
+            body: '',
+          );
+        }
+        final mediaUrl = await _webViewResolver(
+          currentUrl,
+          referer: _headerValue(headers, 'referer'),
+          interceptPattern: webViewPattern,
+        );
+        return _FetchResult(
+          status: mediaUrl == null ? 404 : 200,
+          headers: const {},
+          url: mediaUrl ?? currentUrl,
+          body: '',
+        );
       }
 
       final response = await _dio.requestUri<List<int>>(
@@ -303,6 +362,34 @@ class JsEngine {
       );
 
       final status = response.statusCode ?? 0;
+
+      if (!cloudflareDisabled &&
+          !cloudflareRetried &&
+          method.toUpperCase() == 'GET' &&
+          _cloudflareSolver != null &&
+          (status == 403 || status == 503) &&
+          _isCloudflareResponse(response.headers)) {
+        final challenge = await _cloudflareSolver(
+          currentUrl,
+          referer: _headerValue(headers, 'referer'),
+        );
+        if (challenge != null &&
+            (challenge.cookies.isNotEmpty ||
+                challenge.userAgent?.isNotEmpty == true)) {
+          final cookieHeader = challenge.cookies.entries
+              .map((entry) => '${entry.key}=${entry.value}')
+              .join('; ');
+          headers = {
+            ...headers,
+            if (cookieHeader.isNotEmpty) 'cookie': cookieHeader,
+            if (challenge.userAgent != null) 'user-agent': challenge.userAgent!,
+          };
+          cloudflareRetried = true;
+          hop--;
+          continue;
+        }
+      }
+
       if (status >= 300 && status < 400) {
         final location = response.headers.value('location');
         if (location != null) {
@@ -323,6 +410,31 @@ class JsEngine {
       );
     }
     throw StateError('too many redirects');
+  }
+
+  static bool _isCloudflareResponse(Headers headers) {
+    return headers.value('server')?.toLowerCase().contains('cloudflare') ??
+        false;
+  }
+
+  static String? _headerValue(Map<String, dynamic> headers, String wanted) {
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == wanted) return '${entry.value}';
+    }
+    return null;
+  }
+
+  static String? _takePrivateHeader(
+    Map<String, dynamic> headers,
+    String wanted,
+  ) {
+    final key = headers.keys.firstWhere(
+      (name) => name.toLowerCase() == wanted,
+      orElse: () => '',
+    );
+    if (key.isEmpty) return null;
+    final value = headers.remove(key);
+    return value == null ? null : '$value';
   }
 
   void _resolveFetch(
@@ -455,6 +567,15 @@ bool _hostAllowed(String host, Set<String> allowed) {
 /// against it and strips it before the request goes out.
 const _timeoutHeader = 'x-qjsr-timeout-ms';
 
+/// Private fetch header used to request a host-side WebView resource
+/// interception. It is consumed before Dio and never sent over the network.
+const _webViewPatternHeader = 'x-qjsr-webview-pattern';
+
+/// Private fetch header used by a provider that has its own WebView fallback.
+/// It prevents the generic Cloudflare cookie solver from opening a visible
+/// browser before that provider's media interception path gets a chance.
+const _cloudflareDisabledHeader = 'x-qjsr-disable-cloudflare';
+
 /// Teaches the native `fetch` one option it has no parameter for.
 ///
 /// The C bridge carries exactly url/method/headers/body, and widening that
@@ -466,7 +587,8 @@ const _timeoutHeader = 'x-qjsr-timeout-ms';
 ///
 /// Installed before any script runs, so a bundle cannot get at the
 /// unwrapped `fetch` to smuggle the header in by hand.
-const _fetchOptionsShim = '''
+const _fetchOptionsShim =
+    '''
 (() => {
   const nativeFetch = globalThis.fetch;
   if (typeof nativeFetch !== 'function') return;

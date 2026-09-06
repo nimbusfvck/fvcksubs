@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_js_runtime/fvcksubs_js_runtime.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'addons/addons_controller.dart';
@@ -21,10 +22,12 @@ import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
+import 'platform/cloudflare_killer.dart';
 import 'settings/nsfw_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final cloudflareKiller = CloudflareKiller();
 
   // These reads do not depend on one another. Starting them together keeps
   // the first frame from paying each storage/platform round-trip in series.
@@ -62,6 +65,8 @@ Future<void> main() async {
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityFuture = sourcePriorityStore.load();
+  const sourceLocaleStore = SharedPreferencesSourceLocalePreferenceStore();
+  final sourceLocaleFuture = sourceLocaleStore.load();
 
   final sourceListStore = SharedPreferencesSourceListStore();
   final sourceCacheFuture = _loadPersistedOrDefault(
@@ -95,7 +100,13 @@ Future<void> main() async {
   );
 
   final extensionStorage = await extensionStorageFuture;
-  await loadInstalledExtensions(registry, installedStore, extensionStorage);
+  await loadInstalledExtensions(
+    registry,
+    installedStore,
+    extensionStorage,
+    cloudflareSolver: cloudflareKiller.solve,
+    webViewResolver: cloudflareKiller.resolveMedia,
+  );
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -109,6 +120,8 @@ Future<void> main() async {
       manifest: manifest,
       source: source,
       storage: extensionStorage.forExtension(manifest.id),
+      cloudflareSolver: cloudflareKiller.solve,
+      webViewResolver: cloudflareKiller.resolveMedia,
     ),
     forgetStorage: extensionStorage.remove,
     requestConsent: (request) async {
@@ -144,6 +157,8 @@ Future<void> main() async {
     registry: registry,
     store: sourcePriorityStore,
     initial: await sourcePriorityFuture,
+    localeStore: sourceLocaleStore,
+    sourceLocale: await sourceLocaleFuture,
   );
 
   final sourceCache = SourceCache(
@@ -204,8 +219,10 @@ Future<T> _loadPersistedOrDefault<T>({
 Future<void> loadInstalledExtensions(
   ExtensionRegistry registry,
   InstalledExtensionStore store,
-  ExtensionStorageHub storage,
-) async {
+  ExtensionStorageHub storage, {
+  JsCloudflareSolver? cloudflareSolver,
+  JsWebViewResolver? webViewResolver,
+}) async {
   final Map<String, InstalledExtension> installed;
   try {
     installed = await store.loadAll();
@@ -224,6 +241,8 @@ Future<void> loadInstalledExtensions(
           manifest: manifest,
           source: record.bundleJs,
           storage: storage.forExtension(manifest.id),
+          cloudflareSolver: cloudflareSolver,
+          webViewResolver: webViewResolver,
         ),
       );
       if (replaced is JsExtension) replaced.dispose();
