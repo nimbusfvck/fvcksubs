@@ -80,6 +80,12 @@ void main() {
     expect(await store.loadAppearance(), appearance);
   });
 
+  test('subtitle appearance defaults to 16 px', () async {
+    final store = SharedPreferencesSubtitlePreferenceStore();
+
+    expect((await store.loadAppearance()).fontSize, 16);
+  });
+
   test(
     'external subtitle track cache evicts the oldest media entries',
     () async {

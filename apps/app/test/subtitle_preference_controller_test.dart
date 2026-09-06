@@ -1,10 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/data/online_subtitle_service.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import 'support/harness.dart';
 
 void main() {
+  test('defaults subtitle appearance to 16 px', () {
+    final controller = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+    );
+
+    expect(controller.appearance.fontSize, 16);
+  });
+
   test(
     'remembers external subtitle per media and clears it for source picks',
     () async {
@@ -48,6 +57,45 @@ void main() {
       expect(controller.rememberedExternalSubtitle(first), isNull);
     },
   );
+
+  test('keeps an online temporary subtitle session-only', () async {
+    final store = FakeSubtitlePreferenceStore();
+    final controller = SubtitlePreferenceController(store: store);
+    const ref = MediaRef(extensionId: 'ext', providerId: 'movies', id: 'one');
+    const track = SubtitleTrack(
+      language: 'id',
+      url: '/tmp/fvcksubs-subtitle.srt',
+    );
+
+    controller.rememberSubtitle(ref, track: track, external: true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.rememberedExternalSubtitle(ref), track);
+    expect(store.externalSelections, isEmpty);
+  });
+
+  test('keeps successful online search results only for this session', () {
+    final store = FakeSubtitlePreferenceStore();
+    final controller = SubtitlePreferenceController(store: store);
+    const ref = MediaRef(extensionId: 'ext', providerId: 'movies', id: 'one');
+    const result = OnlineSubtitleSearchResult(
+      id: 'subtitle-1',
+      name: 'Movie.2026',
+      language: 'id',
+      source: 'OpenSubtitles',
+      provider: 'opensubtitles',
+    );
+
+    controller.rememberOnlineSearchResults(ref, 'id-ID', const [result]);
+    controller.selectOnlineSearchResult(ref, 'opensubtitles\u0000subtitle-1');
+
+    expect(controller.rememberedOnlineSearchResults(ref, 'id'), [result]);
+    expect(
+      controller.selectedOnlineSearchResultKey(ref),
+      'opensubtitles\u0000subtitle-1',
+    );
+    expect(store.externalTracks, isEmpty);
+  });
 
   group('language key', () {
     test('folds the tags and labels upstreams use for one language', () {

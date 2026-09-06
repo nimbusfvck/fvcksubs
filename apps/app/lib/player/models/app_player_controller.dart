@@ -282,12 +282,25 @@ Set<String> _repeatedValues(List<String> values) {
 }
 
 class PlayerSubtitleSelection {
-  const PlayerSubtitleSelection.off() : track = null, isExternal = false;
+  const PlayerSubtitleSelection.off()
+    : track = null,
+      isExternal = false,
+      onlineSearchResultKey = null;
 
-  const PlayerSubtitleSelection.track(this.track, {this.isExternal = false});
+  const PlayerSubtitleSelection.track(
+    this.track, {
+    this.isExternal = false,
+    this.onlineSearchResultKey,
+  });
 
   final SubtitleTrack? track;
   final bool isExternal;
+
+  /// Identifies the selected online search result for this player session.
+  ///
+  /// Online subtitle files live in temporary storage, so this is deliberately
+  /// an in-memory UI key rather than persisted subtitle metadata.
+  final String? onlineSearchResultKey;
 }
 
 /// Controls whether the video keeps its source ratio or fills the viewport.

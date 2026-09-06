@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/data/online_subtitle_service.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
 import 'package:fvcksubs_app/player/sheets/subtitle_picker_sheet.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -85,6 +86,53 @@ void main() {
 
     expect(find.textContaining('Indonesia'), findsOneWidget);
     expect(persisted, [external]);
+  });
+
+  testWidgets('shows cached online results and checks the selected one', (
+    tester,
+  ) async {
+    const result = OnlineSubtitleSearchResult(
+      id: 'subtitle-1',
+      name: 'Movie.2026',
+      language: 'id',
+      source: 'OpenSubtitles',
+      provider: 'opensubtitles',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        child: Scaffold(
+          body: PlayerSubtitlePickerSheet(
+            media: const PlaybackMedia(
+              VideoItemV2(
+                ref: MediaRef(
+                  extensionId: 'test',
+                  providerId: 'test.provider',
+                  id: 'movie-1',
+                ),
+                title: 'Movie',
+              ),
+            ),
+            tracks: const [],
+            current: null,
+            filterTracks: (tracks) => tracks,
+            initialOnlineResults: const [result],
+            selectedOnlineResultKey: 'opensubtitles\u0000subtitle-1',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Movie.2026'), findsOneWidget);
+    final resultTile = find.ancestor(
+      of: find.text('Movie.2026'),
+      matching: find.byType(ListTile),
+    );
+    expect(
+      find.descendant(of: resultTile, matching: find.byIcon(Icons.check)),
+      findsOneWidget,
+    );
   });
 }
 

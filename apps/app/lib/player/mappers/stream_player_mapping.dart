@@ -89,11 +89,19 @@ BetterPlayerSubtitlesSource subtitleSourceFor(
   SubtitleTrack track, {
   bool selectedByDefault = false,
 }) => BetterPlayerSubtitlesSource(
-  type: BetterPlayerSubtitlesSourceType.network,
+  type: _isLocalSubtitleUrl(track.url)
+      ? BetterPlayerSubtitlesSourceType.file
+      : BetterPlayerSubtitlesSourceType.network,
   name: _subtitleLabel(track),
   urls: [track.url],
   selectedByDefault: selectedByDefault,
 );
+
+bool _isLocalSubtitleUrl(String value) {
+  final uri = Uri.tryParse(value);
+  return uri?.scheme == 'file' ||
+      ((uri?.scheme.isEmpty ?? true) && value.startsWith('/'));
+}
 
 List<SubtitleTrack> subtitlesForPicker(List<SubtitleTrack> tracks) {
   final filtered = tracks.toList();

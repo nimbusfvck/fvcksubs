@@ -145,6 +145,16 @@ void main() {
     expect(ds.subtitles?[1].name, '🇮🇩 Indonesia');
   });
 
+  test('maps a materialized subtitle path to BetterPlayer file source', () {
+    final source = subtitleSourceFor(
+      const SubtitleTrack(
+        language: 'id',
+        url: 'file:///tmp/fvcksubs-subtitle.srt',
+      ),
+    );
+    expect(source.type, BetterPlayerSubtitlesSourceType.file);
+  });
+
   test('no preferred subtitle language means nothing is pre-selected', () {
     final ds = betterPlayerDataSource(
       const PlayableStream(

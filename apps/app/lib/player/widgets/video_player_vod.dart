@@ -14,6 +14,7 @@ import '../state/player_wakelock.dart';
 import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
+import 'subtitle_html_text.dart';
 
 const _playbackDiagnosticsInterval = Duration(seconds: 2);
 const _startupHealthTimeout = Duration(seconds: 8);
@@ -458,7 +459,7 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
                       ),
                       Positioned.fromRect(
                         rect: subtitleRect,
-                        child: vp.ClosedCaption(
+                        child: SubtitleHtmlText(
                           text: value.caption.text,
                           textStyle:
                               widget.subtitleAppearance?.textStyle ??

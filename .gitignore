@@ -4,6 +4,9 @@ build/
 .flutter-plugins-dependencies
 pubspec_overrides.yaml
 *.iml
+.env
+**/.env
+**/env.g.dart
 .idea/
 .DS_Store
 

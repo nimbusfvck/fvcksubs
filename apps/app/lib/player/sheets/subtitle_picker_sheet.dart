@@ -3,6 +3,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../app_scope.dart';
 import '../../theme/tokens.dart';
+import '../data/online_subtitle_service.dart';
 import '../mappers/stream_player_mapping.dart'
     show subtitleLanguageLabel, subtitlesForPicker;
 import '../models/app_player_controller.dart';
@@ -17,6 +18,10 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
     required this.filterTracks,
     this.initialExternalTracks = const [],
     this.onExternalTracksFetched,
+    this.subtitleSearchService,
+    this.initialOnlineResults = const [],
+    this.selectedOnlineResultKey,
+    this.onOnlineResultsFetched,
   });
 
   final PlaybackMedia media;
@@ -25,6 +30,11 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
   final List<SubtitleTrack> Function(List<SubtitleTrack> tracks) filterTracks;
   final List<SubtitleTrack> initialExternalTracks;
   final void Function(List<SubtitleTrack> tracks)? onExternalTracksFetched;
+  final OnlineSubtitleSearchService? subtitleSearchService;
+  final List<OnlineSubtitleSearchResult> initialOnlineResults;
+  final String? selectedOnlineResultKey;
+  final void Function(List<OnlineSubtitleSearchResult> results)?
+  onOnlineResultsFetched;
 
   @override
   State<PlayerSubtitlePickerSheet> createState() =>
@@ -33,15 +43,32 @@ class PlayerSubtitlePickerSheet extends StatefulWidget {
 
 enum _ExternalFetchState { idle, loading, foundNone }
 
+enum _OnlineSearchState { idle, loading, foundNone }
+
 class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   _SubtitleGroup? _expanded;
   List<SubtitleTrack> _externalTracks = const [];
   _ExternalFetchState _externalState = _ExternalFetchState.idle;
+  _OnlineSearchState _onlineState = _OnlineSearchState.idle;
+  List<OnlineSubtitleSearchResult> _onlineResults = const [];
+  String? _materializingId;
+  late final OnlineSubtitleSearchService _searchService;
+  bool _ownsSearchService = false;
 
   @override
   void initState() {
     super.initState();
     _externalTracks = subtitlesForPicker(widget.initialExternalTracks);
+    _onlineResults = widget.initialOnlineResults;
+    _searchService =
+        widget.subtitleSearchService ?? OnlineSubtitleSearchService();
+    _ownsSearchService = widget.subtitleSearchService == null;
+  }
+
+  @override
+  void dispose() {
+    if (_ownsSearchService) _searchService.dispose();
+    super.dispose();
   }
 
   List<_SubtitleGroup> get _groups {
@@ -80,6 +107,73 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     });
   }
 
+  Future<void> _searchOnline() async {
+    final preference = AppScope.of(context).subtitlePreferenceController;
+    final language = preference.languageCode;
+    if (language == null || language.isEmpty) return;
+    setState(() {
+      _onlineState = _OnlineSearchState.loading;
+      _onlineResults = const [];
+    });
+    try {
+      final item = widget.media.item;
+      final identity = item is EpisodeItemV2 ? item.episode : null;
+      final episode = identity?.position;
+      final season = identity == null
+          ? null
+          : _seasonFromGroup(identity.groupId);
+      final query = (item.subtitle?.trim().isNotEmpty ?? false)
+          ? item.subtitle!.trim()
+          : item.title.trim();
+      final results = await _searchService.search(
+        query: query,
+        language: language,
+        season: season,
+        episode: episode,
+        year: item.releaseYear,
+      );
+      if (!mounted) return;
+      setState(() {
+        _onlineResults = results;
+        _onlineState = results.isEmpty
+            ? _OnlineSearchState.foundNone
+            : _OnlineSearchState.idle;
+      });
+      if (results.isNotEmpty) widget.onOnlineResultsFetched?.call(results);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _onlineResults = const [];
+        _onlineState = _OnlineSearchState.foundNone;
+      });
+    }
+  }
+
+  Future<void> _selectOnline(OnlineSubtitleSearchResult result) async {
+    setState(() => _materializingId = result.id);
+    try {
+      final path = await _searchService.materialize(result);
+      if (!mounted) return;
+      final track = SubtitleTrack(
+        language: result.language,
+        // BetterPlayer's file subtitle source expects a filesystem path
+        // (rather than a file:// URI); the Darwin backend accepts the same
+        // path through libmpv.
+        url: path,
+        label: '${result.source} · ${result.name}',
+      );
+      Navigator.of(context).pop(
+        PlayerSubtitleSelection.track(
+          track,
+          isExternal: true,
+          onlineSearchResultKey: _onlineResultKey(result),
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _materializingId = null);
+    }
+  }
+
   PlayerSubtitleSelection _sourceFor(SubtitleTrack track) =>
       PlayerSubtitleSelection.track(
         track,
@@ -94,6 +188,12 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
     final current = widget.current;
     return current?.url == track.url;
   }
+
+  bool _isOnlineResultSelected(OnlineSubtitleSearchResult result) =>
+      widget.selectedOnlineResultKey == _onlineResultKey(result);
+
+  static String _onlineResultKey(OnlineSubtitleSearchResult result) =>
+      '${result.provider}\u0000${result.id}';
 
   String _variantName(SubtitleTrack track, int index) =>
       track.label.isNotEmpty ? track.label : 'Option ${index + 1}';
@@ -199,6 +299,79 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
                           ),
                         const Divider(color: AppColors.hairlineDark, height: 1),
                         ListTile(
+                          leading: _onlineState == _OnlineSearchState.loading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.onDarkSoft,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.search_rounded,
+                                  color: AppColors.onDarkSoft,
+                                ),
+                          title: Text(
+                            _onlineState == _OnlineSearchState.foundNone
+                                ? 'No $preferenceLanguageLabel subtitles found'
+                                : preferenceLanguageCode == null
+                                ? 'Set a subtitle language to search'
+                                : 'Search $preferenceLanguageLabel',
+                            style: AppTypography.bodyMd.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Search OpenSubtitles and SubSource using your preference',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                          enabled:
+                              preferenceLanguageCode != null &&
+                              _onlineState != _OnlineSearchState.loading,
+                          onTap: _searchOnline,
+                        ),
+                        for (final result in _onlineResults)
+                          ListTile(
+                            leading: _materializingId == result.id
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.brandAccent,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.subtitles_rounded,
+                                    color: AppColors.brandAccent,
+                                  ),
+                            title: Text(
+                              result.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onDark,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${result.source}${result.hearingImpaired ? ' · HI' : ''}',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.onDarkSoft,
+                              ),
+                            ),
+                            trailing: _isOnlineResultSelected(result)
+                                ? const Icon(
+                                    Icons.check,
+                                    color: AppColors.brandAccent,
+                                  )
+                                : null,
+                            enabled: _materializingId == null,
+                            onTap: () => _selectOnline(result),
+                          ),
+                        ListTile(
                           leading: _externalState == _ExternalFetchState.loading
                               ? const SizedBox(
                                   width: 20,
@@ -257,6 +430,21 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
         ),
       ),
     );
+  }
+
+  String? get preferenceLanguageCode =>
+      AppScope.of(context).subtitlePreferenceController.languageCode;
+
+  String get preferenceLanguageLabel => preferenceLanguageCode == null
+      ? 'your preference'
+      : subtitleLanguageLabel(preferenceLanguageCode!);
+
+  static int? _seasonFromGroup(String groupId) {
+    final match = RegExp(
+      r'^(?:season|s)[-_ ]?(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(groupId.trim());
+    return match == null ? null : int.tryParse(match.group(1)!);
   }
 }
 

@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SubtitleAppearancePreferences {
   const SubtitleAppearancePreferences({
-    this.fontSize = 24,
+    this.fontSize = 16,
     this.textColorValue = 0xffffffff,
     this.backgroundColorValue = 0xaa000000,
     this.outline = false,

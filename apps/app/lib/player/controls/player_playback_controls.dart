@@ -519,6 +519,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     final subtitlePreference = AppScope.of(
       context,
     ).subtitlePreferenceController;
+    final language = subtitlePreference.languageCode;
     final tracks = subtitlePreference.tracksForPicker(
       _current.stream.subtitles,
     );
@@ -539,6 +540,22 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         ),
         onExternalTracksFetched: (tracks) => subtitlePreference
             .rememberExternalSubtitles(widget.media.ref, tracks),
+        initialOnlineResults: language == null
+            ? const []
+            : subtitlePreference.rememberedOnlineSearchResults(
+                widget.media.ref,
+                language,
+              ),
+        selectedOnlineResultKey: subtitlePreference
+            .selectedOnlineSearchResultKey(widget.media.ref),
+        onOnlineResultsFetched: (results) {
+          if (language == null) return;
+          subtitlePreference.rememberOnlineSearchResults(
+            widget.media.ref,
+            language,
+            results,
+          );
+        },
       ),
     );
     if (!mounted) return;
@@ -548,6 +565,10 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         widget.media.ref,
         track: picked.track,
         external: picked.isExternal,
+      );
+      subtitlePreference.selectOnlineSearchResult(
+        widget.media.ref,
+        picked.onlineSearchResultKey,
       );
       final isOff = picked.track == null;
       setState(() {

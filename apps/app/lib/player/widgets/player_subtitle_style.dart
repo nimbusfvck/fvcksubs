@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Shared subtitle appearance values for the native player backends.
-const double playerSubtitleFontSize = 24;
+const double playerSubtitleFontSize = 16;
 const Color playerSubtitleBackgroundColor = Color(0xaa000000);
 
 const TextStyle playerSubtitleTextStyle = TextStyle(

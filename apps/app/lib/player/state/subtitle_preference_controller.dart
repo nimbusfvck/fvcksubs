@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
+import '../data/online_subtitle_service.dart';
+
 const supportedSubtitleLanguages =
     <(String code, String name, String description)>[
       ('id', 'Indonesia', 'Prefer Indonesian subtitles when available.'),
@@ -65,6 +67,9 @@ class SubtitlePreferenceController extends ChangeNotifier {
   SubtitleAppearance _appearance;
   final Map<String, SubtitleTrack> _externalSelections;
   final Map<String, List<SubtitleTrack>> _externalTracks;
+  final Map<String, Map<String, List<OnlineSubtitleSearchResult>>>
+  _onlineSearchResults = {};
+  final Map<String, String> _selectedOnlineSearchResults = {};
 
   String? get languageCode => _languageCode;
 
@@ -84,6 +89,45 @@ class SubtitlePreferenceController extends ChangeNotifier {
 
   List<SubtitleTrack> rememberedExternalSubtitles(MediaRef ref) =>
       List.unmodifiable(_externalTracks[_mediaKey(ref)] ?? const []);
+
+  /// Returns successful online-search results for this media and language
+  /// during the active app session.
+  List<OnlineSubtitleSearchResult> rememberedOnlineSearchResults(
+    MediaRef ref,
+    String language,
+  ) => List.unmodifiable(
+    _onlineSearchResults[_mediaKey(ref)]?[subtitleLanguageKey(language)] ??
+        const [],
+  );
+
+  String? selectedOnlineSearchResultKey(MediaRef ref) =>
+      _selectedOnlineSearchResults[_mediaKey(ref)];
+
+  void rememberOnlineSearchResults(
+    MediaRef ref,
+    String language,
+    List<OnlineSubtitleSearchResult> results,
+  ) {
+    if (results.isEmpty) return;
+    final key = _mediaKey(ref);
+    final byLanguage = _onlineSearchResults.putIfAbsent(
+      key,
+      () => <String, List<OnlineSubtitleSearchResult>>{},
+    );
+    byLanguage[subtitleLanguageKey(language)] = List.unmodifiable(results);
+    notifyListeners();
+  }
+
+  void selectOnlineSearchResult(MediaRef ref, String? resultKey) {
+    final key = _mediaKey(ref);
+    if (resultKey == null) {
+      if (_selectedOnlineSearchResults.remove(key) == null) return;
+    } else {
+      if (_selectedOnlineSearchResults[key] == resultKey) return;
+      _selectedOnlineSearchResults[key] = resultKey;
+    }
+    notifyListeners();
+  }
 
   void rememberExternalSubtitles(MediaRef ref, List<SubtitleTrack> tracks) {
     if (tracks.isEmpty) return;
@@ -118,7 +162,12 @@ class SubtitlePreferenceController extends ChangeNotifier {
       if (_externalSelections[key] == next) return;
       _externalSelections[key] = next;
     }
-    unawaited(store.saveExternalSelection(ref, next));
+    // Online search results are materialized in the OS temporary directory.
+    // Keep the selection available for this playback session, but never write
+    // a file:// path to persistent storage where it would be stale next run.
+    if (next == null || !_isLocalSubtitle(next)) {
+      unawaited(store.saveExternalSelection(ref, next));
+    }
     notifyListeners();
   }
 
@@ -158,6 +207,12 @@ class SubtitlePreferenceController extends ChangeNotifier {
   static String _mediaKey(MediaRef ref) =>
       '${ref.extensionId}\u0000${ref.providerId}\u0000${ref.id}';
 
+  static bool _isLocalSubtitle(SubtitleTrack track) {
+    final uri = Uri.tryParse(track.url);
+    return uri?.scheme.toLowerCase() == 'file' ||
+        ((uri?.scheme.isEmpty ?? true) && track.url.startsWith('/'));
+  }
+
   static List<SubtitleTrack> _mergeTracks(List<SubtitleTrack> tracks) {
     final seen = <String>{};
     return [
@@ -169,7 +224,7 @@ class SubtitlePreferenceController extends ChangeNotifier {
 
 class SubtitleAppearance {
   const SubtitleAppearance({
-    this.fontSize = 24,
+    this.fontSize = 16,
     this.textColor = Colors.white,
     this.backgroundColor = const Color(0xaa000000),
     this.outline = false,

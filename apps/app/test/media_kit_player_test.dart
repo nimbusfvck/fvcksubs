@@ -42,7 +42,7 @@ void main() {
   });
 
   test('subtitle appearance is shared by native backends', () {
-    expect(playerSubtitleFontSize, 24);
+    expect(playerSubtitleFontSize, 16);
     expect(playerSubtitleTextStyle.fontSize, playerSubtitleFontSize);
     expect(
       playerSubtitleTextStyle.backgroundColor,
