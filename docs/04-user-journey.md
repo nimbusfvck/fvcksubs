@@ -258,10 +258,11 @@ flowchart TD
 
 ### Play overlay
 
-Pressing Play is **one action**. The source wait opens immediately as a full-screen,
-player-style loading route while discovery or the first resolution is still running. It is
-not a second destination: backing out abandons the pending play, rather than allowing a late
-network result to push a player after the viewer changed their mind.
+Pressing Play is **one action**. The source wait opens immediately as the full-screen player
+route's own loading state while discovery or the first resolution is still running. Once a
+source is ready, that same route changes to playback; a late source never pushes another
+route. Backing out abandons the pending play, rather than allowing a late network result to
+push a player after the viewer changed their mind.
 
 ### Source resolution before playback
 

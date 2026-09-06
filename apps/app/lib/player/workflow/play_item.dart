@@ -134,7 +134,7 @@ Future<void> _playMedia(
       (progress) => _resolveKnownSources(scope, item, [
         orderedCachedList.first,
       ], progress),
-      onResolved: (resolved, loadingRoute) async {
+      onResolved: (resolved, loadingRoute, showPlayer) async {
         if (resolved.isEmpty) return false;
         scope.sourceCache.store(item.ref, resolved);
         final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
@@ -152,6 +152,7 @@ Future<void> _playMedia(
           externalSubtitles: externalSubtitles,
           playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
+          showPlayer: showPlayer,
         );
         return true;
       },
@@ -163,7 +164,7 @@ Future<void> _playMedia(
   final result = await _resolveWithOverlay(
     navigator,
     (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
-    onResolved: (resolved, loadingRoute) async {
+    onResolved: (resolved, loadingRoute, showPlayer) async {
       final first = resolved.first;
       if (first == null) return false;
       if (resolved.refresh == null) {
@@ -186,6 +187,7 @@ Future<void> _playMedia(
         externalSubtitles: externalSubtitles,
         playbackSegments: playbackSegments,
         returnToDetail: returnToDetail,
+        showPlayer: showPlayer,
       );
       return true;
     },
@@ -228,12 +230,19 @@ Future<List<ResolvedSource>> refetchPlayableSources(
 Future<T?> _resolveWithOverlay<T>(
   NavigatorState navigator,
   Future<T> Function(_ResolveProgress progress) resolve, {
-  Future<bool> Function(T result, Route<void> loadingRoute)? onResolved,
+  Future<bool> Function(
+    T result,
+    Route<void> loadingRoute,
+    void Function(Widget player) showPlayer,
+  )?
+  onResolved,
 }) async {
   final progress = _ResolveProgress();
   final loadingReady = Completer<void>();
+  final launchKey = GlobalKey<_PlayerLaunchPageState>();
   final overlay = MaterialPageRoute<void>(
-    builder: (_) => _PlayLoadingPage(
+    builder: (_) => _PlayerLaunchPage(
+      key: launchKey,
       progress: progress,
       onMounted: () {
         if (!loadingReady.isCompleted) loadingReady.complete();
@@ -257,7 +266,13 @@ Future<T?> _resolveWithOverlay<T>(
   }
   var handedOff = false;
   try {
-    handedOff = onResolved == null ? false : await onResolved(result, overlay);
+    handedOff = onResolved == null
+        ? false
+        : await onResolved(
+            result,
+            overlay,
+            (player) => launchKey.currentState?.showPlayer(player),
+          );
   } finally {
     if (!handedOff && overlay.isActive) navigator.removeRoute(overlay);
     progress.dispose();
@@ -313,6 +328,7 @@ Future<void> _openPlayer(
   Future<void>? externalSubtitles,
   Future<List<PlaybackSegment>>? playbackSegments,
   bool returnToDetail = false,
+  void Function(Widget player)? showPlayer,
 }) async {
   final stopwatch = Stopwatch()..start();
   // Started alongside source resolution, so by now it has almost always
@@ -351,27 +367,37 @@ Future<void> _openPlayer(
     item.item,
     contentRating: effectiveRating,
   );
-  final route = MaterialPageRoute<void>(
-    builder: (_) => PlayerPage(
-      item: item.item,
-      resolvedSources: resolved,
-      pendingSources: pendingSources,
-      pendingSegments: playbackSegments,
-      episodeGuide: episodeGuide,
-      returnToDetail: returnToDetail,
-    ),
+  final player = PlayerPage(
+    item: item.item,
+    resolvedSources: resolved,
+    pendingSources: pendingSources,
+    pendingSegments: playbackSegments,
+    episodeGuide: episodeGuide,
+    returnToDetail: returnToDetail,
   );
   _debugSourceLog(
-    'player_route_push source=${_sourceLogName(resolved.first.source)} '
+    '${showPlayer == null ? 'player_route_push' : 'player_route_ready'} '
+    'source=${_sourceLogName(resolved.first.source)} '
     'elapsed=${stopwatch.elapsedMilliseconds}ms',
   );
-  final push = loadingRoute == null
-      ? replaceCurrent
-            ? navigator.pushReplacement(route)
-            : navigator.push(route)
+  if (showPlayer != null) {
+    showPlayer(player);
+    if (replaceCurrent && routeToReplace?.isActive == true) {
+      navigator.removeRoute(routeToReplace!);
+    }
+    return;
+  }
+  final route = MaterialPageRoute<void>(builder: (_) => player);
+  // Replace the loading route in one navigator transaction. Pushing Player
+  // and removing the loading route separately can briefly leave Detail →
+  // Loading → Player in the stack; a fast native failure may then expose the
+  // stale loading route and make the workflow look like it restarted.
+  final push = loadingRoute != null
+      ? navigator.pushReplacement(route)
+      : replaceCurrent
+      ? navigator.pushReplacement(route)
       : navigator.push(route);
   if (loadingRoute != null) {
-    if (loadingRoute.isActive) navigator.removeRoute(loadingRoute);
     if (replaceCurrent && routeToReplace?.isActive == true) {
       navigator.removeRoute(routeToReplace!);
     }
@@ -472,7 +498,10 @@ _resolveFirstPlayable(
   final refresh = canUseCachedPlaybackSources(item)
       ? _revalidate(scope, item)
       : null;
-  final sources = await _loadSources(scope, item, fast: true);
+  // Discover every live provider so the source picker is complete, while
+  // still handing playback off to whichever candidate resolves first. VOD
+  // keeps its existing fast handoff and background refresh behavior.
+  final sources = await _loadSources(scope, item, fast: !item.isLive);
   if (sources.isEmpty) {
     final complete = refresh == null ? null : await refresh;
     if (complete != null && complete.isNotEmpty) {
@@ -497,7 +526,9 @@ _resolveFirstPlayable(
       _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
-  final first = scope.sourcePriorityController.state.orderedProviderIds.isEmpty
+  final first = item.isLive
+      ? await _firstMatching(futures, (_) => true)
+      : scope.sourcePriorityController.state.orderedProviderIds.isEmpty
       ? await _firstMatching(futures, (_) => true)
       : await _firstByPriority(futures);
   final preferred = scope.subtitlePreferenceController;
@@ -880,19 +911,29 @@ class _ResolveProgress extends ChangeNotifier {
   }
 }
 
-class _PlayLoadingPage extends StatefulWidget {
-  const _PlayLoadingPage({required this.progress, required this.onMounted});
+class _PlayerLaunchPage extends StatefulWidget {
+  const _PlayerLaunchPage({
+    super.key,
+    required this.progress,
+    required this.onMounted,
+  });
 
   final _ResolveProgress progress;
   final VoidCallback onMounted;
 
   @override
-  State<_PlayLoadingPage> createState() => _PlayLoadingPageState();
+  State<_PlayerLaunchPage> createState() => _PlayerLaunchPageState();
 }
 
-class _PlayLoadingPageState extends State<_PlayLoadingPage> {
+class _PlayerLaunchPageState extends State<_PlayerLaunchPage> {
   Timer? _ticker;
   int _cursor = 0;
+  Widget? _player;
+
+  void showPlayer(Widget player) {
+    if (!mounted) return;
+    setState(() => _player = player);
+  }
 
   @override
   void initState() {
@@ -911,8 +952,13 @@ class _PlayLoadingPageState extends State<_PlayLoadingPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.surfaceDark,
-    body: SafeArea(
+    backgroundColor: Colors.black,
+    body: _player ?? _sourceFindingView(),
+  );
+
+  Widget _sourceFindingView() => ColoredBox(
+    color: AppColors.surfaceDark,
+    child: SafeArea(
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),

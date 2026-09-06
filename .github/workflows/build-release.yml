@@ -105,12 +105,41 @@ jobs:
           path: apps/app/fvcksubs-macos.zip
           if-no-files-found: error
 
+  ios:
+    name: iOS IPA
+    needs: test
+    runs-on: macos-14
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: apps/app
+        run: flutter pub get
+
+      - name: Build unsigned Impactor IPA
+        run: tool/build_ios_impactor_ipa.sh --skip-pub-get
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvcksubs-ipa-${{ github.ref_name }}
+          path: apps/app/build/ios/ipa/*.ipa
+          if-no-files-found: error
+
   release:
     name: Create GitHub release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - android
       - macos
+      - ios
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -127,6 +156,12 @@ jobs:
           name: fvcksubs-macos-${{ github.ref_name }}
           path: release-assets
 
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fvcksubs-ipa-${{ github.ref_name }}
+          path: release-assets
+
       - name: Rename release assets
         run: |
           mv release-assets/app-release.apk "release-assets/fvcksubs-${GITHUB_REF_NAME}.apk"
@@ -139,3 +174,4 @@ jobs:
           files: |
             release-assets/fvcksubs-${{ github.ref_name }}.apk
             release-assets/fvcksubs-macos-${{ github.ref_name }}.zip
+            release-assets/*.ipa

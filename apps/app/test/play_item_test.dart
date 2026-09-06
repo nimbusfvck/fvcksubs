@@ -96,4 +96,50 @@ void main() {
     expect(extension.sourcesCalls, 2);
     expect(player.played, isNotNull);
   });
+
+  testWidgets('live playback keeps full discovery but uses fastest source', (
+    tester,
+  ) async {
+    final extension = SubtitleFakeExtension(
+      subtitlesBySourceId: const {'preferred': [], 'fast': []},
+      resolveDelayBySourceId: const {
+        'preferred': Duration(milliseconds: 100),
+        'fast': Duration.zero,
+      },
+    );
+    final player = RecordingPlayer();
+    final event = fakeItem(
+      id: 'live-1',
+      extensionId: 'subs',
+      title: 'Preferred vs Fast',
+      participants: const [
+        Participant(name: 'Preferred'),
+        Participant(name: 'Fast'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => unawaited(playItemV2(context, event)),
+            child: const Text('Play'),
+          ),
+        ),
+        registry: ExtensionRegistry([extension]),
+        player: player,
+      ),
+    );
+
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Play'),
+      warnIfMissed: false,
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(extension.lastFast, isFalse);
+
+    await tester.pumpAndSettle();
+    expect(player.played?.url, 'https://edge/fast.m3u8');
+  });
 }

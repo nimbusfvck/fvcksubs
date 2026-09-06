@@ -333,30 +333,33 @@ class FakeCatalog {
 /// the real ones do, and what ordering by preferred language depends on.
 class SubtitleFakeExtension extends ContentExtension {
   /// Creates a fake offering one source per key, resolving to those languages.
-  SubtitleFakeExtension({required this.subtitlesBySourceId, this.resolveDelay})
-    : _manifest = Manifest.parse({
-        'apiVersion': 2,
-        'id': 'subs',
-        'name': 'subs',
-        'version': '1.0.0',
-        'runtime': 'builtin',
-        'categories': ['sport'],
-        'providers': [
-          {
-            'id': 'subs.p',
-            'roles': ['catalog', 'stream'],
-            'catalogs': [
-              {
-                'id': 'catalog',
-                'name': 'subs',
-                'categories': ['sport'],
-                'kind': 'liveEvent',
-              },
-            ],
-          },
-        ],
-        'permissions': {'hosts': <String>[]},
-      });
+  SubtitleFakeExtension({
+    required this.subtitlesBySourceId,
+    this.resolveDelay,
+    this.resolveDelayBySourceId = const {},
+  }) : _manifest = Manifest.parse({
+         'apiVersion': 2,
+         'id': 'subs',
+         'name': 'subs',
+         'version': '1.0.0',
+         'runtime': 'builtin',
+         'categories': ['sport'],
+         'providers': [
+           {
+             'id': 'subs.p',
+             'roles': ['catalog', 'stream'],
+             'catalogs': [
+               {
+                 'id': 'catalog',
+                 'name': 'subs',
+                 'categories': ['sport'],
+                 'kind': 'liveEvent',
+               },
+             ],
+           },
+         ],
+         'permissions': {'hosts': <String>[]},
+       });
 
   /// Subtitle language tags, keyed by the source id that carries them. Order
   /// here is the order `sources()` returns them in.
@@ -365,6 +368,13 @@ class SubtitleFakeExtension extends ContentExtension {
   /// Holds each [resolve] open this long — lets a test observe the wait while
   /// sources are genuinely still outstanding.
   final Duration? resolveDelay;
+
+  /// Optional per-source override for tests where arrival order differs from
+  /// discovery order.
+  final Map<String, Duration> resolveDelayBySourceId;
+
+  /// The mode used by the most recent discovery call.
+  bool? lastFast;
 
   final Manifest _manifest;
 
@@ -380,14 +390,18 @@ class SubtitleFakeExtension extends ContentExtension {
     MediaItemV2 item, {
     Set<String>? enabledProviders,
     bool fast = false,
-  }) async => [
-    for (final id in subtitlesBySourceId.keys)
-      StreamSource(id: id, label: 'Source $id'),
-  ];
+  }) async {
+    lastFast = fast;
+    return [
+      for (final id in subtitlesBySourceId.keys)
+        StreamSource(id: id, label: 'Source $id'),
+    ];
+  }
 
   @override
   Future<PlayableStream> resolve(String sourceId) async {
-    if (resolveDelay != null) await Future<void>.delayed(resolveDelay!);
+    final delay = resolveDelayBySourceId[sourceId] ?? resolveDelay;
+    if (delay != null) await Future<void>.delayed(delay);
     return PlayableStream(
       url: 'https://edge/$sourceId.m3u8',
       format: StreamFormat.hls,

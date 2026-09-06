@@ -190,28 +190,50 @@ Test guidelines:
 ## 7.8 App build artifacts
 
 The repository workflow at `.github/workflows/build-release.yml` builds the Flutter app on
-manual dispatch and on version tags (`v*`). It publishes two GitHub Actions artifacts
+manual dispatch and on version tags (`v*`). It publishes three GitHub Actions artifacts
 whose names include the triggering branch or release tag (`github.ref_name`):
 
 - `fvcksubs-apk-v<version>` — the release APK from `flutter build apk --release`, signed with
   the keystore supplied through GitHub Secrets.
 - `fvcksubs-macos-v<version>` — a zip containing the release `.app` from `flutter build macos --release`.
+- `fvcksubs-ipa-v<version>` — an unsigned release IPA assembled from the `.xcarchive` produced by
+  `flutter build ipa --release --no-codesign`. Import it into Impactor for local signing and
+  installation. Its filename includes the app version and build number, for example
+  `fvcksubs-v0.1.2-build1-unsigned.ipa`; it is not an App Store or TestFlight submission artifact.
 
 The prerequisite `test` job calls the reusable `.github/workflows/test.yml` workflow. It runs
 `flutter test --coverage`, publishes `fvcksubs-coverage-v<version>` containing
 `coverage/lcov.info`, and shows the percentage in the workflow Summary. Other workflows can
-reuse the same test job with `uses: ./.github/workflows/test.yml`; Android and macOS builds
-start only after this job succeeds.
+reuse the same test job with `uses: ./.github/workflows/test.yml`; Android, iOS, and macOS
+builds start only after this job succeeds.
 
-For version tags (`v*`), the `release` job waits for both platform builds, creates a GitHub
-Release with generated notes, and attaches `fvcksubs-v<version>.apk` and
-`fvcksubs-macos-v<version>.zip`. The release job requires `contents: write`; no additional
-secret is needed because it uses the workflow's `GITHUB_TOKEN`.
+For version tags (`v*`), the `release` job waits for all three platform builds, creates a GitHub
+Release with generated notes, and attaches `fvcksubs-v<version>.apk`,
+`fvcksubs-macos-v<version>.zip`, and `fvcksubs-v<version>.ipa`. The release job requires
+`contents: write`; no additional secret is needed because it uses the workflow's `GITHUB_TOKEN`.
 
-These artifacts are build outputs, not store submissions. Configure the Android secrets
+These artifacts are build outputs, not store submissions. The iOS IPA is intentionally unsigned
+so Impactor can re-sign it with the user's Apple Account. macOS output still requires Developer ID
+signing and notarization before public distribution. Configure the Android secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
-`ANDROID_KEY_PASSWORD` before running the workflow. macOS output still requires Developer ID
-signing and notarization before public distribution.
+`ANDROID_KEY_PASSWORD` before running the workflow.
+
+### Local unsigned IPA for Impactor
+
+`tool/build_ios_impactor_ipa.sh` uses the same archive-to-IPA packaging path as the GitHub
+Actions iOS job. It builds a Release archive with signing disabled, then creates an unsigned
+IPA containing `Payload/Runner.app` for import into Impactor.
+
+Run it from the workspace root:
+
+```bash
+tool/build_ios_impactor_ipa.sh
+```
+
+The output is `apps/app/build/ios/ipa/fvcksubs-v<version>-build<build>-unsigned.ipa`. Override the
+app version or build number when needed with `--build-name <version>` and
+`--build-number <number>`. The CI workflow uses `--skip-pub-get` because dependencies have
+already been installed in its preceding step.
 
 Generate the keystore once and store only its base64 value and passwords in the repository's
 Actions secrets; never commit the `.jks` file or `key.properties`:
