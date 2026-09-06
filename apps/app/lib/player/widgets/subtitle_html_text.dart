@@ -50,12 +50,26 @@ class SubtitleHtmlText extends StatelessWidget {
 /// Parses the inline subset of HTML used by WebVTT and SRT subtitle files.
 @visibleForTesting
 List<InlineSpan> subtitleHtmlSpans(String source, TextStyle baseStyle) {
+  final normalized = normalizeSubtitleMarkup(source);
   try {
-    return _spansForNodes(html_parser.parseFragment(source).nodes, baseStyle);
+    return _spansForNodes(
+      html_parser.parseFragment(normalized).nodes,
+      baseStyle,
+    );
   } catch (_) {
-    return [TextSpan(text: source)];
+    return [TextSpan(text: normalized)];
   }
 }
+
+/// Removes ASS/SSA control blocks before the text is passed to the HTML
+/// parser. Position and style overrides are intentionally ignored for now;
+/// the player owns one fixed subtitle overlay, so rendering those controls as
+/// text would be more confusing than keeping the current placement.
+@visibleForTesting
+String normalizeSubtitleMarkup(String source) => source
+    .replaceAll(RegExp(r'\{\\[^{}\r\n]*\}'), '')
+    .replaceAll(RegExp(r'\\[Nn]'), '\n')
+    .replaceAll(r'\h', '\u00a0');
 
 List<InlineSpan> _spansForNodes(List<html.Node> nodes, TextStyle style) => [
   for (final node in nodes) ..._spansForNode(node, style),

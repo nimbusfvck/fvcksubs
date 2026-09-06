@@ -23,4 +23,19 @@ void main() {
 
     expect(TextSpan(children: spans).toPlainText(), 'Rock & roll');
   });
+
+  test('cleans ASS override tags and escaped line breaks', () {
+    final spans = subtitleHtmlSpans(
+      r'{\an8}<i>Top</i>\N{\pos(10,20)}Bottom\hline',
+      const TextStyle(),
+    );
+
+    expect(TextSpan(children: spans).toPlainText(), 'Top\nBottom\u00a0line');
+  });
+
+  test('keeps ordinary braces that are part of subtitle text', () {
+    final spans = subtitleHtmlSpans('Use {this} exactly', const TextStyle());
+
+    expect(TextSpan(children: spans).toPlainText(), 'Use {this} exactly');
+  });
 }
