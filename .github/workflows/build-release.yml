@@ -12,6 +12,8 @@ permissions:
 jobs:
   test:
     uses: ./.github/workflows/test.yml
+    secrets:
+      OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
 
   android:
     name: Android APK
@@ -30,6 +32,11 @@ jobs:
       - name: Install dependencies
         working-directory: apps/app
         run: flutter pub get
+
+      - name: Generate app environment config
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: tool/generate_app_env.sh
 
       - name: Configure release signing
         working-directory: apps/app/android
@@ -87,6 +94,11 @@ jobs:
         working-directory: apps/app
         run: flutter pub get
 
+      - name: Generate app environment config
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: tool/generate_app_env.sh
+
       - name: Build release macOS app
         working-directory: apps/app
         run: flutter build macos --release
@@ -122,6 +134,11 @@ jobs:
       - name: Install dependencies
         working-directory: apps/app
         run: flutter pub get
+
+      - name: Generate app environment config
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: tool/generate_app_env.sh
 
       - name: Build unsigned Impactor IPA
         run: tool/build_ios_impactor_ipa.sh --skip-pub-get

@@ -2,6 +2,9 @@ name: Flutter tests
 
 on:
   workflow_call:
+    secrets:
+      OPENSUBTITLES_API_KEY:
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -24,6 +27,11 @@ jobs:
       - name: Install dependencies
         working-directory: apps/app
         run: flutter pub get
+
+      - name: Generate app environment config
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: tool/generate_app_env.sh
 
       - name: Analyze
         working-directory: apps/app
