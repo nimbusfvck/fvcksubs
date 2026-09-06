@@ -197,8 +197,8 @@ whose names include the triggering branch or release tag (`github.ref_name`):
   the keystore supplied through GitHub Secrets.
 - `fvcksubs-macos-v<version>` — a zip containing the release `.app` from `flutter build macos --release`.
 - `fvcksubs-ipa-v<version>` — an unsigned release IPA assembled from the `.xcarchive` produced by
-  `flutter build ipa --release --no-codesign`. Import it into Impactor for local signing and
-  installation. Its filename includes the app version and build number, for example
+  `flutter build ipa --release --no-codesign`. It requires signing before installation. Its
+  filename includes the app version and build number, for example
   `fvcksubs-v0.1.2-build1-unsigned.ipa`; it is not an App Store or TestFlight submission artifact.
 
 The prerequisite `test` job calls the reusable `.github/workflows/test.yml` workflow. It runs
@@ -213,21 +213,21 @@ Release with generated notes, and attaches `fvcksubs-v<version>.apk`,
 `contents: write`; no additional secret is needed because it uses the workflow's `GITHUB_TOKEN`.
 
 These artifacts are build outputs, not store submissions. The iOS IPA is intentionally unsigned
-so Impactor can re-sign it with the user's Apple Account. macOS output still requires Developer ID
+and requires signing before installation or distribution. macOS output still requires Developer ID
 signing and notarization before public distribution. Configure the Android secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and
 `ANDROID_KEY_PASSWORD` before running the workflow.
 
-### Local unsigned IPA for Impactor
+### Local unsigned IPA
 
-`tool/build_ios_impactor_ipa.sh` uses the same archive-to-IPA packaging path as the GitHub
+`tool/build_ios_ipa.sh` uses the same archive-to-IPA packaging path as the GitHub
 Actions iOS job. It builds a Release archive with signing disabled, then creates an unsigned
-IPA containing `Payload/Runner.app` for import into Impactor.
+IPA containing `Payload/Runner.app` for later signing and installation.
 
 Run it from the workspace root:
 
 ```bash
-tool/build_ios_impactor_ipa.sh
+tool/build_ios_ipa.sh
 ```
 
 The output is `apps/app/build/ios/ipa/fvcksubs-v<version>-build<build>-unsigned.ipa`. Override the

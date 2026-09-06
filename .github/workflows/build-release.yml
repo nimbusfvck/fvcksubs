@@ -140,8 +140,8 @@ jobs:
           OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: tool/generate_app_env.sh
 
-      - name: Build unsigned Impactor IPA
-        run: tool/build_ios_impactor_ipa.sh --skip-pub-get
+      - name: Build unsigned IPA
+        run: tool/build_ios_ipa.sh --skip-pub-get
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4

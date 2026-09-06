@@ -15,9 +15,9 @@ build_number=''
 
 usage() {
   cat <<'EOF'
-Usage: tool/build_ios_impactor_ipa.sh [options]
+Usage: tool/build_ios_ipa.sh [options]
 
-Build an unsigned Release IPA for installation through Impactor.
+Build an unsigned Release IPA from the iOS archive.
 
 Options:
   --build-name <version>    Override the iOS version number
@@ -112,7 +112,7 @@ test -d "$APP_PATH" || {
   exit 1
 }
 
-stage_dir="$(mktemp -d -t fvcksubs-impactor-ipa.XXXXXX)"
+stage_dir="$(mktemp -d -t fvcksubs-ipa.XXXXXX)"
 cleanup() {
   rm -rf "$stage_dir"
 }
