@@ -43,7 +43,7 @@ class OnlineSubtitleSearchService {
   static const _subSourceApi = 'https://api.subsource.net';
   static const _openSubtitlesApi = 'https://api.opensubtitles.com/api/v1';
   static const _openSubtitlesApiKey = AppEnv.openSubtitlesApiKey ?? '';
-  static const _openSubtitlesUserAgent = 'SkyStream v2.2.1';
+  static const _openSubtitlesUserAgent = 'stream';
   static const _headers = <String, String>{
     'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
