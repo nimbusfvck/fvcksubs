@@ -16,16 +16,19 @@ enum StreamFormat {
 
 /// DRM scheme the app understands.
 ///
-/// Only [clearKey] and [widevine] can reach a player (both the Android
-/// ExoPlayer path). [unsupported] marks a source asking for anything else
-/// (e.g. PlayReady) — kept as-is so the UI can say so honestly instead of
-/// silently trying to play and failing.
+/// [widevine] reaches Android's Media3/ExoPlayer path and [fairPlay] reaches
+/// Apple's AVFoundation path. [clearKey] and [unsupported] remain represented
+/// for compatibility, but are not eligible for the official video_player
+/// backend.
 enum DrmScheme {
   /// EME ClearKey; keys arrive inline as JSON, no license server.
   clearKey,
 
   /// Widevine; needs a license server URL.
   widevine,
+
+  /// Apple FairPlay Streaming; needs a certificate and license URL.
+  fairPlay,
 
   /// Any scheme the app can't play (e.g. PlayReady); kept so the UI can say so.
   unsupported,
@@ -34,7 +37,13 @@ enum DrmScheme {
 /// Ready-to-use DRM configuration for a stream.
 class DrmConfig extends Equatable {
   /// Creates a DRM configuration.
-  const DrmConfig({required this.scheme, this.licenseUrl, this.clearKeyJson});
+  const DrmConfig({
+    required this.scheme,
+    this.licenseUrl,
+    this.clearKeyJson,
+    this.certificateUrl,
+    this.contentId,
+  });
 
   /// Builds a [DrmConfig] from decoded JSON, or `null`.
   static DrmConfig? fromJson(Object? json) {
@@ -48,6 +57,8 @@ class DrmConfig extends Equatable {
       ),
       licenseUrl: map['licenseUrl'] as String?,
       clearKeyJson: map['clearKeyJson'] as String?,
+      certificateUrl: map['certificateUrl'] as String?,
+      contentId: map['contentId'] as String?,
     );
   }
 
@@ -60,15 +71,29 @@ class DrmConfig extends Equatable {
   /// Ready-to-use ClearKey license JSON, for [DrmScheme.clearKey].
   final String? clearKeyJson;
 
+  /// FairPlay application certificate URL, for [DrmScheme.fairPlay].
+  final String? certificateUrl;
+
+  /// Optional FairPlay content identifier used when generating the SPC.
+  final String? contentId;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'scheme': scheme.name,
     if (licenseUrl != null) 'licenseUrl': licenseUrl,
     if (clearKeyJson != null) 'clearKeyJson': clearKeyJson,
+    if (certificateUrl != null) 'certificateUrl': certificateUrl,
+    if (contentId != null) 'contentId': contentId,
   };
 
   @override
-  List<Object?> get props => [scheme, licenseUrl, clearKeyJson];
+  List<Object?> get props => [
+    scheme,
+    licenseUrl,
+    clearKeyJson,
+    certificateUrl,
+    contentId,
+  ];
 }
 
 /// One subtitle/caption track alongside a [PlayableStream].

@@ -90,7 +90,7 @@ requirements are equivalent. Protocol changes are reserved for new shared behavi
 | `MediaKind` | `liveEvent`, `channel`, `movie`, `series`, `episode` | **strict** — an unknown value is a real incompatibility for `apiVersion` to catch |
 | `LiveStatus` | `scheduled`, `live`, `ended`, `unknown` | lenient → `unknown` |
 | `StreamFormat` | `dash`, `hls`, `other` | lenient → `other` |
-| `DrmScheme` | `clearKey`, `widevine`, `unsupported` | lenient → `unsupported` |
+| `DrmScheme` | `clearKey`, `widevine`, `fairPlay`, `unsupported` | lenient → `unsupported` |
 
 Lenient decoding allows newer extensions to remain compatible with older application builds.
 The host retains `unsupported` values so the UI can report them before playback starts.
@@ -111,6 +111,11 @@ flowchart LR
 |---|---|---|
 | `StreamSource` | Just enough to list and pick: an id, a label, and which provider it came from | Stable enough to persist |
 | `PlayableStream` | A final URL, the headers playback must send, the container format, optional DRM, an optional separate audio track, and any subtitle tracks | Often minutes; frequently bound to time and IP |
+
+DRM fields are provider-supplied protocol data: `widevine` uses `licenseUrl`,
+while `fairPlay` uses `certificateUrl` and `licenseUrl`, with optional
+`contentId`. The official `video_player` backend accepts Widevine on Android
+and FairPlay on iOS/macOS; protected playback uses a platform view.
 
 `headers` matters: many edges redirect away from, or reject, playback requests that lack a
 `User-Agent` or `Referer`. Whatever the upstream needs must be returned here.

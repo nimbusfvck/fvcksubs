@@ -84,6 +84,9 @@ class FakeController extends ValueNotifier<VideoPlayerValue>
   VideoFormat? get formatHint => null;
 
   @override
+  VideoDrmConfiguration? get drmConfiguration => null;
+
+  @override
   Future<ClosedCaptionFile> get closedCaptionFile => _loadClosedCaption();
 
   @override

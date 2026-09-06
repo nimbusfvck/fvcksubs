@@ -240,6 +240,7 @@ BetterPlayerDrmConfiguration? _drm(PlayableStream stream) {
       licenseUrl: drm.licenseUrl,
       headers: stream.headers,
     ),
+    DrmScheme.fairPlay => null,
     DrmScheme.unsupported => null,
   };
 }

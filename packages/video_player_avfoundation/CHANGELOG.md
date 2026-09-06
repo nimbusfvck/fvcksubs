@@ -298,3 +298,6 @@
 ## 2.2.17
 
 * Splits from `video_player` as a federated implementation.
+## Unreleased
+
+* Adds standard FairPlay certificate and license exchange for network sources.

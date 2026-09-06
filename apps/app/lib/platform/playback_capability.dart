@@ -18,11 +18,15 @@ enum PlaybackTarget {
   };
 
   bool canPlay(PlayableStream stream) => switch (this) {
-    // The temporary unified video_player route has no tested DRM license
-    // flow on any supported platform.
-    PlaybackTarget.android ||
-    PlaybackTarget.ios ||
-    PlaybackTarget.macos => stream.drm == null,
+    PlaybackTarget.android =>
+      stream.drm == null ||
+          (stream.drm!.scheme == DrmScheme.widevine &&
+              stream.drm!.licenseUrl?.isNotEmpty == true),
+    PlaybackTarget.ios || PlaybackTarget.macos =>
+      stream.drm == null ||
+          (stream.drm!.scheme == DrmScheme.fairPlay &&
+              stream.drm!.licenseUrl?.isNotEmpty == true &&
+              stream.drm!.certificateUrl?.isNotEmpty == true),
     PlaybackTarget.unsupported => false,
   };
 }

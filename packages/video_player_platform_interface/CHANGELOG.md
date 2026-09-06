@@ -192,3 +192,6 @@
 ## 1.0.0
 
 * Initial release.
+## Unreleased
+
+* Adds the platform-specific `VideoDrmConfiguration` data-source contract.

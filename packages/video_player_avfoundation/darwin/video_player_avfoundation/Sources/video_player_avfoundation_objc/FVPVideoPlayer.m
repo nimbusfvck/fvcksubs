@@ -75,6 +75,8 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 @implementation FVPVideoPlayer {
+  // Retain the wrapper so the FairPlay resource loader delegate stays alive with the asset.
+  NSObject<FVPAVPlayerItem> *_playerItem;
   // Whether or not player and player item listeners have ever been registered.
   BOOL _listenersRegistered;
 }
@@ -85,6 +87,7 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   self = [super init];
   NSAssert(self, @"super init cannot be nil");
 
+  _playerItem = item;
   _viewProvider = viewProvider;
 
   NSObject<FVPAVAsset> *asset = item.asset;
@@ -188,6 +191,7 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
 
   [self.player replaceCurrentItemWithPlayerItem:nil];
+  _playerItem = nil;
 
   if (_onDisposed) {
     _onDisposed();

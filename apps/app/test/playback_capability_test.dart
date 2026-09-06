@@ -42,20 +42,41 @@ void main() {
       );
     });
 
-    test('all DRM is refused by the unified video_player route', () {
-      for (final scheme in [DrmScheme.clearKey, DrmScheme.widevine]) {
-        expect(
-          target.canPlay(
-            PlayableStream(
-              url: 'x',
-              format: StreamFormat.dash,
-              drm: DrmConfig(scheme: scheme),
+    test('Widevine with a license URL is eligible', () {
+      expect(
+        target.canPlay(
+          const PlayableStream(
+            url: 'x',
+            format: StreamFormat.dash,
+            drm: DrmConfig(
+              scheme: DrmScheme.widevine,
+              licenseUrl: 'https://license.example/widevine',
             ),
           ),
-          isFalse,
-          reason:
-              '$scheme requires a DRM license flow video_player does not provide',
-        );
+        ),
+        isTrue,
+      );
+    });
+
+    test('other DRM schemes and incomplete Widevine are refused', () {
+      for (final stream in [
+        const PlayableStream(
+          url: 'x',
+          format: StreamFormat.dash,
+          drm: DrmConfig(scheme: DrmScheme.clearKey),
+        ),
+        const PlayableStream(
+          url: 'x',
+          format: StreamFormat.dash,
+          drm: DrmConfig(scheme: DrmScheme.fairPlay),
+        ),
+        const PlayableStream(
+          url: 'x',
+          format: StreamFormat.dash,
+          drm: DrmConfig(scheme: DrmScheme.widevine),
+        ),
+      ]) {
+        expect(target.canPlay(stream), isFalse);
       }
     });
 
@@ -94,26 +115,53 @@ void main() {
       );
     });
 
-    test('any DRM at all is refused, regardless of scheme or container', () {
+    test('FairPlay with certificate and license URLs is eligible', () {
+      expect(
+        target.canPlay(
+          const PlayableStream(
+            url: 'x',
+            format: StreamFormat.hls,
+            drm: DrmConfig(
+              scheme: DrmScheme.fairPlay,
+              certificateUrl: 'https://license.example/fairplay.cer',
+              licenseUrl: 'https://license.example/fairplay',
+            ),
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('other DRM schemes and incomplete FairPlay are refused', () {
       for (final scheme in [
         DrmScheme.clearKey,
         DrmScheme.widevine,
         DrmScheme.unsupported,
       ]) {
-        for (final format in [StreamFormat.hls, StreamFormat.dash]) {
-          expect(
-            target.canPlay(
-              PlayableStream(
-                url: 'x',
-                format: format,
-                drm: DrmConfig(scheme: scheme),
-              ),
+        expect(
+          target.canPlay(
+            PlayableStream(
+              url: 'x',
+              format: StreamFormat.hls,
+              drm: DrmConfig(scheme: scheme),
             ),
-            isFalse,
-            reason: 'DRM scheme $scheme should never play on iOS — no CDM',
-          );
-        }
+          ),
+          isFalse,
+        );
       }
+      expect(
+        target.canPlay(
+          const PlayableStream(
+            url: 'x',
+            format: StreamFormat.hls,
+            drm: DrmConfig(
+              scheme: DrmScheme.fairPlay,
+              licenseUrl: 'https://license.example/fairplay',
+            ),
+          ),
+        ),
+        isFalse,
+      );
     });
 
     test('matches macOS exactly — both use the same route', () {
@@ -157,29 +205,36 @@ void main() {
   group('PlaybackTarget.canPlay — macOS', () {
     const target = PlaybackTarget.macos;
 
-    test('clear HLS and DASH are eligible, while DRM is refused', () {
-      expect(
-        target.canPlay(
-          const PlayableStream(url: 'x', format: StreamFormat.hls),
-        ),
-        isTrue,
-      );
-      expect(
-        target.canPlay(
-          const PlayableStream(url: 'x', format: StreamFormat.dash),
-        ),
-        isTrue,
-      );
-      expect(
-        target.canPlay(
-          const PlayableStream(
-            url: 'x',
-            format: StreamFormat.dash,
-            drm: DrmConfig(scheme: DrmScheme.widevine),
+    test(
+      'clear HLS and DASH are eligible, while only FairPlay DRM is allowed',
+      () {
+        expect(
+          target.canPlay(
+            const PlayableStream(url: 'x', format: StreamFormat.hls),
           ),
-        ),
-        isFalse,
-      );
-    });
+          isTrue,
+        );
+        expect(
+          target.canPlay(
+            const PlayableStream(url: 'x', format: StreamFormat.dash),
+          ),
+          isTrue,
+        );
+        expect(
+          target.canPlay(
+            const PlayableStream(
+              url: 'x',
+              format: StreamFormat.dash,
+              drm: DrmConfig(
+                scheme: DrmScheme.fairPlay,
+                certificateUrl: 'https://license.example/fairplay.cer',
+                licenseUrl: 'https://license.example/fairplay',
+              ),
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

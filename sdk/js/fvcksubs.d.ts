@@ -281,11 +281,15 @@ interface PlaybackSegment {
 }
 interface DrmConfig {
   /** DRM mode used by the native player. */
-  scheme: 'clearKey' | 'widevine' | 'unsupported';
+  scheme: 'clearKey' | 'widevine' | 'fairPlay' | 'unsupported';
   /** ClearKey JSON object encoded as a string. */
   clearKeyJson?: string;
   /** Widevine licence endpoint. Its host must be allowed by the manifest. */
   licenseUrl?: string;
+  /** FairPlay application certificate endpoint. */
+  certificateUrl?: string;
+  /** Optional FairPlay content identifier used to generate the SPC. */
+  contentId?: string;
 }
 interface PlayableStream {
   /** Final media URL loaded by the player. Resolve expiring URLs as late as possible. */
@@ -294,7 +298,7 @@ interface PlayableStream {
   headers?: Record<string, string>;
   /** Container/manifest hint used to configure the player. */
   format?: StreamFormat;
-  /** Optional ClearKey or Widevine playback configuration. */
+  /** Optional ClearKey, Widevine, or FairPlay playback configuration. */
   drm?: DrmConfig;
   /** Absolute URL for audio delivered separately from the video. */
   audioUrl?: string;

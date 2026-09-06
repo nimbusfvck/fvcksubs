@@ -43,6 +43,10 @@ dependencies:
   # seekable ranges and allowing live seeks beyond the 1ms indefinite duration.
   video_player:
     path: ../../packages/video_player
+  video_player_android:
+    path: ../../packages/video_player_android
+  video_player_avfoundation:
+    path: ../../packages/video_player_avfoundation
   wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   html: ^0.15.6

@@ -1023,7 +1023,7 @@ private let hlsAudioTestURI =
   }
 
   private func playerItem(with url: URL, factory: FVPAVFactory) -> FVPAVPlayerItem {
-    let asset = factory.urlAsset(with: url, options: nil)
+    let asset = factory.urlAsset(with: url, options: nil, resourceLoaderDelegate: nil)
     return factory.playerItem(with: asset)
   }
 

@@ -119,7 +119,9 @@ abstract class VideoPlayerPlatform extends PlatformInterface {
 
   /// Sets whether the video should continue to play in the background.
   Future<void> setAllowBackgroundPlayback(bool allowBackgroundPlayback) {
-    throw UnimplementedError('setAllowBackgroundPlayback() has not been implemented.');
+    throw UnimplementedError(
+      'setAllowBackgroundPlayback() has not been implemented.',
+    );
   }
 
   /// Sets whether the screen is prevented from sleeping during video playback.
@@ -199,6 +201,16 @@ abstract class VideoPlayerPlatform extends PlatformInterface {
 
 class _PlaceholderImplementation extends VideoPlayerPlatform {}
 
+/// Base class for platform-specific DRM configuration.
+///
+/// Implementations must recognize only the configuration types they support
+/// and reject other types with an [ArgumentError].
+@immutable
+abstract class VideoDrmConfiguration {
+  /// Allows subclasses to be const constructed.
+  const VideoDrmConfiguration();
+}
+
 /// Description of the data source used to create an instance of
 /// the video player.
 class DataSource {
@@ -222,6 +234,7 @@ class DataSource {
     this.asset,
     this.package,
     this.httpHeaders = const <String, String>{},
+    this.drmConfiguration,
   });
 
   /// The way in which the video was originally loaded.
@@ -244,6 +257,11 @@ class DataSource {
   /// Only for [DataSourceType.network] videos.
   /// Always empty for other video types.
   Map<String, String> httpHeaders;
+
+  /// Platform-specific DRM configuration for the video.
+  ///
+  /// Only supported for [DataSourceType.network] videos.
+  final VideoDrmConfiguration? drmConfiguration;
 
   /// The name of the asset. Only set for [DataSourceType.asset] videos.
   final String? asset;
@@ -368,8 +386,15 @@ class VideoEvent {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(eventType, duration, size, rotationCorrection, buffered, seekable, isPlaying);
+  int get hashCode => Object.hash(
+    eventType,
+    duration,
+    size,
+    rotationCorrection,
+    buffered,
+    seekable,
+    isPlaying,
+  );
 }
 
 /// Type of the event.
@@ -454,7 +479,8 @@ class DurationRange {
   }
 
   @override
-  String toString() => '${objectRuntimeType(this, 'DurationRange')}(start: $start, end: $end)';
+  String toString() =>
+      '${objectRuntimeType(this, 'DurationRange')}(start: $start, end: $end)';
 
   @override
   bool operator ==(Object other) =>
@@ -695,8 +721,16 @@ class VideoAudioTrack {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, label, language, isSelected, bitrate, sampleRate, channelCount, codec);
+  int get hashCode => Object.hash(
+    id,
+    label,
+    language,
+    isSelected,
+    bitrate,
+    sampleRate,
+    channelCount,
+    codec,
+  );
 
   @override
   String toString() =>
@@ -786,7 +820,16 @@ class VideoTrack {
   }
 
   @override
-  int get hashCode => Object.hash(id, isSelected, label, bitrate, width, height, frameRate, codec);
+  int get hashCode => Object.hash(
+    id,
+    isSelected,
+    label,
+    bitrate,
+    width,
+    height,
+    frameRate,
+    codec,
+  );
 
   @override
   String toString() =>

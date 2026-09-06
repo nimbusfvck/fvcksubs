@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
+import 'fair_play_drm_configuration.dart';
 import 'video_player_instance_messages.g.dart';
 import 'video_player_plugin_messages.g.dart';
 
@@ -22,7 +23,8 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
   /// Creates a new AVFoundation-based video player implementation instance.
   AVFoundationVideoPlayer({
     @visibleForTesting AVFoundationVideoPlayerApi? pluginApi,
-    @visibleForTesting VideoPlayerInstanceApi Function(int playerId)? playerApiProvider,
+    @visibleForTesting
+    VideoPlayerInstanceApi Function(int playerId)? playerApiProvider,
   }) : _api = pluginApi ?? AVFoundationVideoPlayerApi(),
        _playerApiProvider = playerApiProvider ?? _productionApiProvider;
 
@@ -66,12 +68,17 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     final DataSource dataSource = options.dataSource;
     final VideoViewType viewType = options.viewType;
 
+    final PlatformFairPlayDrmConfiguration? fairPlayDrm =
+        _fairPlayDrmFromDataSource(dataSource);
+
     String? uri;
     switch (dataSource.sourceType) {
       case DataSourceType.asset:
         final String? asset = dataSource.asset;
         if (asset == null) {
-          throw ArgumentError('"asset" must be non-null for an asset data source');
+          throw ArgumentError(
+            '"asset" must be non-null for an asset data source',
+          );
         }
         uri = await _api.getAssetUrl(asset, dataSource.package);
         if (uri == null) {
@@ -90,13 +97,19 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     if (uri == null) {
       throw ArgumentError('Unable to construct a video asset from $options');
     }
-    final pigeonCreationOptions = CreationOptions(uri: uri, httpHeaders: dataSource.httpHeaders);
+    final pigeonCreationOptions = CreationOptions(
+      uri: uri,
+      httpHeaders: dataSource.httpHeaders,
+      fairPlayDrm: fairPlayDrm,
+    );
 
     final int playerId;
     final VideoPlayerViewState state;
     switch (viewType) {
       case VideoViewType.textureView:
-        final TexturePlayerIds ids = await _api.createForTextureView(pigeonCreationOptions);
+        final TexturePlayerIds ids = await _api.createForTextureView(
+          pigeonCreationOptions,
+        );
         playerId = ids.playerId;
         state = VideoPlayerTextureViewState(textureId: ids.textureId);
       case VideoViewType.platformView:
@@ -106,6 +119,34 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     ensurePlayerInitialized(playerId, state);
 
     return playerId;
+  }
+
+  PlatformFairPlayDrmConfiguration? _fairPlayDrmFromDataSource(
+    DataSource dataSource,
+  ) {
+    final VideoDrmConfiguration? drmConfiguration = dataSource.drmConfiguration;
+    if (drmConfiguration == null) return null;
+    if (dataSource.sourceType != DataSourceType.network) {
+      throw ArgumentError.value(
+        dataSource.sourceType,
+        'dataSource.sourceType',
+        'DRM is only supported for network data sources',
+      );
+    }
+    if (drmConfiguration is! FairPlayDrmConfiguration) {
+      throw ArgumentError.value(
+        drmConfiguration,
+        'dataSource.drmConfiguration',
+        'The AVFoundation implementation of video_player only supports '
+            'FairPlayDrmConfiguration',
+      );
+    }
+    return PlatformFairPlayDrmConfiguration(
+      certificateUri: drmConfiguration.certificateUri.toString(),
+      licenseUri: drmConfiguration.licenseUri.toString(),
+      licenseHeaders: drmConfiguration.licenseHeaders,
+      contentId: drmConfiguration.contentId,
+    );
   }
 
   /// Returns the API instance for [playerId], creating it if it doesn't already
@@ -176,9 +217,9 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     int playerId,
     bool preventsDisplaySleepDuringVideoPlayback,
   ) {
-    return _playerWith(
-      id: playerId,
-    ).setPreventsDisplaySleepDuringVideoPlayback(preventsDisplaySleepDuringVideoPlayback);
+    return _playerWith(id: playerId).setPreventsDisplaySleepDuringVideoPlayback(
+      preventsDisplaySleepDuringVideoPlayback,
+    );
   }
 
   @override
@@ -217,18 +258,23 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
 
   @override
   Future<List<VideoTrack>> getVideoTracks(int playerId) async {
-    final NativeVideoTrackData nativeData = await _playerWith(id: playerId).getVideoTracks();
+    final NativeVideoTrackData nativeData = await _playerWith(
+      id: playerId,
+    ).getVideoTracks();
     final tracks = <VideoTrack>[];
 
     // Convert HLS variant tracks (iOS 15+)
     if (nativeData.mediaSelectionTracks != null) {
-      for (final MediaSelectionVideoTrackData track in nativeData.mediaSelectionTracks!) {
+      for (final MediaSelectionVideoTrackData track
+          in nativeData.mediaSelectionTracks!) {
         // Use bitrate as the track ID for HLS variants
         final trackId = 'variant_${track.bitrate ?? track.variantIndex}';
         // Generate label from resolution if not provided
         final String? label =
             track.label ??
-            (track.width != null && track.height != null ? '${track.height}p' : null);
+            (track.width != null && track.height != null
+                ? '${track.height}p'
+                : null);
         tracks.add(
           VideoTrack(
             id: trackId,
@@ -251,7 +297,9 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
         // Generate label from resolution if not provided
         final String? label =
             track.label ??
-            (track.width != null && track.height != null ? '${track.height}p' : null);
+            (track.width != null && track.height != null
+                ? '${track.height}p'
+                : null);
         tracks.add(
           VideoTrack(
             id: trackId,
@@ -304,7 +352,9 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     final VideoPlayerViewState viewState = _playerWith(id: playerId).viewState;
 
     return switch (viewState) {
-      VideoPlayerTextureViewState(:final int textureId) => Texture(textureId: textureId),
+      VideoPlayerTextureViewState(:final int textureId) => Texture(
+        textureId: textureId,
+      ),
       VideoPlayerPlatformViewState() => _buildPlatformView(playerId),
     };
   }
@@ -331,8 +381,11 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
 /// An instance of a video player, corresponding to a single player ID in
 /// [AVFoundationVideoPlayer].
 class _PlayerInstance {
-  _PlayerInstance(this._api, this.viewState, {required EventChannel eventChannel})
-    : _eventChannel = eventChannel;
+  _PlayerInstance(
+    this._api,
+    this.viewState, {
+    required EventChannel eventChannel,
+  }) : _eventChannel = eventChannel;
 
   final VideoPlayerInstanceApi _api;
   final VideoPlayerViewState viewState;
@@ -353,7 +406,9 @@ class _PlayerInstance {
 
   Future<void> setPreventsDisplaySleepDuringVideoPlayback(
     bool preventsDisplaySleepDuringVideoPlayback,
-  ) => _api.setPreventsDisplaySleepDuringVideoPlayback(preventsDisplaySleepDuringVideoPlayback);
+  ) => _api.setPreventsDisplaySleepDuringVideoPlayback(
+    preventsDisplaySleepDuringVideoPlayback,
+  );
 
   Future<void> seekTo(Duration position) {
     return _api.seekTo(position.inMilliseconds);
@@ -363,9 +418,11 @@ class _PlayerInstance {
     return Duration(milliseconds: await _api.getPosition());
   }
 
-  Future<List<MediaSelectionAudioTrackData>> getAudioTracks() => _api.getAudioTracks();
+  Future<List<MediaSelectionAudioTrackData>> getAudioTracks() =>
+      _api.getAudioTracks();
 
-  Future<void> selectAudioTrack(int trackIndex) => _api.selectAudioTrack(trackIndex);
+  Future<void> selectAudioTrack(int trackIndex) =>
+      _api.selectAudioTrack(trackIndex);
 
   Stream<VideoEvent> get videoEvents {
     _eventSubscription ??= _eventChannel.receiveBroadcastStream().listen(

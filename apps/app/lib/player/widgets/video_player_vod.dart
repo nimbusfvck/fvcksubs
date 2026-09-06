@@ -15,6 +15,7 @@ import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 import 'subtitle_html_text.dart';
+import '../mappers/video_player_drm_mapping.dart';
 
 const _playbackDiagnosticsInterval = Duration(seconds: 2);
 const _startupHealthTimeout = Duration(seconds: 8);
@@ -124,6 +125,10 @@ class _VideoPlayerVodViewState extends State<VideoPlayerVodView>
       Uri.parse(widget.stream.url),
       httpHeaders: widget.stream.headers,
       isLive: widget.isLive,
+      drmConfiguration: videoPlayerDrmConfiguration(widget.stream),
+      viewType: widget.stream.isProtected
+          ? vp.VideoViewType.platformView
+          : vp.VideoViewType.textureView,
     );
     _adapter = _VideoPlayerControllerAdapter(
       _player,

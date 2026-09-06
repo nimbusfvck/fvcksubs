@@ -1,7 +1,11 @@
 import 'package:better_player_plus/better_player_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/mappers/stream_player_mapping.dart';
+import 'package:fvcksubs_app/player/mappers/video_player_drm_mapping.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
+import 'package:video_player_android/video_player_android.dart';
+import 'package:video_player_avfoundation/video_player_avfoundation.dart';
 
 void main() {
   test('carries url and headers', () {
@@ -124,6 +128,57 @@ void main() {
     expect(ds.drmConfiguration?.drmType, BetterPlayerDrmType.widevine);
     expect(ds.drmConfiguration?.licenseUrl, 'https://lic/');
     expect(ds.drmConfiguration?.headers?['User-Agent'], 'UA');
+  });
+
+  test('maps Widevine to the official Android video_player configuration', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final configuration = videoPlayerDrmConfiguration(
+      const PlayableStream(
+        url: 'https://edge/live.mpd',
+        headers: {'Authorization': 'Bearer token'},
+        format: StreamFormat.dash,
+        drm: DrmConfig(
+          scheme: DrmScheme.widevine,
+          licenseUrl: 'https://license.example/widevine',
+        ),
+      ),
+    );
+
+    expect(configuration, isA<WidevineDrmConfiguration>());
+    final widevine = configuration! as WidevineDrmConfiguration;
+    expect(widevine.licenseUri.toString(), 'https://license.example/widevine');
+    expect(widevine.licenseHeaders['Authorization'], 'Bearer token');
+  });
+
+  test('maps FairPlay to the official AVFoundation configuration', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final configuration = videoPlayerDrmConfiguration(
+      const PlayableStream(
+        url: 'https://edge/protected.m3u8',
+        headers: {'Authorization': 'Bearer token'},
+        format: StreamFormat.hls,
+        drm: DrmConfig(
+          scheme: DrmScheme.fairPlay,
+          certificateUrl: 'https://license.example/fairplay.cer',
+          licenseUrl: 'https://license.example/fairplay',
+          contentId: 'movie-123',
+        ),
+      ),
+    );
+
+    expect(configuration, isA<FairPlayDrmConfiguration>());
+    final fairPlay = configuration! as FairPlayDrmConfiguration;
+    expect(
+      fairPlay.certificateUri.toString(),
+      'https://license.example/fairplay.cer',
+    );
+    expect(fairPlay.licenseUri.toString(), 'https://license.example/fairplay');
+    expect(fairPlay.licenseHeaders['Authorization'], 'Bearer token');
+    expect(fairPlay.contentId, 'movie-123');
   });
 
   test('maps subtitle tracks — known language gets flag + native name', () {

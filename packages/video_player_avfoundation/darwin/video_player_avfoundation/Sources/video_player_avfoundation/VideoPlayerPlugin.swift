@@ -276,8 +276,31 @@ public final class VideoPlayerPlugin: NSObject, FlutterPlugin, AVFoundationVideo
     guard let url = URL(string: options.uri) else {
       throw PigeonError(code: "video_player", message: "Invalid URI", details: nil)
     }
-    let asset = avFactory.urlAsset(with: url, options: itemOptions)
+    let asset = avFactory.urlAsset(
+      with: url,
+      options: itemOptions,
+      resourceLoaderDelegate: try options.fairPlayDrm.map(fairPlayResourceLoaderDelegate(for:))
+    )
     return avFactory.playerItem(with: asset)
+  }
+
+  private func fairPlayResourceLoaderDelegate(
+    for drm: PlatformFairPlayDrmConfiguration
+  ) throws -> FVPFairPlayResourceLoaderDelegate {
+    guard let certificateURL = URL(string: drm.certificateUri) else {
+      throw PigeonError(
+        code: "video_player", message: "Invalid FairPlay certificate URI", details: nil)
+    }
+    guard let licenseURL = URL(string: drm.licenseUri) else {
+      throw PigeonError(
+        code: "video_player", message: "Invalid FairPlay license URI", details: nil)
+    }
+    return FVPFairPlayResourceLoaderDelegate(
+      certificateURL: certificateURL,
+      licenseURL: licenseURL,
+      licenseHeaders: drm.licenseHeaders,
+      contentId: drm.contentId
+    )
   }
 }
 

@@ -263,6 +263,11 @@ rules are load-bearing:
 `nextPage` is an **opaque cursor**. The shell stores it and hands it back; it never parses
 it. Return nothing when there is no further page.
 
+For playback, `drm.scheme` may be `widevine` or `fairPlay` in addition to the
+legacy `clearKey` and `unsupported` values. Widevine requires `licenseUrl`;
+FairPlay requires `certificateUrl` and `licenseUrl`, and may include
+`contentId`. The shell rejects incomplete or platform-incompatible declarations.
+
 ## 2.6 Source ids
 
 A source id must be **self-contained**. `resolve()` receives the id and nothing else — no

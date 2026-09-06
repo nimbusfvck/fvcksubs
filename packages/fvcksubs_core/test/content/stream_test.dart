@@ -40,6 +40,24 @@ void main() {
     );
   });
 
+  test('PlayableStream with FairPlay DRM round-trips', () {
+    const stream = PlayableStream(
+      url: 'https://cdn.example.com/protected.m3u8',
+      format: StreamFormat.hls,
+      drm: DrmConfig(
+        scheme: DrmScheme.fairPlay,
+        certificateUrl: 'https://license.example/fairplay.cer',
+        licenseUrl: 'https://license.example/fairplay',
+        contentId: 'movie-123',
+      ),
+    );
+    expectRoundTrips(
+      stream,
+      toJson: (s) => s.toJson(),
+      fromJson: PlayableStream.fromJson,
+    );
+  });
+
   test('clear HLS stream (no DRM, no headers) round-trips', () {
     const stream = PlayableStream(
       url: 'https://edge.example.com/live/abc.m3u8',

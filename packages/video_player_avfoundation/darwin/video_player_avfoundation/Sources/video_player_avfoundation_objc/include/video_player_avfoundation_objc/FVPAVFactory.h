@@ -86,7 +86,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Creates and returns a wrapped AVAsset instance with the specified URL and options.
 - (NSObject<FVPAVAsset> *)URLAssetWithURL:(NSURL *)URL
-                                  options:(nullable NSDictionary<NSString *, id> *)options;
+                                  options:(nullable NSDictionary<NSString *, id> *)options
+                   resourceLoaderDelegate:
+                       (nullable NSObject<AVAssetResourceLoaderDelegate> *)resourceLoaderDelegate;
 
 /// Creates and returns a wrapped AVPlayerItem instance with the specified asset.
 - (NSObject<FVPAVPlayerItem> *)playerItemWithAsset:(NSObject<FVPAVAsset> *)asset;

@@ -115,7 +115,7 @@ guide. Groups are generic and may represent any extension-defined grouping.
 | `url` | yes | Final media URL loaded by the player. Resolve it as late as possible when the URL expires. |
 | `headers` | no | Headers attached to media requests, including `Referer` or `User-Agent` when required. |
 | `format` | no | Player hint: `hls`, `dash`, or `other`. |
-| `drm` | no | ClearKey or Widevine configuration used by the native player. |
+| `drm` | no | ClearKey, Widevine, or FairPlay configuration used by the native player. |
 | `audioUrl` | no | Separate audio track paired with the main media URL. |
 | `label` | no | Resolved quality or rendition text shown by the player. |
 | `subtitles` | no | Subtitle tracks available with this stream. |
