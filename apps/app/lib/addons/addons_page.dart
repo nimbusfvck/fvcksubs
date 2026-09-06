@@ -763,7 +763,7 @@ class _ReleaseDetails extends StatelessWidget {
               style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
             ),
             const SizedBox(height: AppSpacing.xs),
-            for (final note in entry!.releaseNotes)
+            for (final note in entry!.releaseNotes.take(1))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Row(
