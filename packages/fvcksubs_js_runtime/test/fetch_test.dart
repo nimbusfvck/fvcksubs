@@ -124,9 +124,11 @@ void main() {
       var solverCalls = 0;
       final challenged = JsEngine(
         allowedHosts: {InternetAddress.loopbackIPv4.address},
-        cloudflareSolver: (url, {referer}) async {
+        callerId: 'fixture.extension',
+        cloudflareSolver: (url, {referer, callerId}) async {
           expect(url, contains('/cloudflare'));
           expect(referer, contains('/referrer'));
+          expect(callerId, 'fixture.extension');
           solverCalls++;
           return const JsCloudflareChallenge(
             cookies: {'cf_clearance': 'fixture-clearance'},
@@ -155,8 +157,9 @@ void main() {
     () async {
       final challenged = JsEngine(
         allowedHosts: {InternetAddress.loopbackIPv4.address},
-        cloudflareSolver: (url, {referer}) async {
+        cloudflareSolver: (url, {referer, callerId}) async {
           expect(url, contains('/cloudflare-ua-only'));
+          expect(callerId, isNull);
           return const JsCloudflareChallenge(
             cookies: {},
             userAgent: 'Fixture-WebView',
@@ -177,11 +180,40 @@ void main() {
     },
   );
 
+  test(
+    'a Cloudflare solver can return the browser document directly',
+    () async {
+      final challenged = JsEngine(
+        allowedHosts: {InternetAddress.loopbackIPv4.address},
+        cloudflareSolver: (url, {referer, callerId}) async {
+          return const JsCloudflareChallenge(
+            cookies: {},
+            responseBody:
+                '<html><iframe src="https://cdn.test/player"></iframe></html>',
+            finalUrl: 'https://provider.test/resolved',
+          );
+        },
+      );
+      try {
+        final result = await challenged.evalAsync(
+          'fetch(${jsonEncode(urlFor('127.0.0.1', '/cloudflare'))})'
+          '.then((r) => ({status: r.status, url: r.url, body: r.body}))',
+        );
+        final decoded = jsonDecode(result) as Map;
+        expect(decoded['status'], 200);
+        expect(decoded['url'], 'https://provider.test/resolved');
+        expect(decoded['body'], contains('iframe'));
+      } finally {
+        challenged.dispose();
+      }
+    },
+  );
+
   test('a Cloudflare POST does not launch a browser challenge', () async {
     var solverCalls = 0;
     final challenged = JsEngine(
       allowedHosts: {InternetAddress.loopbackIPv4.address},
-      cloudflareSolver: (url, {referer}) async {
+      cloudflareSolver: (url, {referer, callerId}) async {
         solverCalls++;
         return const JsCloudflareChallenge(cookies: {});
       },
@@ -204,11 +236,13 @@ void main() {
       var resolverCalls = 0;
       final webView = JsEngine(
         allowedHosts: {InternetAddress.loopbackIPv4.address},
-        webViewResolver: (url, {referer, interceptPattern}) async {
+        callerId: 'fixture.extension',
+        webViewResolver: (url, {referer, interceptPattern, clickUrl, callerId}) async {
           resolverCalls++;
           expect(url, contains('/ok'));
           expect(referer, contains('/referrer'));
           expect(interceptPattern, 'm3u8|master\\.txt');
+          expect(callerId, 'fixture.extension');
           return 'https://cdn.example.test/media/master.m3u8';
         },
       );

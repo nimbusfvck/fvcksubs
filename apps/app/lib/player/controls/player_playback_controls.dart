@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../../app_scope.dart';
 import '../../detail/episode_target_v2.dart';
@@ -13,6 +14,7 @@ import '../mappers/stream_player_mapping.dart' show subtitleIndicatorLabel;
 import '../models/app_player_controller.dart';
 import '../models/resolved_source.dart';
 import '../state/playback_stall_detector.dart';
+import '../state/player_controls_cubit.dart';
 import '../sheets/player_selection_sheets.dart';
 import '../sheets/subtitle_picker_sheet.dart';
 import '../widgets/player_overlays.dart';
@@ -115,6 +117,7 @@ class PlayerPlaybackControls extends StatefulWidget {
 }
 
 class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
+  late final PlayerControlsCubit _controlsCubit;
   ValueListenable<AppPlayerValue>? _videoValue;
   bool _controlsVisible = true;
   bool _wasPlaying = false;
@@ -197,6 +200,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   @override
   void initState() {
     super.initState();
+    _controlsCubit = PlayerControlsCubit();
     _syncVideoValue();
   }
 
@@ -216,6 +220,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _liveEdgeRefreshTimer?.cancel();
     _pausedLiveEdgeTimer?.cancel();
     _videoValue?.removeListener(_onValueChanged);
+    unawaited(_controlsCubit.close());
     super.dispose();
   }
 
@@ -227,16 +232,22 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _liveEdge = Duration.zero;
     _liveEdgeLead = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
+    _publishControlState();
   }
 
   void _onValueChanged() {
-    if (!mounted || _valueUpdateScheduled) return;
-    _valueUpdateScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _valueUpdateScheduled = false;
-      if (!mounted) return;
-      _applyVideoValue();
-    });
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_valueUpdateScheduled) return;
+      _valueUpdateScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _valueUpdateScheduled = false;
+        if (mounted) _applyVideoValue();
+      });
+      return;
+    }
+    _applyVideoValue();
   }
 
   void _applyVideoValue() {
@@ -298,7 +309,22 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       widget.onNearEnd();
     }
 
-    setState(() {});
+    _publishControlState();
+  }
+
+  void _publishControlState() {
+    final value = _videoValue?.value ?? const AppPlayerValue();
+    final activeIntro = _activeIntroSegment;
+    _controlsCubit.update(
+      value: value,
+      controlsVisible: _controlsVisible,
+      isBuffering: widget.controller != null && _isBuffering,
+      liveEdge: _liveEdge,
+      dragValueMs: _dragValueMs,
+      activeSubtitleLabel: _activeSubtitleLabel,
+      activeQualityLabel: _activeQualityLabel,
+      skipIntroLabel: activeIntro == null ? null : 'Skip intro',
+    );
   }
 
   void _syncActiveSubtitleLabel() {
@@ -327,13 +353,15 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         _scheduleBufferingIndicator(value.position);
         return;
       }
-      setState(() => _showBufferingIndicator = true);
+      _showBufferingIndicator = true;
+      _publishControlState();
     });
   }
 
   void _setVisible(bool visible) {
     if (_controlsVisible == visible) return;
-    setState(() => _controlsVisible = visible);
+    _controlsVisible = visible;
+    _controlsCubit.setControlsVisible(visible);
     widget.onVisibilityChanged(visible);
   }
 
@@ -393,7 +421,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       DateTime.now().difference(pausedAt),
     );
     if (estimated <= _liveEdge) return;
-    setState(() => _liveEdge = estimated);
+    _liveEdge = estimated;
+    _controlsCubit.setLiveEdge(estimated);
   }
 
   void _stopPausedLiveEdgeTracking() {
@@ -492,7 +521,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   void _setPlaybackSpeed(double speed) {
-    setState(() => _playbackSpeed = speed);
+    _playbackSpeed = speed;
     unawaited(widget.controller?.setPlaybackSpeed(speed));
     _revealControls();
   }
@@ -576,11 +605,10 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         picked.onlineSearchResultKey,
       );
       final isOff = picked.track == null;
-      setState(() {
-        _activeSubtitleLabel = isOff
-            ? null
-            : subtitleIndicatorLabel(picked.track!.label);
-      });
+      _activeSubtitleLabel = isOff
+          ? null
+          : subtitleIndicatorLabel(picked.track!.label);
+      _publishControlState();
     }
     _revealControls();
   }
@@ -611,12 +639,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       widget.onSettling(_settlingGrace(trackSwitch: true));
       unawaited(widget.controller?.setQuality(picked));
       final height = picked.height;
-      setState(() {
-        _qualityPinned = height > 0;
-        _activeQualityLabel = height > 0
-            ? qualityRungLabel(width: picked.width, height: height)
-            : null;
-      });
+      _qualityPinned = height > 0;
+      _activeQualityLabel = height > 0
+          ? qualityRungLabel(width: picked.width, height: height)
+          : null;
+      _publishControlState();
     }
     _revealControls();
   }
@@ -702,7 +729,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onEpisodeListVisibilityChanged: _onEpisodeListVisibilityChanged,
       onSkip: _skip,
       skipIntroLabel: _activeIntroSegment == null ? null : 'Skip intro',
-      onSkipIntro: _activeIntroSegment == null ? null : _skipIntro,
+      onSkipIntro: _skipIntro,
       onTogglePlayPause: _togglePlayPause,
       onChangeSource: () {
         _hideTimer?.cancel();
@@ -716,20 +743,36 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onOpenQualityPicker: _openQualityPicker,
       onTimelineChangeStart: (value) {
         _hideTimer?.cancel();
-        setState(() => _dragValueMs = value);
+        _dragValueMs = value;
+        _controlsCubit.setDragValue(value);
       },
-      onTimelineChanged: (value) => setState(() => _dragValueMs = value),
+      onTimelineChanged: (value) {
+        _dragValueMs = value;
+        _controlsCubit.setDragValue(value);
+      },
       onTimelineChangeEnd: (value) {
+        final current = _controlsCubit.state.value;
+        final currentTimelineExtent = widget.isLive
+            ? (_liveEdge > liveSeekEdge(current)
+                  ? _liveEdge
+                  : liveSeekEdge(current))
+            : current.duration;
         final target = Duration(milliseconds: value.round());
         final seekTarget = widget.isLive
-            ? liveSeekTarget(target, timelineExtent, currentPosition: position)
+            ? liveSeekTarget(
+                target,
+                currentTimelineExtent,
+                currentPosition: current.position,
+              )
             : target;
         if (seekTarget != null) _seekTo(seekTarget);
-        setState(() => _dragValueMs = null);
+        _dragValueMs = null;
+        _controlsCubit.setDragValue(null);
         _revealControls();
       },
       playbackSegments: widget.playbackSegments,
       upNextCard: upNextCard,
+      controlsCubit: _controlsCubit,
     );
   }
 }

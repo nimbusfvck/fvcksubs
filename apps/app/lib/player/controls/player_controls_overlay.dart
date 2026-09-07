@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -6,8 +7,10 @@ import '../../catalog/artwork_placeholder.dart';
 import '../../detail/episode_target_v2.dart';
 import '../../theme/tokens.dart';
 import '../models/app_player_controller.dart';
+import '../state/player_controls_cubit.dart';
 import '../widgets/player_fit_button.dart';
 import '../widgets/player_overlays.dart';
+import 'live_timeline.dart';
 
 typedef PlayerEpisodeEntry = ({
   EpisodeGroup group,
@@ -59,6 +62,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.onTimelineChangeEnd,
     this.upNextCard,
     this.playbackSegments = const [],
+    this.controlsCubit,
   });
 
   /// Media title shown in the top bar.
@@ -173,78 +177,238 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Source-independent intro, recap, and outro intervals for the timeline.
   final List<PlaybackSegment> playbackSegments;
 
+  /// Optional high-frequency control state. When provided, each control
+  /// region selects only the fields it renders instead of rebuilding the
+  /// complete overlay for every native playback tick.
+  final PlayerControlsCubit? controlsCubit;
+
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      Positioned.fill(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onBackgroundTap,
+  Widget build(BuildContext context) {
+    final cubit = controlsCubit;
+    if (cubit == null) {
+      return _buildStack(
+        top: _PlayerTopControls(
+          title: title,
+          subtitle: subtitle,
+          visible: controlsVisible,
+          onBack: onBack,
+          fitMode: fitMode,
+          onToggleFit: onToggleFit,
+          onOpenSettings: onOpenSettings,
+        ),
+        transport: _PlayerTransportControls(
+          visible: controlsVisible,
+          isLive: isLive,
+          isPlaying: isPlaying,
+          isBuffering: isBuffering,
+          onSkip: onSkip,
+          onTogglePlayPause: onTogglePlayPause,
+        ),
+        bottom: _PlayerBottomControls(
+          visible: controlsVisible,
+          isLive: isLive,
+          sourceLabel: sourceLabel,
+          activeSubtitleLabel: activeSubtitleLabel,
+          activeQualityLabel: activeQualityLabel,
+          position: position,
+          duration: duration,
+          timelineExtent: timelineExtent,
+          bufferedExtent: bufferedExtent,
+          atLiveEdge: atLiveEdge,
+          dragValueMs: dragValueMs,
+          onChangeSource: onChangeSource,
+          episodeEntries: episodeEntries,
+          currentEpisodeRef: currentEpisodeRef,
+          onPlayEpisode: onPlayEpisode,
+          onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
+          onOpenSubtitlePicker: onOpenSubtitlePicker,
+          onOpenAudioPicker: onOpenAudioPicker,
+          onOpenQualityPicker: onOpenQualityPicker,
+          onTimelineChangeStart: onTimelineChangeStart,
+          onTimelineChanged: onTimelineChanged,
+          onTimelineChangeEnd: onTimelineChangeEnd,
+          playbackSegments: playbackSegments,
+        ),
+        skipIntro: _skipIntroCard(skipIntroLabel),
+      );
+    }
+
+    return _buildStack(
+      top: BlocSelector<PlayerControlsCubit, PlayerControlsState, bool>(
+        bloc: cubit,
+        selector: (state) => state.controlsVisible,
+        builder: (_, visible) => _PlayerTopControls(
+          title: title,
+          subtitle: subtitle,
+          visible: visible,
+          onBack: onBack,
+          fitMode: fitMode,
+          onToggleFit: onToggleFit,
+          onOpenSettings: onOpenSettings,
         ),
       ),
-      _PlayerTopControls(
-        title: title,
-        subtitle: subtitle,
-        visible: controlsVisible,
-        onBack: onBack,
-        fitMode: fitMode,
-        onToggleFit: onToggleFit,
-        onOpenSettings: onOpenSettings,
-      ),
-      _PlayerTransportControls(
-        visible: controlsVisible,
-        isLive: isLive,
-        isPlaying: isPlaying,
-        isBuffering: isBuffering,
-        onSkip: onSkip,
-        onTogglePlayPause: onTogglePlayPause,
-      ),
-      _PlayerBottomControls(
-        visible: controlsVisible,
-        isLive: isLive,
-        sourceLabel: sourceLabel,
-        activeSubtitleLabel: activeSubtitleLabel,
-        activeQualityLabel: activeQualityLabel,
-        position: position,
-        duration: duration,
-        timelineExtent: timelineExtent,
-        bufferedExtent: bufferedExtent,
-        atLiveEdge: atLiveEdge,
-        dragValueMs: dragValueMs,
-        onChangeSource: onChangeSource,
-        episodeEntries: episodeEntries,
-        currentEpisodeRef: currentEpisodeRef,
-        onPlayEpisode: onPlayEpisode,
-        onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
-        onOpenSubtitlePicker: onOpenSubtitlePicker,
-        onOpenAudioPicker: onOpenAudioPicker,
-        onOpenQualityPicker: onOpenQualityPicker,
-        onTimelineChangeStart: onTimelineChangeStart,
-        onTimelineChanged: onTimelineChanged,
-        onTimelineChangeEnd: onTimelineChangeEnd,
-        playbackSegments: playbackSegments,
-      ),
-      if (upNextCard == null && skipIntroLabel != null && onSkipIntro != null)
-        Positioned(
-          left: AppSpacing.md,
-          right: AppSpacing.md,
-          bottom: kPlayerOverlayCardInset,
-          child: SafeArea(
-            child: Align(
-              alignment: Alignment.bottomRight,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 250),
-                child: PlayerSkipIntroCard(
-                  label: skipIntroLabel!,
-                  onSkipIntro: onSkipIntro!,
-                ),
-              ),
+      transport:
+          BlocSelector<
+            PlayerControlsCubit,
+            PlayerControlsState,
+            ({bool visible, bool playing, bool buffering})
+          >(
+            bloc: cubit,
+            selector: (state) => (
+              visible: state.controlsVisible,
+              playing: state.value.isPlaying,
+              buffering: state.isBuffering,
+            ),
+            builder: (_, value) => _PlayerTransportControls(
+              visible: value.visible,
+              isLive: isLive,
+              isPlaying: value.playing,
+              isBuffering: value.buffering,
+              onSkip: onSkip,
+              onTogglePlayPause: onTogglePlayPause,
             ),
           ),
+      bottom:
+          BlocSelector<
+            PlayerControlsCubit,
+            PlayerControlsState,
+            ({bool visible, String? subtitle, String? quality})
+          >(
+            bloc: cubit,
+            selector: (state) => (
+              visible: state.controlsVisible,
+              subtitle: state.activeSubtitleLabel,
+              quality: state.activeQualityLabel,
+            ),
+            builder: (_, value) => _PlayerBottomControls(
+              visible: value.visible,
+              isLive: isLive,
+              sourceLabel: sourceLabel,
+              activeSubtitleLabel: value.subtitle,
+              activeQualityLabel: value.quality,
+              position: position,
+              duration: duration,
+              timelineExtent: timelineExtent,
+              bufferedExtent: bufferedExtent,
+              atLiveEdge: atLiveEdge,
+              dragValueMs: dragValueMs,
+              onChangeSource: onChangeSource,
+              episodeEntries: episodeEntries,
+              currentEpisodeRef: currentEpisodeRef,
+              onPlayEpisode: onPlayEpisode,
+              onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
+              onOpenSubtitlePicker: onOpenSubtitlePicker,
+              onOpenAudioPicker: onOpenAudioPicker,
+              onOpenQualityPicker: onOpenQualityPicker,
+              onTimelineChangeStart: onTimelineChangeStart,
+              onTimelineChanged: onTimelineChanged,
+              onTimelineChangeEnd: onTimelineChangeEnd,
+              playbackSegments: playbackSegments,
+              timelineOverride:
+                  BlocSelector<
+                    PlayerControlsCubit,
+                    PlayerControlsState,
+                    ({
+                      Duration position,
+                      Duration duration,
+                      Duration timelineExtent,
+                      Duration bufferedExtent,
+                      bool atLiveEdge,
+                      double? dragValueMs,
+                    })
+                  >(
+                    bloc: cubit,
+                    selector: (state) => (
+                      position: state.value.position,
+                      duration: state.value.duration,
+                      timelineExtent: isLive
+                          ? (state.liveEdge > state.value.seekablePosition
+                                ? state.liveEdge
+                                : state.value.seekablePosition)
+                          : state.value.duration,
+                      bufferedExtent: state.value.bufferedPosition,
+                      atLiveEdge: isAtLiveEdge(
+                        state.value.position,
+                        isLive
+                            ? (state.liveEdge > state.value.seekablePosition
+                                  ? state.liveEdge
+                                  : state.value.seekablePosition)
+                            : state.value.duration,
+                      ),
+                      dragValueMs: state.dragValueMs,
+                    ),
+                    builder: (_, timeline) {
+                      if (!isLive && timeline.duration <= Duration.zero) {
+                        return const SizedBox.shrink();
+                      }
+                      return _PlayerTimeline(
+                        isLive: isLive,
+                        position: timeline.position,
+                        duration: timeline.duration,
+                        timelineExtent: timeline.timelineExtent,
+                        bufferedExtent: timeline.bufferedExtent,
+                        atLiveEdge: timeline.atLiveEdge,
+                        dragValueMs: timeline.dragValueMs,
+                        onChangeStart: onTimelineChangeStart,
+                        onChanged: onTimelineChanged,
+                        onChangeEnd: onTimelineChangeEnd,
+                        playbackSegments: playbackSegments,
+                      );
+                    },
+                  ),
+            ),
+          ),
+      skipIntro:
+          BlocSelector<PlayerControlsCubit, PlayerControlsState, String?>(
+            bloc: cubit,
+            selector: (state) => state.skipIntroLabel,
+            builder: (_, label) => _skipIntroCard(label),
+          ),
+    );
+  }
+
+  Widget _skipIntroCard(String? label) {
+    if (upNextCard != null || label == null || onSkipIntro == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: AppSpacing.md,
+      right: AppSpacing.md,
+      bottom: kPlayerOverlayCardInset,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 250),
+            child: PlayerSkipIntroCard(label: label, onSkipIntro: onSkipIntro!),
+          ),
         ),
-      if (upNextCard case final Widget card) card,
-    ],
+      ),
+    );
+  }
+
+  Widget _buildStack({
+    required Widget top,
+    required Widget transport,
+    required Widget bottom,
+    required Widget skipIntro,
+  }) => RepaintBoundary(
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onBackgroundTap,
+          ),
+        ),
+        top,
+        transport,
+        bottom,
+        skipIntro,
+        if (upNextCard case final Widget card) card,
+      ],
+    ),
   );
 }
 
@@ -462,6 +626,7 @@ class _PlayerBottomControls extends StatefulWidget {
     required this.onTimelineChanged,
     required this.onTimelineChangeEnd,
     required this.playbackSegments,
+    this.timelineOverride,
   });
 
   final bool visible;
@@ -487,6 +652,7 @@ class _PlayerBottomControls extends StatefulWidget {
   final ValueChanged<double> onTimelineChanged;
   final ValueChanged<double> onTimelineChangeEnd;
   final List<PlaybackSegment> playbackSegments;
+  final Widget? timelineOverride;
 
   @override
   State<_PlayerBottomControls> createState() => _PlayerBottomControlsState();
@@ -526,6 +692,7 @@ class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
   ValueChanged<double> get onTimelineChanged => widget.onTimelineChanged;
   ValueChanged<double> get onTimelineChangeEnd => widget.onTimelineChangeEnd;
   List<PlaybackSegment> get playbackSegments => widget.playbackSegments;
+  Widget? get timelineOverride => widget.timelineOverride;
 
   void _toggleEpisodeList() {
     final nextVisible = !_episodeListVisible;
@@ -687,7 +854,9 @@ class _PlayerBottomControlsState extends State<_PlayerBottomControls> {
                       ],
                     ),
                   ),
-                  if (isLive || duration > Duration.zero)
+                  if (timelineOverride != null)
+                    timelineOverride!
+                  else if (isLive || duration > Duration.zero)
                     _PlayerTimeline(
                       isLive: isLive,
                       position: position,

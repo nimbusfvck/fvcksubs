@@ -106,6 +106,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   late vp.VideoPlayerController _player;
   late PlayableStream _activeStream;
   late final _VideoPlayerControllerAdapter _adapter;
+  late Widget _videoSurface;
   late PlayerFitMode _fitMode;
   bool _readyReported = false;
   bool _preferredQualitySelectionDone = false;
@@ -138,6 +139,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     }
     _activeStream = widget.stream;
     _player = _createPlayer(_activeStream);
+    _videoSurface = vp.VideoPlayer(_player);
     _adapter = _VideoPlayerControllerAdapter(
       _player,
       onSetFit: (mode) {
@@ -225,6 +227,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             variants: widget.stream.variants,
           );
     _player = _createPlayer(_activeStream);
+    _videoSurface = vp.VideoPlayer(_player);
     _adapter.attachPlayer(_player);
     _adapter.setActiveUrl(_activeStream.url);
     _bindPlayer();
@@ -578,7 +581,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   Widget build(BuildContext context) =>
       ValueListenableBuilder<vp.VideoPlayerValue>(
         valueListenable: _player,
-        builder: (context, value, _) {
+        builder: (context, value, child) {
           if (!value.isInitialized) {
             return const ColoredBox(color: Colors.black);
           }
@@ -610,7 +613,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                         child: SizedBox(
                           width: videoSize.width,
                           height: videoSize.height,
-                          child: vp.VideoPlayer(_player),
+                          child: child!,
                         ),
                       ),
                       Positioned.fromRect(
@@ -629,5 +632,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             ),
           );
         },
+        child: _videoSurface,
       );
 }

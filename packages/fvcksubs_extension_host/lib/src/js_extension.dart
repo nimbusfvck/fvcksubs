@@ -58,6 +58,7 @@ class JsExtension extends ContentExtension {
     String? prelude,
     JsCloudflareSolver? cloudflareSolver,
     JsWebViewResolver? webViewResolver,
+    JsRuntimeLogger? networkLogger,
     Duration? scriptTimeout,
     Duration? fetchTimeout,
     Duration? maxFetchTimeout,
@@ -67,6 +68,11 @@ class JsExtension extends ContentExtension {
       allowedHosts: manifest.permissions.hosts.toSet(),
       cloudflareSolver: cloudflareSolver,
       webViewResolver: webViewResolver,
+      networkLogger: networkLogger,
+      // The host supplies only an opaque scope. Network services must not
+      // inspect or hardcode provider names; the extension host owns the
+      // association between a manifest and its isolated network context.
+      callerId: manifest.id,
       // Deliberately well under the app's whole-discovery budget. A role call
       // fans out across every provider in one `sources()`, so a single host
       // that accepts a connection and then stalls would otherwise spend most

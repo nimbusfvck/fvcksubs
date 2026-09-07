@@ -218,9 +218,9 @@ void main() {
       url: 'https://stream.example/movie.m3u8',
       format: StreamFormat.hls,
     );
-    sourceCache.store(item.ref, const [
+    sourceCache.store(item.ref, [
       ResolvedSource(
-        source: StreamSource(id: 'hydrax', label: 'Source hydrax'),
+        source: const StreamSource(id: 'hydrax', label: 'Source hydrax'),
         stream: stream,
       ),
     ]);

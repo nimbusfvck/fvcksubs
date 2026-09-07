@@ -18,21 +18,42 @@ class JsEvalException implements Exception {
   String toString() => 'JsEvalException: $message';
 }
 
-/// Cookies and headers returned by a host-side browser challenge solver.
+/// Response state returned by a host-side browser challenge solver.
 ///
-/// The JS bundle never sees this object directly. The fetch bridge applies the
-/// values to one retry of the challenged request, which keeps anti-bot session
-/// state out of extension source ids and protocol payloads.
+/// The JS bundle never sees this object directly. When [responseBody] is
+/// available, the fetch bridge returns the browser's document directly. This
+/// is important for challenges whose clearance is bound to the WebView
+/// fingerprint and cannot be replayed faithfully through Dio.
 class JsCloudflareChallenge {
-  const JsCloudflareChallenge({required this.cookies, this.userAgent});
+  const JsCloudflareChallenge({
+    required this.cookies,
+    this.userAgent,
+    this.responseBody,
+    this.finalUrl,
+    this.statusCode,
+  });
 
   final Map<String, String> cookies;
   final String? userAgent;
+  final String? responseBody;
+  final String? finalUrl;
+  final int? statusCode;
 }
 
 /// Resolves a browser challenge and returns the cookie jar state for [url].
+///
+/// [callerId] is an opaque host-assigned scope, normally the extension
+/// manifest id. The solver may use it to isolate browser sessions and
+/// coalesce requests without knowing anything about the extension/provider.
 typedef JsCloudflareSolver =
-    Future<JsCloudflareChallenge?> Function(String url, {String? referer});
+    Future<JsCloudflareChallenge?> Function(
+      String url, {
+      String? referer,
+      String? callerId,
+    });
+
+/// Optional host-side diagnostic sink for the generic fetch bridge.
+typedef JsRuntimeLogger = void Function(String message);
 
 /// Resolves a media URL by loading a provider page in a host WebView and
 /// returning the first resource matching [interceptPattern].
@@ -41,6 +62,8 @@ typedef JsWebViewResolver =
       String url, {
       String? referer,
       String? interceptPattern,
+      String? clickUrl,
+      String? callerId,
     });
 
 /// A function JS can call via the engine's `__host_call(name, argsJson)`.
@@ -95,10 +118,15 @@ class JsEngine {
   /// can only *raise* its own call's timeout this way, never lower another
   /// one's, and the request itself carries no trace of the option: it is
   /// consumed here, not sent.
+  ///
+  /// [callerId] is an opaque scope for host-side network services. The
+  /// extension host sets it from the manifest id; JS code cannot change it.
   JsEngine({
-    Set<String>? allowedHosts,
-    JsCloudflareSolver? cloudflareSolver,
-    JsWebViewResolver? webViewResolver,
+    this._allowedHosts,
+    this._cloudflareSolver,
+    this._webViewResolver,
+    this._callerId,
+    JsRuntimeLogger? networkLogger,
     Duration? fetchTimeout,
     Duration? maxFetchTimeout,
     int? maxRedirects,
@@ -106,12 +134,10 @@ class JsEngine {
     int maxStackBytes = 1024 * 1024,
     Duration scriptTimeout = const Duration(seconds: 10),
   }) : _engine = bindings.qjsr_new_engine(),
-       _allowedHosts = allowedHosts,
-       _cloudflareSolver = cloudflareSolver,
-       _webViewResolver = webViewResolver,
        _fetchTimeout = fetchTimeout ?? const Duration(seconds: 15),
        _maxFetchTimeout = maxFetchTimeout ?? const Duration(seconds: 45),
-       _maxRedirects = maxRedirects ?? 10 {
+       _maxRedirects = maxRedirects ?? 10,
+       _logger = networkLogger {
     if (_engine == ffi.nullptr) {
       throw StateError('Failed to create QuickJS engine');
     }
@@ -129,6 +155,8 @@ class JsEngine {
   final Set<String>? _allowedHosts;
   final JsCloudflareSolver? _cloudflareSolver;
   final JsWebViewResolver? _webViewResolver;
+  final String? _callerId;
+  final JsRuntimeLogger? _logger;
   final Duration _fetchTimeout;
   final Duration _maxFetchTimeout;
   final int _maxRedirects;
@@ -267,12 +295,22 @@ class JsEngine {
   ) async {
     try {
       final headers = (jsonDecode(headersJson) as Map).cast<String, dynamic>();
+      final timeout = _takeRequestTimeout(headers);
+      _logFetch(
+        'start id=$requestId method=${method.toUpperCase()} '
+        'target=${_logUrl(url)} timeout_ms=${timeout.inMilliseconds} '
+        'scope=${_callerId == null ? 'global' : 'scoped'}',
+      );
       final result = await _performFetch(
         url: url,
         method: method,
         headers: headers,
-        timeout: _takeRequestTimeout(headers),
+        timeout: timeout,
         body: body,
+      );
+      _logFetch(
+        'done id=$requestId status=${result.status} '
+        'target=${_logUrl(result.url)} body_bytes=${result.body.length}',
       );
       _resolveFetch(
         requestId,
@@ -282,6 +320,7 @@ class JsEngine {
         body: result.body,
       );
     } catch (e) {
+      _logFetch('error id=$requestId message=$e');
       _resolveFetch(requestId, errorMessage: e.toString());
     }
   }
@@ -317,16 +356,26 @@ class JsEngine {
     var cloudflareRetried = false;
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       final uri = Uri.parse(currentUrl);
+      _logFetch(
+        'request hop=$hop method=${method.toUpperCase()} '
+        'target=${_logUrl(currentUrl)}',
+      );
       final allowed = _allowedHosts;
       if (allowed != null && !_hostAllowed(uri.host, allowed)) {
         throw StateError('host not allowed: ${uri.host}');
       }
 
       final webViewPattern = _takePrivateHeader(headers, _webViewPatternHeader);
+      final webViewClickUrl = _takePrivateHeader(headers, _webViewClickUrlHeader);
       final cloudflareDisabled =
           _takePrivateHeader(headers, _cloudflareDisabledHeader) != null;
       if (webViewPattern != null) {
+        _logFetch(
+          'webview_start target=${_logUrl(currentUrl)} '
+          'pattern=${_logPattern(webViewPattern)}',
+        );
         if (method.toUpperCase() != 'GET' || _webViewResolver == null) {
+          _logFetch('webview_unavailable status=501');
           return _FetchResult(
             status: 501,
             headers: const {},
@@ -338,6 +387,12 @@ class JsEngine {
           currentUrl,
           referer: _headerValue(headers, 'referer'),
           interceptPattern: webViewPattern,
+          clickUrl: webViewClickUrl,
+          callerId: _callerId,
+        );
+        _logFetch(
+          'webview_done status=${mediaUrl == null ? 404 : 200} '
+          'target=${_logUrl(mediaUrl ?? currentUrl)}',
         );
         return _FetchResult(
           status: mediaUrl == null ? 404 : 200,
@@ -362,6 +417,9 @@ class JsEngine {
       );
 
       final status = response.statusCode ?? 0;
+      _logFetch(
+        'response hop=$hop status=$status target=${_logUrl(currentUrl)}',
+      );
 
       if (!cloudflareDisabled &&
           !cloudflareRetried &&
@@ -369,13 +427,35 @@ class JsEngine {
           _cloudflareSolver != null &&
           (status == 403 || status == 503) &&
           _isCloudflareResponse(response.headers)) {
+        _logFetch('cloudflare_detected target=${_logUrl(currentUrl)}');
         final challenge = await _cloudflareSolver(
           currentUrl,
           referer: _headerValue(headers, 'referer'),
+          callerId: _callerId,
         );
+        _logFetch(
+          'cloudflare_solver_result body_bytes=${challenge?.responseBody?.length ?? 0} '
+          'cookies=${challenge?.cookies.length ?? 0} '
+          'has_user_agent=${challenge?.userAgent?.isNotEmpty == true}',
+        );
+        final browserBody = challenge?.responseBody;
+        if (challenge != null && browserBody != null) {
+          _logFetch(
+            'cloudflare_document_return status=${challenge.statusCode ?? 200} '
+            'target=${_logUrl(challenge.finalUrl ?? currentUrl)}',
+          );
+          return _FetchResult(
+            status: challenge.statusCode ?? 200,
+            headers: const {},
+            url: challenge.finalUrl ?? currentUrl,
+            body: browserBody,
+          );
+        }
+
         if (challenge != null &&
             (challenge.cookies.isNotEmpty ||
                 challenge.userAgent?.isNotEmpty == true)) {
+          _logFetch('cloudflare_retry_with_browser_context');
           final cookieHeader = challenge.cookies.entries
               .map((entry) => '${entry.key}=${entry.value}')
               .join('; ');
@@ -394,6 +474,7 @@ class JsEngine {
         final location = response.headers.value('location');
         if (location != null) {
           currentUrl = uri.resolve(location).toString();
+          _logFetch('redirect next=${_logUrl(currentUrl)}');
           continue;
         }
       }
@@ -422,6 +503,23 @@ class JsEngine {
       if (entry.key.toLowerCase() == wanted) return '${entry.value}';
     }
     return null;
+  }
+
+  void _logFetch(String message) => _logger?.call(message);
+
+  static String _logUrl(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.host.isEmpty) return '<invalid-url>';
+    final segments = uri.pathSegments;
+    final path = segments.isEmpty
+        ? ''
+        : '/${segments.take(2).join('/')}${segments.length > 2 ? '/…' : ''}';
+    return '${uri.scheme}://${uri.host}$path';
+  }
+
+  static String _logPattern(String pattern) {
+    final compact = pattern.replaceAll(RegExp(r'\s+'), ' ');
+    return compact.length <= 100 ? compact : '${compact.substring(0, 100)}…';
   }
 
   static String? _takePrivateHeader(
@@ -570,6 +668,12 @@ const _timeoutHeader = 'x-qjsr-timeout-ms';
 /// Private fetch header used to request a host-side WebView resource
 /// interception. It is consumed before Dio and never sent over the network.
 const _webViewPatternHeader = 'x-qjsr-webview-pattern';
+
+/// Private WebView instruction used when a provider page exposes several
+/// player links and the selected player must be activated after navigation.
+/// The host treats this only as a generic URL selection, never as a provider
+/// name or provider-specific rule.
+const _webViewClickUrlHeader = 'x-qjsr-webview-click-url';
 
 /// Private fetch header used by a provider that has its own WebView fallback.
 /// It prevents the generic Cloudflare cookie solver from opening a visible
