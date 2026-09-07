@@ -9,6 +9,7 @@ import '../../platform/playback_capability.dart';
 import '../../theme/tokens.dart';
 import '../diagnostics/player_diagnostics.dart';
 import '../models/playback_media.dart';
+import '../models/resolved_source.dart';
 import '../player_page.dart';
 import '../state/source_priority_controller.dart';
 import '../state/subtitle_preference_controller.dart';
@@ -138,7 +139,13 @@ Future<void> _playMedia(
       onResolved: (resolved, loadingRoute) async {
         if (resolved.isEmpty) return false;
         scope.sourceCache.store(item.ref, resolved);
-        final pendingSources = _revalidate(scope, item).stream;
+        final pendingSources = _revalidate(
+          scope,
+          item,
+          excludeSourceKeys: {
+            for (final source in resolved) sourceDescriptorKey(source.source),
+          },
+        ).stream;
         await _openPlayer(
           navigator,
           scope,
@@ -167,9 +174,21 @@ Future<void> _playMedia(
     onResolved: (resolved, loadingRoute) async {
       final first = resolved.first;
       if (first == null) return false;
-      if (resolved.refresh == null) {
-        scope.sourceCache.store(item.ref, [first]);
-      }
+      // Store the source handed to the player before background revalidation
+      // starts. Revalidation may intentionally skip this descriptor to avoid
+      // opening a duplicate WebView request, so it must merge new sources
+      // into this cache entry later.
+      final refreshedBeforeHandoff = scope.sourceCache.peek(item.ref);
+      scope.sourceCache.store(
+        item.ref,
+        refreshedBeforeHandoff == null
+            ? [first]
+            : mergeResolvedSources(
+                [first],
+                refreshedBeforeHandoff,
+                preserveSourceId: first.source.id,
+              ),
+      );
       await _openPlayer(
         navigator,
         scope,
@@ -269,7 +288,11 @@ class _ResolvedSourceBatch {
   final Future<List<ResolvedSource>> done;
 }
 
-_ResolvedSourceBatch _revalidate(AppScope scope, PlaybackMedia item) {
+_ResolvedSourceBatch _revalidate(
+  AppScope scope,
+  PlaybackMedia item, {
+  Set<String> excludeSourceKeys = const {},
+}) {
   final controller = StreamController<ResolvedSource>();
   final done = Completer<List<ResolvedSource>>();
 
@@ -287,10 +310,17 @@ _ResolvedSourceBatch _revalidate(AppScope scope, PlaybackMedia item) {
       }
 
       scope.sourceCache.recordSourceList(item.ref, sources);
+      // The initial playback fan-out may already be resolving these same
+      // descriptors. Revalidating them here creates duplicate WebViews and
+      // Cloudflare challenges, which is especially expensive on iOS/macOS.
+      final sourcesToResolve = [
+        for (final source in sources)
+          if (!excludeSourceKeys.contains(sourceDescriptorKey(source))) source,
+      ];
       final batch = _resolveKnownSourcesAsTheySettle(
         scope,
         item,
-        sources,
+        sourcesToResolve,
         progress,
       );
       final resolved = <ResolvedSource>[];
@@ -299,7 +329,15 @@ _ResolvedSourceBatch _revalidate(AppScope scope, PlaybackMedia item) {
         controller.add(source);
       }
       if (resolved.isNotEmpty) {
-        scope.sourceCache.store(item.ref, resolved);
+        if (excludeSourceKeys.isEmpty) {
+          scope.sourceCache.store(item.ref, resolved);
+        } else {
+          final current = scope.sourceCache.peek(item.ref) ?? const [];
+          scope.sourceCache.store(
+            item.ref,
+            mergeResolvedSources(current, resolved),
+          );
+        }
       }
       done.complete(List<ResolvedSource>.unmodifiable(resolved));
     } catch (_) {
@@ -476,12 +514,6 @@ _resolveFirstPlayable(
   PlaybackMedia item,
   _ResolveProgress progress,
 ) async {
-  // Start complete discovery immediately. It is both the fallback if the
-  // fast provider cannot resolve and the source-picker feed after playback
-  // has already started.
-  final refresh = canUseCachedPlaybackSources(item)
-      ? _revalidate(scope, item)
-      : null;
   // A fast discovery may return only the first provider with sources. That is
   // fine when there is no source preference, but it can hide the user's
   // preferred locale/provider entirely. Fetch the complete list first whenever
@@ -493,7 +525,10 @@ _resolveFirstPlayable(
       sourcePriority.sourceLocale.isAuto;
   final sources = await _loadSources(scope, item, fast: fastInitialDiscovery);
   if (sources.isEmpty) {
-    final complete = refresh == null ? null : await refresh.done;
+    final retry = canUseCachedPlaybackSources(item)
+        ? _revalidate(scope, item)
+        : null;
+    final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
       return (
         first: complete.first,
@@ -523,12 +558,26 @@ _resolveFirstPlayable(
   final first = item.isLive
       ? await _firstMatching(futures, (_) => true)
       : await _firstByPriority(futures);
+  _ResolvedSourceBatch? startRefresh() => canUseCachedPlaybackSources(item)
+      ? _revalidate(
+          scope,
+          item,
+          excludeSourceKeys: {
+            for (final source in sources) sourceDescriptorKey(source),
+          },
+        )
+      : null;
   final preferred = scope.subtitlePreferenceController;
   if (first == null ||
       preferred.languageCode == null ||
       preferred.isSatisfiedBy(first.stream.subtitles)) {
-    if (first != null) return (first: first, second: all, refresh: refresh);
-    final complete = refresh == null ? null : await refresh.done;
+    if (first != null) {
+      return (first: first, second: all, refresh: startRefresh());
+    }
+    final retry = canUseCachedPlaybackSources(item)
+        ? _revalidate(scope, item)
+        : null;
+    final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
       return (first: complete.first, second: all, refresh: null);
     }
@@ -542,9 +591,9 @@ _resolveFirstPlayable(
     Future<ResolvedSource?>.delayed(_subtitleSourceGrace, () => null),
   ]);
   if (subtitleMatch != null) {
-    return (first: subtitleMatch, second: all, refresh: refresh);
+    return (first: subtitleMatch, second: all, refresh: startRefresh());
   }
-  return (first: first, second: all, refresh: refresh);
+  return (first: first, second: all, refresh: startRefresh());
 }
 
 /// Looks up external subtitles for [item] while its sources resolve.
