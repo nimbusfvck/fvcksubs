@@ -191,7 +191,9 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
           widget.onError?.call(event.error ?? StateError('Playback failed'));
         case AppPlayerEventType.completed:
           widget.onCompleted?.call();
+        case AppPlayerEventType.pictureInPictureStarted:
         case AppPlayerEventType.pictureInPictureRestore:
+        case AppPlayerEventType.pictureInPictureClosed:
           break;
       }
     });
@@ -209,15 +211,22 @@ class _AppPreviewPlayerState extends State<AppPreviewPlayer> {
   Widget build(BuildContext context) {
     final stream = _resolvedStream;
     if (stream == null) return const SizedBox.shrink();
-    return AppScope.of(context).previewPlayerBuilder(
-      context,
-      stream,
-      muted: widget.muted,
-      looping: false,
-      playing: widget.playing,
-      fit: widget.fit,
-      onControllerCreated: _onControllerCreated,
-      onPlaybackReady: _onPlaybackReady,
+    final session = AppScope.of(context).pictureInPictureSession;
+    return ListenableBuilder(
+      listenable: session,
+      builder: (context, _) => AppScope.of(context).previewPlayerBuilder(
+        context,
+        stream,
+        muted: widget.muted,
+        looping: false,
+        // The full player owns playback once it has been attached to the
+        // persistent PiP session. Preview players must not remain candidates
+        // for automatic PiP while a movie/event is playing elsewhere.
+        playing: widget.playing && session.player == null,
+        fit: widget.fit,
+        onControllerCreated: _onControllerCreated,
+        onPlaybackReady: _onPlaybackReady,
+      ),
     );
   }
 }

@@ -28,8 +28,11 @@ static NSString *const kFVPAssetVariantsKey = @"variants";
 #if TARGET_OS_IOS
 @interface FVPVideoPlayer () <AVPictureInPictureControllerDelegate>
 @property(nonatomic, strong, nullable) AVPictureInPictureController *pictureInPictureController;
+@property(nonatomic, weak, nullable) UIView *pictureInPicturePlayerView;
 @property(nonatomic, copy, nullable) void (^pictureInPictureStartCompletion)(NSNumber *, FlutterError *);
+@property(nonatomic, copy, nullable) void (^pictureInPictureRestoreCompletion)(BOOL);
 @property(nonatomic) BOOL pictureInPictureStartPending;
+@property(nonatomic) BOOL pictureInPictureRestoreRequested;
 @property(nonatomic) BOOL disposeRequestedWhilePictureInPicture;
 @end
 #endif
@@ -251,6 +254,11 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   [self armPictureInPicture];
 }
 
+- (void)setPictureInPicturePlayerView:(UIView *)view {
+  _pictureInPicturePlayerView = view;
+  view.userInteractionEnabled = !self.pictureInPictureController.pictureInPictureActive;
+}
+
 - (void)armPictureInPicture {
   if (![AVPictureInPictureController isPictureInPictureSupported]) {
     return;
@@ -358,10 +366,21 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
 }
 
+- (void)completePictureInPictureRestore:(FlutterError *_Nullable *_Nonnull)error {
+  void (^completionHandler)(BOOL) = self.pictureInPictureRestoreCompletion;
+  self.pictureInPictureRestoreCompletion = nil;
+  if (completionHandler != nil) {
+    completionHandler(YES);
+  }
+}
+
 - (void)pictureInPictureControllerDidStartPictureInPicture:
     (AVPictureInPictureController *)pictureInPictureController {
   NSLog(@"[FVPVideoPlayer] PiP did start");
+  self.pictureInPicturePlayerView.userInteractionEnabled = NO;
+  self.pictureInPictureRestoreRequested = NO;
   self.pictureInPictureStartPending = NO;
+  [self.eventListener videoPlayerDidStartPictureInPicture];
   void (^completion)(NSNumber *, FlutterError *) = self.pictureInPictureStartCompletion;
   self.pictureInPictureStartCompletion = nil;
   if (completion != nil) {
@@ -389,6 +408,14 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 - (void)pictureInPictureControllerDidStopPictureInPicture:
     (AVPictureInPictureController *)pictureInPictureController {
   NSLog(@"[FVPVideoPlayer] PiP did stop");
+  if (self.pictureInPictureRestoreRequested) {
+    self.pictureInPictureRestoreRequested = NO;
+  } else {
+    // Closing the floating window is an explicit end-of-playback action. Pause
+    // immediately and let Dart detach the widget so AVPlayer is disposed too.
+    [self.player pause];
+    [self.eventListener videoPlayerDidClosePictureInPicture];
+  }
   self.pictureInPictureStartPending = NO;
   if (self.disposeRequestedWhilePictureInPicture) {
     self.disposeRequestedWhilePictureInPicture = NO;
@@ -401,8 +428,33 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
             (AVPictureInPictureController *)pictureInPictureController
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler:
         (void (^)(BOOL success))completionHandler {
+  self.pictureInPictureRestoreRequested = YES;
+  // Do not let AVKit immediately start PiP again while the Flutter host is
+  // being restored. The app-level PiP host needs a frame to move the same
+  // platform view back to its visible state; otherwise the fullscreen player
+  // can flash and AVKit may reclaim the layer straight away.
+  if (@available(iOS 14.2, *)) {
+    self.pictureInPictureController
+        .canStartPictureInPictureAutomaticallyFromInline = NO;
+  }
+  AVPlayerLayer *playerLayer = self.pictureInPictureController.playerLayer;
+  playerLayer.hidden = NO;
+  // Texture playback already renders through Flutter. Its AVPlayerLayer is
+  // attached only as AVKit's PiP source and must remain invisible after
+  // restore, otherwise it sits above Flutter controls and the caller route.
+  // Platform-view playback owns a visible native view and needs the layer
+  // revealed again.
+  if (self.pictureInPicturePlayerView != nil) {
+    self.pictureInPicturePlayerView.userInteractionEnabled = YES;
+    playerLayer.opacity = 1.0f;
+  } else {
+    playerLayer.opacity = 0.0f;
+  }
   [self.eventListener videoPlayerDidRequestPictureInPictureRestore];
-  completionHandler(YES);
+  // Flutter calls completePictureInPictureRestore after its persistent player
+  // host has been laid out again. AVKit must not be told that restoration is
+  // complete before that UI is actually visible.
+  self.pictureInPictureRestoreCompletion = completionHandler;
 }
 #else
 - (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion {
@@ -410,6 +462,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)stopPictureInPicture:(FlutterError *_Nullable *_Nonnull)error {
+}
+
+- (void)completePictureInPictureRestore:(FlutterError *_Nullable *_Nonnull)error {
 }
 #endif
 

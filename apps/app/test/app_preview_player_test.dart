@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -61,7 +62,9 @@ void main() {
     tester,
   ) async {
     final previewPlayer = RecordingPreviewPlayer();
-    const resolved = PlayableStream(url: 'https://cdn.example.com/resolved.m3u8');
+    const resolved = PlayableStream(
+      url: 'https://cdn.example.com/resolved.m3u8',
+    );
 
     await tester.pumpWidget(
       wrapApp(
@@ -116,6 +119,36 @@ void main() {
     await tester.pump();
     expect(previewPlayer.playedMuted, isFalse);
     expect(previewPlayer.playedPlaying, isFalse);
+  });
+
+  testWidgets('a full player session pauses previews', (tester) async {
+    final previewPlayer = RecordingPreviewPlayer();
+    final session = PictureInPictureSession();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const AppPreviewPlayer(
+          source: _directSource,
+          muted: true,
+          playing: true,
+          youtubeResolver: _neverCalledResolver,
+        ),
+        registry: ExtensionRegistry([]),
+        previewPlayer: previewPlayer,
+        pictureInPictureSession: session,
+      ),
+    );
+    await tester.pump();
+    expect(previewPlayer.playedPlaying, isTrue);
+
+    const fullPlayer = SizedBox();
+    session.attach(fullPlayer);
+    await tester.pump();
+    expect(previewPlayer.playedPlaying, isFalse);
+
+    session.detach(fullPlayer);
+    await tester.pump();
+    expect(previewPlayer.playedPlaying, isTrue);
   });
 
   testWidgets(

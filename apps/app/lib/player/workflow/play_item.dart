@@ -102,7 +102,7 @@ Future<void> _playMedia(
       .toList();
   if (enabledCached != null && enabledCached.isNotEmpty) {
     final pendingSources = scope.sourceCache.isStale(item.ref)
-        ? _sourcesFromFuture(_revalidate(scope, item))
+        ? _revalidate(scope, item).stream
         : null;
     await _openPlayer(
       navigator,
@@ -135,10 +135,10 @@ Future<void> _playMedia(
       (progress) => _resolveKnownSources(scope, item, [
         orderedCachedList.first,
       ], progress),
-      onResolved: (resolved, loadingRoute, showPlayer) async {
+      onResolved: (resolved, loadingRoute) async {
         if (resolved.isEmpty) return false;
         scope.sourceCache.store(item.ref, resolved);
-        final pendingSources = _sourcesFromFuture(_revalidate(scope, item));
+        final pendingSources = _revalidate(scope, item).stream;
         await _openPlayer(
           navigator,
           scope,
@@ -153,7 +153,6 @@ Future<void> _playMedia(
           externalSubtitles: externalSubtitles,
           playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
-          showPlayer: showPlayer,
         );
         return true;
       },
@@ -165,7 +164,7 @@ Future<void> _playMedia(
   final result = await _resolveWithOverlay(
     navigator,
     (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
-    onResolved: (resolved, loadingRoute, showPlayer) async {
+    onResolved: (resolved, loadingRoute) async {
       final first = resolved.first;
       if (first == null) return false;
       if (resolved.refresh == null) {
@@ -188,7 +187,6 @@ Future<void> _playMedia(
         externalSubtitles: externalSubtitles,
         playbackSegments: playbackSegments,
         returnToDetail: returnToDetail,
-        showPlayer: showPlayer,
       );
       return true;
     },
@@ -219,30 +217,19 @@ bool canUseCachedPlaybackSources(PlaybackMedia item) => !item.isLive;
 Future<List<ResolvedSource>> refetchPlayableSources(
   AppScope scope,
   PlaybackMedia item,
-) async {
-  final progress = _ResolveProgress();
-  try {
-    return await _playableSources(scope, item, progress);
-  } finally {
-    progress.dispose();
-  }
-}
+) => _revalidate(scope, item).done;
 
 Future<T?> _resolveWithOverlay<T>(
   NavigatorState navigator,
   Future<T> Function(_ResolveProgress progress) resolve, {
-  Future<bool> Function(
-    T result,
-    Route<void> loadingRoute,
-    void Function(Widget player) showPlayer,
-  )?
-  onResolved,
+  Future<bool> Function(T result, Route<void> loadingRoute)? onResolved,
 }) async {
   final progress = _ResolveProgress();
   final loadingReady = Completer<void>();
   final launchKey = GlobalKey<_PlayerLaunchPageState>();
-  final overlay = MaterialPageRoute<void>(
-    builder: (_) => _PlayerLaunchPage(
+  final overlay = PageRouteBuilder<void>(
+    opaque: false,
+    pageBuilder: (_, _, _) => _PlayerLaunchPage(
       key: launchKey,
       progress: progress,
       onMounted: () {
@@ -267,13 +254,7 @@ Future<T?> _resolveWithOverlay<T>(
   }
   var handedOff = false;
   try {
-    handedOff = onResolved == null
-        ? false
-        : await onResolved(
-            result,
-            overlay,
-            (player) => launchKey.currentState?.showPlayer(player),
-          );
+    handedOff = onResolved == null ? false : await onResolved(result, overlay);
   } finally {
     if (!handedOff && overlay.isActive) navigator.removeRoute(overlay);
     progress.dispose();
@@ -281,16 +262,56 @@ Future<T?> _resolveWithOverlay<T>(
   return result;
 }
 
-Future<List<ResolvedSource>?> _revalidate(
-  AppScope scope,
-  PlaybackMedia item,
-) async {
-  final progress = _ResolveProgress();
-  final sources = await _playableSourcesWithRetry(scope, item, progress);
-  progress.dispose();
-  if (sources.isEmpty) return null;
-  scope.sourceCache.store(item.ref, sources);
-  return sources;
+class _ResolvedSourceBatch {
+  const _ResolvedSourceBatch({required this.stream, required this.done});
+
+  final Stream<ResolvedSource> stream;
+  final Future<List<ResolvedSource>> done;
+}
+
+_ResolvedSourceBatch _revalidate(AppScope scope, PlaybackMedia item) {
+  final controller = StreamController<ResolvedSource>();
+  final done = Completer<List<ResolvedSource>>();
+
+  unawaited(() async {
+    final progress = _ResolveProgress();
+    try {
+      var sources = await _loadSources(scope, item);
+      if (sources.isEmpty && item.isLive) {
+        await Future<void>.delayed(_sourceRetryDelay);
+        sources = await _loadSources(scope, item);
+      }
+      if (sources.isEmpty) {
+        done.complete(const []);
+        return;
+      }
+
+      scope.sourceCache.recordSourceList(item.ref, sources);
+      final batch = _resolveKnownSourcesAsTheySettle(
+        scope,
+        item,
+        sources,
+        progress,
+      );
+      final resolved = <ResolvedSource>[];
+      await for (final source in batch.stream) {
+        resolved.add(source);
+        controller.add(source);
+      }
+      if (resolved.isNotEmpty) {
+        scope.sourceCache.store(item.ref, resolved);
+      }
+      done.complete(List<ResolvedSource>.unmodifiable(resolved));
+    } catch (_) {
+      // Revalidation is background work. A failed refresh must not turn the
+      // source picker stream into an unhandled future error.
+      if (!done.isCompleted) done.complete(const []);
+    } finally {
+      progress.dispose();
+      await controller.close();
+    }
+  }());
+  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
 }
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
@@ -298,27 +319,15 @@ const _preferredSourceGrace = Duration(milliseconds: 750);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
 const _sourceDiscoveryTimeout = Duration(seconds: 20);
-// Browser-backed providers can spend up to 25 seconds acquiring a
-// Cloudflare cookie before the JS resolver can continue its extractor chain.
-// Resolution runs in parallel and the first fast source still opens the
-// player immediately, so this only keeps slow fallback sources alive.
-const _sourceResolveTimeout = Duration(seconds: 35);
+// Browser-backed providers can need more than one nested iframe/request before
+// the JS resolver reaches the final media URL. Resolution runs in parallel and
+// the first fast source still opens the player immediately, so this only keeps
+// slow fallback sources alive long enough to contribute to the source picker.
+const _sourceResolveTimeout = Duration(seconds: 60);
 
 /// A live event can be visible before a provider's event feed or stream
 /// endpoint has settled. Give that transient window one automatic retry so a
 /// first tap does not incorrectly report that the event has no sources.
-Future<List<ResolvedSource>> _playableSourcesWithRetry(
-  AppScope scope,
-  PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
-  final firstAttempt = await _playableSources(scope, item, progress);
-  if (firstAttempt.isNotEmpty || !item.isLive) return firstAttempt;
-
-  await Future<void>.delayed(_sourceRetryDelay);
-  return _playableSources(scope, item, progress);
-}
-
 Future<void> _openPlayer(
   NavigatorState navigator,
   AppScope scope,
@@ -333,7 +342,6 @@ Future<void> _openPlayer(
   Future<void>? externalSubtitles,
   Future<List<PlaybackSegment>>? playbackSegments,
   bool returnToDetail = false,
-  void Function(Widget player)? showPlayer,
 }) async {
   final stopwatch = Stopwatch()..start();
   // Started alongside source resolution, so by now it has almost always
@@ -382,33 +390,15 @@ Future<void> _openPlayer(
     returnToDetail: returnToDetail,
   );
   _debugSourceLog(
-    '${showPlayer == null ? 'player_route_push' : 'player_route_ready'} '
+    'player_host_ready '
     'source=${_sourceLogName(resolved.first.source)} '
     'elapsed=${stopwatch.elapsedMilliseconds}ms',
   );
-  if (showPlayer != null) {
-    showPlayer(player);
-    if (replaceCurrent && routeToReplace?.isActive == true) {
-      navigator.removeRoute(routeToReplace!);
-    }
-    return;
+  scope.pictureInPictureSession.attach(player);
+  if (loadingRoute?.isActive == true) navigator.removeRoute(loadingRoute!);
+  if (replaceCurrent && routeToReplace?.isActive == true) {
+    navigator.removeRoute(routeToReplace!);
   }
-  final route = MaterialPageRoute<void>(builder: (_) => player);
-  // Replace the loading route in one navigator transaction. Pushing Player
-  // and removing the loading route separately can briefly leave Detail →
-  // Loading → Player in the stack; a fast native failure may then expose the
-  // stale loading route and make the workflow look like it restarted.
-  final push = loadingRoute != null
-      ? navigator.pushReplacement(route)
-      : replaceCurrent
-      ? navigator.pushReplacement(route)
-      : navigator.push(route);
-  if (loadingRoute != null) {
-    if (replaceCurrent && routeToReplace?.isActive == true) {
-      navigator.removeRoute(routeToReplace!);
-    }
-  }
-  unawaited(push);
 }
 
 Future<void> _waitForExternalSubtitles(Future<void> pending) {
@@ -456,23 +446,11 @@ List<ResolvedSource> _preferredFirst(
   return [for (final entry in indexed) entry.$2];
 }
 
-Future<List<ResolvedSource>> _playableSources(
-  AppScope scope,
-  PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
-  final sources = await _loadSources(scope, item);
-  if (sources.isEmpty) return const [];
-
-  scope.sourceCache.recordSourceList(item.ref, sources);
-  return _resolveKnownSources(scope, item, sources, progress);
-}
-
 Future<
   ({
     ResolvedSource? first,
     Stream<ResolvedSource> second,
-    Future<List<ResolvedSource>?>? refresh,
+    _ResolvedSourceBatch? refresh,
   })
 >
 _resolveFirstPlayableWithRetry(
@@ -490,7 +468,7 @@ Future<
   ({
     ResolvedSource? first,
     Stream<ResolvedSource> second,
-    Future<List<ResolvedSource>?>? refresh,
+    _ResolvedSourceBatch? refresh,
   })
 >
 _resolveFirstPlayable(
@@ -504,12 +482,18 @@ _resolveFirstPlayable(
   final refresh = canUseCachedPlaybackSources(item)
       ? _revalidate(scope, item)
       : null;
-  // Discover every live provider so the source picker is complete, while
-  // still handing playback off to whichever candidate resolves first. VOD
-  // keeps its existing fast handoff and background refresh behavior.
-  final sources = await _loadSources(scope, item, fast: !item.isLive);
+  // A fast discovery may return only the first provider with sources. That is
+  // fine when there is no source preference, but it can hide the user's
+  // preferred locale/provider entirely. Fetch the complete list first whenever
+  // the preference can affect the initial handoff; resolution remains parallel.
+  final sourcePriority = scope.sourcePriorityController.state;
+  final fastInitialDiscovery =
+      !item.isLive &&
+      sourcePriority.orderedProviderIds.isEmpty &&
+      sourcePriority.sourceLocale.isAuto;
+  final sources = await _loadSources(scope, item, fast: fastInitialDiscovery);
   if (sources.isEmpty) {
-    final complete = refresh == null ? null : await refresh;
+    final complete = refresh == null ? null : await refresh.done;
     if (complete != null && complete.isNotEmpty) {
       return (
         first: complete.first,
@@ -532,9 +516,11 @@ _resolveFirstPlayable(
       _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
+  // Resolution remains parallel, but the initial handoff must still honor
+  // the ordered source list. That list includes manual provider order and
+  // preferred source locale; using _firstMatching here would let the fastest
+  // provider bypass both whenever no manual order was configured.
   final first = item.isLive
-      ? await _firstMatching(futures, (_) => true)
-      : scope.sourcePriorityController.state.orderedProviderIds.isEmpty
       ? await _firstMatching(futures, (_) => true)
       : await _firstByPriority(futures);
   final preferred = scope.subtitlePreferenceController;
@@ -542,7 +528,7 @@ _resolveFirstPlayable(
       preferred.languageCode == null ||
       preferred.isSatisfiedBy(first.stream.subtitles)) {
     if (first != null) return (first: first, second: all, refresh: refresh);
-    final complete = refresh == null ? null : await refresh;
+    final complete = refresh == null ? null : await refresh.done;
     if (complete != null && complete.isNotEmpty) {
       return (first: complete.first, second: all, refresh: null);
     }
@@ -775,26 +761,96 @@ Stream<ResolvedSource> _resolvedAsTheySettle(
   return controller.stream;
 }
 
-Stream<ResolvedSource> _sourcesFromFuture(
-  Future<List<ResolvedSource>?> future,
-) async* {
-  final sources = await future;
-  if (sources == null) return;
-  yield* Stream<ResolvedSource>.fromIterable(sources);
+_ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
+  AppScope scope,
+  PlaybackMedia item,
+  List<StreamSource> sources,
+  _ResolveProgress progress,
+) {
+  final filtered = [
+    for (final source in sources)
+      if (scope.registry.isSourceEnabled(source)) source,
+  ];
+  if (filtered.isEmpty) {
+    return _ResolvedSourceBatch(
+      stream: const Stream<ResolvedSource>.empty(),
+      done: Future<List<ResolvedSource>>.value(const []),
+    );
+  }
+
+  final ordered = scope.sourcePriorityController.order(filtered);
+  progress.begin([for (final source in ordered) source.label]);
+  final target = PlaybackTarget.detect();
+  final futures = [
+    for (final source in ordered)
+      _resolveOne(scope, item, source, target, progress),
+  ];
+  final controller = StreamController<ResolvedSource>();
+  final resolved = <ResolvedSource>[];
+  final done = Completer<List<ResolvedSource>>();
+  var remaining = futures.length;
+
+  void settle() {
+    remaining--;
+    if (remaining != 0) return;
+    if (!done.isCompleted) {
+      done.complete(List<ResolvedSource>.unmodifiable(resolved));
+    }
+    unawaited(controller.close());
+  }
+
+  for (final future in futures) {
+    unawaited(
+      future
+          .then<void>((source) {
+            if (source == null) return;
+            resolved.add(source);
+            controller.add(source);
+          }, onError: (Object _, StackTrace _) {})
+          .whenComplete(settle),
+    );
+  }
+  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
 }
 
-/// Yields the fast result immediately, then appends the complete background
-/// discovery once it has finished. [refresh] is started by the caller before
-/// this stream is handed to the player, so both phases overlap.
+/// Merges the fast result and background refresh so each source is forwarded
+/// as soon as its own resolver settles. Both streams are already running when
+/// this is called; waiting for one stream before listening to the other would
+/// make parallel discovery look sequential in the picker.
 Stream<ResolvedSource> _appendResolvedSources(
   Stream<ResolvedSource> initial,
-  Future<List<ResolvedSource>?>? refresh,
-) async* {
-  yield* initial;
-  if (refresh == null) return;
-  final sources = await refresh;
-  if (sources == null) return;
-  yield* Stream<ResolvedSource>.fromIterable(sources);
+  _ResolvedSourceBatch? refresh,
+) {
+  if (refresh == null) return initial;
+
+  final controller = StreamController<ResolvedSource>();
+  final subscriptions = <StreamSubscription<ResolvedSource>>[];
+  var openStreams = 2;
+
+  void closeWhenDone() {
+    openStreams--;
+    if (openStreams == 0) unawaited(controller.close());
+  }
+
+  void listenTo(Stream<ResolvedSource> stream) {
+    subscriptions.add(
+      stream.listen(
+        controller.add,
+        onError: (Object _, StackTrace _) {},
+        onDone: closeWhenDone,
+      ),
+    );
+  }
+
+  controller.onCancel = () async {
+    for (final subscription in subscriptions) {
+      await subscription.cancel();
+    }
+  };
+
+  listenTo(initial);
+  listenTo(refresh.stream);
+  return controller.stream;
 }
 
 Future<ResolvedSource?> _resolveOne(
@@ -965,60 +1021,70 @@ class _PlayerLaunchPageState extends State<_PlayerLaunchPage> {
   Widget _sourceFindingView() => ColoredBox(
     color: AppColors.surfaceDark,
     child: SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: ListenableBuilder(
-            listenable: widget.progress,
-            builder: (context, _) {
-              final outstanding = widget.progress.outstanding;
-              final total = widget.progress.total;
-              final line = outstanding.isEmpty
-                  ? 'Finding sources…'
-                  : 'Checking ${outstanding[_cursor % outstanding.length]}…';
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: constraints.maxWidth,
+              minHeight: constraints.maxHeight,
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: ListenableBuilder(
+                  listenable: widget.progress,
+                  builder: (context, _) {
+                    final outstanding = widget.progress.outstanding;
+                    final total = widget.progress.total;
+                    final line = outstanding.isEmpty
+                        ? 'Finding sources…'
+                        : 'Checking ${outstanding[_cursor % outstanding.length]}…';
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Stack(
-                      alignment: Alignment.center,
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
+                        const SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                              Icon(
+                                Icons.travel_explore,
+                                color: AppColors.onDark,
+                                size: 22,
+                              ),
+                            ],
+                          ),
                         ),
-                        Icon(
-                          Icons.travel_explore,
-                          color: AppColors.onDark,
-                          size: 22,
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          line,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.titleSm.copyWith(
+                            color: AppColors.onDark,
+                            letterSpacing: 0.5,
+                          ),
                         ),
+                        if (total > 0) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            '${widget.progress.settledCount} of $total ready',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.onDarkSoft,
+                            ),
+                          ),
+                        ],
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    line,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.titleSm.copyWith(
-                      color: AppColors.onDark,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  if (total > 0) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      '${widget.progress.settledCount} of $total ready',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.onDarkSoft,
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       ),

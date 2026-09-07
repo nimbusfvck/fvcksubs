@@ -1,6 +1,7 @@
 part of 'video_player_view.dart';
 
-class _VideoPlayerControllerAdapter implements AppPlayerController {
+class _VideoPlayerControllerAdapter
+    implements AppPlayerController, AppPlayerPictureInPictureRestorer {
   _VideoPlayerControllerAdapter(
     this._player, {
     required this.onSetFit,
@@ -204,6 +205,20 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
     );
   }
 
+  void reportPictureInPictureStarted() {
+    if (_disposed) return;
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureStarted),
+    );
+  }
+
+  void reportPictureInPictureClosed() {
+    if (_disposed) return;
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureClosed),
+    );
+  }
+
   @override
   Future<void> play() => _player.play();
   @override
@@ -254,6 +269,10 @@ class _VideoPlayerControllerAdapter implements AppPlayerController {
   Future<bool> startPictureInPicture() => _player.startPictureInPicture();
   @override
   Future<void> stopPictureInPicture() => _player.stopPictureInPicture();
+
+  @override
+  Future<void> completePictureInPictureRestore() =>
+      _player.completePictureInPictureRestore();
   @override
   Future<void> setFit(PlayerFitMode mode) async => onSetFit(mode);
 

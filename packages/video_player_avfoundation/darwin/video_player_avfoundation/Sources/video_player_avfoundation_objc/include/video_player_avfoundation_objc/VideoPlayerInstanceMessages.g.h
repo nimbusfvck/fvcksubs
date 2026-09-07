@@ -111,6 +111,7 @@ NSObject<FlutterMessageCodec> *FVPGetVideoPlayerInstanceMessagesCodec(void);
 /// Starts PiP and completes only after AVKit reports that it started.
 - (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion;
 - (void)stopPictureInPicture:(FlutterError *_Nullable *_Nonnull)error;
+- (void)completePictureInPictureRestore:(FlutterError *_Nullable *_Nonnull)error;
 @end
 
 extern void SetUpFVPVideoPlayerInstanceApi(id<FlutterBinaryMessenger> binaryMessenger, NSObject<FVPVideoPlayerInstanceApi> *_Nullable api);

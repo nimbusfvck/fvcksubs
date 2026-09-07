@@ -64,6 +64,7 @@ final class NativeVideoViewFactory: NSObject, FlutterPlatformViewFactory {
     let nativeView = FVPNativeVideoView(player: player.player)
     #if os(iOS)
       player.setPictureInPicturePlayerLayer(nativeView.playerLayer)
+      player.setPictureInPicturePlayerView(nativeView.view())
     #endif
     return nativeView
   }

@@ -119,6 +119,14 @@
   [self sendOrQueue:@{@"event" : @"pictureInPictureRestore"}];
 }
 
+- (void)videoPlayerDidStartPictureInPicture {
+  [self sendOrQueue:@{@"event" : @"pictureInPictureStarted"}];
+}
+
+- (void)videoPlayerDidClosePictureInPicture {
+  [self sendOrQueue:@{@"event" : @"pictureInPictureClosed"}];
+}
+
 - (void)videoPlayerWasDisposed {
   [self.eventChannel setStreamHandler:nil];
 }

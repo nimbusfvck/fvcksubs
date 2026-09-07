@@ -7,6 +7,8 @@ import 'package:fvcksubs_app/detail/detail_page_v2.dart';
 import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -316,9 +318,16 @@ void main() {
       ),
     );
     await tester.pump();
+    final initialBuilds = player.buildCount;
 
     controller.add(later);
     await tester.pumpAndSettle();
+
+    expect(
+      player.buildCount,
+      initialBuilds,
+      reason: 'late source discovery must not rebuild the active player',
+    );
 
     await tester.tap(find.byTooltip('Server 3'));
     await tester.pump(const Duration(milliseconds: 300));
@@ -419,6 +428,142 @@ void main() {
     expect(controller.playCalls, 1);
   });
 
+  testWidgets('automatic PiP restores a playing player when expanded', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: fakeItem(id: 'automatic-pip'),
+          resolvedSources: [_resolvedSource('automatic-pip', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 10),
+      ),
+    );
+    controller.emitPictureInPictureStarted();
+    await tester.pump();
+
+    controller.emitPictureInPictureRestore();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(controller.playCalls, 1);
+  });
+
+  testWidgets('closing PiP detaches and disposes the hosted player', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+    final session = PictureInPictureSession();
+    final playerPage = PlayerPage(
+      item: fakeItem(id: 'closed-pip'),
+      resolvedSources: [_resolvedSource('closed-pip', 'Source')],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(),
+        registry: ExtensionRegistry([]),
+        player: player,
+        pictureInPictureSession: session,
+      ),
+    );
+    session.attach(playerPage);
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitPictureInPictureClosed();
+    await tester.pump();
+
+    expect(find.byType(PlayerPage), findsNothing);
+  });
+
+  testWidgets('disabled PiP preference pops the player without starting PiP', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+    final pipController = PictureInPicturePreferenceController(
+      store: FakePictureInPicturePreferenceStore(),
+      initial: false,
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: fakeItem(id: 'pip-disabled'),
+          resolvedSources: [_resolvedSource('pip-disabled', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+        pictureInPicturePreferenceController: pipController,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(controller.pictureInPictureCalls, 0);
+    expect(find.byType(PlayerPage), findsNothing);
+  });
+
+  testWidgets('a failed PiP request pauses before closing the player', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: fakeItem(id: 'pip-failed'),
+          resolvedSources: [_resolvedSource('pip-failed', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(controller.pictureInPictureCalls, 1);
+    expect(controller.pauseCalls, 1);
+  });
+
   testWidgets('live player Back enters PiP without creating a detail route', (
     tester,
   ) async {
@@ -456,36 +601,32 @@ void main() {
     expect(find.byType(PlayerPage), findsOneWidget);
   });
 
-  testWidgets('PiP player leaves the navigator while the caller stays usable', (
+  testWidgets('PiP player stays mounted while the caller stays usable', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
-    final navigatorKey = GlobalKey<NavigatorState>();
+    final session = PictureInPictureSession();
+    var callerTapped = false;
+    final playerPage = PlayerPage(
+      key: GlobalKey(),
+      item: fakeItem(id: 'detached-pip'),
+      resolvedSources: [_resolvedSource('detached', 'Source')],
+    );
 
     await tester.pumpWidget(
       wrapApp(
-        child: Navigator(
-          key: navigatorKey,
-          onGenerateRoute: (_) => MaterialPageRoute<void>(
-            builder: (_) => const Scaffold(body: Text('Caller route')),
+        child: Scaffold(
+          body: FilledButton(
+            onPressed: () => callerTapped = true,
+            child: const Text('Caller button'),
           ),
         ),
         registry: ExtensionRegistry([]),
         player: player,
+        pictureInPictureSession: session,
       ),
     );
-    await tester.pump();
-    unawaited(
-      navigatorKey.currentState!.push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => PlayerPage(
-            key: GlobalKey(),
-            item: fakeItem(id: 'detached-pip'),
-            resolvedSources: [_resolvedSource('detached', 'Source')],
-          ),
-        ),
-      ),
-    );
+    session.attach(playerPage);
     await tester.pump();
 
     final controller = player.controllers.single;
@@ -502,16 +643,21 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(navigatorKey.currentState!.canPop(), isFalse);
-    expect(find.text('Caller route'), findsOneWidget);
+    // The player stays in the app-level host so iOS can restore the same
+    // UiKitView surface while the caller remains visible underneath.
+    expect(find.text('Caller button'), findsOneWidget);
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(player.controllers, hasLength(1));
 
+    await tester.tap(find.text('Caller button'));
+    expect(callerTapped, isTrue);
+
     controller.emitPictureInPictureRestore();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(PlayerPage), findsOneWidget);
-    expect(navigatorKey.currentState!.canPop(), isTrue);
     expect(controller.playCalls, 1);
+    expect(controller.pictureInPictureRestoreCompletions, 1);
   });
 
   testWidgets('an external track stands in only where the source has none', (
@@ -687,7 +833,8 @@ class _PositionRecordingPlayer extends RecordingPlayer {
   }
 }
 
-class _FakePlayerController implements AppPlayerController {
+class _FakePlayerController
+    implements AppPlayerController, AppPlayerPictureInPictureRestorer {
   _FakePlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
     : _value = ValueNotifier(initialValue);
 
@@ -697,7 +844,9 @@ class _FakePlayerController implements AppPlayerController {
   Duration? lastSeekPosition;
   bool pictureInPictureResult = false;
   int pictureInPictureCalls = 0;
+  int pauseCalls = 0;
   int playCalls = 0;
+  int pictureInPictureRestoreCompletions = 0;
 
   void emitError(Object error) {
     _events.add(AppPlayerEvent(AppPlayerEventType.error, error: error));
@@ -710,6 +859,18 @@ class _FakePlayerController implements AppPlayerController {
   void emitPictureInPictureRestore() {
     _events.add(
       const AppPlayerEvent(AppPlayerEventType.pictureInPictureRestore),
+    );
+  }
+
+  void emitPictureInPictureStarted() {
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureStarted),
+    );
+  }
+
+  void emitPictureInPictureClosed() {
+    _events.add(
+      const AppPlayerEvent(AppPlayerEventType.pictureInPictureClosed),
     );
   }
 
@@ -743,7 +904,7 @@ class _FakePlayerController implements AppPlayerController {
   Future<void> play() async => playCalls++;
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async => pauseCalls++;
 
   @override
   Future<void> seekTo(Duration position) async => lastSeekPosition = position;
@@ -779,4 +940,9 @@ class _FakePlayerController implements AppPlayerController {
 
   @override
   Future<void> stopPictureInPicture() async {}
+
+  @override
+  Future<void> completePictureInPictureRestore() async {
+    pictureInPictureRestoreCompletions++;
+  }
 }

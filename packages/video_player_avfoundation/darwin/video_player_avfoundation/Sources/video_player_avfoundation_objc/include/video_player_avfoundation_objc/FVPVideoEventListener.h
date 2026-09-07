@@ -36,6 +36,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)videoPlayerDidSetPlaying:(BOOL)playing;
 /// Called when AVKit asks the app to restore its UI after PiP expansion.
 - (void)videoPlayerDidRequestPictureInPictureRestore;
+/// Called when AVKit has entered PiP, including automatic PiP.
+- (void)videoPlayerDidStartPictureInPicture;
+/// Called when the user closes PiP without restoring the inline UI.
+- (void)videoPlayerDidClosePictureInPicture;
 /// Called when the video player has been disposed on the Dart side.
 - (void)videoPlayerWasDisposed;
 @end

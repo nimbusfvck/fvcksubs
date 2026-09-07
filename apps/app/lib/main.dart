@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -18,16 +19,19 @@ import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/picture_in_picture_session.dart';
+import 'player/state/picture_in_picture_preference_controller.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
 import 'platform/cloudflare_killer.dart';
+import 'platform/web_view_resolver.dart';
 import 'settings/nsfw_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final cloudflareKiller = CloudflareKiller();
+  final webViewResolver = WebViewResolver();
 
   // These reads do not depend on one another. Starting them together keeps
   // the first frame from paying each storage/platform round-trip in series.
@@ -62,6 +66,10 @@ Future<void> main() async {
 
   const qualityStore = SharedPreferencesQualityPreferenceStore();
   final qualityFuture = qualityStore.load();
+
+  const pictureInPictureStore =
+      SharedPreferencesPictureInPicturePreferenceStore();
+  final pictureInPictureFuture = pictureInPictureStore.load();
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityFuture = sourcePriorityStore.load();
@@ -105,7 +113,8 @@ Future<void> main() async {
     installedStore,
     extensionStorage,
     cloudflareSolver: cloudflareKiller.solve,
-    webViewResolver: cloudflareKiller.resolveMedia,
+    webViewResolver: webViewResolver.resolveMedia,
+    networkLogger: kDebugMode ? _logJsFetch : null,
   );
 
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -121,7 +130,8 @@ Future<void> main() async {
       source: source,
       storage: extensionStorage.forExtension(manifest.id),
       cloudflareSolver: cloudflareKiller.solve,
-      webViewResolver: cloudflareKiller.resolveMedia,
+      webViewResolver: webViewResolver.resolveMedia,
+      networkLogger: kDebugMode ? _logJsFetch : null,
     ),
     forgetStorage: extensionStorage.remove,
     requestConsent: (request) async {
@@ -153,6 +163,12 @@ Future<void> main() async {
     initial: await qualityFuture,
   );
 
+  final pictureInPicturePreferenceController =
+      PictureInPicturePreferenceController(
+        store: pictureInPictureStore,
+        initial: await pictureInPictureFuture,
+      );
+
   final sourcePriorityController = SourcePriorityController(
     registry: registry,
     store: sourcePriorityStore,
@@ -182,6 +198,8 @@ Future<void> main() async {
       homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
       pictureInPictureSession: PictureInPictureSession(),
+      pictureInPicturePreferenceController:
+          pictureInPicturePreferenceController,
       nsfwController: nsfwController,
       navigatorKey: navigatorKey,
     ),
@@ -222,6 +240,7 @@ Future<void> loadInstalledExtensions(
   ExtensionStorageHub storage, {
   JsCloudflareSolver? cloudflareSolver,
   JsWebViewResolver? webViewResolver,
+  JsRuntimeLogger? networkLogger,
 }) async {
   final Map<String, InstalledExtension> installed;
   try {
@@ -243,6 +262,7 @@ Future<void> loadInstalledExtensions(
           storage: storage.forExtension(manifest.id),
           cloudflareSolver: cloudflareSolver,
           webViewResolver: webViewResolver,
+          networkLogger: networkLogger,
         ),
       );
       if (replaced is JsExtension) replaced.dispose();
@@ -250,6 +270,10 @@ Future<void> loadInstalledExtensions(
       debugPrint('Skipping installed extension ${record.id}: $error\n$stack');
     }
   }
+}
+
+void _logJsFetch(String message) {
+  debugPrint('[JsFetch] $message');
 }
 
 ExtensionRegistry buildRegistry({

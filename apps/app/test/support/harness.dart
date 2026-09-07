@@ -11,6 +11,7 @@ import 'package:fvcksubs_app/catalog/plugin_controller.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
@@ -808,6 +809,18 @@ class FakeQualityPreferenceStore implements QualityPreferenceStore {
   Future<void> save(int? maxHeight) async => saved = maxHeight;
 }
 
+/// In-memory Picture in Picture preference store.
+class FakePictureInPicturePreferenceStore
+    implements PictureInPicturePreferenceStore {
+  bool saved = true;
+
+  @override
+  Future<bool> load() async => saved;
+
+  @override
+  Future<void> save(bool enabled) async => saved = enabled;
+}
+
 /// In-memory [CategorySelectionStore].
 class FakeCategorySelectionStore implements CategorySelectionStore {
   /// Seeds the store as if [initial] had already been saved — for tests that
@@ -875,7 +888,9 @@ Widget wrapApp({
   SourceCache? sourceCache,
   NsfwController? nsfwController,
   PictureInPictureSession? pictureInPictureSession,
+  PictureInPicturePreferenceController? pictureInPicturePreferenceController,
 }) => AppScope(
+  navigatorKey: _testNavigatorKey,
   registry: registry,
   deviceClass: deviceClass,
   playerBuilder: (player ?? RecordingPlayer()).build,
@@ -911,6 +926,11 @@ Widget wrapApp({
   homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
   pictureInPictureSession: pictureInPictureSession ?? PictureInPictureSession(),
+  pictureInPicturePreferenceController:
+      pictureInPicturePreferenceController ??
+      PictureInPicturePreferenceController(
+        store: FakePictureInPicturePreferenceStore(),
+      ),
   nsfwController:
       nsfwController ??
       NsfwController(
@@ -919,6 +939,7 @@ Widget wrapApp({
         showNsfw: registry.showNsfw,
       ),
   child: MaterialApp(
+    navigatorKey: _testNavigatorKey,
     builder: (context, routeChild) => Stack(
       fit: StackFit.expand,
       children: [
@@ -939,6 +960,8 @@ Widget wrapApp({
     home: Scaffold(body: child),
   ),
 );
+
+final _testNavigatorKey = GlobalKey<NavigatorState>();
 
 class _FakeLibraryStoreV2 implements LibraryStore {
   @override

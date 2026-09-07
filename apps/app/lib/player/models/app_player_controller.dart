@@ -43,7 +43,13 @@ class AppPlayerValue {
   );
 }
 
-enum AppPlayerEventType { completed, error, pictureInPictureRestore }
+enum AppPlayerEventType {
+  completed,
+  error,
+  pictureInPictureStarted,
+  pictureInPictureRestore,
+  pictureInPictureClosed,
+}
 
 class AppPlayerEvent {
   const AppPlayerEvent(this.type, {this.error});
@@ -341,4 +347,13 @@ abstract interface class AppPlayerController {
   Future<void> exitFullScreen();
   Future<bool> startPictureInPicture();
   Future<void> stopPictureInPicture();
+}
+
+/// Optional bridge used to finish the native PiP restore handshake.
+///
+/// Keeping this separate from [AppPlayerController] lets test and non-native
+/// player implementations continue to work without pretending to own AVKit's
+/// callback.
+abstract interface class AppPlayerPictureInPictureRestorer {
+  Future<void> completePictureInPictureRestore();
 }

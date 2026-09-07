@@ -12,6 +12,7 @@ import 'navigation/app_route_observer.dart';
 import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/picture_in_picture_session.dart';
+import 'player/state/picture_in_picture_preference_controller.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
@@ -38,6 +39,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.homeCategoryStore,
     required this.sourceCache,
     required this.pictureInPictureSession,
+    required this.pictureInPicturePreferenceController,
     required this.nsfwController,
     this.navigatorKey,
     this.playerBuilder = defaultPlayerBuilder,
@@ -70,6 +72,9 @@ class FvcksubsApp extends StatelessWidget {
 
   final PictureInPictureSession pictureInPictureSession;
 
+  final PictureInPicturePreferenceController
+  pictureInPicturePreferenceController;
+
   final NsfwController nsfwController;
 
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -95,34 +100,20 @@ class FvcksubsApp extends StatelessWidget {
     homeCategoryStore: homeCategoryStore,
     sourceCache: sourceCache,
     pictureInPictureSession: pictureInPictureSession,
+    pictureInPicturePreferenceController: pictureInPicturePreferenceController,
     nsfwController: nsfwController,
+    navigatorKey: navigatorKey,
     child: MaterialApp(
       navigatorKey: navigatorKey,
-      navigatorObservers: [appRouteObserver],
+      navigatorObservers: [
+        appRouteObserver,
+        PictureInPictureNavigatorObserver(session: pictureInPictureSession),
+      ],
       title: 'fvcksubs',
       debugShowCheckedModeBanner: false,
       theme: buildDarkTheme(),
       builder: (context, child) {
-        final scope = AppScope.of(context);
-        return SystemUiVisibility(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              child ?? const SizedBox.shrink(),
-              Positioned.fill(
-                child: Overlay(
-                  initialEntries: [
-                    OverlayEntry(
-                      builder: (_) => PictureInPictureHost(
-                        session: scope.pictureInPictureSession,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
+        return SystemUiVisibility(child: child ?? const SizedBox.shrink());
       },
       home: const HomeShell(),
     ),

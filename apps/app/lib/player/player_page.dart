@@ -167,9 +167,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _allowPop = false;
   bool _backInFlight = false;
   bool _pipBackground = false;
-  bool _pipDetachedFromRoute = false;
   bool _resumeAfterPictureInPicture = false;
-  NavigatorState? _pipNavigator;
+  bool _restorePlayPending = false;
   PictureInPictureSession? _pictureInPictureSession;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
@@ -238,13 +237,15 @@ class _PlayerPageState extends State<PlayerPage> {
         final cache = AppScope.of(context).sourceCache;
         cache.store(widget.media.ref, merged);
         cache.promote(widget.media.ref, playingId);
-        setState(() {
-          _resolvedSources = merged;
-          _currentIndex = merged.indexWhere(
-            (source) => source.source.id == playingId,
-          );
-          if (_currentIndex < 0) _currentIndex = 0;
-        });
+        // Late discovery only appends alternatives. Keep the player subtree
+        // out of this update: rebuilding the controls while a source sheet is
+        // animating makes its timeline visibly blink. The sheet listens to
+        // this notifier directly, and callbacks read the page-owned list.
+        _resolvedSources = merged;
+        _currentIndex = merged.indexWhere(
+          (source) => source.source.id == playingId,
+        );
+        if (_currentIndex < 0) _currentIndex = 0;
         _resolvedSourcesListenable.value = merged;
         _continuePendingFallback();
       }
@@ -286,13 +287,13 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     scope.sourceCache.store(widget.media.ref, merged);
     scope.sourceCache.promote(widget.media.ref, playingId);
-    setState(() {
-      _resolvedSources = merged;
-      _currentIndex = merged.indexWhere(
-        (source) => source.source.id == playingId,
-      );
-      if (_currentIndex < 0) _currentIndex = 0;
-    });
+    // The open source remains unchanged by a refresh. Publish the new list
+    // to the sheet without rebuilding the native player or its controls.
+    _resolvedSources = merged;
+    _currentIndex = merged.indexWhere(
+      (source) => source.source.id == playingId,
+    );
+    if (_currentIndex < 0) _currentIndex = 0;
     _resolvedSourcesListenable.value = merged;
     return merged;
   }
@@ -354,6 +355,7 @@ class _PlayerPageState extends State<PlayerPage> {
       // alone would schedule renewals for a source that never played.
       _armRenewalTimer();
     }
+    if (_pipBackground) _resumeAfterPictureInPicture = value.isPlaying;
     _lastPosition = value.position;
     _lastDuration = value.duration;
     final position = sourceSwitchSeekPosition(
@@ -390,6 +392,25 @@ class _PlayerPageState extends State<PlayerPage> {
     AppPlayerEvent event,
   ) {
     if (attempt != _playbackAttempt) return;
+    if (event.type == AppPlayerEventType.pictureInPictureStarted) {
+      _resumeAfterPictureInPicture = controller.value.value.isPlaying;
+      if (mounted && !_pipBackground) {
+        setState(() => _pipBackground = true);
+      }
+      return;
+    }
+    if (event.type == AppPlayerEventType.pictureInPictureClosed) {
+      _resumeAfterPictureInPicture = false;
+      _restorePlayPending = false;
+      if (!mounted) return;
+      final session = _pictureInPictureSession;
+      if (session != null && identical(session.player, widget)) {
+        session.detach(widget);
+      } else {
+        _popRoute();
+      }
+      return;
+    }
     if (event.type == AppPlayerEventType.pictureInPictureRestore) {
       _restorePictureInPicturePlayer();
       return;
@@ -794,6 +815,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _popRoute() {
     if (!mounted) return;
+    final session = _pictureInPictureSession;
+    if (session != null && identical(session.player, widget)) {
+      session.detach(widget);
+      return;
+    }
     if (_allowPop) {
       Navigator.of(context).pop();
       return;
@@ -809,43 +835,42 @@ class _PlayerPageState extends State<PlayerPage> {
     _backInFlight = true;
     final controller = _controller;
     final initialized = controller?.value.value.initialized == true;
+    final pipEnabled = AppScope.of(
+      context,
+    ).pictureInPicturePreferenceController.enabled;
     if (kDebugMode) {
-      debugPrint('[PlayerPiP] back_request initialized=$initialized');
+      debugPrint(
+        '[PlayerPiP] back_request initialized=$initialized enabled=$pipEnabled',
+      );
     }
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
     }
     final wasPlaying = initialized && controller!.value.value.isPlaying;
-    final started = initialized
+    final started = pipEnabled && initialized
         ? await _requestPictureInPicture(controller!)
         : false;
-    if (!mounted) return;
-    _backInFlight = false;
+    if (!mounted) {
+      _backInFlight = false;
+      return;
+    }
     if (started) {
       _resumeAfterPictureInPicture = wasPlaying;
+      _restorePlayPending = false;
+      _backInFlight = false;
       setState(() => _pipBackground = true);
-      final navigator = Navigator.of(context);
-      if (!_pipDetachedFromRoute && navigator.canPop()) {
-        // The keyed widget moves to the app-level host in the same frame that
-        // this route is removed, keeping the native controller alive while
-        // the caller's navigation stack becomes active again.
-        _pipDetachedFromRoute = true;
-        _pipNavigator = navigator;
-        final session = AppScope.of(context).pictureInPictureSession;
-        session.attach(widget);
-        final route = ModalRoute.of(context);
-        if (route != null) {
-          navigator.removeRoute(route);
-        }
-      }
     } else {
       _resumeAfterPictureInPicture = false;
-      if (_pipDetachedFromRoute) {
-        _pipDetachedFromRoute = false;
-        AppScope.of(context).pictureInPictureSession.detach(widget);
-      } else {
-        _popRoute();
+      _restorePlayPending = false;
+      // A failed PiP request must not leave the AVPlayer running after the
+      // player is detached from the session.
+      if (wasPlaying) await controller.pause();
+      if (!mounted) {
+        _backInFlight = false;
+        return;
       }
+      _backInFlight = false;
+      _popRoute();
     }
   }
 
@@ -861,31 +886,28 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _restorePictureInPicturePlayer() {
-    if (!_pipBackground || !mounted) return;
-    final shouldResume = _resumeAfterPictureInPicture;
+    if (!mounted) return;
+    final shouldResume =
+        _resumeAfterPictureInPicture ||
+        _controller?.value.value.isPlaying == true;
     _resumeAfterPictureInPicture = false;
+    _restorePlayPending = shouldResume;
     setState(() => _pipBackground = false);
-    final navigator = _pipNavigator;
-    final session = _pictureInPictureSession;
-    if (_pipDetachedFromRoute &&
-        navigator?.mounted == true &&
-        session != null) {
-      // PiP was detached from the route so Home could remain usable. Put the
-      // same keyed PlayerPage back above that route when iOS expands PiP.
-      // Push before detaching from the host so the platform view can reparent
-      // without disposing the native player between the two locations.
-      unawaited(
-        navigator!.push<void>(MaterialPageRoute<void>(builder: (_) => widget)),
-      );
-      session.detach(widget);
-      _pipDetachedFromRoute = false;
-      _pipNavigator = null;
-    }
-    if (shouldResume) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_controller?.play());
-      });
-    }
+    // Keep the player in its original route for the whole PiP lifecycle.
+    // Reparenting a UiKitView can preserve AVPlayer audio while losing the
+    // native video surface on iOS.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _pipBackground) return;
+      final controller = _controller;
+      final restorer = controller is AppPlayerPictureInPictureRestorer
+          ? controller as AppPlayerPictureInPictureRestorer
+          : null;
+      if (restorer != null) await restorer.completePictureInPictureRestore();
+      if (mounted && _restorePlayPending && !_pipBackground) {
+        _restorePlayPending = false;
+        unawaited(controller?.play());
+      }
+    });
   }
 
   void _togglePlayback() {
@@ -1009,15 +1031,22 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _changeSource() async {
+    final navigator =
+        AppScope.of(context).navigatorKey?.currentState ??
+        Navigator.of(context);
     final picked = await showModalBottomSheet<ResolvedSource>(
-      context: context,
+      context: navigator.context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) {
-        final registry = AppScope.of(context).registry;
+      builder: (sheetContext) {
+        // The sheet can rebuild after the player route has been dismissed.
+        // Resolve inherited dependencies from the sheet itself, not from the
+        // PlayerPage State whose context may already be defunct.
+        final registry = AppScope.of(sheetContext).registry;
         final providerNames = {
           for (final manifest in registry.installed)
             for (final provider in manifest.providers)
@@ -1159,9 +1188,20 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_pipBackground) {
-      return const IgnorePointer(child: SizedBox.expand());
-    }
+    // Keep this wrapper in the tree even when PiP is inactive. Adding it only
+    // when PiP starts changes the native surface's element ancestry, which can
+    // recreate the player: AVPlayer audio survives, but the video surface is
+    // then lost when PiP expands.
+    return ClipRect(
+      clipper: _PictureInPictureClipper(hidden: _pipBackground),
+      child: IgnorePointer(
+        ignoring: _pipBackground,
+        child: _buildInteractivePlayer(context),
+      ),
+    );
+  }
+
+  Widget _buildInteractivePlayer(BuildContext context) {
     return PopScope<void>(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -1219,4 +1259,17 @@ class _PlayerPageState extends State<PlayerPage> {
       ),
     );
   }
+}
+
+class _PictureInPictureClipper extends CustomClipper<Rect> {
+  const _PictureInPictureClipper({required this.hidden});
+
+  final bool hidden;
+
+  @override
+  Rect getClip(Size size) => hidden ? Rect.zero : Offset.zero & size;
+
+  @override
+  bool shouldReclip(_PictureInPictureClipper oldClipper) =>
+      hidden != oldClipper.hidden;
 }

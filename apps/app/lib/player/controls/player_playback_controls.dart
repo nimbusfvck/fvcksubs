@@ -179,6 +179,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         : null;
   }
 
+  BuildContext get _modalContext =>
+      AppScope.of(context).navigatorKey?.currentState?.context ?? context;
+
   List<PlayerEpisodeEntry> get _episodeEntries {
     final guide = widget.episodeGuide;
     if (guide == null || !widget.media.isEpisode || widget.isLive) {
@@ -502,7 +505,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   Future<void> _openSettings() async {
     _hideTimer?.cancel();
     final picked = await showDialog<double>(
-      context: context,
+      context: _modalContext,
+      useRootNavigator: true,
       builder: (_) =>
           PlayerPlaybackSettingsDialog(currentSpeed: _playbackSpeed),
     );
@@ -523,7 +527,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       _current.stream.subtitles,
     );
     final picked = await showModalBottomSheet<PlayerSubtitleSelection>(
-      context: context,
+      context: _modalContext,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
@@ -588,7 +593,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         _qualityPinned ??
         (AppScope.of(context).qualityPreferenceController.maxHeight != null);
     final picked = await showModalBottomSheet<AppQualityTrack>(
-      context: context,
+      context: _modalContext,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
@@ -619,7 +625,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _hideTimer?.cancel();
     final tracks = widget.controller?.audioTracks ?? const [];
     final picked = await showModalBottomSheet<AppAudioTrack>(
-      context: context,
+      context: _modalContext,
+      useRootNavigator: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),

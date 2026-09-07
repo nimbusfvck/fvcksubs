@@ -174,75 +174,77 @@ class PlayerControlsOverlayView extends StatelessWidget {
   final List<PlaybackSegment> playbackSegments;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTap: onBackgroundTap,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        _PlayerTopControls(
-          title: title,
-          subtitle: subtitle,
-          visible: controlsVisible,
-          onBack: onBack,
-          fitMode: fitMode,
-          onToggleFit: onToggleFit,
-          onOpenSettings: onOpenSettings,
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Positioned.fill(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onBackgroundTap,
         ),
-        _PlayerTransportControls(
-          visible: controlsVisible,
-          isLive: isLive,
-          isPlaying: isPlaying,
-          isBuffering: isBuffering,
-          onSkip: onSkip,
-          onTogglePlayPause: onTogglePlayPause,
-        ),
-        _PlayerBottomControls(
-          visible: controlsVisible,
-          isLive: isLive,
-          sourceLabel: sourceLabel,
-          activeSubtitleLabel: activeSubtitleLabel,
-          activeQualityLabel: activeQualityLabel,
-          position: position,
-          duration: duration,
-          timelineExtent: timelineExtent,
-          bufferedExtent: bufferedExtent,
-          atLiveEdge: atLiveEdge,
-          dragValueMs: dragValueMs,
-          onChangeSource: onChangeSource,
-          episodeEntries: episodeEntries,
-          currentEpisodeRef: currentEpisodeRef,
-          onPlayEpisode: onPlayEpisode,
-          onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
-          onOpenSubtitlePicker: onOpenSubtitlePicker,
-          onOpenAudioPicker: onOpenAudioPicker,
-          onOpenQualityPicker: onOpenQualityPicker,
-          onTimelineChangeStart: onTimelineChangeStart,
-          onTimelineChanged: onTimelineChanged,
-          onTimelineChangeEnd: onTimelineChangeEnd,
-          playbackSegments: playbackSegments,
-        ),
-        if (upNextCard == null && skipIntroLabel != null && onSkipIntro != null)
-          Positioned(
-            left: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: kPlayerOverlayCardInset,
-            child: SafeArea(
-              child: Align(
-                alignment: Alignment.bottomRight,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 250),
-                  child: PlayerSkipIntroCard(
-                    label: skipIntroLabel!,
-                    onSkipIntro: onSkipIntro!,
-                  ),
+      ),
+      _PlayerTopControls(
+        title: title,
+        subtitle: subtitle,
+        visible: controlsVisible,
+        onBack: onBack,
+        fitMode: fitMode,
+        onToggleFit: onToggleFit,
+        onOpenSettings: onOpenSettings,
+      ),
+      _PlayerTransportControls(
+        visible: controlsVisible,
+        isLive: isLive,
+        isPlaying: isPlaying,
+        isBuffering: isBuffering,
+        onSkip: onSkip,
+        onTogglePlayPause: onTogglePlayPause,
+      ),
+      _PlayerBottomControls(
+        visible: controlsVisible,
+        isLive: isLive,
+        sourceLabel: sourceLabel,
+        activeSubtitleLabel: activeSubtitleLabel,
+        activeQualityLabel: activeQualityLabel,
+        position: position,
+        duration: duration,
+        timelineExtent: timelineExtent,
+        bufferedExtent: bufferedExtent,
+        atLiveEdge: atLiveEdge,
+        dragValueMs: dragValueMs,
+        onChangeSource: onChangeSource,
+        episodeEntries: episodeEntries,
+        currentEpisodeRef: currentEpisodeRef,
+        onPlayEpisode: onPlayEpisode,
+        onEpisodeListVisibilityChanged: onEpisodeListVisibilityChanged,
+        onOpenSubtitlePicker: onOpenSubtitlePicker,
+        onOpenAudioPicker: onOpenAudioPicker,
+        onOpenQualityPicker: onOpenQualityPicker,
+        onTimelineChangeStart: onTimelineChangeStart,
+        onTimelineChanged: onTimelineChanged,
+        onTimelineChangeEnd: onTimelineChangeEnd,
+        playbackSegments: playbackSegments,
+      ),
+      if (upNextCard == null && skipIntroLabel != null && onSkipIntro != null)
+        Positioned(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          bottom: kPlayerOverlayCardInset,
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 250),
+                child: PlayerSkipIntroCard(
+                  label: skipIntroLabel!,
+                  onSkipIntro: onSkipIntro!,
                 ),
               ),
             ),
           ),
-        if (upNextCard case final Widget card) card,
-      ],
-    ),
+        ),
+      if (upNextCard case final Widget card) card,
+    ],
   );
 }
 

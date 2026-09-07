@@ -68,12 +68,13 @@ void main() {
 
   testWidgets('top-edge swipe does not dismiss the player', (tester) async {
     var dismissals = 0;
+    final childKey = GlobalKey();
 
     await tester.pumpWidget(
       MaterialApp(
         home: PlayerDragToClose(
           onDismiss: () => dismissals++,
-          child: const SizedBox.expand(),
+          child: SizedBox.expand(key: childKey),
         ),
       ),
     );
@@ -83,6 +84,8 @@ void main() {
     expect(dismissals, 0);
 
     await tester.dragFrom(const Offset(200, 96), const Offset(200, 420));
+    await tester.pump();
     expect(dismissals, 1);
+    expect(tester.getTopLeft(find.byKey(childKey)).dy, 0);
   });
 }

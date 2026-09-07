@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/settings_page.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
@@ -10,6 +11,32 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 import 'support/harness.dart';
 
 void main() {
+  testWidgets('Picture in Picture toggle changes and persists the preference', (
+    tester,
+  ) async {
+    final store = FakePictureInPicturePreferenceStore();
+    final controller = PictureInPicturePreferenceController(store: store);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SettingsPage(),
+        registry: ExtensionRegistry([]),
+        pictureInPicturePreferenceController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tile = find.widgetWithText(SwitchListTile, 'Picture in Picture');
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+
+    await tester.tap(tile);
+    await tester.pump();
+
+    expect(controller.enabled, isFalse);
+    expect(store.saved, isFalse);
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+  });
+
   testWidgets('subtitle preference is selected and persisted from Settings', (
     tester,
   ) async {
@@ -55,9 +82,14 @@ void main() {
 
     // The new Addons entry at the top of Settings pushes this tile below
     // the test viewport's fold.
-    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Subtitle appearance'));
+    final subtitleAppearance = find.ancestor(
+      of: find.text('Subtitle appearance'),
+      matching: find.byType(ListTile),
+    );
+    await tester.ensureVisible(subtitleAppearance);
+    tester.widget<ListTile>(subtitleAppearance).onTap!();
     await tester.pumpAndSettle();
 
     final slider = tester.widget<Slider>(find.byType(Slider));

@@ -9,6 +9,7 @@ import '../addons/addons_page.dart';
 import '../addons/installer_controller.dart';
 import '../app_scope.dart';
 import '../player/state/source_priority_controller.dart';
+import '../player/state/picture_in_picture_preference_controller.dart';
 import '../player/state/subtitle_preference_controller.dart';
 import '../player/drm_test_page.dart';
 import 'quality_preference.dart';
@@ -24,6 +25,9 @@ class SettingsPage extends StatelessWidget {
     final controller = AppScope.of(context).subtitlePreferenceController;
     final qualityController = AppScope.of(context).qualityPreferenceController;
     final nsfwController = AppScope.of(context).nsfwController;
+    final pictureInPictureController = AppScope.of(
+      context,
+    ).pictureInPicturePreferenceController;
     return Scaffold(
       appBar: const AppPageBar(title: 'Settings'),
       body: ListenableBuilder(
@@ -49,6 +53,8 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             QualityPreferenceEntry(controller: qualityController),
             const SizedBox(height: AppSpacing.md),
+            _PictureInPicturePreference(controller: pictureInPictureController),
+            const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
             const SizedBox(height: AppSpacing.md),
             _SubtitleAppearanceEntry(controller: controller),
@@ -69,6 +75,31 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PictureInPicturePreference extends StatelessWidget {
+  const _PictureInPicturePreference({required this.controller});
+
+  final PictureInPicturePreferenceController controller;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Material(
+      color: AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.lg,
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: controller.enabled,
+        onChanged: controller.setEnabled,
+        title: const Text('Picture in Picture'),
+        subtitle: const Text(
+          'Keep video playing in a floating window when leaving the player.',
+        ),
+        secondary: const Icon(Icons.picture_in_picture_alt_outlined),
+      ),
+    ),
+  );
 }
 
 class _DrmTestEntry extends StatelessWidget {

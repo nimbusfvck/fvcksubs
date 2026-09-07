@@ -226,7 +226,16 @@ class _PlayerDragToCloseState extends State<PlayerDragToClose>
     _dragAccepted = false;
     final velocity = details.primaryVelocity ?? 0;
     if (_dy > _kDismissThreshold || velocity > _kDismissVelocity) {
-      widget.onDismiss();
+      // The player remains mounted while native PiP owns playback. Clear the
+      // drag transform before handing off so an eventual PiP restore returns
+      // to the full-screen position instead of the partially dismissed one.
+      setState(() => _dy = 0);
+      // Let the reset reach the render tree before AVKit inspects the player
+      // layer. Starting PiP while the drag transform is still active is
+      // racy on iOS and can leave audio playing without a PiP window.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onDismiss();
+      });
     } else {
       _snapBack();
     }

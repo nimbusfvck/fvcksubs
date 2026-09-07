@@ -70,6 +70,54 @@ void main() {
     },
   );
 
+  testWidgets('action taps do not toggle the background controls', (
+    tester,
+  ) async {
+    var backgroundTaps = 0;
+    var qualityOpens = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerControlsOverlayView(
+            title: 'Movie',
+            controlsVisible: true,
+            isLive: false,
+            isPlaying: true,
+            isBuffering: false,
+            sourceLabel: null,
+            activeSubtitleLabel: null,
+            activeQualityLabel: null,
+            position: const Duration(seconds: 30),
+            duration: const Duration(minutes: 2),
+            timelineExtent: const Duration(minutes: 2),
+            bufferedExtent: const Duration(seconds: 45),
+            atLiveEdge: true,
+            dragValueMs: null,
+            onBackgroundTap: () => backgroundTaps++,
+            onBack: () {},
+            onSkip: (_) {},
+            onTogglePlayPause: () {},
+            onChangeSource: () {},
+            episodeEntries: const [],
+            currentEpisodeRef: null,
+            onPlayEpisode: (_) {},
+            onOpenSubtitlePicker: () {},
+            onOpenQualityPicker: () => qualityOpens++,
+            onTimelineChangeStart: (_) {},
+            onTimelineChanged: (_) {},
+            onTimelineChangeEnd: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.high_quality_rounded));
+
+    expect(qualityOpens, 1);
+    expect(backgroundTaps, 0);
+  });
+
   testWidgets('on-demand controls forward skip intent', (tester) async {
     final skips = <int>[];
 

@@ -111,6 +111,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   bool _preferredQualitySelectionDone = false;
   Stopwatch? _openStopwatch;
   bool _nativePlayingReported = false;
+  bool _openStarted = false;
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
   Timer? _playbackDiagnosticsTimer;
@@ -148,22 +149,31 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     );
     _bindPlayer();
     widget.onControllerCreated?.call(_adapter);
+    if (!widget.preview || widget.playing) _startOpen();
+  }
+
+  void _startOpen() {
+    if (_openStarted) return;
+    _openStarted = true;
     unawaited(_open());
   }
 
   vp.VideoPlayerController _createPlayer(PlayableStream stream) {
-    // iOS PiP needs a native AVPlayerLayer. Full playback therefore uses the
-    // platform view on iOS; previews remain texture-backed because they never
-    // enter the PiP workflow.
-    final usePlatformView =
-        stream.isProtected || (Platform.isIOS && !widget.preview);
+    // The texture backend owns an invisible AVPlayerLayer on iOS, which is
+    // enough for AVKit PiP while keeping Flutter controls above the video.
+    // A platform view is still required for protected streams.
+    final usePlatformView = stream.isProtected;
+    final allowBackgroundPlayback = Platform.isIOS && !widget.preview;
     return vp.VideoPlayerController.networkUrl(
       Uri.parse(stream.url),
       httpHeaders: stream.headers,
       isLive: widget.isLive,
-      videoPlayerOptions: widget.isLive
+      videoPlayerOptions: widget.isLive || allowBackgroundPlayback
           ? vp.VideoPlayerOptions(
-              liveConfiguration: widget.liveOptions ?? _defaultLiveOptions(),
+              allowBackgroundPlayback: allowBackgroundPlayback,
+              liveConfiguration: widget.isLive
+                  ? widget.liveOptions ?? _defaultLiveOptions()
+                  : null,
             )
           : null,
       drmConfiguration: videoPlayerDrmConfiguration(stream),
@@ -176,8 +186,15 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   void _bindPlayer() {
     _player.addListener(_onValueChanged);
     _videoEventSubscription = _player.videoEvents.listen((event) {
-      if (event.eventType == vp.VideoEventType.pictureInPictureRestore) {
-        _adapter.reportPictureInPictureRestore();
+      switch (event.eventType) {
+        case vp.VideoEventType.pictureInPictureStarted:
+          _adapter.reportPictureInPictureStarted();
+        case vp.VideoEventType.pictureInPictureRestore:
+          _adapter.reportPictureInPictureRestore();
+        case vp.VideoEventType.pictureInPictureClosed:
+          _adapter.reportPictureInPictureClosed();
+        default:
+          break;
       }
     });
   }
@@ -521,7 +538,15 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       if (_fitMode != nextFit) setState(() => _fitMode = nextFit);
     }
     if (oldWidget.playing != widget.playing) {
-      unawaited(widget.playing ? _player.play() : _player.pause());
+      if (widget.playing) {
+        if (_openStarted) {
+          unawaited(_player.play());
+        } else {
+          _startOpen();
+        }
+      } else if (_openStarted && _player.value.isInitialized) {
+        unawaited(_player.pause());
+      }
     }
     if (oldWidget.muted != widget.muted) {
       unawaited(_player.setVolume(widget.muted ? 0 : 1));

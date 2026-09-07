@@ -144,6 +144,11 @@ abstract class VideoPlayerPlatform extends PlatformInterface {
   /// Unsupported platforms ignore this call.
   Future<void> stopPictureInPicture(int playerId) async {}
 
+  /// Completes the native PiP restore handshake after the player UI is visible.
+  ///
+  /// Platforms without a native restore handshake may ignore this call.
+  Future<void> completePictureInPictureRestore(int playerId) async {}
+
   /// Sets additional options on web.
   Future<void> setWebOptions(int playerId, VideoPlayerWebOptions options) {
     throw UnimplementedError('setWebOptions() has not been implemented.');
@@ -438,6 +443,13 @@ enum VideoEventType {
 
   /// AVKit requested that the app restore its inline player after PiP expands.
   pictureInPictureRestore,
+
+  /// AVKit entered PiP, including an automatic transition when the app is
+  /// backgrounded.
+  pictureInPictureStarted,
+
+  /// The user closed PiP without asking AVKit to restore the inline player.
+  pictureInPictureClosed,
 
   /// An unknown event has been received.
   unknown,

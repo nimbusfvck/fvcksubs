@@ -136,4 +136,8 @@ abstract class VideoPlayerInstanceApi {
 
   @ObjCSelector('stopPictureInPicture')
   void stopPictureInPicture();
+
+  /// Completes the AVKit restore handshake after the Flutter player is visible.
+  @ObjCSelector('completePictureInPictureRestore')
+  void completePictureInPictureRestore();
 }

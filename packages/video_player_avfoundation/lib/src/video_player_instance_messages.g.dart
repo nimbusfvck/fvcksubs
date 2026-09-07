@@ -747,4 +747,22 @@ class VideoPlayerInstanceApi {
       isNullValid: true,
     );
   }
+
+  Future<void> completePictureInPictureRestore() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.video_player_avfoundation.VideoPlayerInstanceApi.completePictureInPictureRestore$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
 }

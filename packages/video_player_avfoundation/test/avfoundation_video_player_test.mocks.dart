@@ -292,4 +292,13 @@ class MockVideoPlayerInstanceApi extends _i1.Mock
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
           as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> completePictureInPictureRestore() =>
+      (super.noSuchMethod(
+            Invocation.method(#completePictureInPictureRestore, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
 }

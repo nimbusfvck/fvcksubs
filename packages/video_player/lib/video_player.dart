@@ -766,6 +766,8 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
             value = value.copyWith(isPlaying: event.isPlaying);
           }
         case platform_interface.VideoEventType.pictureInPictureRestore:
+        case platform_interface.VideoEventType.pictureInPictureStarted:
+        case platform_interface.VideoEventType.pictureInPictureClosed:
           // UI lifecycle event; playback value remains unchanged.
           break;
         case platform_interface.VideoEventType.unknown:
@@ -894,6 +896,12 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
   Future<void> stopPictureInPicture() async {
     if (_isDisposed) return;
     await _videoPlayerPlatform.stopPictureInPicture(_playerId);
+  }
+
+  /// Completes the native PiP restore handshake after the player UI is visible.
+  Future<void> completePictureInPictureRestore() async {
+    if (_isDisposed) return;
+    await _videoPlayerPlatform.completePictureInPictureRestore(_playerId);
   }
 
   Future<void> _applyPlayPause() async {

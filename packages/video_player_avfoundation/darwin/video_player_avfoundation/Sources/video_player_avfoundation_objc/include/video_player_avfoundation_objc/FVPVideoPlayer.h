@@ -42,6 +42,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// The native platform view is created after the player, so the view factory
 /// wires its presentation layer back into the player once both objects exist.
 - (void)setPictureInPicturePlayerLayer:(AVPlayerLayer *)playerLayer;
+
+/// Supplies the visible platform view so it can stop intercepting touches
+/// while the app is showing native PiP and the caller underneath is usable.
+- (void)setPictureInPicturePlayerView:(UIView *)view;
 #endif
 
 /// Initializes a new instance of FVPVideoPlayer with the given AVPlayerItem, AV factory, and view

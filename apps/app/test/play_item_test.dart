@@ -200,4 +200,60 @@ void main() {
       expect(find.text('CAST'), findsOneWidget);
     },
   );
+
+  testWidgets('background sources reach the picker as they resolve', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'subs',
+        providerId: 'subs.p',
+        id: 'movie-incremental-refresh',
+      ),
+      title: 'Movie',
+    );
+    var now = DateTime(2026);
+    final sourceCache = SourceCache(now: () => now);
+    final stream = const PlayableStream(
+      url: 'https://stream.example/movie.m3u8',
+      format: StreamFormat.hls,
+    );
+    sourceCache.store(item.ref, const [
+      ResolvedSource(
+        source: StreamSource(id: 'hydrax', label: 'Source hydrax'),
+        stream: stream,
+      ),
+    ]);
+    now = now.add(const Duration(minutes: 4));
+
+    final extension = SubtitleFakeExtension(
+      subtitlesBySourceId: const {'hydrax': [], 'cast': []},
+      resolveDelayBySourceId: const {
+        'cast': Duration(milliseconds: 400),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => unawaited(playItemV2(context, item)),
+            child: const Text('Play'),
+          ),
+        ),
+        registry: ExtensionRegistry([extension]),
+        player: RecordingPlayer(),
+        sourceCache: sourceCache,
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byTooltip('Source hydrax').last);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Source cast'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Source cast'), findsOneWidget);
+  });
 }

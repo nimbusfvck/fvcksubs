@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
+import '../../app_scope.dart';
 import '../../navigation/app_route_observer.dart';
 import 'platform_player_builder.dart';
 
@@ -66,31 +67,39 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    if (!_routeVisible) return const SizedBox.shrink();
-    return IgnorePointer(
-      child: AnimatedOpacity(
-        opacity: _ready ? 1 : 0,
-        duration: const Duration(milliseconds: 180),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return platformPlayerBuilder(
-              context,
-              PlayableStream(
-                url: widget.trailer.url,
-                label: widget.trailer.url,
-              ),
-              isLive: false,
-              playing: widget.playing,
-              preview: true,
-              muted: true,
-              looping: true,
-              fit: BoxFit.cover,
-              wakelock: false,
-              onPlaybackReady: _onPlaybackReady,
-            );
-          },
-        ),
-      ),
+    final session = AppScope.of(context).pictureInPictureSession;
+    return ListenableBuilder(
+      listenable: session,
+      builder: (context, _) {
+        if (!_routeVisible) return const SizedBox.shrink();
+        return IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: _ready ? 1 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return platformPlayerBuilder(
+                  context,
+                  PlayableStream(
+                    url: widget.trailer.url,
+                    label: widget.trailer.url,
+                  ),
+                  isLive: false,
+                  // A full player attached to the session owns the only
+                  // active playback session, including while it is in PiP.
+                  playing: widget.playing && session.player == null,
+                  preview: true,
+                  muted: true,
+                  looping: true,
+                  fit: BoxFit.cover,
+                  wakelock: false,
+                  onPlaybackReady: _onPlaybackReady,
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }

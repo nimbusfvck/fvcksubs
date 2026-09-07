@@ -10,6 +10,7 @@ import 'library/library_controller.dart';
 import 'platform/device_class.dart';
 import 'player/state/source_cache.dart';
 import 'player/state/picture_in_picture_session.dart';
+import 'player/state/picture_in_picture_preference_controller.dart';
 import 'player/state/source_priority_controller.dart';
 import 'player/state/quality_preference_controller.dart';
 import 'player/state/subtitle_preference_controller.dart';
@@ -35,7 +36,9 @@ class AppScope extends InheritedWidget {
     required this.homeCategoryStore,
     required this.sourceCache,
     required this.pictureInPictureSession,
+    required this.pictureInPicturePreferenceController,
     required this.nsfwController,
+    this.navigatorKey,
     required super.child,
   });
 
@@ -69,7 +72,12 @@ class AppScope extends InheritedWidget {
 
   final PictureInPictureSession pictureInPictureSession;
 
+  final PictureInPicturePreferenceController
+  pictureInPicturePreferenceController;
+
   final NsfwController nsfwController;
+
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   static AppScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
@@ -94,5 +102,8 @@ class AppScope extends InheritedWidget {
       homeCategoryStore != oldWidget.homeCategoryStore ||
       sourceCache != oldWidget.sourceCache ||
       pictureInPictureSession != oldWidget.pictureInPictureSession ||
-      nsfwController != oldWidget.nsfwController;
+      pictureInPicturePreferenceController !=
+          oldWidget.pictureInPicturePreferenceController ||
+      nsfwController != oldWidget.nsfwController ||
+      navigatorKey != oldWidget.navigatorKey;
 }

@@ -731,4 +731,21 @@ void SetUpFVPVideoPlayerInstanceApiWithSuffix(id<FlutterBinaryMessenger> binaryM
       [channel setMessageHandler:nil];
     }
   }
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.video_player_avfoundation.VideoPlayerInstanceApi.completePictureInPictureRestore", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FVPGetVideoPlayerInstanceMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(completePictureInPictureRestore:)], @"FVPVideoPlayerInstanceApi api (%@) doesn't respond to @selector(completePictureInPictureRestore:error:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        FlutterError *error;
+        [api completePictureInPictureRestore:&error];
+        callback(wrapResult(nil, error));
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
 }
