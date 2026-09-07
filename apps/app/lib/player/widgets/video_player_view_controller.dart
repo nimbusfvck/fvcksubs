@@ -36,7 +36,7 @@ class _VideoPlayerControllerAdapter
   @override
   Stream<AppPlayerEvent> get events => _events.stream;
   @override
-  List<AppQualityTrack> get qualityTracks => [
+  List<AppQualityTrack> get qualityTracks => dedupedQualityTracks([
     for (final track in _nativeVideoTracks)
       if ((track.height ?? 0) > 0)
         AppQualityTrack(
@@ -55,7 +55,7 @@ class _VideoPlayerControllerAdapter
           bitrate: variant.bitrate,
           variant: variant,
         ),
-  ];
+  ]);
   @override
   AppQualityTrack? get activeQuality {
     final variantId = _selectedVariantId;

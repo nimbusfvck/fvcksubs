@@ -5,19 +5,6 @@ import '../../theme/tokens.dart';
 import '../models/resolved_source.dart';
 import '../models/app_player_controller.dart';
 
-List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
-  final byHeight = <int, AppQualityTrack>{};
-  for (final track in tracks) {
-    final height = track.height;
-    if (height <= 0) continue;
-    final existing = byHeight[height];
-    if (existing == null || (track.bitrate ?? 0) > (existing.bitrate ?? 0)) {
-      byHeight[height] = track;
-    }
-  }
-  return byHeight.values.toList()..sort((a, b) => b.height.compareTo(a.height));
-}
-
 const double _refreshControlSize = 40;
 
 const playerPlaybackSpeeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];

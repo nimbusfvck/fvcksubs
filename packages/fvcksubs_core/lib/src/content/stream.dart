@@ -10,6 +10,9 @@ enum StreamFormat {
   /// HLS (`.m3u8`).
   hls,
 
+  /// MPEG-4 progressive download (`.mp4`), including extensionless MP4 URLs.
+  mp4,
+
   /// Anything else, or unknown (the fallback on decode).
   other,
 }

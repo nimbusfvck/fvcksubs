@@ -83,6 +83,23 @@ class AppQualityTrack {
   final StreamVariant? variant;
 }
 
+/// Removes duplicate quality rungs while keeping the strongest rendition.
+///
+/// Native HLS tracks and provider-supplied fixed renditions can describe the
+/// same height. The picker should expose one row per quality, preferring the
+/// track with the larger reported bitrate.
+List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
+  final byHeight = <int, AppQualityTrack>{};
+  for (final track in tracks) {
+    if (track.height <= 0) continue;
+    final existing = byHeight[track.height];
+    if (existing == null || (track.bitrate ?? 0) > (existing.bitrate ?? 0)) {
+      byHeight[track.height] = track;
+    }
+  }
+  return byHeight.values.toList()..sort((a, b) => b.height.compareTo(a.height));
+}
+
 /// Names a rendition the way viewers meet it elsewhere: 720p, 1080p, 4K.
 ///
 /// A wide release is letterboxed into its frame, so the rung a provider calls

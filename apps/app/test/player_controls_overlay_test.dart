@@ -5,6 +5,18 @@ import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/sheets/player_selection_sheets.dart';
 
 void main() {
+  test('quality tracks are deduplicated by height and keep best bitrate', () {
+    const tracks = [
+      AppQualityTrack(id: 'native-720', height: 720, bitrate: 2_000_000),
+      AppQualityTrack(id: 'provider-720', height: 720, bitrate: 3_000_000),
+      AppQualityTrack(id: 'provider-360', height: 360),
+    ];
+
+    final deduped = dedupedQualityTracks(tracks);
+
+    expect(deduped.map((track) => track.id), ['provider-720', 'provider-360']);
+  });
+
   testWidgets('series overlay shows series title and episode context', (
     tester,
   ) async {

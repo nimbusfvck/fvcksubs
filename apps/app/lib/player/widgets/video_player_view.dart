@@ -221,6 +221,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     final oldPlayer = _player;
     final restorePosition = oldPlayer.value.position;
     final restorePlaying = oldPlayer.value.isPlaying;
+    var oldPlayerPaused = false;
     final nextStream = variant == null
         ? widget.stream
         : PlayableStream(
@@ -239,6 +240,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     final stopwatch = Stopwatch()..start();
     var swapped = false;
     try {
+      if (restorePlaying) {
+        await oldPlayer.pause();
+        oldPlayerPaused = true;
+        _logOpenStage('quality_old_player_paused', stopwatch);
+      }
       _logOpenStage(
         'quality_initialize_start',
         stopwatch,
@@ -288,6 +294,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     } catch (error) {
       if (!swapped) await nextPlayer.dispose();
       if (!_isCurrentGeneration(generation)) return;
+      if (oldPlayerPaused) {
+        try {
+          await oldPlayer.play();
+          _logOpenStage('quality_old_player_resumed', stopwatch);
+        } catch (_) {
+          // Preserve the switch error; the old player may already be invalid.
+        }
+      }
       _logOpenStage(
         'quality_switch_failed',
         stopwatch,

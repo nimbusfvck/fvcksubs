@@ -71,6 +71,29 @@ void main() {
     );
   });
 
+  test('extensionless MP4 stream decodes with its explicit format', () {
+    final stream = PlayableStream.fromJson({
+      'url': 'https://edge.example.com/sora/2083783925/signed-token',
+      'format': 'mp4',
+    });
+
+    expect(stream.format, StreamFormat.mp4);
+    expect(stream.toJson()['format'], 'mp4');
+  });
+
+  test('MP4 rendition variant preserves its explicit format', () {
+    final variant = StreamVariant.fromJson({
+      'id': 'quality-360p',
+      'url': 'https://edge.example.com/sora/2083783925/signed-token',
+      'format': 'mp4',
+      'label': '360p',
+      'height': 360,
+    });
+
+    expect(variant.format, StreamFormat.mp4);
+    expect(variant.toJson()['format'], 'mp4');
+  });
+
   test('unknown DRM scheme decodes to unsupported', () {
     final drm = DrmConfig.fromJson({'scheme': 'playReady'});
     expect(drm!.scheme, DrmScheme.unsupported);
