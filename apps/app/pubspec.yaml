@@ -28,6 +28,8 @@ dependencies:
     path: ../../packages/video_player_android
   video_player_avfoundation:
     path: ../../packages/video_player_avfoundation
+  video_player_mini_player:
+    path: ../../packages/video_player_mini_player
   wakelock_plus: ^1.7.0
   cached_network_image: ^3.4.1
   html: ^0.15.6

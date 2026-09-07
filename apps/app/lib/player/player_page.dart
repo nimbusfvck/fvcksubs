@@ -341,6 +341,10 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller == null || !identical(controller, _controller)) return;
     final value = _videoValue?.value;
     if (value == null || !value.initialized) return;
+    _pictureInPictureSession?.setPlaybackState(
+      isPlaying: value.isPlaying,
+      isBuffering: value.isBuffering,
+    );
     if (!_sourceStarted) {
       _sourceStarted = true;
       _pendingFallbackSourceId = null;
@@ -394,6 +398,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (attempt != _playbackAttempt) return;
     if (event.type == AppPlayerEventType.pictureInPictureStarted) {
       _resumeAfterPictureInPicture = controller.value.value.isPlaying;
+      _pictureInPictureSession?.setInteractionEnabled(false);
       if (mounted && !_pipBackground) {
         setState(() => _pipBackground = true);
       }
@@ -857,6 +862,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (started) {
       _resumeAfterPictureInPicture = wasPlaying;
       _restorePlayPending = false;
+      _pictureInPictureSession?.setInteractionEnabled(false);
       _backInFlight = false;
       setState(() => _pipBackground = true);
     } else {
@@ -892,6 +898,7 @@ class _PlayerPageState extends State<PlayerPage> {
         _controller?.value.value.isPlaying == true;
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = shouldResume;
+    _pictureInPictureSession?.setInteractionEnabled(true);
     setState(() => _pipBackground = false);
     // Keep the player in its original route for the whole PiP lifecycle.
     // Reparenting a UiKitView can preserve AVPlayer audio while losing the
@@ -1019,6 +1026,10 @@ class _PlayerPageState extends State<PlayerPage> {
       _controller = null;
       _onVisibilityChanged = null;
     });
+    _pictureInPictureSession?.setPlaybackState(
+      isPlaying: false,
+      isBuffering: true,
+    );
     AppScope.of(
       context,
     ).sourceCache.promote(widget.media.ref, picked.source.id);
@@ -1097,6 +1108,18 @@ class _PlayerPageState extends State<PlayerPage> {
         }),
       );
 
+  Widget _fullScreenControls() {
+    final session = _pictureInPictureSession;
+    final controls = _controlsFor(_controller);
+    if (session == null) return controls;
+    return ValueListenableBuilder<MiniPlayerPresentationState>(
+      valueListenable: session.presentation,
+      builder: (context, state, child) =>
+          state.showControls ? child! : const SizedBox.shrink(),
+      child: controls,
+    );
+  }
+
   /// The external track to hand the player for the current source.
   ///
   /// An explicit pick for this item always wins — the viewer chose it. Failing
@@ -1131,10 +1154,18 @@ class _PlayerPageState extends State<PlayerPage> {
         ).subtitlePreferenceController.appearance,
         preferredExternalSubtitle: _externalSubtitle(context),
         onControllerCreated: (value) {
-          _controller = value as AppPlayerController?;
-          if (_controller != null) {
-            _attachEventListener(_controller!);
-            unawaited(_controller!.setFit(_fitMode));
+          final controller = value as AppPlayerController?;
+          _controller = controller;
+          _pictureInPictureSession?.setPlaybackToggleRequested(
+            controller == null ? null : _togglePlayback,
+          );
+          if (controller != null) {
+            _pictureInPictureSession?.setPlaybackState(
+              isPlaying: controller.value.value.isPlaying,
+              isBuffering: controller.value.value.isBuffering,
+            );
+            _attachEventListener(controller);
+            unawaited(controller.setFit(_fitMode));
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});
@@ -1226,37 +1257,46 @@ class _PlayerPageState extends State<PlayerPage> {
         },
         child: Focus(
           autofocus: true,
-          child: PlayerDragToClose(
-            onDismiss: _handleBack,
-            child: Scaffold(
-              backgroundColor: Colors.black,
-              body: Stack(
-                children: [
-                  _playerViewport(context),
-                  if (!_waitingForFallback)
-                    Positioned.fill(child: _controlsFor(_controller)),
-                  if (_waitingForFallback)
-                    Positioned.fill(
-                      child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              children: [
+                Positioned.fill(child: _playerBackground()),
+                _playerViewport(context),
+                if (!_waitingForFallback)
+                  Positioned.fill(child: _fullScreenControls()),
+                if (_waitingForFallback)
+                  Positioned.fill(
+                    child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
+                  ),
+                if (_playbackError != null)
+                  Positioned.fill(
+                    child: PlayerPlaybackErrorOverlay(
+                      message: _playbackError!,
+                      retrying: _retrying,
+                      onRetry: _retryPlayback,
+                      onChangeSource: _resolvedSources.length > 1
+                          ? _changeSource
+                          : null,
+                      onBack: _handleBack,
+                      onHide: () => setState(() => _playbackError = null),
                     ),
-                  if (_playbackError != null)
-                    Positioned.fill(
-                      child: PlayerPlaybackErrorOverlay(
-                        message: _playbackError!,
-                        retrying: _retrying,
-                        onRetry: _retryPlayback,
-                        onChangeSource: _resolvedSources.length > 1
-                            ? _changeSource
-                            : null,
-                        onBack: _handleBack,
-                        onHide: () => setState(() => _playbackError = null),
-                      ),
-                    ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _playerBackground() {
+    final session = _pictureInPictureSession;
+    if (session == null) return const ColoredBox(color: Colors.black);
+    return ValueListenableBuilder<MiniPlayerPresentationState>(
+      valueListenable: session.presentation,
+      builder: (context, state, _) => ColoredBox(
+        color: state.showBackground ? Colors.black : Colors.transparent,
       ),
     );
   }

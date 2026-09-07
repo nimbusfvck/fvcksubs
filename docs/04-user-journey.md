@@ -264,6 +264,14 @@ source is ready, that same route changes to playback; a late source never pushes
 route. Backing out abandons the pending play, rather than allowing a late network result to
 push a player after the viewer changed their mind.
 
+While watching, a downward drag progressively reduces the player into an in-app mini-player.
+The player remains active while the caller underneath becomes usable. Releasing after the
+commit threshold docks the card; a short drag returns it to full screen. The card itself expands
+when tapped, and its only controls are pause and close. This is distinct from system PiP, which
+is requested separately when the viewer leaves the player and the platform supports it. Once
+minimized, a drag allows the card to follow the user's finger freely before snapping to the
+nearest corner on release.
+
 ### Source resolution before playback
 
 ```mermaid

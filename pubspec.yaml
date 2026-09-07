@@ -18,6 +18,7 @@ workspace:
   - packages/video_player_android
   - packages/video_player_avfoundation
   - packages/video_player
+  - packages/video_player_mini_player
   - apps/app
 
 dev_dependencies:

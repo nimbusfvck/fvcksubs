@@ -243,6 +243,7 @@ without any protocol change.
 flowchart TB
     PRE["Pre-resolved sources, ordered by preference"] --> PP["Player screen"]
     PP --> NAT["Native playback"]
+    PP --> MINI["Persistent in-app mini-player"]
     PP --> CTL["Custom controls"]
     CTL --> Q["Quality — one entry per resolution, highest first"]
     CTL --> SUB["Subtitles — the source's own, plus any fallback lookup"]
@@ -262,6 +263,7 @@ flowchart TB
 | Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
 | Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
 | Picture in Picture | On iOS, system Back first asks the native AVFoundation player to enter Picture in Picture. The player is attached to a persistent entry in the app Navigator's overlay from playback start, so Detail/Home routes remain the real caller underneath. Clear playback uses the texture backend: its invisible AVPlayerLayer is registered with AVKit for PiP while Flutter controls remain above the rendered video; protected playback may use a platform view. Full playback opts out of the video package's normal background pause observer so AVPlayer can continue through the PiP transition. After PiP starts, the Flutter player surface is clipped and its native view stops accepting touches, allowing the caller underneath to remain interactive; later routes such as source sheets are still inserted above the player entry. VOD can therefore stay on its existing Detail page and live playback can return to Home or its actual caller. Expanding restores the same surface and resumes it when it was playing; closing the PiP window pauses and disposes the hosted player. Unsupported or unavailable PiP falls back to ordinary dismissal. PiP renders the native video layer only; Flutter controls and subtitles are not part of the PiP surface. |
+| In-app mini-player | The shared `video_player_mini_player` host keeps the same Flutter/native player widget in one persistent overlay. A downward drag publishes progress continuously, interpolating the surface into a bottom-right-docked card; release past the threshold commits the minimized state, while a short drag springs back. Tapping the card restores full screen; the minimized card can be dragged directly and follows the pointer until release, then snaps to the nearest of the four corners. The host stays below newly pushed routes, so the caller remains usable without reparenting the native surface. |
 | Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
 | Errors | If the first source fails before playback initializes, mark it failed and try the next resolved source, including one that arrives through the active background fan-out. After playback starts, never auto-advance; keep retry and source switching available. |
 
@@ -297,6 +299,17 @@ flowchart TB
   releases its audio session.
   Other platforms return unsupported and use the normal player dismissal. Flutter-rendered controls
   and subtitles are not available inside the native PiP window.
+- **In-app mini-player** is separate from system PiP. It is implemented by the reusable
+  `video_player_mini_player` package, while the forked `video_player` package remains responsible
+  for the native surface and system PiP APIs. The same player widget stays mounted in one overlay
+  entry while its bounds, corner radius, and interaction mode change. The drag interpolates
+  directly from the full-screen rect to the bottom-right-docked rect. A tap anywhere on the card restores
+  full screen; the mini bar overlays the top of the video with playback toggle on the left and
+  close on the right; the compact frame stays 16:9 and is capped at 200px wide, with 24px rounded
+  translucent-black backgrounds per icon rather than a full-width toolbar. The card can drag to
+  the top-left, top-right, bottom-left, or bottom-right corner; dragging follows the user's
+  finger and snaps to the nearest corner on release. Native PiP temporarily
+  disables that host's hit testing so the underlying caller can receive input.
 - **Desktop playback controls** stay app-owned: Space toggles play/pause, J/L seek ten seconds,
   arrow keys seek five seconds, F toggles fullscreen, and Escape exits it. This
   keeps source, subtitle, quality, retry, and Up Next controls available across platforms.
