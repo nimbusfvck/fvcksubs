@@ -6,6 +6,10 @@ import 'package:flutter/widgets.dart';
 class PictureInPictureSession extends ChangeNotifier {
   Widget? _player;
 
+  final GlobalKey<NavigatorState> modalNavigatorKey =
+      GlobalKey<NavigatorState>();
+  final ValueNotifier<bool> modalOpen = ValueNotifier<bool>(false);
+
   Widget? get player => _player;
 
   void attach(Widget player) {
@@ -78,9 +82,7 @@ class PictureInPictureNavigatorObserver extends NavigatorObserver {
     final navigatorState = navigator;
     final overlay = navigatorState?.overlay;
     final entry = _entry;
-    if (overlay == null || entry == null) {
-      return;
-    }
+    if (overlay == null || entry == null) return;
 
     var hasReordered = false;
 
@@ -92,28 +94,15 @@ class PictureInPictureNavigatorObserver extends NavigatorObserver {
           !entry.mounted) {
         return;
       }
-      // A modal route is already present in the overlay by the time this
-      // callback runs, but `isCurrent` can briefly lag during a sheet
-      // transition. The route entries themselves are the reliable anchor.
       if (!route.isActive || route.overlayEntries.isEmpty) return;
       final entries = List<OverlayEntry>.of(route.overlayEntries);
       final anchor = entries.first;
       if (!anchor.mounted) return;
-      // Include the host in the moved group so its position is unambiguous:
-      // route entries must be above the player, while the player entry itself
-      // remains mounted so the native surface is not recreated.
       overlay.rearrange(<OverlayEntry>[entry, ...entries], below: entry);
       hasReordered = true;
     }
 
-    // Modal routes normally install their entries before didPush is notified.
-    // Reorder immediately when possible so the first transition frame cannot
-    // paint the player over the sheet.
     reorder();
-
-    // Navigator rearranges its route entries after observer notifications and
-    // again when a transition completes. Cover both points so a persistent
-    // player cannot end up above the newly pushed route.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       reorder();
       final animation = route is TransitionRoute<dynamic>
@@ -127,9 +116,6 @@ class PictureInPictureNavigatorObserver extends NavigatorObserver {
         }
         animation.removeStatusListener(onStatusChanged);
         if (status == AnimationStatus.completed) {
-          // Navigator may restore its route-entry order from another
-          // transition listener after this callback. Reorder on the following
-          // frame, once all route listeners have finished.
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => reorder(force: true),
           );
@@ -166,8 +152,53 @@ class PictureInPictureHost extends StatelessWidget {
     builder: (context, _) {
       final player = session.player;
       return RepaintBoundary(
-        child: SizedBox.expand(child: player ?? const SizedBox.shrink()),
+        child: SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              player ?? const SizedBox.shrink(),
+              HeroControllerScope.none(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: session.modalOpen,
+                  builder: (_, modalOpen, child) =>
+                      IgnorePointer(ignoring: !modalOpen, child: child),
+                  child: Navigator(
+                    key: session.modalNavigatorKey,
+                    observers: [
+                      _PictureInPictureModalObserver(session.modalOpen),
+                    ],
+                    onGenerateRoute: (_) => PageRouteBuilder<void>(
+                      opaque: false,
+                      transitionDuration: Duration.zero,
+                      reverseTransitionDuration: Duration.zero,
+                      pageBuilder: (_, _, _) =>
+                          const IgnorePointer(child: SizedBox.expand()),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     },
   );
+}
+
+class _PictureInPictureModalObserver extends NavigatorObserver {
+  _PictureInPictureModalObserver(this.modalOpen);
+
+  final ValueNotifier<bool> modalOpen;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route is PopupRoute<dynamic>) modalOpen.value = true;
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    if (route is PopupRoute<dynamic>) modalOpen.value = false;
+  }
 }

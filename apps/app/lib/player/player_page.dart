@@ -1031,12 +1031,13 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _changeSource() async {
-    final navigator =
-        AppScope.of(context).navigatorKey?.currentState ??
-        Navigator.of(context);
+    final modalContext =
+        AppScope.of(
+          context,
+        ).pictureInPictureSession.modalNavigatorKey.currentContext ??
+        context;
     final picked = await showModalBottomSheet<ResolvedSource>(
-      context: navigator.context,
-      useRootNavigator: true,
+      context: modalContext,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(

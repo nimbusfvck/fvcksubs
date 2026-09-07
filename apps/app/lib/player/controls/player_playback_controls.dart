@@ -183,7 +183,10 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   BuildContext get _modalContext =>
-      AppScope.of(context).navigatorKey?.currentState?.context ?? context;
+      AppScope.of(
+        context,
+      ).pictureInPictureSession.modalNavigatorKey.currentContext ??
+      context;
 
   List<PlayerEpisodeEntry> get _episodeEntries {
     final guide = widget.episodeGuide;
@@ -535,7 +538,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     _hideTimer?.cancel();
     final picked = await showDialog<double>(
       context: _modalContext,
-      useRootNavigator: true,
       builder: (_) =>
           PlayerPlaybackSettingsDialog(currentSpeed: _playbackSpeed),
     );
@@ -557,7 +559,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     );
     final picked = await showModalBottomSheet<PlayerSubtitleSelection>(
       context: _modalContext,
-      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
@@ -622,7 +623,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         (AppScope.of(context).qualityPreferenceController.maxHeight != null);
     final picked = await showModalBottomSheet<AppQualityTrack>(
       context: _modalContext,
-      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
@@ -653,7 +653,6 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     final tracks = widget.controller?.audioTracks ?? const [];
     final picked = await showModalBottomSheet<AppAudioTrack>(
       context: _modalContext,
-      useRootNavigator: true,
       backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),

@@ -8,12 +8,14 @@ class _VideoPlayerControllerAdapter
     required this.onSelectVariant,
     required String streamUrl,
     this.variants = const [],
-  }) : _activeUrl = streamUrl;
+  }) : _activeUrl = streamUrl,
+       _baseUrl = streamUrl;
 
   vp.VideoPlayerController _player;
   final void Function(PlayerFitMode mode) onSetFit;
   final Future<void> Function(StreamVariant? variant) onSelectVariant;
   final List<StreamVariant> variants;
+  final String _baseUrl;
   String _activeUrl;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
@@ -232,16 +234,18 @@ class _VideoPlayerControllerAdapter
   Future<void> setQuality(AppQualityTrack? track) async {
     final variant = track?.variant;
     if (variant != null) {
-      _selectedVariantId = variant.id;
       if (kDebugMode) {
         debugPrint('[VideoPlayerVOD] quality_request variant=${variant.label}');
       }
       await onSelectVariant(variant);
+      if (!_disposed && _activeUrl == variant.url) {
+        _selectedVariantId = variant.id;
+      }
       return;
     }
     if (track == null || track.id == 'auto') {
-      _selectedVariantId = null;
       await onSelectVariant(null);
+      if (!_disposed && _activeUrl == _baseUrl) _selectedVariantId = null;
       return;
     }
     final native = track.platformTrack as vp.VideoTrack?;
