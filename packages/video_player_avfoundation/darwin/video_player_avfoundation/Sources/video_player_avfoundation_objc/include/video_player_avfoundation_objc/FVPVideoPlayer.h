@@ -46,6 +46,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Supplies the visible platform view so it can stop intercepting touches
 /// while the app is showing native PiP and the caller underneath is usable.
 - (void)setPictureInPicturePlayerView:(UIView *)view;
+
+/// Enables or disables automatic inline Picture in Picture for this player.
+- (void)setPictureInPictureAutomaticallyFromInline:(BOOL)enabled;
 #endif
 
 /// Initializes a new instance of FVPVideoPlayer with the given AVPlayerItem, AV factory, and view

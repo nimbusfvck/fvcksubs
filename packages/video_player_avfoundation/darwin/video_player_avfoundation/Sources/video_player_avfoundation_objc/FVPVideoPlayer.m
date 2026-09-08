@@ -34,6 +34,7 @@ static NSString *const kFVPAssetVariantsKey = @"variants";
 @property(nonatomic) BOOL pictureInPictureStartPending;
 @property(nonatomic) BOOL pictureInPictureRestoreRequested;
 @property(nonatomic) BOOL disposeRequestedWhilePictureInPicture;
+@property(nonatomic) BOOL allowPictureInPicture;
 @end
 #endif
 
@@ -109,6 +110,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 
   _playerItem = item;
   _viewProvider = viewProvider;
+#if TARGET_OS_IOS
+  _allowPictureInPicture = YES;
+#endif
 
   NSObject<FVPAVAsset> *asset = item.asset;
   void (^assetCompletionHandler)(void) = ^{
@@ -259,6 +263,18 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   view.userInteractionEnabled = !self.pictureInPictureController.pictureInPictureActive;
 }
 
+- (void)setPictureInPictureAutomaticallyFromInline:(BOOL)enabled {
+  self.allowPictureInPicture = enabled;
+  if (@available(iOS 14.2, *)) {
+    self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = enabled;
+  }
+}
+
+- (void)setPictureInPictureAllowed:(BOOL)allowed
+                             error:(FlutterError *_Nullable *_Nonnull)error {
+  [self setPictureInPictureAutomaticallyFromInline:allowed];
+}
+
 - (void)armPictureInPicture {
   if (![AVPictureInPictureController isPictureInPictureSupported]) {
     return;
@@ -283,11 +299,17 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
 
   if (@available(iOS 14.2, *)) {
-    self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = YES;
+    self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline =
+        self.allowPictureInPicture;
   }
 }
 
 - (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion {
+  if (!self.allowPictureInPicture) {
+    NSLog(@"[FVPVideoPlayer] PiP disabled for this player");
+    completion(@NO, nil);
+    return;
+  }
   if (![AVPictureInPictureController isPictureInPictureSupported]) {
     NSLog(@"[FVPVideoPlayer] PiP unsupported");
     completion(@NO, nil);
@@ -457,6 +479,10 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   self.pictureInPictureRestoreCompletion = completionHandler;
 }
 #else
+- (void)setPictureInPictureAllowed:(BOOL)allowed
+                             error:(FlutterError *_Nullable *_Nonnull)error {
+}
+
 - (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion {
   completion(@NO, nil);
 }

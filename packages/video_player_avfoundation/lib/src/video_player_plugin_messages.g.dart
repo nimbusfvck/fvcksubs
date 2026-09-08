@@ -49,7 +49,9 @@ bool _deepEquals(Object? a, Object? b) {
   }
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed.every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+        a.indexed.every(
+          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
+        );
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -75,6 +77,7 @@ bool _deepEquals(Object? a, Object? b) {
   }
   return a == b;
 }
+
 int _deepHash(Object? value) {
   if (value is List) {
     return Object.hashAll(value.map(_deepHash));
@@ -96,7 +99,6 @@ int _deepHash(Object? value) {
   }
   return value.hashCode;
 }
-
 
 /// Information passed to the platform view creation.
 class PlatformVideoViewCreationParams {
@@ -120,7 +122,8 @@ class PlatformVideoViewCreationParams {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! PlatformVideoViewCreationParams || other.runtimeType != runtimeType) {
+    if (other is! PlatformVideoViewCreationParams ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -169,7 +172,8 @@ class PlatformFairPlayDrmConfiguration {
     return PlatformFairPlayDrmConfiguration(
       certificateUri: result[0]! as String,
       licenseUri: result[1]! as String,
-      licenseHeaders: (result[2]! as Map<Object?, Object?>).cast<String, String>(),
+      licenseHeaders: (result[2]! as Map<Object?, Object?>)
+          .cast<String, String>(),
       contentId: result[3] as String?,
     );
   }
@@ -177,7 +181,8 @@ class PlatformFairPlayDrmConfiguration {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! PlatformFairPlayDrmConfiguration || other.runtimeType != runtimeType) {
+    if (other is! PlatformFairPlayDrmConfiguration ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -217,22 +222,31 @@ class PlatformLiveConfiguration {
 
   /// Desired distance behind the live edge when playback starts or catches up.
   int targetOffsetMs;
+
   /// Smallest allowed distance behind the live edge.
   int minOffsetMs;
+
   /// Largest allowed distance behind the live edge.
   int maxOffsetMs;
+
   /// Lowest playback speed used while correcting live latency.
   double minPlaybackSpeed;
+
   /// Highest playback speed used while correcting live latency.
   double maxPlaybackSpeed;
+
   /// Preferred AVPlayer read-ahead buffer duration.
   int preferredForwardBufferDurationMs;
+
   /// Minimum Android load-control buffer duration, unused on Darwin.
   int minBufferDurationMs;
+
   /// Maximum Android load-control buffer duration, unused on Darwin.
   int maxBufferDurationMs;
+
   /// Android buffer required before initial playback, unused on Darwin.
   int bufferForPlaybackMs;
+
   /// Android buffer required after a rebuffer, unused on Darwin.
   int bufferForPlaybackAfterRebufferMs;
 
@@ -310,6 +324,7 @@ class CreationOptions {
     required this.httpHeaders,
     this.fairPlayDrm,
     this.isLive,
+    this.allowPictureInPicture,
     this.liveConfiguration,
   });
 
@@ -317,6 +332,9 @@ class CreationOptions {
 
   /// Whether the source is an unbounded live stream.
   bool? isLive;
+
+  /// Whether this player may enter native Picture in Picture.
+  bool? allowPictureInPicture;
 
   Map<String, String> httpHeaders;
 
@@ -326,7 +344,14 @@ class CreationOptions {
   PlatformLiveConfiguration? liveConfiguration;
 
   List<Object?> _toList() {
-    return <Object?>[uri, isLive, httpHeaders, fairPlayDrm, liveConfiguration];
+    return <Object?>[
+      uri,
+      isLive,
+      allowPictureInPicture,
+      httpHeaders,
+      fairPlayDrm,
+      liveConfiguration,
+    ];
   }
 
   Object encode() {
@@ -338,9 +363,10 @@ class CreationOptions {
     return CreationOptions(
       uri: result[0]! as String,
       isLive: result[1] as bool?,
-      httpHeaders: (result[2]! as Map<Object?, Object?>).cast<String, String>(),
-      fairPlayDrm: result[3] as PlatformFairPlayDrmConfiguration?,
-      liveConfiguration: result[4] as PlatformLiveConfiguration?,
+      allowPictureInPicture: result[2] as bool?,
+      httpHeaders: (result[3]! as Map<Object?, Object?>).cast<String, String>(),
+      fairPlayDrm: result[4] as PlatformFairPlayDrmConfiguration?,
+      liveConfiguration: result[5] as PlatformLiveConfiguration?,
     );
   }
 
@@ -357,6 +383,7 @@ class CreationOptions {
         _deepEquals(httpHeaders, other.httpHeaders) &&
         _deepEquals(fairPlayDrm, other.fairPlayDrm) &&
         _deepEquals(isLive, other.isLive) &&
+        _deepEquals(allowPictureInPicture, other.allowPictureInPicture) &&
         _deepEquals(liveConfiguration, other.liveConfiguration);
   }
 
@@ -366,7 +393,7 @@ class CreationOptions {
 
   @override
   String toString() {
-    return 'CreationOptions(uri: $uri, httpHeaders: $httpHeaders, fairPlayDrm: $fairPlayDrm, isLive: $isLive, liveConfiguration: $liveConfiguration)';
+    return 'CreationOptions(uri: $uri, httpHeaders: $httpHeaders, fairPlayDrm: $fairPlayDrm, isLive: $isLive, allowPictureInPicture: $allowPictureInPicture, liveConfiguration: $liveConfiguration)';
   }
 }
 
@@ -387,8 +414,12 @@ class TexturePlayerIds {
 
   static TexturePlayerIds decode(Object result) {
     result as List<Object?>;
-    return TexturePlayerIds(playerId: result[0]! as int, textureId: result[1]! as int);
+    return TexturePlayerIds(
+      playerId: result[0]! as int,
+      textureId: result[1]! as int,
+    );
   }
+
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
@@ -398,7 +429,8 @@ class TexturePlayerIds {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(playerId, other.playerId) && _deepEquals(textureId, other.textureId);
+    return _deepEquals(playerId, other.playerId) &&
+        _deepEquals(textureId, other.textureId);
   }
 
   @override
@@ -410,7 +442,6 @@ class TexturePlayerIds {
     return 'TexturePlayerIds(playerId: $playerId, textureId: $textureId)';
   }
 }
-
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -462,11 +493,13 @@ class AVFoundationVideoPlayerApi {
   /// Constructor for [AVFoundationVideoPlayerApi]. The [binaryMessenger] named argument is
   /// available for dependency injection. If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  AVFoundationVideoPlayerApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-    : pigeonVar_binaryMessenger = binaryMessenger,
-      pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
-          ? '.$messageChannelSuffix'
-          : '';
+  AVFoundationVideoPlayerApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -484,7 +517,11 @@ class AVFoundationVideoPlayerApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
-    _extractReplyValueOrThrow(pigeonVar_replyList, pigeonVar_channelName, isNullValid: true);
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   Future<int> createForPlatformView(CreationOptions params) async {
@@ -495,7 +532,9 @@ class AVFoundationVideoPlayerApi {
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[params]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[params],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
@@ -506,7 +545,9 @@ class AVFoundationVideoPlayerApi {
     return pigeonVar_replyValue! as int;
   }
 
-  Future<TexturePlayerIds> createForTextureView(CreationOptions creationOptions) async {
+  Future<TexturePlayerIds> createForTextureView(
+    CreationOptions creationOptions,
+  ) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.video_player_avfoundation.AVFoundationVideoPlayerApi.createForTextureView$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -514,7 +555,9 @@ class AVFoundationVideoPlayerApi {
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[creationOptions]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[creationOptions],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
@@ -533,10 +576,16 @@ class AVFoundationVideoPlayerApi {
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[mixWithOthers]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[mixWithOthers],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
-    _extractReplyValueOrThrow(pigeonVar_replyList, pigeonVar_channelName, isNullValid: true);
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   Future<String?> getAssetUrl(String asset, String? package) async {
@@ -547,7 +596,9 @@ class AVFoundationVideoPlayerApi {
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[asset, package]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[asset, package],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(

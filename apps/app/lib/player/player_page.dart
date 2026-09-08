@@ -214,7 +214,14 @@ class _PlayerPageState extends State<PlayerPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _library = AppScope.of(context).libraryController;
-    _pictureInPictureSession = AppScope.of(context).pictureInPictureSession;
+    final session = AppScope.of(context).pictureInPictureSession;
+    if (!identical(_pictureInPictureSession, session)) {
+      _pictureInPictureSession?.removeListener(
+        _onPictureInPicturePresentationChanged,
+      );
+      _pictureInPictureSession = session;
+      session.addListener(_onPictureInPicturePresentationChanged);
+    }
     _syncSystemUi();
     _progressTimer ??= Timer.periodic(
       _progressInterval,
@@ -300,7 +307,9 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    _pictureInPictureSession?.detach(widget);
+    _pictureInPictureSession
+      ?..removeListener(_onPictureInPicturePresentationChanged)
+      ..detach(widget);
     _progressTimer?.cancel();
     _stallTimer?.cancel();
     _renewalTimer?.cancel();
@@ -840,54 +849,56 @@ class _PlayerPageState extends State<PlayerPage> {
     _backInFlight = true;
     final controller = _controller;
     final initialized = controller?.value.value.initialized == true;
-    final pipEnabled = AppScope.of(
-      context,
-    ).pictureInPicturePreferenceController.enabled;
     if (kDebugMode) {
       debugPrint(
-        '[PlayerPiP] back_request initialized=$initialized enabled=$pipEnabled',
+        '[PlayerPiP] back_request initialized=$initialized mode=${_pictureInPictureSession?.mode.name}',
       );
     }
     if (controller?.isFullScreen == true) {
       unawaited(controller!.exitFullScreen());
     }
-    final wasPlaying = initialized && controller!.value.value.isPlaying;
-    final started = pipEnabled && initialized
-        ? await _requestPictureInPicture(controller!)
-        : false;
     if (!mounted) {
       _backInFlight = false;
       return;
     }
-    if (started) {
-      _resumeAfterPictureInPicture = wasPlaying;
-      _restorePlayPending = false;
-      _pictureInPictureSession?.setInteractionEnabled(false);
-      _backInFlight = false;
-      setState(() => _pipBackground = true);
-    } else {
-      _resumeAfterPictureInPicture = false;
-      _restorePlayPending = false;
-      // A failed PiP request must not leave the AVPlayer running after the
-      // player is detached from the session.
-      if (wasPlaying) await controller.pause();
-      if (!mounted) {
-        _backInFlight = false;
-        return;
-      }
+    if (!initialized) {
       _backInFlight = false;
       _popRoute();
+      return;
     }
+
+    _resumeAfterPictureInPicture = false;
+    _restorePlayPending = false;
+    _pictureInPictureSession?.minimize();
+    // Back is an in-app presentation change, not a native PiP request. Turn
+    // off automatic PiP before returning so closing the app from mini-player
+    // cannot promote this session into a floating native window.
+    await _syncNativePictureInPictureAllowed();
+    _backInFlight = false;
   }
 
-  Future<bool> _requestPictureInPicture(AppPlayerController controller) async {
+  void _onPictureInPicturePresentationChanged() {
+    unawaited(_syncNativePictureInPictureAllowed());
+  }
+
+  Future<void> _syncNativePictureInPictureAllowed() async {
+    if (!mounted) return;
+    final controller = _controller;
+    final policy = controller is AppPlayerPictureInPicturePolicy
+        ? controller as AppPlayerPictureInPicturePolicy
+        : null;
+    if (policy == null) return;
+    final preference = AppScope.of(
+      context,
+    ).pictureInPicturePreferenceController;
     try {
-      final started = await controller.startPictureInPicture();
-      if (kDebugMode) debugPrint('[PlayerPiP] start_result=$started');
-      return started;
+      await policy.setPictureInPictureAllowed(
+        (_pictureInPictureSession?.isFullScreen ?? true) && preference.enabled,
+      );
     } catch (error) {
-      if (kDebugMode) debugPrint('[PlayerPiP] start_error=$error');
-      return false;
+      if (kDebugMode) {
+        debugPrint('[PlayerPiP] eligibility_update_error=$error');
+      }
     }
   }
 
@@ -910,6 +921,9 @@ class _PlayerPageState extends State<PlayerPage> {
           ? controller as AppPlayerPictureInPictureRestorer
           : null;
       if (restorer != null) await restorer.completePictureInPictureRestore();
+      if (mounted && !_pipBackground) {
+        await _syncNativePictureInPictureAllowed();
+      }
       if (mounted && _restorePlayPending && !_pipBackground) {
         _restorePlayPending = false;
         unawaited(controller?.play());
@@ -1166,6 +1180,7 @@ class _PlayerPageState extends State<PlayerPage> {
             );
             _attachEventListener(controller);
             unawaited(controller.setFit(_fitMode));
+            unawaited(_syncNativePictureInPictureAllowed());
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});

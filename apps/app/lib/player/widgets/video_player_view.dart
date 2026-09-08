@@ -168,13 +168,18 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     // A platform view is still required for protected streams.
     final usePlatformView = stream.isProtected;
     final allowBackgroundPlayback = Platform.isIOS && !widget.preview;
+    final needsVideoPlayerOptions =
+        widget.isLive ||
+        allowBackgroundPlayback ||
+        (Platform.isIOS && widget.preview);
     return vp.VideoPlayerController.networkUrl(
       Uri.parse(stream.url),
       httpHeaders: stream.headers,
       isLive: widget.isLive,
-      videoPlayerOptions: widget.isLive || allowBackgroundPlayback
+      videoPlayerOptions: needsVideoPlayerOptions
           ? vp.VideoPlayerOptions(
               allowBackgroundPlayback: allowBackgroundPlayback,
+              allowPictureInPicture: !widget.preview,
               liveConfiguration: widget.isLive
                   ? widget.liveOptions ?? _defaultLiveOptions()
                   : null,

@@ -276,6 +276,15 @@ class MockVideoPlayerInstanceApi extends _i1.Mock
           as _i5.Future<void>);
 
   @override
+  _i5.Future<void> setPictureInPictureAllowed(bool? allowed) =>
+      (super.noSuchMethod(
+            Invocation.method(#setPictureInPictureAllowed, [allowed]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<bool> startPictureInPicture() =>
       (super.noSuchMethod(
             Invocation.method(#startPictureInPicture, []),

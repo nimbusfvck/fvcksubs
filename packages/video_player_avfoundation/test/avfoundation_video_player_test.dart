@@ -81,7 +81,10 @@ void main() {
         AVFoundationVideoPlayer player,
         _,
         MockVideoPlayerInstanceApi playerApi,
-      ) = setUpMockPlayer(playerId: 1, textureId: 101);
+      ) = setUpMockPlayer(
+        playerId: 1,
+        textureId: 101,
+      );
       when(playerApi.startPictureInPicture()).thenAnswer((_) async => true);
 
       expect(await player.startPictureInPicture(1), isTrue);
@@ -89,6 +92,20 @@ void main() {
 
       verify(playerApi.startPictureInPicture());
       verify(playerApi.stopPictureInPicture());
+    });
+
+    test('updates Picture in Picture eligibility', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: 1,
+      );
+
+      await player.setPictureInPictureAllowed(1, false);
+
+      verify(playerApi.setPictureInPictureAllowed(false));
     });
 
     test('create with asset', () async {
@@ -406,6 +423,37 @@ void main() {
         7000,
       );
       expect(creationOptions.liveConfiguration?.targetOffsetMs, 5000);
+    });
+
+    test('createWithOptions passes Picture in Picture permission', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        MockAVFoundationVideoPlayerApi api,
+        _,
+      ) = setUpMockPlayer(
+        playerId: 1,
+        textureId: 101,
+      );
+      when(
+        api.createForTextureView(any),
+      ).thenAnswer((_) async => TexturePlayerIds(playerId: 2, textureId: 102));
+
+      await player.createWithOptions(
+        VideoCreationOptions(
+          dataSource: DataSource(
+            sourceType: DataSourceType.network,
+            uri: 'https://example.com/preview.mp4',
+          ),
+          viewType: VideoViewType.textureView,
+          videoPlayerOptions: VideoPlayerOptions(allowPictureInPicture: false),
+        ),
+      );
+
+      final VerificationResult verification = verify(
+        api.createForTextureView(captureAny),
+      );
+      final creationOptions = verification.captured[0] as CreationOptions;
+      expect(creationOptions.allowPictureInPicture, false);
     });
 
     test('createWithOptions with file', () async {

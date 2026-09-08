@@ -377,10 +377,11 @@ void main() {
     await controller.close();
   });
 
-  testWidgets('player Back enters PiP and restores the player on expand', (
+  testWidgets('player Back minimizes without entering native PiP', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
+    final session = PictureInPictureSession();
 
     await tester.pumpWidget(
       wrapApp(
@@ -398,12 +399,12 @@ void main() {
         ),
         registry: ExtensionRegistry([]),
         player: player,
+        pictureInPictureSession: session,
       ),
     );
     await tester.pump();
 
     final controller = player.controllers.single;
-    controller.pictureInPictureResult = true;
     controller.emitValue(
       const AppPlayerValue(
         initialized: true,
@@ -416,16 +417,11 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(controller.pictureInPictureCalls, 1);
+    expect(controller.pictureInPictureCalls, 0);
+    expect(session.isMinimized, isTrue);
+    expect(controller.pictureInPictureAllowed, contains(false));
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(find.byType(DetailPageV2), findsNothing);
-
-    controller.emitPictureInPictureRestore();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-
-    expect(find.byType(PlayerPage), findsOneWidget);
-    expect(controller.playCalls, 1);
   });
 
   testWidgets('automatic PiP restores a playing player when expanded', (
@@ -492,7 +488,7 @@ void main() {
     expect(find.byType(PlayerPage), findsNothing);
   });
 
-  testWidgets('disabled PiP preference pops the player without starting PiP', (
+  testWidgets('disabled PiP preference keeps the mini-player in-app', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -526,11 +522,11 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 
+    expect(find.byType(PlayerPage), findsOneWidget);
     expect(controller.pictureInPictureCalls, 0);
-    expect(find.byType(PlayerPage), findsNothing);
   });
 
-  testWidgets('a failed PiP request pauses before closing the player', (
+  testWidgets('Back does not request native PiP or pause the mini-player', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -558,13 +554,11 @@ void main() {
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-
-    expect(controller.pictureInPictureCalls, 1);
-    expect(controller.pauseCalls, 1);
+    expect(controller.pictureInPictureCalls, 0);
+    expect(controller.pauseCalls, 0);
   });
 
-  testWidgets('live player Back enters PiP without creating a detail route', (
+  testWidgets('live player Back minimizes without creating a detail route', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -583,41 +577,30 @@ void main() {
     await tester.pump();
 
     final controller = player.controllers.single;
-    controller.pictureInPictureResult = true;
-
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 
-    expect(controller.pictureInPictureCalls, 1);
+    expect(controller.pictureInPictureCalls, 0);
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(find.byType(DetailPageV2), findsNothing);
     expect(find.text('Playing in Picture in Picture'), findsNothing);
-
-    controller.emitPictureInPictureRestore();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-
-    expect(find.text('Playing in Picture in Picture'), findsNothing);
-    expect(find.byType(PlayerPage), findsOneWidget);
   });
 
-  testWidgets('PiP player stays mounted while the caller stays usable', (
+  testWidgets('mini-player stays mounted while the caller stays underneath', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
     final session = PictureInPictureSession();
-    var callerTapped = false;
     final playerPage = PlayerPage(
       key: GlobalKey(),
       item: fakeItem(id: 'detached-pip'),
       resolvedSources: [_resolvedSource('detached', 'Source')],
     );
-
     await tester.pumpWidget(
       wrapApp(
         child: Scaffold(
           body: FilledButton(
-            onPressed: () => callerTapped = true,
+            onPressed: () {},
             child: const Text('Caller button'),
           ),
         ),
@@ -630,7 +613,6 @@ void main() {
     await tester.pump();
 
     final controller = player.controllers.single;
-    controller.pictureInPictureResult = true;
     controller.emitValue(
       const AppPlayerValue(
         initialized: true,
@@ -648,16 +630,8 @@ void main() {
     expect(find.text('Caller button'), findsOneWidget);
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(player.controllers, hasLength(1));
-
-    await tester.tap(find.text('Caller button'));
-    expect(callerTapped, isTrue);
-
-    controller.emitPictureInPictureRestore();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(PlayerPage), findsOneWidget);
-    expect(controller.playCalls, 1);
-    expect(controller.pictureInPictureRestoreCompletions, 1);
+    expect(session.isMinimized, isTrue);
+    expect(controller.pictureInPictureCalls, 0);
   });
 
   testWidgets('an external track stands in only where the source has none', (
@@ -834,7 +808,10 @@ class _PositionRecordingPlayer extends RecordingPlayer {
 }
 
 class _FakePlayerController
-    implements AppPlayerController, AppPlayerPictureInPictureRestorer {
+    implements
+        AppPlayerController,
+        AppPlayerPictureInPictureRestorer,
+        AppPlayerPictureInPicturePolicy {
   _FakePlayerController({AppPlayerValue initialValue = const AppPlayerValue()})
     : _value = ValueNotifier(initialValue);
 
@@ -846,6 +823,7 @@ class _FakePlayerController
   int pictureInPictureCalls = 0;
   int pauseCalls = 0;
   int playCalls = 0;
+  final List<bool> pictureInPictureAllowed = [];
   int pictureInPictureRestoreCompletions = 0;
 
   void emitError(Object error) {
@@ -932,6 +910,12 @@ class _FakePlayerController
 
   @override
   Future<void> exitFullScreen() async {}
+
+  @override
+  Future<void> setPictureInPictureAllowed(bool allowed) async {
+    pictureInPictureAllowed.add(allowed);
+  }
+
   @override
   Future<bool> startPictureInPicture() async {
     pictureInPictureCalls++;

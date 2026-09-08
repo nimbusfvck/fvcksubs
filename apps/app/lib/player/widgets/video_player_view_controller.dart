@@ -1,7 +1,10 @@
 part of 'video_player_view.dart';
 
 class _VideoPlayerControllerAdapter
-    implements AppPlayerController, AppPlayerPictureInPictureRestorer {
+    implements
+        AppPlayerController,
+        AppPlayerPictureInPictureRestorer,
+        AppPlayerPictureInPicturePolicy {
   _VideoPlayerControllerAdapter(
     this._player, {
     required this.onSetFit,
@@ -271,6 +274,11 @@ class _VideoPlayerControllerAdapter
   Future<void> exitFullScreen() async {}
   @override
   Future<bool> startPictureInPicture() => _player.startPictureInPicture();
+
+  @override
+  Future<void> setPictureInPictureAllowed(bool allowed) =>
+      _player.setPictureInPictureAllowed(allowed);
+
   @override
   Future<void> stopPictureInPicture() => _player.stopPictureInPicture();
 

@@ -892,6 +892,12 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     return _videoPlayerPlatform.startPictureInPicture(_playerId);
   }
 
+  /// Enables or disables native Picture in Picture for this player.
+  Future<void> setPictureInPictureAllowed(bool allowed) async {
+    if (_isDisposedOrNotInitialized) return;
+    await _videoPlayerPlatform.setPictureInPictureAllowed(_playerId, allowed);
+  }
+
   /// Stops Picture in Picture when it is active.
   Future<void> stopPictureInPicture() async {
     if (_isDisposed) return;

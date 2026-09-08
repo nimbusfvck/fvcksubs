@@ -113,6 +113,12 @@ class _MiniPlayerHostState extends State<MiniPlayerHost>
     _snapTo(shouldMinimize ? _dragThreshold : 0, minimize: shouldMinimize);
   }
 
+  void _onDragCancel() {
+    if (!_dragAccepted) return;
+    _dragAccepted = false;
+    _snapTo(0, minimize: false);
+  }
+
   void _snapTo(double target, {required bool minimize}) {
     final start = _dragOffset;
     _snapAnimation = Tween<double>(
@@ -350,16 +356,16 @@ class _MiniPlayerHostState extends State<MiniPlayerHost>
         ],
       ),
     );
-    if (mode != MiniPlayerMode.minimized && presentation.interactionEnabled) {
-      content = GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onVerticalDragStart: _onDragStart,
-        onVerticalDragUpdate: _onDragUpdate,
-        onVerticalDragEnd: _onDragEnd,
-        onVerticalDragCancel: () => _snapTo(0, minimize: false),
-        child: content,
-      );
-    }
+    // Keep this ancestor stable across the full-screen/mini transition so
+    // the hosted player is not temporarily deactivated and disposed.
+    content = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _onDragStart,
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      onVerticalDragCancel: _onDragCancel,
+      child: content,
+    );
 
     return Stack(
       fit: StackFit.expand,

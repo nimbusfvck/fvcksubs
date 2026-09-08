@@ -374,3 +374,9 @@ abstract interface class AppPlayerController {
 abstract interface class AppPlayerPictureInPictureRestorer {
   Future<void> completePictureInPictureRestore();
 }
+
+/// Optional bridge for changing native PiP eligibility as presentation moves
+/// between the full player and the in-app mini-player.
+abstract interface class AppPlayerPictureInPicturePolicy {
+  Future<void> setPictureInPictureAllowed(bool allowed);
+}

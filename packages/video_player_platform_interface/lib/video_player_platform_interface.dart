@@ -133,6 +133,11 @@ abstract class VideoPlayerPlatform extends PlatformInterface {
     bool preventsDisplaySleepDuringVideoPlayback,
   ) async {}
 
+  /// Enables or disables automatic and explicit native Picture in Picture.
+  ///
+  /// Platforms without native Picture in Picture ignore this call.
+  Future<void> setPictureInPictureAllowed(int playerId, bool allowed) async {}
+
   /// Starts Picture in Picture for the player when the platform supports it.
   ///
   /// Returns `true` only after the platform has accepted and started PiP.
@@ -531,6 +536,7 @@ class VideoPlayerOptions {
   VideoPlayerOptions({
     this.mixWithOthers = false,
     this.allowBackgroundPlayback = false,
+    this.allowPictureInPicture = true,
     this.preventsDisplaySleepDuringVideoPlayback = true,
     this.webOptions,
     this.backBufferDurationMs,
@@ -543,6 +549,13 @@ class VideoPlayerOptions {
   /// Set this to true to keep playing video in background, when app goes in background.
   /// The default value is false.
   final bool allowBackgroundPlayback;
+
+  /// Set this to false for inline videos that must never enter native Picture
+  /// in Picture automatically or through the player API.
+  ///
+  /// The default is true so existing full-player integrations keep their
+  /// Picture in Picture behavior.
+  final bool allowPictureInPicture;
 
   /// Set this to true to mix the video players audio with other audio sources.
   /// The default value is false

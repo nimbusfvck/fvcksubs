@@ -10,6 +10,10 @@ void main() {
     final options = VideoPlayerOptions();
     expect(options.allowBackgroundPlayback, false);
   });
+  test('VideoPlayerOptions allowPictureInPicture defaults to true', () {
+    final options = VideoPlayerOptions();
+    expect(options.allowPictureInPicture, true);
+  });
   test('VideoPlayerOptions mixWithOthers defaults to false', () {
     final options = VideoPlayerOptions();
     expect(options.mixWithOthers, false);

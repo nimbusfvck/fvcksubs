@@ -129,6 +129,10 @@ abstract class VideoPlayerInstanceApi {
     bool preventsDisplaySleepDuringVideoPlayback,
   );
 
+  /// Enables or disables automatic and explicit native Picture in Picture.
+  @ObjCSelector('setPictureInPictureAllowed:')
+  void setPictureInPictureAllowed(bool allowed);
+
   /// Starts PiP and completes only after AVKit reports that it started.
   @async
   @ObjCSelector('startPictureInPicture')

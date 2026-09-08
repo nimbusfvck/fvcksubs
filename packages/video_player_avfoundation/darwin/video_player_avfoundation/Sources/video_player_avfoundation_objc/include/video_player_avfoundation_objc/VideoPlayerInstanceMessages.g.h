@@ -108,6 +108,8 @@ NSObject<FlutterMessageCodec> *FVPGetVideoPlayerInstanceMessagesCodec(void);
 /// Pass 0 to enable auto quality selection.
 - (void)selectVideoTrackWithBitrate:(NSInteger)bitrate error:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setPreventsDisplaySleepDuringVideoPlayback:(BOOL)preventsDisplaySleepDuringVideoPlayback error:(FlutterError *_Nullable *_Nonnull)error;
+/// Enables or disables automatic and explicit native Picture in Picture.
+- (void)setPictureInPictureAllowed:(BOOL)allowed error:(FlutterError *_Nullable *_Nonnull)error;
 /// Starts PiP and completes only after AVKit reports that it started.
 - (void)startPictureInPicture:(void (^)(NSNumber *_Nullable, FlutterError *_Nullable))completion;
 - (void)stopPictureInPicture:(FlutterError *_Nullable *_Nonnull)error;

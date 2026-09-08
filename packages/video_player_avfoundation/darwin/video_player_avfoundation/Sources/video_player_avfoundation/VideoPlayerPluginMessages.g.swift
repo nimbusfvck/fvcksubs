@@ -376,6 +376,7 @@ struct PlatformLiveConfiguration: Hashable, CustomStringConvertible {
 struct CreationOptions: Hashable, CustomStringConvertible {
   var uri: String
   var isLive: Bool? = nil
+  var allowPictureInPicture: Bool? = nil
   var httpHeaders: [String: String]
   var fairPlayDrm: PlatformFairPlayDrmConfiguration? = nil
   var liveConfiguration: PlatformLiveConfiguration? = nil
@@ -384,13 +385,15 @@ struct CreationOptions: Hashable, CustomStringConvertible {
   static func fromList(_ pigeonVar_list: [Any?]) -> CreationOptions? {
     let uri = pigeonVar_list[0] as! String
     let isLive: Bool? = nilOrValue(pigeonVar_list[1])
-    let httpHeaders = pigeonVar_list[2] as! [String: String]
-    let fairPlayDrm: PlatformFairPlayDrmConfiguration? = nilOrValue(pigeonVar_list[3])
-    let liveConfiguration: PlatformLiveConfiguration? = nilOrValue(pigeonVar_list[4])
+    let allowPictureInPicture: Bool? = nilOrValue(pigeonVar_list[2])
+    let httpHeaders = pigeonVar_list[3] as! [String: String]
+    let fairPlayDrm: PlatformFairPlayDrmConfiguration? = nilOrValue(pigeonVar_list[4])
+    let liveConfiguration: PlatformLiveConfiguration? = nilOrValue(pigeonVar_list[5])
 
     return CreationOptions(
       uri: uri,
       isLive: isLive,
+      allowPictureInPicture: allowPictureInPicture,
       httpHeaders: httpHeaders,
       fairPlayDrm: fairPlayDrm,
       liveConfiguration: liveConfiguration
@@ -402,6 +405,7 @@ struct CreationOptions: Hashable, CustomStringConvertible {
       httpHeaders,
       fairPlayDrm,
       isLive,
+      allowPictureInPicture,
       liveConfiguration,
     ]
   }
@@ -413,6 +417,7 @@ struct CreationOptions: Hashable, CustomStringConvertible {
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.httpHeaders, rhs.httpHeaders)
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.fairPlayDrm, rhs.fairPlayDrm)
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.isLive, rhs.isLive)
+      && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.allowPictureInPicture, rhs.allowPictureInPicture)
       && VideoPlayerPluginMessagesPigeonInternal.deepEquals(lhs.liveConfiguration, rhs.liveConfiguration)
   }
 
@@ -422,12 +427,13 @@ struct CreationOptions: Hashable, CustomStringConvertible {
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: httpHeaders, hasher: &hasher)
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: fairPlayDrm, hasher: &hasher)
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: isLive, hasher: &hasher)
+    VideoPlayerPluginMessagesPigeonInternal.deepHash(value: allowPictureInPicture, hasher: &hasher)
     VideoPlayerPluginMessagesPigeonInternal.deepHash(value: liveConfiguration, hasher: &hasher)
   }
 
   public var description: String {
     return
-      "CreationOptions(uri: \(String(describing: uri)), httpHeaders: \(String(describing: httpHeaders)), fairPlayDrm: \(String(describing: fairPlayDrm)), isLive: \(String(describing: isLive)), liveConfiguration: \(String(describing: liveConfiguration)))"
+      "CreationOptions(uri: \(String(describing: uri)), httpHeaders: \(String(describing: httpHeaders)), fairPlayDrm: \(String(describing: fairPlayDrm)), isLive: \(String(describing: isLive)), allowPictureInPicture: \(String(describing: allowPictureInPicture)), liveConfiguration: \(String(describing: liveConfiguration)))"
   }
 }
 /// Generated class from Pigeon that represents data sent in messages.

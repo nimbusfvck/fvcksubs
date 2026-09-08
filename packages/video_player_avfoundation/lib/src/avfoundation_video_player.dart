@@ -102,6 +102,7 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     final pigeonCreationOptions = CreationOptions(
       uri: uri,
       isLive: options.isLive,
+      allowPictureInPicture: options.videoPlayerOptions?.allowPictureInPicture,
       httpHeaders: dataSource.httpHeaders,
       fairPlayDrm: fairPlayDrm,
       liveConfiguration: liveOptions == null
@@ -244,6 +245,11 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
   @override
   Future<bool> startPictureInPicture(int playerId) {
     return _playerWith(id: playerId).startPictureInPicture();
+  }
+
+  @override
+  Future<void> setPictureInPictureAllowed(int playerId, bool allowed) {
+    return _playerWith(id: playerId).setPictureInPictureAllowed(allowed);
   }
 
   @override
@@ -443,6 +449,9 @@ class _PlayerInstance {
   ) => _api.setPreventsDisplaySleepDuringVideoPlayback(
     preventsDisplaySleepDuringVideoPlayback,
   );
+
+  Future<void> setPictureInPictureAllowed(bool allowed) =>
+      _api.setPictureInPictureAllowed(allowed);
 
   Future<bool> startPictureInPicture() => _api.startPictureInPicture();
 
