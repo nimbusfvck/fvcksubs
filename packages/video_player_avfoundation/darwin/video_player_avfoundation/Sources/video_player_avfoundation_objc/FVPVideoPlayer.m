@@ -255,6 +255,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
   [_pictureInPicturePlayerLayer removeFromSuperlayer];
   _pictureInPicturePlayerLayer = playerLayer;
+  if (!self.allowPictureInPicture) {
+    return;
+  }
   [self armPictureInPicture];
 }
 
@@ -265,9 +268,22 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 
 - (void)setPictureInPictureAutomaticallyFromInline:(BOOL)enabled {
   self.allowPictureInPicture = enabled;
+  if (!enabled) {
+    // A preview must not retain an AVPictureInPictureController at all.
+    // Merely setting canStartPictureInPictureAutomaticallyFromInline to NO
+    // still leaves AVKit a live PiP candidate during app backgrounding.
+    if (self.pictureInPictureController.pictureInPictureActive ||
+        self.pictureInPictureStartPending) {
+      NSLog(@"[FVPVideoPlayer] refusing to disable active PiP");
+      return;
+    }
+    self.pictureInPictureController = nil;
+    return;
+  }
   if (@available(iOS 14.2, *)) {
     self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = enabled;
   }
+  [self armPictureInPicture];
 }
 
 - (void)setPictureInPictureAllowed:(BOOL)allowed
@@ -276,6 +292,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)armPictureInPicture {
+  if (!self.allowPictureInPicture) {
+    return;
+  }
   if (![AVPictureInPictureController isPictureInPictureSupported]) {
     return;
   }
