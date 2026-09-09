@@ -38,10 +38,12 @@ const Duration _progressInterval = Duration(seconds: 10);
 const Duration _stallSampleInterval = Duration(seconds: 2);
 
 /// A live player may leave its buffering flag set while its forward window is
-/// still healthy. Only a sustained empty forward window is strong enough to
-/// discard the native player and resolve a fresh stream.
+/// still healthy. A sustained empty window, frozen position, or backward jump
+/// is strong enough to discard the native player and resolve a fresh stream.
 const Duration _liveBufferingRecoveryThreshold = Duration(seconds: 8);
 const Duration _liveForwardBufferThreshold = Duration(seconds: 1);
+const Duration _livePositionProgressTolerance = Duration(milliseconds: 250);
+const Duration _renewalStabilityThreshold = Duration(seconds: 20);
 const Duration _orientationReleaseDelay = Duration(milliseconds: 260);
 
 /// How many failures in a row are answered by re-resolving the same source
@@ -80,13 +82,27 @@ Duration liveForwardBuffer({
 bool liveBufferingNeedsRecovery({
   required Duration position,
   required Duration bufferedPosition,
+  Duration? previousPosition,
   required bool isPlaying,
   required bool isBuffering,
-}) =>
-    isPlaying &&
-    isBuffering &&
-    liveForwardBuffer(position: position, bufferedPosition: bufferedPosition) <=
-        _liveForwardBufferThreshold;
+}) {
+  if (!isPlaying || !isBuffering) return false;
+  final forwardBuffer = liveForwardBuffer(
+    position: position,
+    bufferedPosition: bufferedPosition,
+  );
+  if (forwardBuffer <= _liveForwardBufferThreshold) return true;
+  if (previousPosition == null) return false;
+  return position <= previousPosition + _livePositionProgressTolerance;
+}
+
+@visibleForTesting
+bool playbackIsStableForRenewalReset({
+  required bool isLive,
+  required Duration position,
+  required bool isPlaying,
+  required bool isBuffering,
+}) => isPlaying && !isBuffering && (!isLive || position > Duration.zero);
 
 class PlayerPage extends StatefulWidget {
   PlayerPage({
@@ -136,8 +152,10 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _renewalTimer;
   final PlaybackStallDetector _stallDetector = PlaybackStallDetector();
   DateTime? _liveBufferingSince;
+  Duration? _lastLivePosition;
   bool _renewing = false;
   DateTime? _lastRenewalAt;
+  DateTime? _renewalStableSince;
   int _consecutiveRenewals = 0;
   ValueListenable<AppPlayerValue>? _videoValue;
   AppPlayerController? _trackedPositionController;
@@ -374,8 +392,31 @@ class _PlayerPageState extends State<PlayerPage> {
       _armRenewalTimer();
     }
     if (_pipBackground) _resumeAfterPictureInPicture = value.isPlaying;
+    _updateRenewalStability(value);
     _lastPosition = value.position;
     _lastDuration = value.duration;
+  }
+
+  void _updateRenewalStability(AppPlayerValue value) {
+    if (_consecutiveRenewals == 0) return;
+    final stable = playbackIsStableForRenewalReset(
+      isLive: _isLive,
+      position: value.position,
+      isPlaying: value.isPlaying,
+      isBuffering: value.isBuffering,
+    );
+    if (!stable) {
+      _renewalStableSince = null;
+      return;
+    }
+    final since = _renewalStableSince ??= DateTime.now();
+    if (DateTime.now().difference(since) < _renewalStabilityThreshold) return;
+    _consecutiveRenewals = 0;
+    _lastRenewalAt = null;
+    _renewalStableSince = null;
+    if (kDebugMode) {
+      debugPrint('[PlaybackSources] renewal_counter_reset stable_playback');
+    }
   }
 
   void _attachEventListener(AppPlayerController controller) {
@@ -566,7 +607,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer = null;
     _stallDetector.reset();
     _consecutiveRenewals = 0;
+    _renewalStableSince = null;
     _sourceStarted = false;
+    _lastLivePosition = null;
     setState(() {
       _waitingForFallback = false;
       _retrying = true;
@@ -634,6 +677,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _sampleLiveBuffering(value);
       return;
     }
+    _lastLivePosition = null;
     final stalled = _stallDetector.sample(
       position: value.position,
       bufferedPosition: value.bufferedPosition,
@@ -649,9 +693,11 @@ class _PlayerPageState extends State<PlayerPage> {
     final stalled = liveBufferingNeedsRecovery(
       position: value.position,
       bufferedPosition: value.bufferedPosition,
+      previousPosition: _lastLivePosition,
       isPlaying: value.isPlaying,
       isBuffering: value.isBuffering,
     );
+    _lastLivePosition = value.position;
     if (!stalled) {
       _liveBufferingSince = null;
       return;
@@ -732,6 +778,8 @@ class _PlayerPageState extends State<PlayerPage> {
       _detachPositionListener();
       _stallDetector.reset();
       _sourceStarted = false;
+      _renewalStableSince = null;
+      _lastLivePosition = null;
       setState(() {
         _pendingSwitchPosition = position;
         _resolvedSources[_currentIndex] = ResolvedSource(
@@ -1059,7 +1107,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer = null;
     _stallDetector.reset();
     _liveBufferingSince = null;
+    _lastLivePosition = null;
     _consecutiveRenewals = 0;
+    _renewalStableSince = null;
     _failedSourceIds.remove(picked.source.id);
     _pendingFallbackSourceId = null;
     _pendingFallbackError = null;

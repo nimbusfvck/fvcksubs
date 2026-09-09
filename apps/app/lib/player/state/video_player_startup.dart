@@ -146,6 +146,7 @@ class VideoPlayerStartup {
   }
 
   Future<void> refreshAfterMetadata() async {
+    if (_hasUsableTrackMetadata) return;
     var attempt = 0;
     for (final delay in const [
       Duration(seconds: 1),
@@ -167,9 +168,13 @@ class VideoPlayerStartup {
               'attempt=$attempt '
               'audio=${controller.audioTracks.length} video=${controller.qualityTracks.length}',
         );
+        if (_hasUsableTrackMetadata) return;
       } catch (_) {
         log('tracks_retry_failed', details: 'attempt=$attempt');
       }
     }
   }
+
+  bool get _hasUsableTrackMetadata =>
+      controller.audioTracks.isNotEmpty && controller.qualityTracks.isNotEmpty;
 }

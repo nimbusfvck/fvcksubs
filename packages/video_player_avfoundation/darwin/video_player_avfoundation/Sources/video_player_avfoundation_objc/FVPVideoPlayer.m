@@ -25,6 +25,61 @@ static void *rateContext = &rateContext;
 /// https://developer.apple.com/documentation/avfoundation/avpartialasyncproperty/variants
 static NSString *const kFVPAssetVariantsKey = @"variants";
 
+static NSString *FVPTimeDescription(CMTime time) {
+  if (!CMTIME_IS_NUMERIC(time)) {
+    return @"invalid";
+  }
+  return [NSString stringWithFormat:@"%.3f", CMTimeGetSeconds(time)];
+}
+
+static NSString *FVPRangesDescription(NSArray<NSValue *> *ranges) {
+  if (ranges.count == 0) {
+    return @"[]";
+  }
+  NSMutableArray<NSString *> *descriptions = [NSMutableArray array];
+  for (NSValue *rangeValue in ranges) {
+    CMTimeRange range = [rangeValue CMTimeRangeValue];
+    CMTime end = CMTimeAdd(range.start, range.duration);
+    [descriptions addObject:[NSString stringWithFormat:@"{%@+%@=%@}",
+                                                          FVPTimeDescription(range.start),
+                                                          FVPTimeDescription(range.duration),
+                                                          FVPTimeDescription(end)]];
+  }
+  return [NSString stringWithFormat:@"[%@]", [descriptions componentsJoinedByString:@", "]];
+}
+
+static NSString *FVPTimeControlStatusDescription(AVPlayerTimeControlStatus status) {
+  switch (status) {
+    case AVPlayerTimeControlStatusPaused:
+      return @"paused";
+    case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
+      return @"waiting";
+    case AVPlayerTimeControlStatusPlaying:
+      return @"playing";
+  }
+  return @"unknown";
+}
+
+static void FVPLogBufferDiagnostics(AVPlayer *player, NSString *trigger) {
+#if DEBUG
+  AVPlayerItem *item = player.currentItem;
+  if (item == nil) {
+    NSLog(@"[FVPBuffer] trigger=%@ item=nil", trigger);
+    return;
+  }
+  NSLog(@"[FVPBuffer] trigger=%@ position_s=%@ rate=%.3f time_control=%@ "
+        @"reason=%@ likely_to_keep_up=%@ loaded=%@ seekable=%@",
+        trigger,
+        FVPTimeDescription(player.currentTime),
+        player.rate,
+        FVPTimeControlStatusDescription(player.timeControlStatus),
+        player.reasonForWaitingToPlay ?: @"none",
+        item.isPlaybackLikelyToKeepUp ? @"true" : @"false",
+        FVPRangesDescription(item.loadedTimeRanges),
+        FVPRangesDescription(item.seekableTimeRanges));
+#endif
+}
+
 #if TARGET_OS_IOS
 @interface FVPVideoPlayer () <AVPictureInPictureControllerDelegate>
 @property(nonatomic, strong, nullable) AVPictureInPictureController *pictureInPictureController;
@@ -545,6 +600,10 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
                                              selector:@selector(itemDidPlayToEndTime:)
                                                  name:AVPlayerItemDidPlayToEndTimeNotification
                                                object:item];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(itemPlaybackStalled:)
+                                                 name:AVPlayerItemPlaybackStalledNotification
+                                               object:item];
     _listenersRegistered = YES;
   }
 }
@@ -556,6 +615,11 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   } else {
     [self.eventListener videoPlayerDidComplete];
   }
+}
+
+- (void)itemPlaybackStalled:(NSNotification *)notification {
+  (void)notification;
+  FVPLogBufferDiagnostics(self.player, @"playback_stalled_notification");
 }
 
 const int64_t TIME_UNSET = -9223372036854775807;
@@ -641,11 +705,15 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
       ]];
     }
     [self.eventListener videoPlayerDidUpdateSeekableTimeRanges:seekableValues];
+    FVPLogBufferDiagnostics(self.player, @"time_ranges_changed");
   } else if (context == statusContext) {
     AVPlayerItem *item = (AVPlayerItem *)object;
     [self reportStatusForPlayerItem:item];
   } else if (context == playbackLikelyToKeepUpContext) {
     [self updatePlayingState];
+    FVPLogBufferDiagnostics(
+        self.player,
+        [[_player currentItem] isPlaybackLikelyToKeepUp] ? @"likely_to_keep_up" : @"fell_behind");
     if ([[_player currentItem] isPlaybackLikelyToKeepUp]) {
       [self.eventListener videoPlayerDidEndBuffering];
     } else {

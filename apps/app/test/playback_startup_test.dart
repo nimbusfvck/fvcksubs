@@ -174,6 +174,19 @@ void main() {
   );
 
   test(
+    'does not poll native tracks after metadata is already complete',
+    () async {
+      final player = _NativePlayer(_stream.url);
+      final controller = _Controller(player.calls);
+      final startup = _startup(player, controller);
+
+      await startup.refreshAfterMetadata();
+
+      expect(player.calls, isEmpty);
+    },
+  );
+
+  test(
     'replacement during initial seek cannot start the old controller',
     () async {
       final player = _NativePlayer(_stream.url)..seekGate = Completer<void>();
@@ -276,6 +289,12 @@ class _Controller extends FakeAppPlayerController {
   _Controller(this.calls);
   final List<String> calls;
   int qualityCalls = 0;
+
+  @override
+  List<AppAudioTrack> get audioTracks => const [
+    AppAudioTrack(id: 'audio', label: 'Audio'),
+  ];
+
   @override
   List<AppQualityTrack> get qualityTracks => const [
     AppQualityTrack(id: '720', height: 720),

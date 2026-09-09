@@ -17,7 +17,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'support/harness.dart';
 
 void main() {
-  test('live buffering uses forward buffer instead of absolute buffer end', () {
+  test('live buffering and renewal health use playback progress', () {
     expect(
       liveForwardBuffer(
         position: const Duration(milliseconds: 107750),
@@ -38,6 +38,53 @@ void main() {
       liveBufferingNeedsRecovery(
         position: const Duration(milliseconds: 106323),
         bufferedPosition: const Duration(milliseconds: 107839),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isFalse,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(seconds: 12),
+        bufferedPosition: const Duration(milliseconds: 17802),
+        previousPosition: const Duration(milliseconds: 17943),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(seconds: 12),
+        bufferedPosition: const Duration(milliseconds: 17802),
+        previousPosition: const Duration(seconds: 12),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: const Duration(seconds: 20),
+        isPlaying: true,
+        isBuffering: false,
+      ),
+      isTrue,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: Duration.zero,
+        isPlaying: true,
+        isBuffering: false,
+      ),
+      isFalse,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: const Duration(seconds: 20),
         isPlaying: true,
         isBuffering: true,
       ),
