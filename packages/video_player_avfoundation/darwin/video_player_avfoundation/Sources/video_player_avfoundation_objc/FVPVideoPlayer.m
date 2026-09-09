@@ -33,6 +33,7 @@ static NSString *const kFVPAssetVariantsKey = @"variants";
 @property(nonatomic, copy, nullable) void (^pictureInPictureRestoreCompletion)(BOOL);
 @property(nonatomic) BOOL pictureInPictureStartPending;
 @property(nonatomic) BOOL pictureInPictureRestoreRequested;
+@property(nonatomic) BOOL pictureInPictureRestorePending;
 @property(nonatomic) BOOL disposeRequestedWhilePictureInPicture;
 @property(nonatomic) BOOL allowPictureInPicture;
 @end
@@ -408,6 +409,18 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)completePictureInPictureRestore:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.pictureInPictureRestorePending) {
+    self.pictureInPictureRestorePending = NO;
+    self.pictureInPicturePlayerLayer.hidden = NO;
+    if (self.pictureInPicturePlayerView != nil) {
+      self.pictureInPicturePlayerView.userInteractionEnabled = YES;
+      self.pictureInPicturePlayerLayer.opacity = 1.0f;
+    } else {
+      // Texture playback renders through Flutter; this layer is only AVKit's
+      // PiP source and must remain invisible after the restore.
+      self.pictureInPicturePlayerLayer.opacity = 0.0f;
+    }
+  }
   void (^completionHandler)(BOOL) = self.pictureInPictureRestoreCompletion;
   self.pictureInPictureRestoreCompletion = nil;
   if (completionHandler != nil) {
@@ -418,6 +431,7 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 - (void)pictureInPictureControllerDidStartPictureInPicture:
     (AVPictureInPictureController *)pictureInPictureController {
   NSLog(@"[FVPVideoPlayer] PiP did start");
+  self.pictureInPictureRestorePending = NO;
   self.pictureInPicturePlayerView.userInteractionEnabled = NO;
   self.pictureInPictureRestoreRequested = NO;
   self.pictureInPictureStartPending = NO;
@@ -479,15 +493,18 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
         .canStartPictureInPictureAutomaticallyFromInline = NO;
   }
   AVPlayerLayer *playerLayer = self.pictureInPictureController.playerLayer;
-  playerLayer.hidden = NO;
+  self.pictureInPictureRestorePending = YES;
+  // Keep the native surface hidden until Flutter has restored the persistent
+  // host to the presentation it had before PiP (full-screen or mini-player).
+  // Revealing it here lets the original full-size layer flash above the host.
+  playerLayer.hidden = YES;
   // Texture playback already renders through Flutter. Its AVPlayerLayer is
   // attached only as AVKit's PiP source and must remain invisible after
   // restore, otherwise it sits above Flutter controls and the caller route.
   // Platform-view playback owns a visible native view and needs the layer
   // revealed again.
   if (self.pictureInPicturePlayerView != nil) {
-    self.pictureInPicturePlayerView.userInteractionEnabled = YES;
-    playerLayer.opacity = 1.0f;
+    self.pictureInPicturePlayerView.userInteractionEnabled = NO;
   } else {
     playerLayer.opacity = 0.0f;
   }

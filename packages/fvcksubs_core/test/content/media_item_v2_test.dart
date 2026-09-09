@@ -13,6 +13,7 @@ void main() {
       ref: ref,
       title: 'Standalone video',
       subtitle: 'Drama',
+      tags: ['dracin', 'dramaverse'],
       releaseYear: 2026,
       rating: 8.7,
       artwork: Artwork(
@@ -22,6 +23,27 @@ void main() {
     );
 
     expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('item tags require non-empty strings', () {
+    final item = MediaItemV2.fromJson({
+      'ref': ref.toJson(),
+      'kind': 'video',
+      'title': 'Tagged video',
+      'tags': [' dracin ', 'storyreel'],
+    });
+
+    expect(item.tags, ['dracin', 'storyreel']);
+    expect(item.toJson()['tags'], ['dracin', 'storyreel']);
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid tags',
+        'tags': [''],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('common display metadata rejects invalid values', () {

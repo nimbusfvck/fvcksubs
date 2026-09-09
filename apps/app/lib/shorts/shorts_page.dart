@@ -36,6 +36,7 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
   bool _controllerReady = false;
   final PageController _pageController = PageController();
   int _currentIndex = 0;
+  String? _selectedTag;
 
   // Session-only per source plan §4: starts muted every time Shorts is
   // entered, persists across pages only within this visit. The fill mode
@@ -55,7 +56,7 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
       _controllerReady = true;
       unawaited(
         _controller.load().then((_) {
-          if (mounted) _resolveAround(0);
+          if (mounted) _resolveAround(0, _visibleItems(_controller.state));
         }),
       );
     }
@@ -90,11 +91,43 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
 
   void _onPageChanged(int index) {
     setState(() => _currentIndex = index);
-    _resolveAround(index);
+    _resolveAround(index, _visibleItems(_controller.state));
   }
 
-  void _resolveAround(int index) {
-    final items = _controller.state.items;
+  List<VersionedMediaItem> _visibleItems(ShortsState state) {
+    final selectedTag = _selectedTag;
+    if (selectedTag == null) return state.items;
+    return [
+      for (final entry in state.items)
+        if (entry.item.tags.contains(selectedTag)) entry,
+    ];
+  }
+
+  List<String> _availableTags(Iterable<VersionedMediaItem> items) {
+    final tags = <String>[];
+    final seen = <String>{};
+    for (final entry in items) {
+      if (entry.item.tags.isEmpty) continue;
+      final firstTag = entry.item.tags.first;
+      if (firstTag.isNotEmpty && seen.add(firstTag)) tags.add(firstTag);
+    }
+    return tags;
+  }
+
+  void _selectTag(String? tag) {
+    if (_selectedTag == tag) return;
+    setState(() {
+      _selectedTag = tag;
+      _currentIndex = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      _pageController.jumpToPage(0);
+      _resolveAround(0, _visibleItems(_controller.state));
+    });
+  }
+
+  void _resolveAround(int index, List<VersionedMediaItem> items) {
     if (index >= 0 && index < items.length) {
       final item = items[index].item;
       unawaited(_controller.ensurePreviewResolved(item));
@@ -145,7 +178,9 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not start playback for "${item.title}".')),
+        SnackBar(
+          content: Text('Could not start playback for "${item.title}".'),
+        ),
       );
     }
   }
@@ -156,11 +191,12 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
     body: BlocConsumer<ShortsController, ShortsState>(
       bloc: _controller,
       listener: (context, state) {
-        if (state.items.isEmpty || !_routeVisible) return;
-        final index = _currentIndex.clamp(0, state.items.length - 1);
-        final current = state.items[index].item;
+        final items = _visibleItems(state);
+        if (items.isEmpty || !_routeVisible) return;
+        final index = _currentIndex.clamp(0, items.length - 1);
+        final current = items[index].item;
         if (state.previewFor(current.ref).status == PreviewStatus.unusable) {
-          _advanceToNext(index, state.items.length);
+          _advanceToNext(index, items.length);
         }
       },
       builder: (context, state) {
@@ -171,17 +207,15 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
               actionLabel: 'Retry',
               onAction: () => unawaited(_controller.retry()),
             ),
-            ShortsStatus.usable ||
-            ShortsStatus.empty => const _ShortsMessage(
+            ShortsStatus.usable || ShortsStatus.empty => const _ShortsMessage(
               message: 'No previews are available right now.',
             ),
-            ShortsStatus.initial ||
-            ShortsStatus.loading => const Center(
+            ShortsStatus.initial || ShortsStatus.loading => const Center(
               child: CircularProgressIndicator(color: AppColors.onDark),
             ),
           };
         }
-        return _viewportFor(context, _feed(state));
+        return _viewportFor(context, _feed(state, _visibleItems(state)));
       },
     ),
   );
@@ -191,40 +225,121 @@ class _ShortsPageState extends State<ShortsPage> with RouteAware {
       ? feed
       : Center(child: SizedBox(width: 420, child: feed));
 
-  Widget _feed(ShortsState state) => RefreshIndicator(
-    onRefresh: _controller.refresh,
-    child: PageView.builder(
-      controller: _pageController,
-      scrollDirection: Axis.vertical,
-      onPageChanged: _onPageChanged,
-      itemCount: state.items.length,
-      itemBuilder: (context, index) {
-        final item = state.items[index].item;
-        // Only the active page gets a preview resolution to render — an
-        // adjacent, not-yet-current page stays on artwork, so only one
-        // native player exists at a time (source plan §3/§5).
-        final isCurrent = index == _currentIndex && _routeVisible;
-        return ShortsFeedCard(
-          item: item,
-          detail: state.detailFor(item.ref),
-          previewResolution: isCurrent ? state.previewFor(item.ref) : const PreviewResolution(),
-          muted: _muted,
-          playing: isCurrent,
-          fit: _fitMode,
-          onToggleMute: _toggleMute,
-          onToggleFit: _toggleFit,
-          onReady: () {},
-          onCompleted: () => _advanceToNext(index, state.items.length),
-          onError: (_) => _advanceToNext(index, state.items.length),
-          onWatch: () => _watch(item, state.detailFor(item.ref)),
-        );
-      },
-    ),
+  Widget _feed(ShortsState state, List<VersionedMediaItem> items) => Stack(
+    fit: StackFit.expand,
+    children: [
+      if (items.isEmpty)
+        const _ShortsMessage(message: 'No Shorts match this tag.')
+      else
+        RefreshIndicator(
+          onRefresh: _controller.refresh,
+          child: PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.vertical,
+            onPageChanged: _onPageChanged,
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index].item;
+              // Only the active page gets a preview resolution to render — an
+              // adjacent, not-yet-current page stays on artwork, so only one
+              // native player exists at a time (source plan §3/§5).
+              final isCurrent = index == _currentIndex && _routeVisible;
+              return ShortsFeedCard(
+                item: item,
+                detail: state.detailFor(item.ref),
+                previewResolution: isCurrent
+                    ? state.previewFor(item.ref)
+                    : const PreviewResolution(),
+                muted: _muted,
+                playing: isCurrent,
+                fit: _fitMode,
+                onToggleMute: _toggleMute,
+                onToggleFit: _toggleFit,
+                onReady: () {},
+                onCompleted: () => _advanceToNext(index, items.length),
+                onError: (_) => _advanceToNext(index, items.length),
+                onWatch: () => _watch(item, state.detailFor(item.ref)),
+              );
+            },
+          ),
+        ),
+      _ShortsTagFilter(
+        tags: _availableTags(state.items),
+        selected: _selectedTag,
+        onSelected: _selectTag,
+      ),
+    ],
   );
 }
 
+class _ShortsTagFilter extends StatelessWidget {
+  const _ShortsTagFilter({
+    required this.tags,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> tags;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.xxl + AppSpacing.md,
+            AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              _chip(label: 'All', value: null),
+              for (final tag in tags) _chip(label: _label(tag), value: tag),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip({required String label, required String? value}) => Padding(
+    padding: const EdgeInsets.only(right: AppSpacing.xs),
+    child: ChoiceChip(
+      label: Text(label),
+      selected: selected == value,
+      onSelected: (_) => onSelected(value),
+      showCheckmark: false,
+      labelStyle: AppTypography.titleSm.copyWith(
+        color: selected == value ? AppColors.surfaceDark : AppColors.onDark,
+      ),
+      backgroundColor: Colors.black.withValues(alpha: 0.45),
+      selectedColor: AppColors.onDark.withValues(alpha: 0.78),
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    ),
+  );
+
+  static String _label(String tag) =>
+      tag.isEmpty ? tag : tag[0].toUpperCase() + tag.substring(1);
+}
+
 class _ShortsMessage extends StatelessWidget {
-  const _ShortsMessage({required this.message, this.actionLabel, this.onAction});
+  const _ShortsMessage({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String message;
   final String? actionLabel;

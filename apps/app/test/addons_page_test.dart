@@ -114,6 +114,35 @@ void main() {
     },
   );
 
+  testWidgets('a catalog-only provider gets its own switch', (tester) async {
+    final registry = ExtensionRegistry([_CatalogOnlyExtension()]);
+    final controller = AddonsController(
+      registry: registry,
+      store: FakeAddonSettingsStore(),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const AddonsPage(),
+        registry: registry,
+        addonsController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('catalog-only'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('LayarKaca'), findsOneWidget);
+    expect(find.text('Catalog'), findsOneWidget);
+    final providerSwitch = find.byType(SwitchListTile).at(1);
+    await tester.tap(providerSwitch);
+    await tester.pumpAndSettle();
+
+    expect(registry.isProviderEnabled('catalog-only.p'), isFalse);
+    expect(registry.isExtensionEnabled('catalog-only'), isTrue);
+  });
+
   testWidgets('uses the provider display name without exposing its id', (
     tester,
   ) async {
@@ -161,6 +190,53 @@ void main() {
     );
     expect(checkButton, findsOneWidget);
     expect(tester.widget<OutlinedButton>(checkButton).onPressed, isNotNull);
+  });
+
+  testWidgets('repository selection offers Update for an installed extension', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      FakeExtension(id: 'fake', version: '1.0.0'),
+    ]);
+    final store = FakeInstalledExtensionStore();
+    await store.save(
+      InstalledExtension(
+        id: 'fake',
+        version: '1.0.0',
+        manifestJson: jsonEncode(registry.installed.single.toJson()),
+        bundleJs: '',
+      ),
+    );
+    final controller = InstallerController(
+      registry: registry,
+      installer: _TestExtensionInstaller(
+        ExtensionRepo([_repoEntry('fake', version: '2.0.0')]),
+      ),
+      installedStore: store,
+      repoStore: FakeRepoStore(),
+      repoUrl: 'repo://test',
+      loadExtension: (manifest, source) =>
+          FakeExtension(id: manifest.id, version: manifest.version),
+      requestConsent: (_) async => true,
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const AddonsPage(),
+        registry: registry,
+        installerController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Check'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, 'Update'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+    await tester.pumpAndSettle();
+    expect(registry.installed.single.version, '2.0.0');
   });
 
   testWidgets('remove asks for confirmation and uninstalls the extension', (
@@ -479,11 +555,44 @@ void main() {
   });
 }
 
-ExtensionRepoEntry _repoEntry(String id) => ExtensionRepoEntry(
-  id: id,
-  name: id,
-  version: '1.0.0',
-  manifestUrl: 'repo://$id/manifest.json',
-  bundleUrl: 'repo://$id/bundle.js',
-  bundleSha256: '',
-);
+ExtensionRepoEntry _repoEntry(String id, {String version = '1.0.0'}) =>
+    ExtensionRepoEntry(
+      id: id,
+      name: id,
+      version: version,
+      manifestUrl: 'repo://$id/manifest.json',
+      bundleUrl: 'repo://$id/bundle.js',
+      bundleSha256: '',
+    );
+
+class _CatalogOnlyExtension extends ContentExtension {
+  _CatalogOnlyExtension()
+    : _manifest = Manifest.parse({
+        'apiVersion': 2,
+        'id': 'catalog-only',
+        'name': 'catalog-only',
+        'version': '1.0.0',
+        'runtime': 'builtin',
+        'categories': ['movie'],
+        'providers': [
+          {
+            'id': 'catalog-only.p',
+            'name': 'LayarKaca',
+            'roles': ['catalog', 'meta'],
+            'catalogs': [
+              {
+                'id': 'layarkaca',
+                'name': 'LayarKaca',
+                'categories': ['movie'],
+              },
+            ],
+          },
+        ],
+        'permissions': {'hosts': <String>[]},
+      });
+
+  final Manifest _manifest;
+
+  @override
+  Manifest get manifest => _manifest;
+}

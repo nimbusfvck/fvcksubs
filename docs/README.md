@@ -33,6 +33,9 @@ Browse or search → Select content → Select source → Resolve → Play
 | 12 | [App Engineering Guidelines](12-app-engineering-guidelines.md) | Feature ownership, Cubit, dependency injection, errors, comments, and tests |
 | 13 | [Issue Fix Workflow](13-issue-fix-workflow.md) | Evidence-led root-cause investigation, implementation, validation, and handoff |
 | 14 | [Shorts Preview Feed Plan](14-shorts-preview-feed-plan.md) | Backward-compatible preview contracts, player adapters, Shorts UX, and delivery order |
+| 15 | [Playback Session Architecture](15-playback-session-architecture.md) | Playback ownership, source resolution, native surface identity, and presentation boundaries |
+| 16 | [Playback Session Migration Plan](16-playback-session-migration-plan.md) | Incremental extraction phases, exit criteria, validation matrix, and rollback boundaries |
+| 17 | [Playback Performance Plan](17-playback-performance-plan.md) | Readiness gates, startup, lag, buffering, recovery, thermal/energy measurements, and watching-experience safeguards |
 
 Extension authors can use the dependency-free [JavaScript SDK](../sdk/js/README.md)
 for provider registration, role dispatch, restart-safe source ids, and editor

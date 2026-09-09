@@ -314,7 +314,7 @@ void main() {
         initialized: true,
         isPlaying: true,
         position: Duration(seconds: 60),
-        duration: Duration(minutes: 2),
+        duration: Duration(minutes: 11),
       ),
     );
 
@@ -339,7 +339,7 @@ void main() {
         initialized: true,
         isPlaying: true,
         position: Duration(seconds: 90),
-        duration: Duration(minutes: 2),
+        duration: Duration(minutes: 11),
       ),
     );
     await tester.pump();
@@ -371,8 +371,8 @@ void main() {
       const AppPlayerValue(
         initialized: true,
         isPlaying: true,
-        position: Duration(seconds: 59),
-        duration: Duration(minutes: 2),
+        position: Duration(minutes: 9, seconds: 59),
+        duration: Duration(minutes: 11),
       ),
     );
 
@@ -389,11 +389,66 @@ void main() {
       const AppPlayerValue(
         initialized: true,
         isPlaying: true,
-        position: Duration(seconds: 60),
-        duration: Duration(minutes: 2),
+        position: Duration(minutes: 10),
+        duration: Duration(minutes: 11),
       ),
     );
     await tester.pump();
+    expect(nearEndCalls, 1);
+  });
+
+  testWidgets('short episodes still trigger up-next', (tester) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-short',
+      ),
+      title: 'Short episode',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    var nearEndCalls = 0;
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 4, seconds: 30),
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        playbackSegments: const [
+          PlaybackSegment(
+            type: PlaybackSegmentType.outro,
+            startMs: 30000,
+            endMs: 60000,
+          ),
+        ],
+        onNearEnd: () => nearEndCalls++,
+      ),
+    );
+    controller.update(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 4, seconds: 31),
+        duration: Duration(minutes: 10),
+      ),
+    );
+    await tester.pump();
+
     expect(nearEndCalls, 1);
   });
 
@@ -761,7 +816,7 @@ Widget _controls(
     ],
     currentIndex: 0,
     onChangeSource: () {},
-    onBack: () {},
+    onMinimize: () {},
     isLive: false,
     episodeGuide: episodeGuide,
     playbackSegments: playbackSegments,

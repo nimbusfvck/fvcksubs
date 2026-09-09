@@ -199,6 +199,7 @@ sealed class MediaItemV2 extends Equatable {
     required this.ref,
     required this.title,
     this.subtitle,
+    this.tags = const [],
     this.releaseYear,
     this.releaseDate,
     this.rating,
@@ -291,6 +292,9 @@ sealed class MediaItemV2 extends Equatable {
   /// Optional secondary display text.
   final String? subtitle;
 
+  /// Normalized extension-supplied labels used for lightweight filtering.
+  final List<String> tags;
+
   /// Calendar year in which this item was first released.
   final int? releaseYear;
 
@@ -320,6 +324,7 @@ sealed class MediaItemV2 extends Equatable {
     if (releaseDate != null)
       'releaseDate': releaseDate!.toUtc().toIso8601String(),
     if (rating != null) 'rating': rating,
+    if (tags.isNotEmpty) 'tags': tags,
     if (artwork != null) 'artwork': artwork!.toJson(),
   };
 
@@ -332,6 +337,7 @@ sealed class MediaItemV2 extends Equatable {
     kind,
     title,
     subtitle,
+    tags,
     releaseYear,
     releaseDate,
     rating,
@@ -346,6 +352,7 @@ final class VideoItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
@@ -357,6 +364,7 @@ final class VideoItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
@@ -378,6 +386,7 @@ final class SeriesItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
@@ -389,6 +398,7 @@ final class SeriesItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
@@ -411,6 +421,7 @@ final class EpisodeItemV2 extends MediaItemV2 {
     required super.title,
     required this.episode,
     super.subtitle,
+    super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
@@ -426,6 +437,7 @@ final class EpisodeItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
@@ -466,6 +478,7 @@ final class ChannelItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
@@ -477,6 +490,7 @@ final class ChannelItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
@@ -499,6 +513,7 @@ final class EventItemV2 extends MediaItemV2 {
     required super.title,
     required this.schedule,
     super.subtitle,
+    super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
@@ -516,6 +531,7 @@ final class EventItemV2 extends MediaItemV2 {
          ref: value.ref,
          title: value.title,
          subtitle: value.subtitle,
+         tags: value.tags,
          releaseYear: value.releaseYear,
          releaseDate: value.releaseDate,
          rating: value.rating,
@@ -553,6 +569,7 @@ const _baseKeys = {
   'kind',
   'title',
   'subtitle',
+  'tags',
   'releaseYear',
   'releaseDate',
   'rating',
@@ -564,6 +581,7 @@ final class _CommonItemFields {
     required this.ref,
     required this.title,
     this.subtitle,
+    this.tags = const [],
     this.releaseYear,
     this.releaseDate,
     this.rating,
@@ -574,6 +592,7 @@ final class _CommonItemFields {
     final ref = json['ref'];
     final title = json['title'];
     final subtitle = json['subtitle'];
+    final tags = json['tags'];
     final releaseYear = json['releaseYear'];
     final releaseDate = json['releaseDate'];
     final rating = json['rating'];
@@ -584,6 +603,16 @@ final class _CommonItemFields {
     }
     if (subtitle != null && subtitle is! String) {
       throw const FormatException('item.subtitle must be a string');
+    }
+    if (tags != null && tags is! List) {
+      throw const FormatException('item.tags must be a list');
+    }
+    final parsedTags = <String>[];
+    for (final tag in (tags as List?) ?? const []) {
+      if (tag is! String || tag.trim().isEmpty) {
+        throw const FormatException('item.tags[] must be a non-empty string');
+      }
+      parsedTags.add(tag.trim());
     }
     if (releaseYear != null && (releaseYear is! int || releaseYear <= 0)) {
       throw const FormatException(
@@ -612,6 +641,7 @@ final class _CommonItemFields {
       ref: MediaRef.fromJson(ref.cast<String, Object?>()),
       title: title,
       subtitle: subtitle as String?,
+      tags: parsedTags,
       releaseYear: releaseYear as int?,
       releaseDate: parsedReleaseDate,
       rating: (rating as num?)?.toDouble(),
@@ -624,6 +654,7 @@ final class _CommonItemFields {
   final MediaRef ref;
   final String title;
   final String? subtitle;
+  final List<String> tags;
   final int? releaseYear;
   final DateTime? releaseDate;
   final double? rating;

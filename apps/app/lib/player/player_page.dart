@@ -20,6 +20,7 @@ import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
 import 'state/picture_in_picture_session.dart';
+import 'state/player_orientation_coordinator.dart';
 import 'state/source_fallback_policy.dart';
 import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
@@ -41,6 +42,7 @@ const Duration _stallSampleInterval = Duration(seconds: 2);
 /// discard the native player and resolve a fresh stream.
 const Duration _liveBufferingRecoveryThreshold = Duration(seconds: 8);
 const Duration _liveForwardBufferThreshold = Duration(seconds: 1);
+const Duration _orientationReleaseDelay = Duration(milliseconds: 260);
 
 /// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
@@ -163,6 +165,8 @@ class _PlayerPageState extends State<PlayerPage> {
   double? _appliedViewportAspectRatio;
   bool? _systemUiImmersive;
   bool? _landscape;
+  final PlayerOrientationCoordinator _orientationCoordinator =
+      PlayerOrientationCoordinator();
   bool _allowPop = false;
   bool _backInFlight = false;
   bool _pipBackground = false;
@@ -324,6 +328,7 @@ class _PlayerPageState extends State<PlayerPage> {
         landscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       ),
     );
+    _orientationCoordinator.reset();
     super.dispose();
   }
 
@@ -400,6 +405,7 @@ class _PlayerPageState extends State<PlayerPage> {
       session?.setInteractionEnabled(false);
       if (mounted && !_pipBackground) {
         setState(() => _pipBackground = true);
+        _syncRequestedLandscapeOrientation();
       }
       return;
     }
@@ -425,7 +431,11 @@ class _PlayerPageState extends State<PlayerPage> {
         if (mounted &&
             attempt == _playbackAttempt &&
             identical(controller, _controller)) {
-          _showNextEpisode();
+          if (!_upNextDismissed && !_upNextPaused && _nextEpisode != null) {
+            _playNextEpisode();
+          } else {
+            _showNextEpisode();
+          }
         }
       });
       return;
@@ -863,6 +873,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = false;
     _pictureInPictureSession?.minimize();
+    _syncRequestedLandscapeOrientation();
     // Back is an in-app presentation change, not a native PiP request. Keep
     // automatic PiP eligible so backgrounding from the mini-player can still
     // promote the active full-video session into a floating native window.
@@ -870,7 +881,35 @@ class _PlayerPageState extends State<PlayerPage> {
     _backInFlight = false;
   }
 
+  void _minimizePlayer() {
+    if (!mounted) return;
+    _pictureInPictureSession?.minimize();
+    _syncRequestedLandscapeOrientation();
+    unawaited(_syncNativePictureInPictureAllowed());
+  }
+
+  void _toggleLandscapeOrientation() {
+    _orientationCoordinator.toggle(
+      activeFullPlayer: _isActiveFullPlayer,
+      pipBackground: _pipBackground,
+    );
+    if (mounted) setState(() {});
+  }
+
+  bool get _isActiveFullPlayer =>
+      _pictureInPictureSession?.isFullScreen ?? true;
+
+  void _syncRequestedLandscapeOrientation() {
+    final activeFullPlayer = _isActiveFullPlayer;
+    _orientationCoordinator.sync(
+      activeFullPlayer: activeFullPlayer,
+      pipBackground: _pipBackground,
+      releaseDelay: activeFullPlayer ? Duration.zero : _orientationReleaseDelay,
+    );
+  }
+
   void _onPictureInPicturePresentationChanged() {
+    _syncRequestedLandscapeOrientation();
     unawaited(_syncNativePictureInPictureAllowed());
   }
 
@@ -915,6 +954,7 @@ class _PlayerPageState extends State<PlayerPage> {
     // native video surface on iOS.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _pipBackground) return;
+      _syncRequestedLandscapeOrientation();
       final controller = _controller;
       final restorer = controller is AppPlayerPictureInPictureRestorer
           ? controller as AppPlayerPictureInPictureRestorer
@@ -1101,9 +1141,11 @@ class _PlayerPageState extends State<PlayerPage> {
         resolvedSources: _resolvedSources,
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
-        onBack: _handleBack,
+        onMinimize: _minimizePlayer,
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
+        landscapeLocked: _orientationCoordinator.landscapeRequested,
+        onToggleLandscape: _toggleLandscapeOrientation,
         isLive: _isLive,
         playbackSegments: _playbackSegments,
         episodeGuide: widget.episodeGuide,
@@ -1211,10 +1253,6 @@ class _PlayerPageState extends State<PlayerPage> {
         final maxHeight = constraints.maxHeight;
         final cover = _fitMode == PlayerFitMode.cover;
         final viewportRatio = maxHeight > 0 ? maxWidth / maxHeight : 16 / 9;
-        final containWidth = maxHeight > 0 && viewportRatio > 16 / 9
-            ? maxHeight * (16 / 9)
-            : maxWidth;
-        final containHeight = containWidth / (16 / 9);
         final ratio = cover ? viewportRatio : 16 / 9;
         final controller = _controller;
         if (controller != null &&
@@ -1225,14 +1263,7 @@ class _PlayerPageState extends State<PlayerPage> {
           unawaited(controller.setViewportAspectRatio(ratio));
         }
         final player = _buildPlayer(context);
-        return Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: cover ? maxWidth : containWidth,
-            height: cover ? maxHeight : containHeight,
-            child: player,
-          ),
-        );
+        return SizedBox(width: maxWidth, height: maxHeight, child: player);
       },
     );
   }

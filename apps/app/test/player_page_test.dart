@@ -45,6 +45,38 @@ void main() {
     );
   });
 
+  testWidgets('portrait video receives the full player viewport', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final player = _FullViewportPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'portrait-movie',
+            ),
+            title: 'Portrait movie',
+          ),
+          resolvedSources: [_resolvedSource('portrait', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getSize(find.byKey(_FullViewportPlayer.marker)),
+      const Size(390, 844),
+    );
+  });
+
   test('source switch keeps VOD position and does not seek live streams', () {
     expect(
       sourceSwitchSeekPosition(
@@ -415,7 +447,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(controller.pictureInPictureCalls, 0);
@@ -562,7 +594,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pumpAndSettle();
 
     expect(find.byType(PlayerPage), findsOneWidget);
@@ -595,7 +627,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(controller.pictureInPictureCalls, 0);
     expect(controller.pauseCalls, 0);
@@ -621,7 +653,7 @@ void main() {
     await tester.pump();
 
     final controller = player.controllers.single;
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pumpAndSettle();
 
     expect(controller.pictureInPictureCalls, 0);
@@ -666,7 +698,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
 
     // The player stays in the app-level host so iOS can restore the same
@@ -793,6 +825,42 @@ class _FailingPlayer extends RecordingPlayer {
       onPlaybackReady?.call(controller);
     }
     return widget;
+  }
+}
+
+class _FullViewportPlayer extends RecordingPlayer {
+  static const marker = Key('full-viewport-player');
+  final _FakePlayerController controller = _FakePlayerController(
+    initialValue: const AppPlayerValue(initialized: true),
+  );
+  bool _reportedController = false;
+
+  @override
+  Widget build(
+    BuildContext context,
+    PlayableStream stream, {
+    required bool isLive,
+    void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
+    Widget Function(
+      BuildContext context,
+      Object? controller,
+      void Function(bool visibility) onVisibilityChanged,
+    )?
+    customControlsBuilder,
+    String? preferredSubtitleLanguage,
+    int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
+    Key? key,
+  }) {
+    if (!_reportedController) {
+      _reportedController = true;
+      onControllerCreated?.call(controller);
+      onPlaybackReady?.call(controller);
+    }
+    return const SizedBox.expand(key: marker);
   }
 }
 

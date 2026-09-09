@@ -59,6 +59,7 @@ Duration playerSettleGrace({required bool isLive, required bool trackSwitch}) =>
     : _seekSettleGrace;
 
 void _noFitToggle() {}
+void _noLandscapeToggle() {}
 
 void _noSettling(Duration grace) {}
 
@@ -71,9 +72,11 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.resolvedSources,
     required this.currentIndex,
     required this.onChangeSource,
-    required this.onBack,
+    required this.onMinimize,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
+    this.landscapeLocked = false,
+    this.onToggleLandscape = _noLandscapeToggle,
     required this.isLive,
     this.episodeGuide,
     this.playbackSegments = const [],
@@ -93,9 +96,11 @@ class PlayerPlaybackControls extends StatefulWidget {
   final List<ResolvedSource> resolvedSources;
   final int currentIndex;
   final VoidCallback onChangeSource;
-  final VoidCallback onBack;
+  final VoidCallback onMinimize;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
+  final bool landscapeLocked;
+  final VoidCallback onToggleLandscape;
   final bool isLive;
   final EpisodeGuide? episodeGuide;
   final List<PlaybackSegment> playbackSegments;
@@ -723,9 +728,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       atLiveEdge: isAtLiveEdge(position, timelineExtent),
       dragValueMs: _dragValueMs,
       onBackgroundTap: _handleBackgroundTap,
-      onBack: widget.onBack,
+      onMinimize: widget.onMinimize,
       fitMode: widget.fitMode,
       onToggleFit: widget.onToggleFit,
+      landscapeLocked: widget.landscapeLocked,
+      onToggleLandscape: widget.onToggleLandscape,
       onOpenSettings: _openSettings,
       onEpisodeListVisibilityChanged: _onEpisodeListVisibilityChanged,
       onSkip: _skip,

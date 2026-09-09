@@ -48,6 +48,9 @@ class VersionedMediaItem extends Equatable {
   /// Kind discriminator of the wrapped item.
   MediaKindV2 get kind => item.kind;
 
+  /// Normalized extension-supplied labels used for lightweight filtering.
+  List<String> get tags => item.tags;
+
   /// Encodes the envelope for persistence.
   Map<String, Object?> toJson() => {'item': item.toJson()};
 
