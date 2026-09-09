@@ -8,9 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:video_player/video_player.dart' as vp;
 import '../diagnostics/player_diagnostics.dart';
+import '../mappers/startup_stream.dart';
+import '../models/playback_start_position.dart';
+import '../state/video_player_startup.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_wakelock.dart';
-import '../state/quality_preference_controller.dart';
 import '../state/subtitle_preference_controller.dart';
 import 'player_subtitle_style.dart';
 import 'subtitle_html_text.dart';
@@ -28,6 +30,7 @@ class VideoPlayerView extends StatefulWidget {
     super.key,
     required this.stream,
     this.isLive = false,
+    this.startPosition,
     this.liveOptions,
     this.onControllerCreated,
     this.onPlaybackReady,
@@ -45,6 +48,7 @@ class VideoPlayerView extends StatefulWidget {
 
   final PlayableStream stream;
   final bool isLive;
+  final PlaybackStartPosition? startPosition;
 
   /// Optional live latency and buffering tuning passed to the native player.
   ///
@@ -139,7 +143,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         (_) => _wakelock?.refresh(),
       );
     }
-    _activeStream = widget.stream;
+    final variant = preferredStartupVariant(
+      widget.stream,
+      widget.preferredQualityMaxHeight,
+    );
+    _preferredQualitySelectionDone = variant != null;
+    _activeStream = streamForVariant(widget.stream, variant);
     _player = _createPlayer(_activeStream);
     _videoSurface = vp.VideoPlayer(_player);
     _adapter = _VideoPlayerControllerAdapter(
@@ -148,9 +157,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         if (mounted) setState(() => _fitMode = mode);
       },
       onSelectVariant: _selectVariant,
-      streamUrl: _activeStream.url,
+      streamUrl: widget.stream.url,
       variants: _activeStream.variants,
     );
+    _adapter.setActiveUrl(_activeStream.url);
     _bindPlayer();
     widget.onControllerCreated?.call(_adapter);
     if (!widget.preview || widget.playing) _startOpen();
@@ -224,32 +234,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     if (!_isActive) return;
     final generation = ++_playerGeneration;
     final oldPlayer = _player;
-    final restorePosition = oldPlayer.value.position;
     final restorePlaying = oldPlayer.value.isPlaying;
     var oldPlayerPaused = false;
-    final nextStream = variant == null
-        ? widget.stream
-        : PlayableStream(
-            url: variant.url,
-            headers: variant.headers.isEmpty
-                ? widget.stream.headers
-                : variant.headers,
-            format: variant.format,
-            drm: widget.stream.drm,
-            audioUrl: widget.stream.audioUrl,
-            label: variant.label,
-            subtitles: widget.stream.subtitles,
-            variants: widget.stream.variants,
-          );
+    final nextStream = streamForVariant(widget.stream, variant);
     final nextPlayer = _createPlayer(nextStream);
     final stopwatch = Stopwatch()..start();
     var swapped = false;
     try {
-      if (restorePlaying) {
-        await oldPlayer.pause();
-        oldPlayerPaused = true;
-        _logOpenStage('quality_old_player_paused', stopwatch);
-      }
       _logOpenStage(
         'quality_initialize_start',
         stopwatch,
@@ -272,6 +263,39 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             'duration=${nextPlayer.value.duration.inMilliseconds}ms '
             'size=${nextPlayer.value.size.width}x${nextPlayer.value.size.height}',
       );
+      await nextPlayer.setLooping(widget.looping);
+      if (!_isCurrentGeneration(generation)) {
+        await nextPlayer.dispose();
+        return;
+      }
+      await nextPlayer.setVolume(widget.muted ? 0 : 1);
+      if (!_isCurrentGeneration(generation)) {
+        await nextPlayer.dispose();
+        return;
+      }
+      if (restorePlaying) {
+        await oldPlayer.pause();
+        oldPlayerPaused = true;
+        _logOpenStage('quality_old_player_paused', stopwatch);
+      }
+      final restorePosition = oldPlayer.value.position;
+      if (restorePosition > Duration.zero) {
+        final duration = nextPlayer.value.duration;
+        final target = duration > Duration.zero && restorePosition > duration
+            ? duration
+            : restorePosition;
+        _logOpenStage(
+          'quality_seek_start',
+          stopwatch,
+          details: 'target_ms=${target.inMilliseconds}',
+        );
+        await nextPlayer.seekTo(target);
+        if (!_isCurrentGeneration(generation)) {
+          await nextPlayer.dispose();
+          return;
+        }
+        _logOpenStage('quality_seek_done', stopwatch);
+      }
 
       await _videoEventSubscription?.cancel();
       _videoEventSubscription = null;
@@ -289,7 +313,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       if (mounted) setState(() {});
       await oldPlayer.dispose();
       await _open(
-        restorePosition: restorePosition,
         restorePlaying: restorePlaying,
         applyPreferredQuality: false,
         initialized: true,
@@ -340,97 +363,43 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     Stopwatch? stopwatch,
   }) async {
     final clock = stopwatch ?? (Stopwatch()..start());
+    final currentGeneration = generation ?? _playerGeneration;
     _openStopwatch = clock;
+    final startup = VideoPlayerStartup(
+      player: _player,
+      controller: _adapter,
+      stream: _activeStream,
+      refreshTracks: _adapter.refreshTracks,
+      isCurrent: () => _isCurrentGeneration(currentGeneration),
+      log: (stage, {details}) => _logOpenStage(stage, clock, details: details),
+      maxHeight: widget.preferredQualityMaxHeight,
+      preferredQualityDone:
+          !applyPreferredQuality || _preferredQualitySelectionDone,
+    );
     try {
-      final audioUrl = _activeStream.audioUrl;
-      if (audioUrl != null && audioUrl.isNotEmpty) {
-        throw UnsupportedError(
-          'The native player does not support a separate audio URL.',
-        );
-      }
-      if (!initialized) {
-        _logOpenStage(
-          'initialize_start',
-          clock,
-          details:
-              'url=${safePlaybackUrlForLog(_activeStream.url)} '
-              'format=${_activeStream.format.name}',
-        );
-        await _player.initialize();
-        if (!_isCurrentGeneration(generation)) return;
-        _logOpenStage(
-          'initialize_done',
-          clock,
-          details:
-              'duration=${_player.value.duration.inMilliseconds}ms '
-              'size=${_player.value.size.width}x${_player.value.size.height}',
-        );
-      } else {
-        _logOpenStage('initialize_reused', clock);
-      }
-      await _player.setLooping(widget.looping);
-      if (!_isCurrentGeneration(generation)) return;
-      await _player.setVolume(widget.muted ? 0 : 1);
-      if (!_isCurrentGeneration(generation)) return;
-      if (restorePosition != null && restorePosition > Duration.zero) {
-        final duration = _player.value.duration;
-        final target = duration > Duration.zero && restorePosition > duration
-            ? duration
-            : restorePosition;
-        await _player.seekTo(target);
-        if (!_isCurrentGeneration(generation)) return;
-      }
-      _logOpenStage('player_configured', clock);
-      await _adapter.refreshTracks();
-      if (!_isCurrentGeneration(generation)) return;
-      _logOpenStage(
-        'tracks_initial_done',
-        clock,
-        details:
-            'audio=${_adapter.audioTracks.length} '
-            'video=${_adapter.qualityTracks.length}',
+      final playing = restorePlaying ?? widget.playing;
+      final opened = await startup.open(
+        initialized: initialized,
+        looping: widget.looping,
+        muted: widget.muted,
+        playing: playing,
+        isLive: widget.isLive,
+        startPosition: restorePosition == null
+            ? widget.startPosition
+            : PlaybackStartPosition.exact(restorePosition),
+        subtitleLanguage: widget.preferredSubtitleLanguage,
+        externalSubtitle: widget.preferredExternalSubtitle,
       );
-      if (applyPreferredQuality) await _applyPreferredQuality();
-      if (!_isCurrentGeneration(generation)) return;
-      _logOpenStage(
-        'quality_initial_done',
-        clock,
-        details: 'active=${_adapter.activeQuality?.id ?? 'auto'}',
-      );
-      // AVFoundation can report the first frame before it has finished
-      // populating its HLS media-selection and variant groups. FlyStream's
-      // large master can take seconds, so keep checking briefly rather than
-      // freezing the picker empty at the instant its first frame appears.
-      unawaited(_refreshTracksAfterMetadata(clock, generation));
-      final subtitle = _preferredSubtitle();
-      if (subtitle != null) {
-        _logOpenStage(
-          'subtitle_start',
-          clock,
-          details: 'language=${subtitle.language}',
-        );
-        try {
-          await _adapter.setSubtitle(subtitle);
-        } catch (_) {
-          // An external caption must not make an otherwise playable video fail.
-        }
-        if (!_isCurrentGeneration(generation)) return;
-        _logOpenStage('subtitle_done', clock);
-      } else {
-        _logOpenStage('subtitle_skipped', clock);
-      }
-      if (restorePlaying ?? widget.playing) {
-        _logOpenStage('play_start', clock);
-        await _player.play();
-        if (!_isCurrentGeneration(generation)) return;
-        _logOpenStage('play_done', clock);
+      if (!opened || !_isCurrentGeneration(currentGeneration)) return;
+      _preferredQualitySelectionDone = startup.preferredQualityDone;
+      unawaited(startup.refreshAfterMetadata());
+      if (playing) {
         _startPlaybackDiagnostics(clock);
       } else {
-        _logOpenStage('play_skipped', clock);
         _reportPlaybackReady(clock);
       }
     } catch (error) {
-      if (!_isCurrentGeneration(generation)) return;
+      if (!_isCurrentGeneration(currentGeneration)) return;
       _logOpenStage(
         'failed',
         clock,
@@ -519,87 +488,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     _readyReported = true;
     _logOpenStage('ready_reported', stopwatch);
     widget.onPlaybackReady?.call(_adapter);
-  }
-
-  Future<void> _refreshTracksAfterMetadata(
-    Stopwatch stopwatch,
-    int? generation,
-  ) async {
-    var attempt = 0;
-    for (final delay in const [
-      Duration(seconds: 1),
-      Duration(seconds: 3),
-      Duration(seconds: 6),
-    ]) {
-      await Future<void>.delayed(delay);
-      if (!_isCurrentGeneration(generation)) return;
-      attempt++;
-      if (!_isCurrentGeneration(generation)) return;
-      _logOpenStage(
-        'tracks_retry_start',
-        stopwatch,
-        details: 'attempt=$attempt',
-      );
-      try {
-        await _adapter.refreshTracks();
-        if (!_isCurrentGeneration(generation)) return;
-        await _applyPreferredQuality();
-        if (!_isCurrentGeneration(generation)) return;
-        _logOpenStage(
-          'tracks_retry_done',
-          stopwatch,
-          details:
-              'attempt=$attempt audio=${_adapter.audioTracks.length} '
-              'video=${_adapter.qualityTracks.length}',
-        );
-      } catch (_) {
-        // An HLS source with no selectable group simply keeps an empty picker.
-        _logOpenStage(
-          'tracks_retry_failed',
-          stopwatch,
-          details: 'attempt=$attempt',
-        );
-      }
-    }
-  }
-
-  Future<void> _applyPreferredQuality() async {
-    if (_preferredQualitySelectionDone) return;
-    final track = preferredQualityTrack(
-      tracks: _adapter.qualityTracks,
-      maxHeight: widget.preferredQualityMaxHeight,
-    );
-    if (track == null) return;
-    if (track.id == _adapter.activeQuality?.id) {
-      _preferredQualitySelectionDone = true;
-      return;
-    }
-    try {
-      await _adapter.setQuality(track);
-      if (!_isActive) return;
-      _preferredQualitySelectionDone = true;
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint(
-          '[VideoPlayerVOD] preferred_quality_unavailable '
-          '${error.runtimeType}',
-        );
-      }
-    }
-  }
-
-  SubtitleTrack? _preferredSubtitle() {
-    final external = widget.preferredExternalSubtitle;
-    if (external != null) return external;
-    final language = widget.preferredSubtitleLanguage;
-    if (language == null) return null;
-    for (final track in _activeStream.subtitles) {
-      if (subtitleLanguageKey(track.language) ==
-          subtitleLanguageKey(language)) {
-        return track;
-      }
-    }
-    return null;
   }
 
   void _onValueChanged() {

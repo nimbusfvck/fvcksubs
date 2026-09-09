@@ -131,21 +131,30 @@ Future<void> _playMedia(
     final orderedCachedList = scope.sourcePriorityController.order(
       enabledCachedList,
     );
+    _ResolvedSourceBatch? cachedBatch;
     final fast = await _resolveWithOverlay(
       navigator,
-      (progress) => _resolveKnownSources(scope, item, [
-        orderedCachedList.first,
-      ], progress),
+      (progress) async {
+        final batch = _resolveKnownSourcesAsTheySettle(
+          scope,
+          item,
+          orderedCachedList,
+          progress,
+        );
+        cachedBatch = batch;
+        final first = await batch.first;
+        return first == null ? const <ResolvedSource>[] : [first];
+      },
       onResolved: (resolved, loadingRoute) async {
         if (resolved.isEmpty) return false;
         scope.sourceCache.store(item.ref, resolved);
-        final pendingSources = _revalidate(
+        final refresh = _revalidate(
           scope,
           item,
           excludeSourceKeys: {
-            for (final source in resolved) sourceDescriptorKey(source.source),
+            for (final source in orderedCachedList) sourceDescriptorKey(source),
           },
-        ).stream;
+        );
         await _openPlayer(
           navigator,
           scope,
@@ -156,7 +165,7 @@ Future<void> _playMedia(
           routeToReplace: routeToReplace,
           contentRating: contentRating,
           episodeGuide: episodeGuide,
-          pendingSources: pendingSources,
+          pendingSources: _appendResolvedSources(cachedBatch!.stream, refresh),
           externalSubtitles: externalSubtitles,
           playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
@@ -282,10 +291,15 @@ Future<T?> _resolveWithOverlay<T>(
 }
 
 class _ResolvedSourceBatch {
-  const _ResolvedSourceBatch({required this.stream, required this.done});
+  const _ResolvedSourceBatch({
+    required this.stream,
+    required this.done,
+    required this.first,
+  });
 
   final Stream<ResolvedSource> stream;
   final Future<List<ResolvedSource>> done;
+  final Future<ResolvedSource?> first;
 }
 
 _ResolvedSourceBatch _revalidate(
@@ -349,7 +363,11 @@ _ResolvedSourceBatch _revalidate(
       await controller.close();
     }
   }());
-  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
+  return _ResolvedSourceBatch(
+    stream: controller.stream,
+    done: done.future,
+    first: done.future.then((sources) => sources.firstOrNull),
+  );
 }
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
@@ -824,6 +842,7 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
     return _ResolvedSourceBatch(
       stream: const Stream<ResolvedSource>.empty(),
       done: Future<List<ResolvedSource>>.value(const []),
+      first: Future<ResolvedSource?>.value(null),
     );
   }
 
@@ -859,7 +878,11 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
           .whenComplete(settle),
     );
   }
-  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
+  return _ResolvedSourceBatch(
+    stream: controller.stream,
+    done: done.future,
+    first: _firstByPriority(futures),
+  );
 }
 
 /// Merges the fast result and background refresh so each source is forwarded
@@ -950,27 +973,6 @@ Future<ResolvedSource?> _resolveOne(
   } finally {
     progress.markSettled(source.label);
   }
-}
-
-Future<List<ResolvedSource>> _resolveKnownSources(
-  AppScope scope,
-  PlaybackMedia item,
-  List<StreamSource> sources,
-  _ResolveProgress progress,
-) async {
-  sources = [
-    for (final source in sources)
-      if (scope.registry.isSourceEnabled(source)) source,
-  ];
-  if (sources.isEmpty) return const [];
-  sources = scope.sourcePriorityController.order(sources);
-  progress.begin([for (final source in sources) source.label]);
-
-  final target = PlaybackTarget.detect();
-  final resolved = await Future.wait(
-    sources.map((source) => _resolveOne(scope, item, source, target, progress)),
-  );
-  return resolved.whereType<ResolvedSource>().toList();
 }
 
 String _sourceLogName(StreamSource source) {

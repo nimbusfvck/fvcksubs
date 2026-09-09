@@ -27,6 +27,7 @@ import 'platform/device_class.dart';
 import 'platform/cloudflare_killer.dart';
 import 'platform/web_view_resolver.dart';
 import 'settings/nsfw_controller.dart';
+import 'settings/preview_autoplay_preference_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +71,9 @@ Future<void> main() async {
   const pictureInPictureStore =
       SharedPreferencesPictureInPicturePreferenceStore();
   final pictureInPictureFuture = pictureInPictureStore.load();
+  const previewAutoplayStore =
+      SharedPreferencesPreviewAutoplayPreferenceStore();
+  final previewAutoplayFuture = previewAutoplayStore.load();
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityFuture = sourcePriorityStore.load();
@@ -168,6 +172,11 @@ Future<void> main() async {
         store: pictureInPictureStore,
         initial: await pictureInPictureFuture,
       );
+  final previewAutoplayPreferenceController =
+      PreviewAutoplayPreferenceController(
+        store: previewAutoplayStore,
+        initial: await previewAutoplayFuture,
+      );
 
   final sourcePriorityController = SourcePriorityController(
     registry: registry,
@@ -200,6 +209,7 @@ Future<void> main() async {
       pictureInPictureSession: PictureInPictureSession(),
       pictureInPicturePreferenceController:
           pictureInPicturePreferenceController,
+      previewAutoplayPreferenceController: previewAutoplayPreferenceController,
       nsfwController: nsfwController,
       navigatorKey: navigatorKey,
     ),

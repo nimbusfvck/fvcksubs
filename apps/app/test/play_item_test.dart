@@ -146,6 +146,56 @@ void main() {
   });
 
   testWidgets(
+    'a stalled preferred cached descriptor does not block a ready fallback',
+    (tester) async {
+      const item = VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'subs',
+          providerId: 'subs.p',
+          id: 'movie-cached-descriptors',
+        ),
+        title: 'Movie',
+      );
+      const preferred = StreamSource(
+        id: 'preferred',
+        label: 'Source preferred',
+      );
+      const fallback = StreamSource(id: 'fallback', label: 'Source fallback');
+      final sourceCache = SourceCache()
+        ..recordSourceList(item.ref, const [preferred, fallback]);
+      final extension = SubtitleFakeExtension(
+        subtitlesBySourceId: const {'preferred': [], 'fallback': []},
+        resolveDelayBySourceId: const {
+          'preferred': Duration(seconds: 2),
+          'fallback': Duration.zero,
+        },
+      );
+      final player = RecordingPlayer();
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => unawaited(playItemV2(context, item)),
+              child: const Text('Play'),
+            ),
+          ),
+          registry: ExtensionRegistry([extension]),
+          player: player,
+          sourceCache: sourceCache,
+        ),
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump();
+
+      expect(player.played?.url, 'https://edge/fallback.m3u8');
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets(
     'stale cached playback publishes refreshed sources to the picker',
     (tester) async {
       const staleItem = PlaybackMedia(
@@ -228,9 +278,7 @@ void main() {
 
     final extension = SubtitleFakeExtension(
       subtitlesBySourceId: const {'hydrax': [], 'cast': []},
-      resolveDelayBySourceId: const {
-        'cast': Duration(milliseconds: 400),
-      },
+      resolveDelayBySourceId: const {'cast': Duration(milliseconds: 400)},
     );
 
     await tester.pumpWidget(

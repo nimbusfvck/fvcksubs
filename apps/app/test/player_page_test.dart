@@ -4,8 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/detail/detail_page_v2.dart';
-import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/models/playback_start_position.dart';
+import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
@@ -377,7 +378,7 @@ void main() {
     await controller.close();
   });
 
-  testWidgets('player Back minimizes without entering native PiP', (
+  testWidgets('player Back minimizes and remains eligible for native PiP', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -419,7 +420,7 @@ void main() {
 
     expect(controller.pictureInPictureCalls, 0);
     expect(session.isMinimized, isTrue);
-    expect(controller.pictureInPictureAllowed, contains(false));
+    expect(controller.pictureInPictureAllowed, contains(true));
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(find.byType(DetailPageV2), findsNothing);
   });
@@ -458,6 +459,48 @@ void main() {
 
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(controller.playCalls, 1);
+  });
+
+  testWidgets('PiP restores the mini-player presentation it started from', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+    final session = PictureInPictureSession();
+    final playerPage = PlayerPage(
+      key: GlobalKey(),
+      item: fakeItem(id: 'mini-pip-restore'),
+      resolvedSources: [_resolvedSource('mini-pip-restore', 'Source')],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(),
+        registry: ExtensionRegistry([]),
+        player: player,
+        pictureInPictureSession: session,
+      ),
+    );
+    session.attach(playerPage);
+    await tester.pump();
+    session.minimize();
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 10),
+      ),
+    );
+    controller.emitPictureInPictureStarted();
+    await tester.pump();
+
+    controller.emitPictureInPictureRestore();
+    await tester.pump();
+
+    expect(session.isMinimized, isTrue);
+    expect(controller.pictureInPictureRestoreCompletions, 1);
   });
 
   testWidgets('closing PiP detaches and disposes the hosted player', (
@@ -556,6 +599,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(controller.pictureInPictureCalls, 0);
     expect(controller.pauseCalls, 0);
+    expect(controller.pictureInPictureAllowed, contains(true));
   });
 
   testWidgets('live player Back minimizes without creating a detail route', (
@@ -723,6 +767,7 @@ class _FailingPlayer extends RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
@@ -736,6 +781,7 @@ class _FailingPlayer extends RecordingPlayer {
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
       preferredQualityMaxHeight: preferredQualityMaxHeight,
+      startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
       key: key,
@@ -769,6 +815,7 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
@@ -782,6 +829,7 @@ class _PositionRecordingPlayer extends RecordingPlayer {
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
       preferredQualityMaxHeight: preferredQualityMaxHeight,
+      startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
       key: key,
@@ -802,6 +850,14 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     );
     controllers.add(controller);
     onControllerCreated?.call(controller);
+    final target = startPosition?.target(
+      controller.value.value.duration,
+      isLive: isLive,
+    );
+    if (target != null) {
+      controller.lastSeekPosition = target;
+      controller.emitValue(controller.value.value.copyWith(position: target));
+    }
     onPlaybackReady?.call(controller);
     return widget;
   }

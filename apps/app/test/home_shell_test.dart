@@ -150,6 +150,11 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Preferred subtitles'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Preferred subtitles'), findsOneWidget);
     expect(find.text('Indonesia'), findsOneWidget);
   });
@@ -379,7 +384,10 @@ void main() {
       const Offset(0, 300),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Change service').first);
+    final changeService = find.byTooltip('Change service').first;
+    await tester.ensureVisible(changeService);
+    await tester.pumpAndSettle();
+    await tester.tap(changeService);
     await tester.pumpAndSettle();
     expect(find.text('Netflix'), findsOneWidget);
     await tester.tap(find.text('Netflix'));

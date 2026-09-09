@@ -14,6 +14,7 @@ import '../player/state/subtitle_preference_controller.dart';
 import '../player/drm_test_page.dart';
 import 'quality_preference.dart';
 import 'nsfw_controller.dart';
+import 'preview_autoplay_preference_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 
@@ -28,6 +29,9 @@ class SettingsPage extends StatelessWidget {
     final pictureInPictureController = AppScope.of(
       context,
     ).pictureInPicturePreferenceController;
+    final previewAutoplayController = AppScope.of(
+      context,
+    ).previewAutoplayPreferenceController;
     return Scaffold(
       appBar: const AppPageBar(title: 'Settings'),
       body: ListenableBuilder(
@@ -55,6 +59,8 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _PictureInPicturePreference(controller: pictureInPictureController),
             const SizedBox(height: AppSpacing.md),
+            _PreviewAutoplayPreference(controller: previewAutoplayController),
+            const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
             const SizedBox(height: AppSpacing.md),
             _SubtitleAppearanceEntry(controller: controller),
@@ -75,6 +81,31 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PreviewAutoplayPreference extends StatelessWidget {
+  const _PreviewAutoplayPreference({required this.controller});
+
+  final PreviewAutoplayPreferenceController controller;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Material(
+      color: AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.lg,
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: controller.enabled,
+        onChanged: controller.setEnabled,
+        title: const Text('Autoplay previews'),
+        subtitle: const Text(
+          'Play short, muted trailer previews on Home and Detail pages.',
+        ),
+        secondary: const Icon(Icons.ondemand_video_outlined),
+      ),
+    ),
+  );
 }
 
 class _PictureInPicturePreference extends StatelessWidget {

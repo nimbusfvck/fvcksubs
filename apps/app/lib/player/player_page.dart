@@ -13,8 +13,9 @@ import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'controls/player_playback_controls.dart';
 import 'controls/player_controls_overlay.dart';
-import 'models/playback_media.dart';
 import 'models/app_player_controller.dart';
+import 'models/playback_media.dart';
+import 'models/playback_start_position.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
@@ -27,8 +28,6 @@ import 'workflow/primary_episode_target.dart';
 
 export 'models/resolved_source.dart' show ResolvedSource, mergeResolvedSources;
 
-const Duration _minResumeProgress = Duration(seconds: 5);
-const Duration _resumeEndGuard = Duration(seconds: 30);
 const Duration _progressInterval = Duration(seconds: 10);
 
 /// How often playback is sampled for a stall.
@@ -169,6 +168,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _pipBackground = false;
   bool _resumeAfterPictureInPicture = false;
   bool _restorePlayPending = false;
+  MiniPlayerMode? _presentationBeforePictureInPicture;
   PictureInPictureSession? _pictureInPictureSession;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
@@ -371,20 +371,6 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_pipBackground) _resumeAfterPictureInPicture = value.isPlaying;
     _lastPosition = value.position;
     _lastDuration = value.duration;
-    final position = sourceSwitchSeekPosition(
-      isLive: _isLive,
-      previousPosition: _pendingSwitchPosition,
-      duration: value.duration,
-    );
-    if (position != null) {
-      _pendingSwitchPosition = null;
-      _lastPosition = position;
-      unawaited(controller.seekTo(position));
-    }
-    if (!_hasResumed) {
-      _hasResumed = true;
-      _resumeSavedPosition(value.duration);
-    }
   }
 
   void _attachEventListener(AppPlayerController controller) {
@@ -406,8 +392,12 @@ class _PlayerPageState extends State<PlayerPage> {
   ) {
     if (attempt != _playbackAttempt) return;
     if (event.type == AppPlayerEventType.pictureInPictureStarted) {
+      final session = _pictureInPictureSession;
+      _presentationBeforePictureInPicture = session?.isMinimized == true
+          ? MiniPlayerMode.minimized
+          : MiniPlayerMode.fullScreen;
       _resumeAfterPictureInPicture = controller.value.value.isPlaying;
-      _pictureInPictureSession?.setInteractionEnabled(false);
+      session?.setInteractionEnabled(false);
       if (mounted && !_pipBackground) {
         setState(() => _pipBackground = true);
       }
@@ -416,6 +406,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (event.type == AppPlayerEventType.pictureInPictureClosed) {
       _resumeAfterPictureInPicture = false;
       _restorePlayPending = false;
+      _presentationBeforePictureInPicture = null;
       if (!mounted) return;
       final session = _pictureInPictureSession;
       if (session != null && identical(session.player, widget)) {
@@ -773,12 +764,14 @@ class _PlayerPageState extends State<PlayerPage> {
     });
   }
 
-  void _resumeSavedPosition(Duration? duration) {
-    if (_isLive || _controller == null) return;
+  PlaybackStartPosition? get _startPosition {
+    if (_isLive) return null;
+    final pending = _pendingSwitchPosition;
+    if (pending != null) return PlaybackStartPosition.exact(pending);
     final progress = _library?.recordFor(widget.media.ref)?.progress;
-    if (progress == null || progress < _minResumeProgress) return;
-    if (duration != null && duration - progress < _resumeEndGuard) return;
-    unawaited(_controller!.seekTo(progress));
+    return !_hasResumed && progress != null
+        ? PlaybackStartPosition.resume(progress)
+        : null;
   }
 
   void _reportProgress() {
@@ -870,9 +863,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = false;
     _pictureInPictureSession?.minimize();
-    // Back is an in-app presentation change, not a native PiP request. Turn
-    // off automatic PiP before returning so closing the app from mini-player
-    // cannot promote this session into a floating native window.
+    // Back is an in-app presentation change, not a native PiP request. Keep
+    // automatic PiP eligible so backgrounding from the mini-player can still
+    // promote the active full-video session into a floating native window.
     await _syncNativePictureInPictureAllowed();
     _backInFlight = false;
   }
@@ -892,9 +885,7 @@ class _PlayerPageState extends State<PlayerPage> {
       context,
     ).pictureInPicturePreferenceController;
     try {
-      await policy.setPictureInPictureAllowed(
-        (_pictureInPictureSession?.isFullScreen ?? true) && preference.enabled,
-      );
+      await policy.setPictureInPictureAllowed(preference.enabled);
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[PlayerPiP] eligibility_update_error=$error');
@@ -904,12 +895,20 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _restorePictureInPicturePlayer() {
     if (!mounted) return;
+    final previousPresentation = _presentationBeforePictureInPicture;
+    _presentationBeforePictureInPicture = null;
     final shouldResume =
         _resumeAfterPictureInPicture ||
         _controller?.value.value.isPlaying == true;
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = shouldResume;
-    _pictureInPictureSession?.setInteractionEnabled(true);
+    final session = _pictureInPictureSession;
+    if (previousPresentation == MiniPlayerMode.minimized) {
+      session?.minimize();
+    } else if (previousPresentation == MiniPlayerMode.fullScreen) {
+      session?.restore();
+    }
+    session?.setInteractionEnabled(true);
     setState(() => _pipBackground = false);
     // Keep the player in its original route for the whole PiP lifecycle.
     // Reparenting a UiKitView can preserve AVPlayer audio while losing the
@@ -1160,6 +1159,7 @@ class _PlayerPageState extends State<PlayerPage> {
         preferredSubtitleLanguage: AppScope.of(
           context,
         ).subtitlePreferenceController.languageCode,
+        startPosition: _startPosition,
         preferredQualityMaxHeight: AppScope.of(
           context,
         ).qualityPreferenceController.maxHeight,
@@ -1188,7 +1188,11 @@ class _PlayerPageState extends State<PlayerPage> {
         },
         onPlaybackReady: (value) {
           final controller = value as AppPlayerController?;
-          if (controller != null) _trackPosition(controller);
+          if (controller != null) {
+            _hasResumed = true;
+            _pendingSwitchPosition = null;
+            _trackPosition(controller);
+          }
         },
         customControlsBuilder: (context, value, onVisibilityChanged) {
           final controller = value as AppPlayerController?;

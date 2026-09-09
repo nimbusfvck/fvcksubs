@@ -230,6 +230,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   void _syncVideoValue() {
     final ValueListenable<AppPlayerValue>? next = widget.controller?.value;
     if (identical(next, _videoValue)) return;
+    _controlsCubit.cancelSeek();
     _videoValue?.removeListener(_onValueChanged);
     _stopPausedLiveEdgeTracking();
     _liveEdge = Duration.zero;
@@ -520,7 +521,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   void _seekTo(Duration target) {
     widget.onSettling(_settlingGrace(trackSwitch: false));
-    unawaited(widget.controller?.seekTo(target));
+    final controller = widget.controller;
+    if (controller != null) unawaited(_controlsCubit.seek(controller, target));
   }
 
   void _setPlaybackSpeed(double speed) {

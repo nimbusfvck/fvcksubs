@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
@@ -13,6 +12,8 @@ import '../search/search_page.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 import '../widgets/centered_content.dart';
+import '../widgets/media_hero_layout.dart';
+import '../widgets/media_hero_flexible_space.dart';
 import 'catalog_grid_section.dart';
 import 'catalog_group_shelf.dart';
 import 'catalog_grouping.dart';
@@ -205,14 +206,11 @@ class _HomePageState extends State<HomePage> {
       bloc: _featuredController,
       builder: (context, featured) {
         final showFeatured = featured.items.isNotEmpty || featured.isLoading;
+        final viewport = MediaQuery.sizeOf(context);
         final featuredHeight = !showFeatured
             ? null
-            : math
-                  .min(
-                    480,
-                    math.max(420, MediaQuery.sizeOf(context).height * 0.52),
-                  )
-                  .toDouble();
+            : MediaHeroLayout.heightForViewport(viewport) -
+                  MediaQuery.paddingOf(context).top;
         return Scaffold(
           body: RefreshIndicator(
             onRefresh: _refresh,
@@ -227,31 +225,13 @@ class _HomePageState extends State<HomePage> {
                   floating: false,
                   flexibleSpace: featuredHeight == null
                       ? null
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final minHeight =
-                                MediaQuery.paddingOf(context).top +
-                                kToolbarHeight;
-                            final range = math.max(
-                              1,
-                              featuredHeight - minHeight,
-                            );
-                            final progress =
-                                ((constraints.maxHeight - minHeight) / range)
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-                            return CenteredContent(
-                              child: IgnorePointer(
-                                ignoring: progress < 0.5,
-                                child: Opacity(
-                                  opacity: progress,
-                                  child: featured.items.isEmpty
-                                      ? const FeaturedHeroPlaceholder()
-                                      : FeaturedHero(items: featured.items),
-                                ),
-                              ),
-                            );
-                          },
+                      : MediaHeroFlexibleSpace(
+                          expandedHeight: featuredHeight,
+                          child: CenteredContent(
+                            child: featured.items.isEmpty
+                                ? const FeaturedHeroPlaceholder()
+                                : FeaturedHero(items: featured.items),
+                          ),
                         ),
                   backgroundColor: AppColors.surfaceDark,
                   foregroundColor: AppColors.onDark,

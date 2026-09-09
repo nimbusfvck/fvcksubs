@@ -17,6 +17,7 @@ import 'player/state/subtitle_preference_controller.dart';
 import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
 import 'settings/nsfw_controller.dart';
+import 'settings/preview_autoplay_preference_controller.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({
@@ -37,6 +38,7 @@ class AppScope extends InheritedWidget {
     required this.sourceCache,
     required this.pictureInPictureSession,
     required this.pictureInPicturePreferenceController,
+    required this.previewAutoplayPreferenceController,
     required this.nsfwController,
     this.navigatorKey,
     required super.child,
@@ -75,6 +77,8 @@ class AppScope extends InheritedWidget {
   final PictureInPicturePreferenceController
   pictureInPicturePreferenceController;
 
+  final PreviewAutoplayPreferenceController previewAutoplayPreferenceController;
+
   final NsfwController nsfwController;
 
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -104,6 +108,8 @@ class AppScope extends InheritedWidget {
       pictureInPictureSession != oldWidget.pictureInPictureSession ||
       pictureInPicturePreferenceController !=
           oldWidget.pictureInPicturePreferenceController ||
+      previewAutoplayPreferenceController !=
+          oldWidget.previewAutoplayPreferenceController ||
       nsfwController != oldWidget.nsfwController ||
       navigatorKey != oldWidget.navigatorKey;
 }

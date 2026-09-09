@@ -1,21 +1,22 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_app/widgets/media_hero_layout.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
-import '../catalog/artwork_cache.dart';
 import '../catalog/generated_banner.dart';
-import '../catalog/start_time_label.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/shimmer_placeholder.dart';
+import '../widgets/media_hero_card.dart';
+import '../widgets/media_hero_flexible_space.dart';
+import '../widgets/media_hero_summary.dart';
 
 class FeaturedHero extends StatefulWidget {
   const FeaturedHero({super.key, required this.items});
@@ -38,12 +39,12 @@ class FeaturedHeroPlaceholder extends StatelessWidget {
       children: [
         const Positioned.fill(child: ShimmerPlaceholder(height: null)),
         const DecoratedBox(
-          decoration: BoxDecoration(gradient: _featuredGradient),
+          decoration: BoxDecoration(gradient: MediaHeroCard.gradient),
         ),
         Positioned(
           left: AppSpacing.md,
           right: AppSpacing.md,
-          bottom: 64,
+          bottom: MediaHeroLayout.homeSummaryBottom,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -152,6 +153,9 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
+    final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
+      MediaHeroCollapseScope.of(context),
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -177,11 +181,14 @@ class _FeaturedHeroState extends State<FeaturedHero> {
             key: const Key('featured-page-indicator'),
             left: 0,
             right: 0,
-            bottom: AppSpacing.md,
-            child: Center(
-              child: _FeaturedPageIndicator(
-                page: _page,
-                count: widget.items.length,
+            bottom: MediaHeroLayout.homeIndicatorBottom,
+            child: Opacity(
+              opacity: overlayOpacity,
+              child: Center(
+                child: _FeaturedPageIndicator(
+                  page: _page,
+                  count: widget.items.length,
+                ),
               ),
             ),
           ),
@@ -314,66 +321,50 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
           ? snapshot.data
           : null;
       return _buildSlide(
+        detail,
         !widget.active || detail == null ? null : _autoplayTrailer(detail),
       );
     },
   );
 
-  Widget _buildSlide(MediaTrailer? preview) {
+  Widget _buildSlide(MediaDetailV2? detail, MediaTrailer? preview) {
     final media = widget.item.item;
-    final artwork = media.artwork;
-    final image = artwork?.portrait ?? artwork?.landscape;
+    final displayItem = widget.item;
     final fallbackArtwork = _fallbackArtwork(media);
-    final cacheWidth = artworkCacheDimension(
-      context,
-      MediaQuery.sizeOf(context).width,
+    final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
+      MediaHeroCollapseScope.of(context),
     );
     return RepaintBoundary(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (image != null)
-            CachedNetworkImage(
-              imageUrl: image.url,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              fadeInDuration: Duration.zero,
-              memCacheWidth: cacheWidth,
-              placeholder: (_, _) =>
-                  const ColoredBox(color: AppColors.surfaceDarkElevated),
-              errorWidget: (_, _, _) => fallbackArtwork,
-            )
-          else
-            fallbackArtwork,
-          if (preview != null)
-            Positioned.fill(
-              child: ValueListenableBuilder<bool>(
+      child: MediaHeroCard(
+        item: media,
+        fallback: fallbackArtwork,
+        preview: preview == null
+            ? null
+            : ValueListenableBuilder<bool>(
                 valueListenable: widget.scrolling,
                 builder: (context, scrolling, child) => TrailerPreview(
                   trailer: preview,
                   playing: widget.active && !scrolling,
                 ),
               ),
-            ),
-          const DecoratedBox(
-            decoration: BoxDecoration(gradient: _featuredGradient),
-          ),
-          Positioned(
-            left: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: 64,
+        foreground: Positioned(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          bottom: MediaHeroLayout.homeSummaryBottom,
+          child: Opacity(
+            opacity: overlayOpacity,
             child: Align(
               alignment: Alignment.bottomCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 680),
                 child: SizedBox(
                   width: double.infinity,
-                  child: _FeaturedDetails(item: widget.item),
+                  child: _FeaturedDetails(item: displayItem),
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -396,7 +387,7 @@ Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
       eventName: subtitle ?? '',
       brandAboveParticipants: true,
       centerContent: true,
-      participantLogoSize: 50,
+      participantLogoSize: 56,
       showMatchup: false,
       showBrand: false,
       branding: branding,
@@ -430,77 +421,59 @@ class _FeaturedDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = item.item;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _FeaturedTitle(item: media),
-        const SizedBox(height: AppSpacing.xs),
-        _FeaturedMeta(item: media),
-        if (media.subtitle != null) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            media.subtitle!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.onDarkSoft,
-              shadows: _featuredTextShadows,
+    return MediaHeroSummary(
+      item: media,
+      titleTextKey: const Key('featured-title-text'),
+      titleLogoKey: const Key('featured-title-logo'),
+      actions: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
+        children: [
+          FilledButton.icon(
+            key: const Key('featured-play'),
+            onPressed: () => unawaited(_play(context)),
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Watch Now'),
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
             ),
           ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          children: [
-            FilledButton.icon(
-              key: const Key('featured-play'),
-              onPressed: () => unawaited(_play(context)),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Play'),
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
-              ),
-            ),
-            BlocBuilder<LibraryController, LibraryState>(
-              bloc: AppScope.of(context).libraryController,
-              builder: (context, state) {
-                final favorite = state.isFavorite(media.ref);
-                return IconButton(
-                  key: const Key('featured-favorite'),
-                  tooltip: favorite ? 'In favorites' : 'Add to favorites',
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.onDark,
-                    side: const BorderSide(color: AppColors.outlineDark),
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
-                  ),
-                  icon: Icon(favorite ? Icons.check : Icons.add),
-                  onPressed: () => AppScope.of(
-                    context,
-                  ).libraryController.toggleFavorite(media),
-                );
-              },
-            ),
-            IconButton(
-              key: const Key('featured-info'),
-              tooltip: 'Open details',
-              style: IconButton.styleFrom(
-                foregroundColor: AppColors.onDark,
-                backgroundColor: AppColors.surfaceDarkElevated.withValues(
-                  alpha: 0.86,
+          BlocBuilder<LibraryController, LibraryState>(
+            bloc: AppScope.of(context).libraryController,
+            builder: (context, state) {
+              final favorite = state.isFavorite(media.ref);
+              return IconButton(
+                key: const Key('featured-favorite'),
+                tooltip: favorite ? 'In favorites' : 'Add to favorites',
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.onDark,
+                  side: const BorderSide(color: AppColors.outlineDark),
+                  shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
                 ),
-                side: const BorderSide(color: AppColors.outlineDark),
-                shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
+                icon: Icon(favorite ? Icons.check : Icons.add),
+                onPressed: () => AppScope.of(
+                  context,
+                ).libraryController.toggleFavorite(media),
+              );
+            },
+          ),
+          IconButton(
+            key: const Key('featured-info'),
+            tooltip: 'Open details',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.onDark,
+              backgroundColor: AppColors.surfaceDarkElevated.withValues(
+                alpha: 0.86,
               ),
-              icon: const Icon(Icons.info_outline),
-              onPressed: () => openVersionedItem(context, item),
+              side: const BorderSide(color: AppColors.outlineDark),
+              shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
             ),
-          ],
-        ),
-      ],
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => openVersionedItem(context, item),
+          ),
+        ],
+      ),
     );
   }
 
@@ -508,164 +481,3 @@ class _FeaturedDetails extends StatelessWidget {
     return playItemV2(context, item.item);
   }
 }
-
-class _FeaturedTitle extends StatelessWidget {
-  const _FeaturedTitle({required this.item});
-
-  final MediaItemV2 item;
-
-  @override
-  Widget build(BuildContext context) {
-    if (item case EventItemV2(
-      :final participants,
-      :final branding,
-    ) when participants.length == 2) {
-      return MatchupText(
-        home: participants[0].name,
-        away: participants[1].name,
-        accent: GeneratedBanner.accentFor(participants, branding: branding),
-        singleLine: true,
-        uppercase: true,
-        textKey: const Key('featured-title-text'),
-      );
-    }
-    final logo = switch (item) {
-      VideoItemV2() || SeriesItemV2() => item.artwork?.logo,
-      _ => null,
-    };
-    final fallback = _FeaturedTitleText(title: item.title);
-    if (logo == null) return fallback;
-
-    return Semantics(
-      label: item.title,
-      image: true,
-      child: ExcludeSemantics(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 280),
-          child: SizedBox(
-            height: 56,
-            child: CachedNetworkImage(
-              key: const Key('featured-title-logo'),
-              imageUrl: logo.url,
-              fit: BoxFit.contain,
-              fadeInDuration: Duration.zero,
-              memCacheWidth: artworkCacheDimension(context, 280),
-              placeholder: (_, _) => Center(child: fallback),
-              errorWidget: (_, _, _) => Center(child: fallback),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FeaturedTitleText extends StatelessWidget {
-  const _FeaturedTitleText({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    title,
-    key: const Key('featured-title-text'),
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    textAlign: TextAlign.center,
-    style: AppTypography.displaySm.copyWith(
-      color: AppColors.onDark,
-      fontWeight: FontWeight.w800,
-      letterSpacing: -0.7,
-      shadows: _featuredTextShadows,
-    ),
-  );
-}
-
-class _FeaturedMeta extends StatelessWidget {
-  const _FeaturedMeta({required this.item});
-
-  final MediaItemV2 item;
-
-  @override
-  Widget build(BuildContext context) {
-    final event = item is EventItemV2 ? item as EventItemV2 : null;
-    final eventLabel =
-        event == null || event.schedule.state == ScheduleState.live
-        ? null
-        : event.schedule.label ?? startTimeLabel(event.schedule.startsAt);
-    final values = <Widget>[
-      Text(
-        _kindLabel(item),
-        style: AppTypography.bodySm.copyWith(
-          color: AppColors.onDarkSoft,
-          shadows: _featuredTextShadows,
-        ),
-      ),
-      if (item.releaseYear != null)
-        Text(
-          item.releaseYear.toString(),
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.onDarkSoft,
-            shadows: _featuredTextShadows,
-          ),
-        ),
-      if (item.rating != null) ...[
-        const Icon(Icons.star, size: 15, color: Colors.amber),
-        Text(
-          item.rating!.toStringAsFixed(1),
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.onDark,
-            shadows: _featuredTextShadows,
-          ),
-        ),
-      ],
-      if (eventLabel != null)
-        Text(
-          eventLabel,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.onDarkSoft,
-            shadows: _featuredTextShadows,
-          ),
-        ),
-      if (event?.schedule.state == ScheduleState.live)
-        Text(
-          'LIVE',
-          style: AppTypography.caption.copyWith(
-            color: AppColors.liveAccent,
-            shadows: _featuredTextShadows,
-          ),
-        ),
-    ];
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xxs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: values,
-    );
-  }
-}
-
-String _kindLabel(MediaItemV2 item) => switch (item.kind) {
-  MediaKindV2.video => 'Movie',
-  MediaKindV2.series => 'Series',
-  MediaKindV2.episode => 'Episode',
-  MediaKindV2.channel => 'Live',
-  MediaKindV2.event => 'Live event',
-};
-
-const _featuredTextShadows = [
-  Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
-];
-
-const _featuredGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [
-    Color(0xD9000000),
-    Color(0x40000000),
-    Color(0xF0101010),
-    Color(0xFF101010),
-  ],
-  stops: [0, 0.24, 0.58, 1],
-);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:video_player/video_player.dart' as vp;
 
+import '../models/playback_start_position.dart';
 import 'video_player_view.dart';
 import '../state/subtitle_preference_controller.dart';
 
@@ -24,6 +25,7 @@ Widget platformPlayerBuilder(
   customControlsBuilder,
   String? preferredSubtitleLanguage,
   int? preferredQualityMaxHeight,
+  PlaybackStartPosition? startPosition,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
   bool muted = false,
@@ -45,6 +47,7 @@ Widget platformPlayerBuilder(
     onPlaybackReady: onPlaybackReady,
     preferredSubtitleLanguage: preferredSubtitleLanguage,
     preferredQualityMaxHeight: preferredQualityMaxHeight,
+    startPosition: startPosition,
     preferredExternalSubtitle: preferredExternalSubtitle,
     subtitleAppearance: subtitleAppearance,
     muted: muted,

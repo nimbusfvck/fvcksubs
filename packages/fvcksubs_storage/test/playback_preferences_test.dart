@@ -39,6 +39,14 @@ void main() {
     expect(await store.load(), isNull);
   });
 
+  test('preview autoplay defaults enabled and round-trips', () async {
+    const store = SharedPreferencesPreviewAutoplayPreferenceStore();
+
+    expect(await store.load(), isTrue);
+    await store.save(false);
+    expect(await store.load(), isFalse);
+  });
+
   test('external subtitle selections round-trip per media item', () async {
     final store = SharedPreferencesSubtitlePreferenceStore();
     const first = MediaRef(

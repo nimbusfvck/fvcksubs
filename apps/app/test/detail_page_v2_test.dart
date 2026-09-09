@@ -31,7 +31,7 @@ void main() {
 
       expect(find.text('Could not load details.'), findsNothing);
       expect(find.text('Catalog item'), findsWidgets);
-      expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Watch Now'), findsOneWidget);
     },
   );
 
@@ -248,7 +248,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(FilledButton, 'Play E5'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Watch E5'), findsOneWidget);
   });
 
   group('a group too long to scroll', () {
@@ -344,7 +344,13 @@ void main() {
     testWidgets('switches range when a chip is tapped', (tester) async {
       await open(tester, detailWith(250));
 
-      await tester.tap(find.text('1–100'));
+      final firstRange = find.text('1–100');
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(firstRange);
       await tester.pumpAndSettle();
 
       expect(find.text('Episode 1'), findsWidgets);

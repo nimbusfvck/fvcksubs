@@ -21,6 +21,7 @@ import 'player/widgets/stream_player.dart';
 import 'shell/home_shell.dart';
 import 'shell/system_ui_visibility.dart';
 import 'settings/nsfw_controller.dart';
+import 'settings/preview_autoplay_preference_controller.dart';
 import 'theme/app_theme.dart';
 
 class FvcksubsApp extends StatelessWidget {
@@ -40,6 +41,7 @@ class FvcksubsApp extends StatelessWidget {
     required this.sourceCache,
     required this.pictureInPictureSession,
     required this.pictureInPicturePreferenceController,
+    required this.previewAutoplayPreferenceController,
     required this.nsfwController,
     this.navigatorKey,
     this.playerBuilder = defaultPlayerBuilder,
@@ -75,6 +77,8 @@ class FvcksubsApp extends StatelessWidget {
   final PictureInPicturePreferenceController
   pictureInPicturePreferenceController;
 
+  final PreviewAutoplayPreferenceController previewAutoplayPreferenceController;
+
   final NsfwController nsfwController;
 
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -101,6 +105,7 @@ class FvcksubsApp extends StatelessWidget {
     sourceCache: sourceCache,
     pictureInPictureSession: pictureInPictureSession,
     pictureInPicturePreferenceController: pictureInPicturePreferenceController,
+    previewAutoplayPreferenceController: previewAutoplayPreferenceController,
     nsfwController: nsfwController,
     navigatorKey: navigatorKey,
     child: MaterialApp(

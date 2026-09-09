@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../models/app_player_controller.dart';
@@ -9,6 +10,7 @@ class PlayerControlsState {
     this.isBuffering = true,
     this.liveEdge = Duration.zero,
     this.dragValueMs,
+    this.pendingSeekPosition,
     this.activeSubtitleLabel,
     this.activeQualityLabel,
     this.skipIntroLabel,
@@ -19,6 +21,7 @@ class PlayerControlsState {
   final bool isBuffering;
   final Duration liveEdge;
   final double? dragValueMs;
+  final Duration? pendingSeekPosition;
   final String? activeSubtitleLabel;
   final String? activeQualityLabel;
   final String? skipIntroLabel;
@@ -29,6 +32,7 @@ class PlayerControlsState {
     bool? isBuffering,
     Duration? liveEdge,
     Object? dragValueMs = _unchanged,
+    Object? pendingSeekPosition = _unchanged,
     Object? activeSubtitleLabel = _unchanged,
     Object? activeQualityLabel = _unchanged,
     Object? skipIntroLabel = _unchanged,
@@ -40,6 +44,9 @@ class PlayerControlsState {
     dragValueMs: identical(dragValueMs, _unchanged)
         ? this.dragValueMs
         : dragValueMs as double?,
+    pendingSeekPosition: identical(pendingSeekPosition, _unchanged)
+        ? this.pendingSeekPosition
+        : pendingSeekPosition as Duration?,
     activeSubtitleLabel: identical(activeSubtitleLabel, _unchanged)
         ? this.activeSubtitleLabel
         : activeSubtitleLabel as String?,
@@ -59,6 +66,33 @@ class PlayerControlsCubit extends Cubit<PlayerControlsState> {
     PlayerControlsState initial = const PlayerControlsState(),
   }) : super(initial);
 
+  int _seekGeneration = 0;
+
+  void cancelSeek() {
+    _seekGeneration++;
+    if (!isClosed) emit(state.copyWith(pendingSeekPosition: null));
+  }
+
+  Future<void> seek(AppPlayerController controller, Duration target) async {
+    if (isClosed || !controller.value.value.initialized) return;
+    final generation = ++_seekGeneration;
+    emit(state.copyWith(pendingSeekPosition: target));
+    try {
+      await controller.seekTo(target);
+    } catch (error) {
+      if (kDebugMode) debugPrint('[Player] seek_failed ${error.runtimeType}');
+    } finally {
+      if (!isClosed && generation == _seekGeneration) {
+        emit(
+          state.copyWith(
+            value: controller.value.value,
+            pendingSeekPosition: null,
+          ),
+        );
+      }
+    }
+  }
+
   void update({
     required AppPlayerValue value,
     required bool controlsVisible,
@@ -70,6 +104,7 @@ class PlayerControlsCubit extends Cubit<PlayerControlsState> {
     required String? skipIntroLabel,
   }) => emit(
     PlayerControlsState(
+      pendingSeekPosition: state.pendingSeekPosition,
       value: value,
       controlsVisible: controlsVisible,
       isBuffering: isBuffering,

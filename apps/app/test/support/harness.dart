@@ -1,3 +1,4 @@
+import 'package:fvcksubs_app/player/models/playback_start_position.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
+import 'package:fvcksubs_app/settings/preview_autoplay_preference_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -482,6 +484,7 @@ class RecordingPlayer {
   /// lets a test assert an external track only stands in for a source that
   /// carries nothing in the preferred language.
   SubtitleTrack? playedPreferredExternalSubtitle;
+  PlaybackStartPosition? playedStartPosition;
 
   // [key] is accepted (real callers, `PlayerPage` in particular, rely on it
   // to recreate the native player on a source switch)
@@ -502,10 +505,12 @@ class RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     Key? key,
   }) {
+    playedStartPosition = startPosition;
     played = stream;
     playedIsLive = isLive;
     playedPreferredSubtitleLanguage = preferredSubtitleLanguage;
@@ -889,6 +894,7 @@ Widget wrapApp({
   NsfwController? nsfwController,
   PictureInPictureSession? pictureInPictureSession,
   PictureInPicturePreferenceController? pictureInPicturePreferenceController,
+  PreviewAutoplayPreferenceController? previewAutoplayPreferenceController,
 }) => AppScope(
   navigatorKey: _testNavigatorKey,
   registry: registry,
@@ -931,6 +937,11 @@ Widget wrapApp({
       PictureInPicturePreferenceController(
         store: FakePictureInPicturePreferenceStore(),
       ),
+  previewAutoplayPreferenceController:
+      previewAutoplayPreferenceController ??
+      PreviewAutoplayPreferenceController(
+        store: FakePreviewAutoplayPreferenceStore(),
+      ),
   nsfwController:
       nsfwController ??
       NsfwController(
@@ -960,6 +971,17 @@ Widget wrapApp({
     home: Scaffold(body: child),
   ),
 );
+
+class FakePreviewAutoplayPreferenceStore
+    implements PreviewAutoplayPreferenceStore {
+  bool saved = true;
+
+  @override
+  Future<bool> load() async => saved;
+
+  @override
+  Future<void> save(bool enabled) async => saved = enabled;
+}
 
 final _testNavigatorKey = GlobalKey<NavigatorState>();
 

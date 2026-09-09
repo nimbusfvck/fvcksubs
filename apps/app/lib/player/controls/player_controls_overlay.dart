@@ -319,7 +319,8 @@ class PlayerControlsOverlayView extends StatelessWidget {
                   >(
                     bloc: cubit,
                     selector: (state) => (
-                      position: state.value.position,
+                      position:
+                          state.pendingSeekPosition ?? state.value.position,
                       duration: state.value.duration,
                       timelineExtent: isLive
                           ? (state.liveEdge > state.value.seekablePosition
