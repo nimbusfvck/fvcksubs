@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_app/widgets/media_hero_layout.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -109,6 +109,9 @@ class FeaturedHeroPlaceholder extends StatelessWidget {
 }
 
 const _featuredIndicatorStartProgress = 0.12;
+const _featuredIncomingTravelFactor = 0.09;
+const _featuredOutgoingTravelFactor = 0.04;
+const _featuredArtworkOverscan = 0.28;
 
 class _FeaturedHeroState extends State<FeaturedHero>
     with SingleTickerProviderStateMixin {
@@ -215,6 +218,8 @@ class _FeaturedHeroState extends State<FeaturedHero>
                   offset: Offset(0, -collapse * 0.28),
                   child: _FeaturedPreview(
                     item: activeItem,
+                    pageController: _pageController,
+                    selectedPage: _page,
                     previewRef: _previewRef,
                     previewProgress: _previewProgress,
                     animatePosterIn: _animatePosterIn,
@@ -272,31 +277,47 @@ class _FeaturedHeroState extends State<FeaturedHero>
                 // The hero ticker pauses offscreen, but this small ticker must
                 // finish the summary fade before it leaves the toolbar.
                 enabled: true,
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: _scrolling,
-                  builder: (context, scrolling, child) => AnimatedSlide(
-                    offset: scrolling ? const Offset(0, 0.12) : Offset.zero,
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeInOutCubic,
-                    child: AnimatedOpacity(
-                      opacity: scrolling ? 0.0 : overlayOpacity,
-                      duration: const Duration(milliseconds: 260),
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_pageController, _scrolling]),
+                  builder: (context, _) {
+                    final page = _pageController.hasClients
+                        ? _pageController.page ?? _page.toDouble()
+                        : _page.toDouble();
+                    final summaryPage = _scrolling.value
+                        ? page.round().clamp(0, widget.items.length - 1).toInt()
+                        : _page;
+                    final summaryVisible =
+                        !_scrolling.value || summaryPage != _page;
+                    final summaryItem = widget.items[summaryPage];
+                    return AnimatedSlide(
+                      offset: summaryVisible
+                          ? Offset.zero
+                          : const Offset(0, 0.12),
+                      duration: summaryVisible
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
                       curve: Curves.easeInOutCubic,
-                      child: child,
-                    ),
-                  ),
-                  child: Align(
-                    alignment: MediaHeroLayout.isLargeScreen(context)
-                        ? Alignment.bottomLeft
-                        : Alignment.bottomCenter,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 680),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: _FeaturedDetails(item: activeItem),
+                      child: AnimatedOpacity(
+                        opacity: summaryVisible ? overlayOpacity : 0.0,
+                        duration: summaryVisible
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        curve: Curves.easeInOutCubic,
+                        child: Align(
+                          alignment: MediaHeroLayout.isLargeScreen(context)
+                              ? Alignment.bottomLeft
+                              : Alignment.bottomCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 680),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: _FeaturedDetails(item: summaryItem),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -331,10 +352,6 @@ class _FeaturedHeroState extends State<FeaturedHero>
       _noTrailerAutoSlideController.stop();
       _dragging.value = true;
       _scrolling.value = true;
-    } else if (notification is UserScrollNotification &&
-        notification.direction == ScrollDirection.idle) {
-      // The finger is up while PageView is still completing its snap.
-      _dragging.value = false;
     } else if (notification is ScrollEndNotification) {
       final settledPage = _pageController.hasClients
           ? _pageController.page?.round() ?? _page
@@ -614,10 +631,8 @@ class _FeaturedPosterLayer extends StatelessWidget {
       final currentPosterOpacity = previewRef.value == currentItem.item.ref
           ? 0.0
           : 1.0;
-      // Let the PageView own the horizontal drag and snap. The poster layer
-      // The poster remains full-screen. Its artwork alignment trails the
-      // finger and catches up during the release snap, matching a classic
-      // PageView parallax without moving the layer bounds.
+      // A flat remote image cannot reproduce tvOS layered artwork exactly.
+      // Combine restrained pan and opacity with an edge blur during the drag.
       const dragFollowThrough = 0.68;
       final posterProgress = dragging.value
           ? rawProgress * dragFollowThrough
@@ -626,7 +641,22 @@ class _FeaturedPosterLayer extends StatelessWidget {
       final artworkOffset = direction < 0
           ? posterParallax * (1 - posterProgress)
           : -posterParallax * (1 - posterProgress);
-      final targetOpacity = Curves.easeInOutCubic.transform(rawProgress);
+      final viewportWidth =
+          pageController.hasClients &&
+              pageController.position.hasViewportDimension
+          ? pageController.position.viewportDimension
+          : MediaQuery.sizeOf(context).width;
+      final artworkWidth = viewportWidth * (1 + _featuredArtworkOverscan);
+      final currentTranslation =
+          -(page - selectedPage) *
+          viewportWidth *
+          _featuredOutgoingTravelFactor;
+      final targetTranslation =
+          direction.sign.toDouble() *
+          viewportWidth *
+          _featuredIncomingTravelFactor *
+          (1 - rawProgress);
+      final targetOpacity = Curves.easeOutCubic.transform(rawProgress);
       final currentPosterFadeDuration = currentPosterOpacity == 0.0
           ? const Duration(milliseconds: 360)
           : animatePosterIn.value
@@ -636,31 +666,126 @@ class _FeaturedPosterLayer extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: [
-          AnimatedOpacity(
-            opacity: currentPosterOpacity,
-            duration: currentPosterFadeDuration,
-            curve: Curves.easeInOut,
-            child: _FeaturedSlide(item: currentItem),
-          ),
-          if (direction != 0 && targetIndex != selectedPage)
-            AnimatedOpacity(
-              opacity: targetOpacity,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              child: _FeaturedSlide(
-                item: items[targetIndex],
-                artworkAlignment: Alignment(artworkOffset, -1),
+          Opacity(
+            opacity: 1 - rawProgress * 0.22,
+            child: Transform.translate(
+              key: const Key('featured-parallax-current'),
+              offset: Offset(currentTranslation, 0),
+              child: AnimatedOpacity(
+                opacity: currentPosterOpacity,
+                duration: currentPosterFadeDuration,
+                curve: Curves.easeInOut,
+                child: _FeaturedExtendedSlide(
+                  item: currentItem,
+                  width: artworkWidth,
+                ),
               ),
             ),
+          ),
+          if (direction != 0 && targetIndex != selectedPage)
+            Opacity(
+              opacity: targetOpacity,
+              child: Transform.translate(
+                key: const Key('featured-parallax-target'),
+                offset: Offset(targetTranslation, 0),
+                child: _FeaturedExtendedSlide(
+                  item: items[targetIndex],
+                  width: artworkWidth,
+                  artworkAlignment: Alignment(artworkOffset, -1),
+                ),
+              ),
+            ),
+          _FeaturedEdgeBlur(
+            key: const Key('featured-edge-blur'),
+            page: page,
+            selectedPage: selectedPage,
+            viewportWidth: viewportWidth,
+          ),
         ],
       );
     },
   );
 }
 
+class _FeaturedExtendedSlide extends StatelessWidget {
+  const _FeaturedExtendedSlide({
+    required this.item,
+    required this.width,
+    this.artworkAlignment,
+  });
+
+  final VersionedMediaItem item;
+  final double width;
+  final Alignment? artworkAlignment;
+
+  @override
+  Widget build(BuildContext context) => OverflowBox(
+    alignment: Alignment.center,
+    minWidth: width,
+    maxWidth: width,
+    child: SizedBox(
+      width: width,
+      child: _FeaturedSlide(item: item, artworkAlignment: artworkAlignment),
+    ),
+  );
+}
+
+class _FeaturedEdgeBlur extends StatelessWidget {
+  const _FeaturedEdgeBlur({
+    super.key,
+    required this.page,
+    required this.selectedPage,
+    required this.viewportWidth,
+  });
+
+  final double page;
+  final int selectedPage;
+  final double viewportWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final direction = page.compareTo(selectedPage.toDouble());
+    if (direction == 0) return const SizedBox.shrink();
+    final progress = (page - selectedPage).abs().clamp(0.0, 1.0).toDouble();
+    // Match the blur edge to the user's swipe: a left swipe blurs the left
+    // edge, while a right swipe blurs the right edge.
+    final fromRight = direction > 0;
+    final blurWidth = viewportWidth * (0.38 + progress * 0.16);
+    final overlap = viewportWidth * 0.22;
+    final totalWidth = blurWidth + overlap;
+    final sigmaX = 26 + progress * 30;
+    final sigmaY = 5 + progress * 7;
+    final blurStart = overlap / totalWidth;
+    return Align(
+      alignment: fromRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: SizedBox(
+        width: totalWidth,
+        height: double.infinity,
+        child: ClipRect(
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: fromRight ? Alignment.centerLeft : Alignment.centerRight,
+              end: fromRight ? Alignment.centerRight : Alignment.centerLeft,
+              colors: const [Colors.transparent, Colors.white, Colors.white],
+              stops: [0, blurStart, 1],
+            ).createShader(bounds),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
+              child: const ColoredBox(color: Colors.transparent),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FeaturedPreview extends StatefulWidget {
   const _FeaturedPreview({
     required this.item,
+    required this.pageController,
+    required this.selectedPage,
     required this.previewRef,
     required this.previewProgress,
     required this.animatePosterIn,
@@ -671,6 +796,8 @@ class _FeaturedPreview extends StatefulWidget {
   });
 
   final VersionedMediaItem item;
+  final PageController pageController;
+  final int selectedPage;
   final ValueNotifier<MediaRef?> previewRef;
   final ValueNotifier<double?> previewProgress;
   final ValueNotifier<bool> animatePosterIn;
@@ -900,12 +1027,33 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
     // Keep the player visible and playing while the poster layer transitions.
     // If the selected item changes, the previous trailer stays here until the
     // new detail resolves and the poster can cover the handoff.
-    return TrailerPreview(
-      trailer: trailer,
-      playing: _playing && widget.visible,
-      onPlayingChanged: _onTrailerPlaying,
-      onProgressChanged: _onTrailerProgress,
-      onCompleted: _onTrailerCompleted,
+    return AnimatedBuilder(
+      animation: widget.pageController,
+      builder: (context, child) {
+        final page = widget.pageController.hasClients
+            ? widget.pageController.page ?? widget.selectedPage.toDouble()
+            : widget.selectedPage.toDouble();
+        final viewportWidth =
+            widget.pageController.hasClients &&
+                widget.pageController.position.hasViewportDimension
+            ? widget.pageController.position.viewportDimension
+            : MediaQuery.sizeOf(context).width;
+        final translation =
+            -(page - widget.selectedPage) *
+            viewportWidth *
+            _featuredOutgoingTravelFactor;
+        return Transform.translate(
+          offset: Offset(translation, 0),
+          child: child,
+        );
+      },
+      child: TrailerPreview(
+        trailer: trailer,
+        playing: _playing && widget.visible,
+        onPlayingChanged: _onTrailerPlaying,
+        onProgressChanged: _onTrailerProgress,
+        onCompleted: _onTrailerCompleted,
+      ),
     );
   }
 }

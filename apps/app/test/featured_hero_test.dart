@@ -377,7 +377,24 @@ void main() {
       ),
     );
 
-    await tester.drag(find.byType(PageView), const Offset(-300, 0));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(PageView)),
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+
+    final parallaxTarget = tester.widget<Transform>(
+      find.byKey(const Key('featured-parallax-target')),
+    );
+    final parallaxCurrent = tester.widget<Transform>(
+      find.byKey(const Key('featured-parallax-current')),
+    );
+    expect(parallaxTarget.transform.getTranslation().x, greaterThan(0));
+    expect(parallaxCurrent.transform.getTranslation().x, lessThan(0));
+    expect(find.byKey(const Key('featured-edge-blur')), findsOneWidget);
+
+    await gesture.moveBy(const Offset(-180, 0));
+    await gesture.up();
     // The active fallback progress animation intentionally never settles.
     for (var index = 0; index < 10; index++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -442,7 +459,7 @@ void main() {
     await gesture.moveBy(const Offset(-240, 0));
     await tester.pump();
 
-    expect(find.text('First movie'), findsOneWidget);
+    expect(find.text('Second movie'), findsOneWidget);
     expect(
       tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
       isTrue,
