@@ -10,6 +10,7 @@ class AppPlayerValue {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
+    this.bufferedRanges = const [],
     this.seekablePosition = Duration.zero,
   });
 
@@ -18,7 +19,12 @@ class AppPlayerValue {
   final bool isBuffering;
   final Duration position;
   final Duration duration;
+
+  /// The furthest buffered point, retained for the timeline and seek UI.
   final Duration bufferedPosition;
+
+  /// Native buffered ranges, preserved so live recovery can detect gaps.
+  final List<AppPlayerTimeRange> bufferedRanges;
 
   /// The end of the native seekable window. For live playback this is the
   /// timeline edge, independent of read-ahead buffering.
@@ -31,6 +37,7 @@ class AppPlayerValue {
     Duration? position,
     Duration? duration,
     Duration? bufferedPosition,
+    List<AppPlayerTimeRange>? bufferedRanges,
     Duration? seekablePosition,
   }) => AppPlayerValue(
     initialized: initialized ?? this.initialized,
@@ -39,8 +46,36 @@ class AppPlayerValue {
     position: position ?? this.position,
     duration: duration ?? this.duration,
     bufferedPosition: bufferedPosition ?? this.bufferedPosition,
+    bufferedRanges: bufferedRanges ?? this.bufferedRanges,
     seekablePosition: seekablePosition ?? this.seekablePosition,
   );
+}
+
+/// A backend-independent buffered interval.
+@immutable
+class AppPlayerTimeRange {
+  const AppPlayerTimeRange(this.start, this.end);
+
+  final Duration start;
+  final Duration end;
+}
+
+/// Returns the end of the buffered range that contains [position].
+///
+/// A small tolerance absorbs timestamp rounding at segment boundaries, but a
+/// real gap still returns zero instead of the furthest range in the future.
+Duration bufferedEndAtPosition({
+  required Duration position,
+  required Iterable<AppPlayerTimeRange> ranges,
+  Duration tolerance = const Duration(milliseconds: 250),
+}) {
+  var end = Duration.zero;
+  for (final range in ranges) {
+    if (range.start <= position + tolerance && range.end > position) {
+      if (range.end > end) end = range.end;
+    }
+  }
+  return end;
 }
 
 enum AppPlayerEventType {

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:video_player/video_player.dart' as vp;
 import '../diagnostics/player_diagnostics.dart';
+import '../data/local_hls_proxy.dart';
 import '../mappers/startup_stream.dart';
 import '../models/playback_start_position.dart';
 import '../state/video_player_startup.dart';
@@ -23,6 +24,7 @@ part 'video_player_view_subtitles.dart';
 
 const _playbackDiagnosticsInterval = Duration(seconds: 2);
 const _startupHealthTimeout = Duration(seconds: 8);
+const _livePlaybackProgressTolerance = Duration(milliseconds: 250);
 
 /// The app's native video player for HLS, DRM, live, and on-demand playback.
 class VideoPlayerView extends StatefulWidget {
@@ -107,10 +109,10 @@ Rect subtitleOverlayRect({
 
 class _VideoPlayerViewState extends State<VideoPlayerView>
     with WidgetsBindingObserver {
-  late vp.VideoPlayerController _player;
+  vp.VideoPlayerController? _player;
   late PlayableStream _activeStream;
-  late final _VideoPlayerControllerAdapter _adapter;
-  late Widget _videoSurface;
+  _VideoPlayerControllerAdapter? _adapter;
+  Widget _videoSurface = const ColoredBox(color: Colors.black);
   late PlayerFitMode _fitMode;
   bool _readyReported = false;
   bool _preferredQualitySelectionDone = false;
@@ -120,11 +122,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   Timer? _wakelockRefreshTimer;
   PlayerWakelockLease? _wakelock;
   Timer? _playbackDiagnosticsTimer;
+  Timer? _livePlaybackKickTimer;
   StreamSubscription<vp.VideoEvent>? _videoEventSubscription;
   DateTime? _startupHealthStartedAt;
   bool _startupHealthPassed = false;
   bool _disposed = false;
   Future<void>? _variantSwitch;
+  LocalHlsProxy? _playbackProxy;
   int _playerGeneration = 0;
 
   bool get _isActive => mounted && !_disposed;
@@ -149,25 +153,62 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     );
     _preferredQualitySelectionDone = variant != null;
     _activeStream = streamForVariant(widget.stream, variant);
-    _player = _createPlayer(_activeStream);
-    _videoSurface = vp.VideoPlayer(_player);
-    _adapter = _VideoPlayerControllerAdapter(
-      _player,
+    if (widget.isLive && !widget.preview && !_activeStream.isProtected) {
+      _playbackProxy = LocalHlsProxy(logger: kDebugMode ? debugPrint : null);
+    }
+    unawaited(_preparePlayer());
+  }
+
+  Future<void> _preparePlayer() async {
+    final stopwatch = Stopwatch()..start();
+    final originalStream = _activeStream;
+    var playerStream = originalStream;
+    final proxy = _playbackProxy;
+    _logProxy(
+      'prepare_start live=${widget.isLive} '
+      'url=${safePlaybackUrlForLog(originalStream.url)}',
+    );
+    if (proxy != null) {
+      try {
+        playerStream = await proxy.wrap(originalStream);
+        _logProxy(
+          'enabled elapsed=${stopwatch.elapsedMilliseconds}ms '
+          'url=${safePlaybackUrlForLog(originalStream.url)}',
+        );
+      } catch (error) {
+        await proxy.dispose();
+        _playbackProxy = null;
+        _logProxy('disabled reason=${redactPlaybackLogText(error)}');
+      }
+    }
+    if (!_isActive) return;
+    _activeStream = playerStream;
+    final player = _createPlayer(playerStream);
+    final adapter = _VideoPlayerControllerAdapter(
+      player,
       onSetFit: (mode) {
         if (mounted) setState(() => _fitMode = mode);
       },
       onSelectVariant: _selectVariant,
       streamUrl: widget.stream.url,
-      variants: _activeStream.variants,
+      variants: originalStream.variants,
     );
-    _adapter.setActiveUrl(_activeStream.url);
+    _player = player;
+    _adapter = adapter;
+    _videoSurface = vp.VideoPlayer(player);
+    adapter.setActiveUrl(playerStream.url);
     _bindPlayer();
-    widget.onControllerCreated?.call(_adapter);
+    widget.onControllerCreated?.call(adapter);
+    _logProxy(
+      'player_created elapsed=${stopwatch.elapsedMilliseconds}ms '
+      'url=${safePlaybackUrlForLog(playerStream.url)}',
+    );
+    if (mounted) setState(() {});
     if (!widget.preview || widget.playing) _startOpen();
   }
 
   void _startOpen() {
-    if (_openStarted) return;
+    if (_openStarted || _player == null || _adapter == null) return;
     _openStarted = true;
     unawaited(_open());
   }
@@ -203,15 +244,18 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   }
 
   void _bindPlayer() {
-    _player.addListener(_onValueChanged);
-    _videoEventSubscription = _player.videoEvents.listen((event) {
+    final player = _player;
+    final adapter = _adapter;
+    if (player == null || adapter == null) return;
+    player.addListener(_onValueChanged);
+    _videoEventSubscription = player.videoEvents.listen((event) {
       switch (event.eventType) {
         case vp.VideoEventType.pictureInPictureStarted:
-          _adapter.reportPictureInPictureStarted();
+          adapter.reportPictureInPictureStarted();
         case vp.VideoEventType.pictureInPictureRestore:
-          _adapter.reportPictureInPictureRestore();
+          adapter.reportPictureInPictureRestore();
         case vp.VideoEventType.pictureInPictureClosed:
-          _adapter.reportPictureInPictureClosed();
+          adapter.reportPictureInPictureClosed();
         default:
           break;
       }
@@ -231,12 +275,25 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   }
 
   Future<void> _selectVariantNow(StreamVariant? variant) async {
-    if (!_isActive) return;
-    final generation = ++_playerGeneration;
     final oldPlayer = _player;
+    final adapter = _adapter;
+    if (!_isActive || oldPlayer == null || adapter == null) return;
+    final generation = ++_playerGeneration;
     final restorePlaying = oldPlayer.value.isPlaying;
     var oldPlayerPaused = false;
-    final nextStream = streamForVariant(widget.stream, variant);
+    final originalNextStream = streamForVariant(widget.stream, variant);
+    var nextStream = originalNextStream;
+    final proxy = _playbackProxy;
+    if (proxy != null) {
+      try {
+        nextStream = await proxy.wrap(originalNextStream);
+      } catch (error) {
+        _logProxy('variant_disabled reason=${redactPlaybackLogText(error)}');
+        _playbackProxy = null;
+        await proxy.dispose();
+      }
+    }
+    if (!_isCurrentGeneration(generation)) return;
     final nextPlayer = _createPlayer(nextStream);
     final stopwatch = Stopwatch()..start();
     var swapped = false;
@@ -306,9 +363,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       _activeStream = nextStream;
       _player = nextPlayer;
       swapped = true;
-      _videoSurface = vp.VideoPlayer(_player);
-      _adapter.attachPlayer(_player);
-      _adapter.setActiveUrl(_activeStream.url);
+      _videoSurface = vp.VideoPlayer(nextPlayer);
+      adapter.attachPlayer(nextPlayer);
+      adapter.setActiveUrl(_activeStream.url);
       _bindPlayer();
       if (mounted) setState(() {});
       await oldPlayer.dispose();
@@ -362,14 +419,17 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     int? generation,
     Stopwatch? stopwatch,
   }) async {
+    final player = _player;
+    final adapter = _adapter;
+    if (player == null || adapter == null) return;
     final clock = stopwatch ?? (Stopwatch()..start());
     final currentGeneration = generation ?? _playerGeneration;
     _openStopwatch = clock;
     final startup = VideoPlayerStartup(
-      player: _player,
-      controller: _adapter,
+      player: player,
+      controller: adapter,
       stream: _activeStream,
-      refreshTracks: _adapter.refreshTracks,
+      refreshTracks: adapter.refreshTracks,
       isCurrent: () => _isCurrentGeneration(currentGeneration),
       log: (stage, {details}) => _logOpenStage(stage, clock, details: details),
       maxHeight: widget.preferredQualityMaxHeight,
@@ -395,6 +455,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       unawaited(startup.refreshAfterMetadata());
       if (playing) {
         _startPlaybackDiagnostics(clock);
+        _scheduleLivePlaybackKick(player, currentGeneration, clock);
       } else {
         _reportPlaybackReady(clock);
       }
@@ -405,7 +466,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         clock,
         details: 'error=${redactPlaybackLogText(error)}',
       );
-      _adapter.reportError(error);
+      adapter.reportError(error);
     }
   }
 
@@ -421,6 +482,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     );
   }
 
+  void _logProxy(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[LocalHlsProxy] $message');
+  }
+
   void _startPlaybackDiagnostics(Stopwatch stopwatch) {
     _startupHealthStartedAt = DateTime.now();
     _playbackDiagnosticsTimer?.cancel();
@@ -431,15 +497,47 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     _samplePlaybackHealth(stopwatch);
   }
 
+  void _scheduleLivePlaybackKick(
+    vp.VideoPlayerController player,
+    int generation,
+    Stopwatch stopwatch,
+  ) {
+    if (!widget.isLive) return;
+    _livePlaybackKickTimer?.cancel();
+    final initialPosition = player.value.position;
+    _livePlaybackKickTimer = Timer(const Duration(seconds: 1), () async {
+      _livePlaybackKickTimer = null;
+      if (!_isCurrentGeneration(generation) || !player.value.isInitialized) {
+        return;
+      }
+      if (player.value.position >
+          initialPosition + _livePlaybackProgressTolerance) {
+        return;
+      }
+      _logOpenStage('live_play_kick_start', stopwatch);
+      await player.play();
+      if (_isCurrentGeneration(generation)) {
+        _logOpenStage('live_play_kick_done', stopwatch);
+      }
+    });
+  }
+
   void _samplePlaybackHealth(Stopwatch stopwatch) {
-    if (!mounted) return;
-    final value = _player.value;
+    final player = _player;
+    final adapter = _adapter;
+    if (!mounted || player == null || adapter == null) return;
+    final value = player.value;
     final bufferedPosition = value.buffered.fold<Duration>(
       Duration.zero,
       (latest, range) => range.end > latest ? range.end : latest,
     );
-    final ahead = bufferedPosition > value.position
-        ? bufferedPosition - value.position
+    final appValue = adapter.value.value;
+    final contiguousBufferedPosition = bufferedEndAtPosition(
+      position: value.position,
+      ranges: appValue.bufferedRanges,
+    );
+    final contiguousAhead = contiguousBufferedPosition > value.position
+        ? contiguousBufferedPosition - value.position
         : Duration.zero;
     final seekablePosition = value.seekable.fold<Duration>(
       Duration.zero,
@@ -452,16 +550,18 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
           'live=${widget.isLive} '
           'position_ms=${value.position.inMilliseconds} '
           'buffered_ms=${bufferedPosition.inMilliseconds} '
+          'contiguous_buffered_ms=${contiguousBufferedPosition.inMilliseconds} '
           'seekable_ms=${seekablePosition.inMilliseconds} '
-          'ahead_ms=${ahead.inMilliseconds} '
+          'ahead_ms=${contiguousAhead.inMilliseconds} '
           'is_playing=${value.isPlaying} '
           'is_buffering=${value.isBuffering} '
           'duration_ms=${value.duration.inMilliseconds}',
     );
 
     if (!_startupHealthPassed) {
-      final hasMediaProgress =
-          value.position > Duration.zero || bufferedPosition > Duration.zero;
+      final hasMediaProgress = widget.isLive
+          ? value.position > Duration.zero
+          : value.position > Duration.zero || bufferedPosition > Duration.zero;
       if (value.isPlaying && !value.isBuffering && hasMediaProgress) {
         _startupHealthPassed = true;
         _reportPlaybackReady(stopwatch);
@@ -474,9 +574,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         _logOpenStage(
           'startup_health_failed',
           stopwatch,
-          details: 'reason=no_media_progress timeout_s=8',
+          details:
+              'reason=${widget.isLive ? 'live_position_not_advancing' : 'no_media_progress'} '
+              'timeout_s=8',
         );
-        _adapter.reportError(
+        adapter.reportError(
           StateError('Playback made no media progress during startup.'),
         );
       }
@@ -491,8 +593,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   }
 
   void _onValueChanged() {
-    _adapter.syncValue();
-    final value = _player.value;
+    final player = _player;
+    final adapter = _adapter;
+    if (player == null || adapter == null) return;
+    adapter.syncValue();
+    final value = player.value;
     if (value.isPlaying && !_nativePlayingReported) {
       _nativePlayingReported = true;
       final stopwatch = _openStopwatch;
@@ -501,12 +606,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       }
     }
     if (value.hasError) {
-      _adapter.reportError(value.errorDescription!);
+      adapter.reportError(value.errorDescription!);
     }
     if (value.isCompleted) {
       _playbackDiagnosticsTimer?.cancel();
       _playbackDiagnosticsTimer = null;
-      _adapter.reportCompleted();
+      _livePlaybackKickTimer?.cancel();
+      _livePlaybackKickTimer = null;
+      adapter.reportCompleted();
     }
   }
 
@@ -522,16 +629,23 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     if (oldWidget.playing != widget.playing) {
       if (widget.playing) {
         if (_openStarted) {
-          unawaited(_player.play());
+          final player = _player;
+          if (player != null) unawaited(player.play());
         } else {
           _startOpen();
         }
-      } else if (_openStarted && _player.value.isInitialized) {
-        unawaited(_player.pause());
+      } else {
+        final player = _player;
+        if (_openStarted && player?.value.isInitialized == true) {
+          unawaited(player!.pause());
+        }
       }
     }
     if (oldWidget.muted != widget.muted) {
-      unawaited(_player.setVolume(widget.muted ? 0 : 1));
+      final player = _player;
+      if (player != null) {
+        unawaited(player.setVolume(widget.muted ? 0 : 1));
+      }
     }
   }
 
@@ -544,73 +658,80 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   void dispose() {
     _disposed = true;
     _playbackDiagnosticsTimer?.cancel();
+    _livePlaybackKickTimer?.cancel();
     _wakelockRefreshTimer?.cancel();
     if (widget.wakelock ?? !widget.preview) {
       WidgetsBinding.instance.removeObserver(this);
       _wakelock?.release();
     }
-    _player.removeListener(_onValueChanged);
+    final player = _player;
+    final adapter = _adapter;
+    player?.removeListener(_onValueChanged);
     unawaited(_videoEventSubscription?.cancel());
-    _adapter.dispose();
-    unawaited(_player.dispose());
+    adapter?.dispose();
+    unawaited(player?.dispose() ?? Future<void>.value());
+    unawaited(_playbackProxy?.dispose() ?? Future<void>.value());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<vp.VideoPlayerValue>(
-        valueListenable: _player,
-        builder: (context, value, child) {
-          if (!value.isInitialized) {
-            return const ColoredBox(color: Colors.black);
-          }
-          final videoSize = value.size;
-          final fit = _fitMode == PlayerFitMode.contain
-              ? BoxFit.contain
-              : BoxFit.cover;
-          return ColoredBox(
-            color: Colors.black,
-            child: ClipRect(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final viewportSize = Size(
-                    constraints.maxWidth,
-                    constraints.maxHeight,
-                  );
-                  final subtitleRect = subtitleOverlayRect(
-                    videoSize: videoSize,
-                    viewportSize: viewportSize,
-                    fit: fit,
-                  );
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      FittedBox(
-                        fit: fit,
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.hardEdge,
-                        child: SizedBox(
-                          width: videoSize.width,
-                          height: videoSize.height,
-                          child: child!,
-                        ),
+  Widget build(BuildContext context) {
+    final player = _player;
+    if (player == null) return const ColoredBox(color: Colors.black);
+    return ValueListenableBuilder<vp.VideoPlayerValue>(
+      valueListenable: player,
+      builder: (context, value, child) {
+        if (!value.isInitialized) {
+          return const ColoredBox(color: Colors.black);
+        }
+        final videoSize = value.size;
+        final fit = _fitMode == PlayerFitMode.contain
+            ? BoxFit.contain
+            : BoxFit.cover;
+        return ColoredBox(
+          color: Colors.black,
+          child: ClipRect(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final viewportSize = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+                final subtitleRect = subtitleOverlayRect(
+                  videoSize: videoSize,
+                  viewportSize: viewportSize,
+                  fit: fit,
+                );
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    FittedBox(
+                      fit: fit,
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: videoSize.width,
+                        height: videoSize.height,
+                        child: child!,
                       ),
-                      Positioned.fromRect(
-                        rect: subtitleRect,
-                        child: SubtitleHtmlText(
-                          text: value.caption.text,
-                          textStyle:
-                              widget.subtitleAppearance?.textStyle ??
-                              playerSubtitleTextStyle,
-                        ),
+                    ),
+                    Positioned.fromRect(
+                      rect: subtitleRect,
+                      child: SubtitleHtmlText(
+                        text: value.caption.text,
+                        textStyle:
+                            widget.subtitleAppearance?.textStyle ??
+                            playerSubtitleTextStyle,
                       ),
-                    ],
-                  );
-                },
-              ),
+                    ),
+                  ],
+                );
+              },
             ),
-          );
-        },
-        child: _videoSurface,
-      );
+          ),
+        );
+      },
+      child: _videoSurface,
+    );
+  }
 }

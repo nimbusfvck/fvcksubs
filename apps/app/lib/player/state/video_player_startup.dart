@@ -21,6 +21,7 @@ class VideoPlayerStartup {
     required this.log,
     required this.maxHeight,
     this.preferredQualityDone = false,
+    this.liveInitializeTimeout = const Duration(seconds: 8),
   });
 
   final vp.VideoPlayerController player;
@@ -31,6 +32,10 @@ class VideoPlayerStartup {
   final void Function(String stage, {String? details}) log;
   final int? maxHeight;
   bool preferredQualityDone;
+
+  /// Prevents a live source that buffers forever before AVPlayer becomes ready
+  /// from leaving the player route in an endless loading state.
+  final Duration liveInitializeTimeout;
 
   Future<bool> open({
     required bool initialized,
@@ -53,9 +58,25 @@ class VideoPlayerStartup {
         'initialize_start',
         details:
             'url=${safePlaybackUrlForLog(stream.url)} '
-            'format=${stream.format.name}',
+            'format=${stream.format.name} '
+            'live=$isLive '
+            'timeout_s=${isLive ? liveInitializeTimeout.inMilliseconds / 1000 : 'none'}',
       );
-      await player.initialize();
+      try {
+        final initialization = player.initialize();
+        if (isLive) {
+          await initialization.timeout(liveInitializeTimeout);
+        } else {
+          await initialization;
+        }
+      } on TimeoutException {
+        log(
+          'initialize_timeout',
+          details:
+              'live=true timeout_s=${liveInitializeTimeout.inMilliseconds / 1000}',
+        );
+        rethrow;
+      }
       if (!isCurrent()) return false;
       log(
         'initialize_done',

@@ -45,6 +45,7 @@ const Duration _liveForwardBufferThreshold = Duration(seconds: 1);
 const Duration _livePositionProgressTolerance = Duration(milliseconds: 250);
 const Duration _renewalStabilityThreshold = Duration(seconds: 20);
 const Duration _orientationReleaseDelay = Duration(milliseconds: 260);
+const Duration _fallbackWaitTimeout = Duration(seconds: 10);
 
 /// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
@@ -77,19 +78,41 @@ Duration liveForwardBuffer({
   return bufferedPosition - position;
 }
 
+/// Returns only the buffer that is contiguous with the current live position.
+@visibleForTesting
+Duration liveContiguousForwardBuffer({
+  required Duration position,
+  required Duration bufferedPosition,
+  List<AppPlayerTimeRange>? bufferedRanges,
+}) {
+  final ranges = bufferedRanges;
+  if (ranges == null || ranges.isEmpty) {
+    return liveForwardBuffer(
+      position: position,
+      bufferedPosition: bufferedPosition,
+    );
+  }
+  return liveForwardBuffer(
+    position: position,
+    bufferedPosition: bufferedEndAtPosition(position: position, ranges: ranges),
+  );
+}
+
 /// Reports whether a live player is buffering with no usable forward cushion.
 @visibleForTesting
 bool liveBufferingNeedsRecovery({
   required Duration position,
   required Duration bufferedPosition,
+  List<AppPlayerTimeRange>? bufferedRanges,
   Duration? previousPosition,
   required bool isPlaying,
   required bool isBuffering,
 }) {
   if (!isPlaying || !isBuffering) return false;
-  final forwardBuffer = liveForwardBuffer(
+  final forwardBuffer = liveContiguousForwardBuffer(
     position: position,
     bufferedPosition: bufferedPosition,
+    bufferedRanges: bufferedRanges,
   );
   if (forwardBuffer <= _liveForwardBufferThreshold) return true;
   if (previousPosition == null) return false;
@@ -150,6 +173,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _progressTimer;
   Timer? _stallTimer;
   Timer? _renewalTimer;
+  Timer? _fallbackWaitTimer;
   final PlaybackStallDetector _stallDetector = PlaybackStallDetector();
   DateTime? _liveBufferingSince;
   Duration? _lastLivePosition;
@@ -335,6 +359,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _progressTimer?.cancel();
     _stallTimer?.cancel();
     _renewalTimer?.cancel();
+    _fallbackWaitTimer?.cancel();
     _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
     _backgroundSourceLoading.dispose();
@@ -377,11 +402,13 @@ class _PlayerPageState extends State<PlayerPage> {
       isPlaying: value.isPlaying,
       isBuffering: value.isBuffering,
     );
-    if (!_sourceStarted) {
+    if (!_sourceStarted && value.initialized && value.isPlaying) {
       _sourceStarted = true;
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
-      if (_waitingForFallback) {
+      if (_waitingForFallback || _retrying) {
         setState(() {
           _waitingForFallback = false;
           _retrying = false;
@@ -541,10 +568,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!_pendingSourcesSettled) {
       _pendingFallbackSourceId = _current.source.id;
       _pendingFallbackError = message;
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = Timer(_fallbackWaitTimeout, _finishFallbackWait);
       setState(() {
         _waitingForFallback = true;
         _playbackError = null;
-        _retrying = true;
+        _retrying = false;
       });
       return;
     }
@@ -564,12 +593,16 @@ class _PlayerPageState extends State<PlayerPage> {
       failedSourceIds: _failedSourceIds,
     );
     if (nextIndex != null) {
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
       _logAndSwitchToFallback(nextIndex);
       return;
     }
     if (_pendingSourcesSettled) {
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       final message = _pendingFallbackError;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
@@ -590,6 +623,8 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _showInitialPlaybackError(String? message) {
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
     setState(() {
       _waitingForFallback = false;
       _playbackError = (message == null || message.isEmpty)
@@ -602,6 +637,10 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _retryPlayback() async {
     if (_controller == null || _retrying) return;
     final attempt = ++_playbackAttempt;
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
+    _pendingFallbackSourceId = null;
+    _pendingFallbackError = null;
     _failedSourceIds.remove(_current.source.id);
     _renewalTimer?.cancel();
     _renewalTimer = null;
@@ -615,6 +654,8 @@ class _PlayerPageState extends State<PlayerPage> {
       _retrying = true;
       _playbackError = null;
     });
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = Timer(_fallbackWaitTimeout, _finishRetryWait);
     try {
       final scope = AppScope.of(context);
       final stream = await scope.registry.resolveSource(
@@ -637,11 +678,12 @@ class _PlayerPageState extends State<PlayerPage> {
         );
         _sourceRevision++;
         _controller = null;
-        _retrying = false;
       });
       scope.sourceCache.store(widget.media.ref, _resolvedSources);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       setState(() {
         _retrying = false;
         _playbackError =
@@ -664,7 +706,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (remaining == null) return;
     _renewalTimer = Timer(
       renewalDelayFor(remaining),
-      () => unawaited(_renewCurrentSource()),
+      () => unawaited(_renewCurrentSource(reason: 'scheduled')),
     );
   }
 
@@ -693,6 +735,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final stalled = liveBufferingNeedsRecovery(
       position: value.position,
       bufferedPosition: value.bufferedPosition,
+      bufferedRanges: value.bufferedRanges,
       previousPosition: _lastLivePosition,
       isPlaying: value.isPlaying,
       isBuffering: value.isBuffering,
@@ -710,6 +753,7 @@ class _PlayerPageState extends State<PlayerPage> {
       debugPrint(
         '[PlaybackSources] live_buffering_recovery '
         'buffered_ms=${value.bufferedPosition.inMilliseconds} '
+        'contiguous_buffered_ms=${liveContiguousForwardBuffer(position: value.position, bufferedPosition: value.bufferedPosition, bufferedRanges: value.bufferedRanges).inMilliseconds} '
         'is_buffering=${value.isBuffering} '
         'elapsed_ms=${elapsed.inMilliseconds}',
       );
@@ -747,7 +791,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _fallBackAfterFailedRenewal(_current.source.id);
       return;
     }
-    unawaited(_renewCurrentSource());
+    unawaited(_renewCurrentSource(reason: 'buffering'));
   }
 
   /// Re-resolves the source being watched and swaps the result in silently.
@@ -756,8 +800,9 @@ class _PlayerPageState extends State<PlayerPage> {
   /// remedy is the same: the URL in hand no longer works and only the
   /// extension can mint another. A source that cannot be re-resolved is
   /// handed to [_fallBackAfterFailedRenewal] rather than left frozen.
-  Future<void> _renewCurrentSource() async {
+  Future<void> _renewCurrentSource({required String reason}) async {
     if (_renewing || _controller == null || !mounted) return;
+    final stopwatch = Stopwatch()..start();
     _renewing = true;
     _liveBufferingSince = null;
     _renewalTimer?.cancel();
@@ -765,10 +810,18 @@ class _PlayerPageState extends State<PlayerPage> {
     final attempt = ++_playbackAttempt;
     final scope = AppScope.of(context);
     final sourceId = _current.source.id;
+    _logRecovery(
+      'renew_start reason=$reason '
+      'source=${_current.source.providerId}/${_current.source.label}',
+    );
     try {
       final stream = await scope.registry.resolveSource(
         widget.media.ref,
         sourceId,
+      );
+      _logRecovery(
+        'renew_resolve_done elapsed=${stopwatch.elapsedMilliseconds}ms '
+        'url=${safePlaybackUrlForLog(stream.url)}',
       );
       if (!PlaybackTarget.detect().canPlay(stream)) {
         throw StateError('The renewed source is not playable on this device.');
@@ -776,6 +829,9 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!mounted || attempt != _playbackAttempt) return;
       final position = _isLive ? null : _positionForSourceSwitch();
       _detachPositionListener();
+      _logRecovery(
+        'renew_detach_controller elapsed=${stopwatch.elapsedMilliseconds}ms',
+      );
       _stallDetector.reset();
       _sourceStarted = false;
       _renewalStableSince = null;
@@ -790,13 +846,23 @@ class _PlayerPageState extends State<PlayerPage> {
         _playbackError = null;
         _controller = null;
       });
+      _logRecovery(
+        'renew_state_committed elapsed=${stopwatch.elapsedMilliseconds}ms '
+        'revision=$_sourceRevision',
+      );
       scope.sourceCache.store(widget.media.ref, _resolvedSources);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
       _fallBackAfterFailedRenewal(sourceId);
     } finally {
+      _logRecovery('renew_done elapsed=${stopwatch.elapsedMilliseconds}ms');
       _renewing = false;
     }
+  }
+
+  void _logRecovery(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[PlaybackSources] $message');
   }
 
   /// Moves to the next source that has not failed, or surfaces the error.
@@ -899,10 +965,11 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_backInFlight) return;
     _backInFlight = true;
     final controller = _controller;
-    final initialized = controller?.value.value.initialized == true;
+    final started = _sourceStarted;
     if (kDebugMode) {
       debugPrint(
-        '[PlayerPiP] back_request initialized=$initialized mode=${_pictureInPictureSession?.mode.name}',
+        '[PlayerPiP] back_request started=$started '
+        'mode=${_pictureInPictureSession?.mode.name}',
       );
     }
     if (controller?.isFullScreen == true) {
@@ -912,7 +979,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _backInFlight = false;
       return;
     }
-    if (!initialized) {
+    if (!started) {
       _backInFlight = false;
       _popRoute();
       return;
@@ -931,6 +998,10 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _minimizePlayer() {
     if (!mounted) return;
+    if (!_sourceStarted) {
+      unawaited(_handleBack());
+      return;
+    }
     _pictureInPictureSession?.minimize();
     _syncRequestedLandscapeOrientation();
     unawaited(_syncNativePictureInPictureAllowed());
@@ -1108,6 +1179,8 @@ class _PlayerPageState extends State<PlayerPage> {
     _stallDetector.reset();
     _liveBufferingSince = null;
     _lastLivePosition = null;
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
     _consecutiveRenewals = 0;
     _renewalStableSince = null;
     _failedSourceIds.remove(picked.source.id);
@@ -1136,6 +1209,38 @@ class _PlayerPageState extends State<PlayerPage> {
     AppScope.of(
       context,
     ).sourceCache.promote(widget.media.ref, picked.source.id);
+  }
+
+  void _finishFallbackWait() {
+    _fallbackWaitTimer = null;
+    if (!mounted || !_waitingForFallback || _sourceStarted) return;
+    if (kDebugMode) {
+      debugPrint(
+        '[PlaybackSources] fallback_wait_timeout '
+        'timeout_s=${_fallbackWaitTimeout.inSeconds}',
+      );
+    }
+    final message = _pendingFallbackError;
+    _pendingFallbackSourceId = null;
+    _pendingFallbackError = null;
+    _showInitialPlaybackError(message);
+  }
+
+  void _finishRetryWait() {
+    _fallbackWaitTimer = null;
+    if (!mounted || !_retrying || _sourceStarted) return;
+    _playbackAttempt++;
+    if (kDebugMode) {
+      debugPrint(
+        '[PlaybackSources] retry_timeout '
+        'timeout_s=${_fallbackWaitTimeout.inSeconds}',
+      );
+    }
+    setState(() {
+      _retrying = false;
+      _playbackError =
+          'Source is unavailable. Try another source or retry later.';
+    });
   }
 
   Duration? _positionForSourceSwitch() {
@@ -1334,6 +1439,11 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _buildInteractivePlayer(BuildContext context) {
+    final showSourceLoading =
+        _waitingForFallback || (_retrying && !_sourceStarted);
+    final showPlaybackError =
+        _playbackError != null &&
+        !(_pictureInPictureSession?.isMinimized ?? false);
     return PopScope<void>(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -1363,13 +1473,18 @@ class _PlayerPageState extends State<PlayerPage> {
               children: [
                 Positioned.fill(child: _playerBackground()),
                 _playerViewport(context),
-                if (!_waitingForFallback)
+                if (!showSourceLoading)
                   Positioned.fill(child: _fullScreenControls()),
-                if (_waitingForFallback)
+                if (showSourceLoading)
                   Positioned.fill(
-                    child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
+                    child: PlayerFallbackLoadingOverlay(
+                      onBack: _handleBack,
+                      message: _retrying
+                          ? 'Refreshing stream…'
+                          : 'Finding another source…',
+                    ),
                   ),
-                if (_playbackError != null)
+                if (showPlaybackError)
                   Positioned.fill(
                     child: PlayerPlaybackErrorOverlay(
                       message: _playbackError!,

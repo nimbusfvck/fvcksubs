@@ -99,6 +99,48 @@ void main() {
     expect(player.played, isNotNull);
   });
 
+  testWidgets('finding sources can be abandoned with Back', (tester) async {
+    const item = PlaybackMedia(
+      VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie-1'),
+        title: 'Movie',
+      ),
+    );
+    final player = RecordingPlayer();
+    final extension = FakeExtension(
+      sourceList: const [StreamSource(id: 'source', label: 'Source')],
+      sourcesDelay: const Duration(seconds: 2),
+      resolved: const PlayableStream(
+        url: 'https://stream.example/source.m3u8',
+        format: StreamFormat.hls,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => unawaited(playItemV2(context, item.item)),
+            child: const Text('Play'),
+          ),
+        ),
+        registry: ExtensionRegistry([extension]),
+        player: player,
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump(const Duration(seconds: 21));
+
+    expect(player.played, isNull);
+    expect(find.text('Finding sources…'), findsNothing);
+  });
+
   testWidgets('live playback keeps full discovery but uses fastest source', (
     tester,
   ) async {

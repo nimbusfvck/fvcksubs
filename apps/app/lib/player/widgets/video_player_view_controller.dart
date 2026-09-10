@@ -11,14 +11,12 @@ class _VideoPlayerControllerAdapter
     required this.onSelectVariant,
     required String streamUrl,
     this.variants = const [],
-  }) : _activeUrl = streamUrl,
-       _baseUrl = streamUrl;
+  }) : _activeUrl = streamUrl;
 
   vp.VideoPlayerController _player;
   final void Function(PlayerFitMode mode) onSetFit;
   final Future<void> Function(StreamVariant? variant) onSelectVariant;
   final List<StreamVariant> variants;
-  final String _baseUrl;
   String _activeUrl;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
@@ -185,6 +183,10 @@ class _VideoPlayerControllerAdapter
       position: source.position,
       duration: source.duration,
       bufferedPosition: buffered,
+      bufferedRanges: [
+        for (final range in source.buffered)
+          AppPlayerTimeRange(range.start, range.end),
+      ],
       seekablePosition: seekable,
     );
   }
@@ -241,14 +243,12 @@ class _VideoPlayerControllerAdapter
         debugPrint('[VideoPlayerVOD] quality_request variant=${variant.label}');
       }
       await onSelectVariant(variant);
-      if (!_disposed && _activeUrl == variant.url) {
-        _selectedVariantId = variant.id;
-      }
+      if (!_disposed) _selectedVariantId = variant.id;
       return;
     }
     if (track == null || track.id == 'auto') {
       await onSelectVariant(null);
-      if (!_disposed && _activeUrl == _baseUrl) _selectedVariantId = null;
+      if (!_disposed) _selectedVariantId = null;
       return;
     }
     final native = track.platformTrack as vp.VideoTrack?;

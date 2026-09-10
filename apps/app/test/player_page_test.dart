@@ -26,9 +26,42 @@ void main() {
       const Duration(milliseconds: 89),
     );
     expect(
+      liveContiguousForwardBuffer(
+        position: const Duration(milliseconds: 25836),
+        bufferedPosition: const Duration(milliseconds: 33882),
+        bufferedRanges: [
+          const AppPlayerTimeRange(
+            Duration(milliseconds: 24454),
+            Duration(milliseconds: 27398),
+          ),
+          const AppPlayerTimeRange(
+            Duration(seconds: 30),
+            Duration(milliseconds: 33882),
+          ),
+        ],
+      ),
+      const Duration(milliseconds: 1562),
+    );
+    expect(
       liveBufferingNeedsRecovery(
         position: const Duration(milliseconds: 107750),
         bufferedPosition: const Duration(milliseconds: 107839),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(milliseconds: 25836),
+        bufferedPosition: const Duration(milliseconds: 33882),
+        bufferedRanges: [
+          const AppPlayerTimeRange(
+            Duration(milliseconds: 30_000),
+            Duration(milliseconds: 33_882),
+          ),
+        ],
+        previousPosition: const Duration(milliseconds: 25836),
         isPlaying: true,
         isBuffering: true,
       ),
@@ -295,7 +328,7 @@ void main() {
     player.controllers.single.emitError(StateError('source rejected'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('Finding another source…'), findsNothing);
+    expect(find.text('Finding another source…'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
       findsOneWidget,
@@ -311,6 +344,45 @@ void main() {
       find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
       findsNothing,
     );
+    await pending.close();
+  });
+
+  testWidgets('does not wait forever for a late fallback source', (
+    tester,
+  ) async {
+    final player = _FailingPlayer();
+    final first = _resolvedSource('first', 'Source A');
+    final pending = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'fallback-timeout',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [first],
+          pendingSources: pending.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    player.controllers.single.emitError(StateError('source rejected'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 11));
+
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsNothing,
+    );
+    expect(find.text("Couldn't play this source"), findsOneWidget);
     await pending.close();
   });
 
@@ -681,9 +753,7 @@ void main() {
     expect(controller.pictureInPictureAllowed, contains(true));
   });
 
-  testWidgets('live player Back minimizes without creating a detail route', (
-    tester,
-  ) async {
+  testWidgets('live player Back closes before playback starts', (tester) async {
     final player = _PositionRecordingPlayer();
 
     await tester.pumpWidget(
@@ -704,7 +774,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.pictureInPictureCalls, 0);
-    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(find.byType(PlayerPage), findsNothing);
     expect(find.byType(DetailPageV2), findsNothing);
     expect(find.text('Playing in Picture in Picture'), findsNothing);
   });

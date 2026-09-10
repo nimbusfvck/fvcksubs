@@ -255,18 +255,25 @@ Future<T?> _resolveWithOverlay<T>(
   final progress = _ResolveProgress();
   final loadingReady = Completer<void>();
   final launchKey = GlobalKey<_PlayerLaunchPageState>();
-  final overlay = PageRouteBuilder<void>(
+  var abandoned = false;
+  late final PageRouteBuilder<void> overlay;
+  void abandon() {
+    abandoned = true;
+    if (overlay.isActive) navigator.removeRoute(overlay);
+  }
+
+  overlay = PageRouteBuilder<void>(
     opaque: false,
     pageBuilder: (_, _, _) => _PlayerLaunchPage(
       key: launchKey,
       progress: progress,
+      onBack: abandon,
       onMounted: () {
         if (!loadingReady.isCompleted) loadingReady.complete();
       },
     ),
   );
 
-  var abandoned = false;
   unawaited(overlay.popped.whenComplete(() => abandoned = true));
   _debugSourceLog('player_route_loading');
   unawaited(navigator.push(overlay));
@@ -1028,10 +1035,12 @@ class _PlayerLaunchPage extends StatefulWidget {
   const _PlayerLaunchPage({
     super.key,
     required this.progress,
+    required this.onBack,
     required this.onMounted,
   });
 
   final _ResolveProgress progress;
+  final VoidCallback onBack;
   final VoidCallback onMounted;
 
   @override
@@ -1072,72 +1081,89 @@ class _PlayerLaunchPageState extends State<_PlayerLaunchPage> {
   Widget _sourceFindingView() => ColoredBox(
     color: AppColors.surfaceDark,
     child: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: constraints.maxWidth,
-              minHeight: constraints.maxHeight,
-            ),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: ListenableBuilder(
-                  listenable: widget.progress,
-                  builder: (context, _) {
-                    final outstanding = widget.progress.outstanding;
-                    final total = widget.progress.total;
-                    final line = outstanding.isEmpty
-                        ? 'Finding sources…'
-                        : 'Checking ${outstanding[_cursor % outstanding.length]}…';
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: constraints.maxWidth,
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: ListenableBuilder(
+                        listenable: widget.progress,
+                        builder: (context, _) {
+                          final outstanding = widget.progress.outstanding;
+                          final total = widget.progress.total;
+                          final line = outstanding.isEmpty
+                              ? 'Finding sources…'
+                              : 'Checking ${outstanding[_cursor % outstanding.length]}…';
 
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: Stack(
-                            alignment: Alignment.center,
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
+                              const SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                    Icon(
+                                      Icons.travel_explore,
+                                      color: AppColors.onDark,
+                                      size: 22,
+                                    ),
+                                  ],
+                                ),
                               ),
-                              Icon(
-                                Icons.travel_explore,
-                                color: AppColors.onDark,
-                                size: 22,
+                              const SizedBox(height: AppSpacing.lg),
+                              Text(
+                                line,
+                                textAlign: TextAlign.center,
+                                style: AppTypography.titleSm.copyWith(
+                                  color: AppColors.onDark,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
+                              if (total > 0) ...[
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  '${widget.progress.settledCount} of $total ready',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.onDarkSoft,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          line,
-                          textAlign: TextAlign.center,
-                          style: AppTypography.titleSm.copyWith(
-                            color: AppColors.onDark,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        if (total > 0) ...[
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            '${widget.progress.settledCount} of $total ready',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            top: AppSpacing.xxs,
+            left: AppSpacing.xs,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              color: AppColors.onDark,
+              iconSize: 22,
+              tooltip: 'Back',
+              onPressed: widget.onBack,
+            ),
+          ),
+        ],
       ),
     ),
   );

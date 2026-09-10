@@ -88,4 +88,25 @@ void main() {
     expect(dismissals, 1);
     expect(tester.getTopLeft(find.byKey(childKey)).dy, 0);
   });
+
+  testWidgets('fallback loading overlay explains what playback is doing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerFallbackLoadingOverlay(
+            onBack: () {},
+            message: 'Refreshing stream…',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Refreshing stream…'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsOneWidget,
+    );
+  });
 }

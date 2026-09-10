@@ -228,6 +228,28 @@ void main() {
     await result;
     expect(player.calls, isNot(contains('play')));
   });
+
+  test('times out a live initialize that never becomes ready', () async {
+    final player = _NativePlayer(_stream.url)
+      ..initializeGate = Completer<void>();
+    final startup = _startup(
+      player,
+      _Controller(player.calls),
+      liveInitializeTimeout: const Duration(milliseconds: 1),
+    );
+
+    await expectLater(
+      startup.open(
+        initialized: false,
+        looping: false,
+        muted: false,
+        playing: true,
+        isLive: true,
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(player.calls, ['initialize']);
+  });
 }
 
 VideoPlayerStartup _startup(
@@ -236,6 +258,7 @@ VideoPlayerStartup _startup(
   PlayableStream stream = _stream,
   bool preselected = false,
   bool Function()? isCurrent,
+  Duration liveInitializeTimeout = const Duration(seconds: 8),
 }) => VideoPlayerStartup(
   player: player,
   controller: controller,
@@ -247,15 +270,18 @@ VideoPlayerStartup _startup(
   log: (_, {details}) {},
   maxHeight: 720,
   preferredQualityDone: preselected,
+  liveInitializeTimeout: liveInitializeTimeout,
 );
 
 class _NativePlayer extends vp.VideoPlayerController {
   _NativePlayer(String url) : super.networkUrl(Uri.parse(url));
   final List<String> calls = [];
   Completer<void>? seekGate;
+  Completer<void>? initializeGate;
   @override
   Future<void> initialize() async {
     calls.add('initialize');
+    await initializeGate?.future;
     value = const vp.VideoPlayerValue(
       duration: Duration(minutes: 10),
       isInitialized: true,
