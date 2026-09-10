@@ -227,6 +227,9 @@ class _HomePageState extends State<HomePage> {
                       ? null
                       : MediaHeroFlexibleSpace(
                           expandedHeight: featuredHeight,
+                          collapsedHeight:
+                              kToolbarHeight +
+                              MediaQuery.paddingOf(context).top,
                           child: CenteredContent(
                             child: featured.items.isEmpty
                                 ? const FeaturedHeroPlaceholder()

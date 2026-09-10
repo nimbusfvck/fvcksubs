@@ -35,6 +35,33 @@ void main() {
     },
   );
 
+  testWidgets('back button stays visible after the detail hero scrolls away', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'scrollable-detail',
+      ),
+      title: 'Scrollable detail',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([FakeExtension()]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Back'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'an unreleased movie shows Remind Me instead of Play, with its release date',
     (tester) async {
@@ -74,11 +101,7 @@ void main() {
     tester,
   ) async {
     const movie = VideoItemV2(
-      ref: MediaRef(
-        extensionId: 'fake',
-        providerId: 'fake.p',
-        id: 'movie',
-      ),
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie'),
       title: 'Movie',
     );
     const collectionItem = VideoItemV2(

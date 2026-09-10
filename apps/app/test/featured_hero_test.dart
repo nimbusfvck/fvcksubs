@@ -154,6 +154,49 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('long featured event title breaks before VS', (tester) async {
+    final item = VersionedMediaItem(
+      item: EventItemV2(
+        ref: const MediaRef(
+          extensionId: 'live',
+          providerId: 'live.catalog',
+          id: 'long-matchup-title',
+        ),
+        title: 'Long matchup title',
+        schedule: Schedule(
+          startsAt: DateTime.utc(2026, 8, 20),
+          state: ScheduleState.live,
+        ),
+        participants: const [
+          Participant(name: 'Home Team With A Long Name'),
+          Participant(name: 'Away Team With A Long Name'),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 240,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    final title = tester.widget<Text>(
+      find.byKey(const Key('featured-title-text')),
+    );
+    expect(title.maxLines, 2);
+    expect(
+      (title.textSpan! as TextSpan).toPlainText(),
+      'HOME TEAM WITH A LONG NAME\nVS AWAY TEAM WITH A LONG NAME',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('page indicator is centered at the bottom', (tester) async {
     final items = [
       VersionedMediaItem(

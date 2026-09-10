@@ -155,6 +155,7 @@ class _FeaturedHeroState extends State<FeaturedHero> {
     if (widget.items.isEmpty) return const SizedBox.shrink();
     final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
       MediaHeroCollapseScope.of(context),
+      maxCollapse: MediaHeroCollapseScope.maxCollapseOf(context),
     );
     return Stack(
       fit: StackFit.expand,
@@ -333,6 +334,7 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
     final fallbackArtwork = _fallbackArtwork(media);
     final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
       MediaHeroCollapseScope.of(context),
+      maxCollapse: MediaHeroCollapseScope.maxCollapseOf(context),
     );
     return RepaintBoundary(
       child: MediaHeroCard(

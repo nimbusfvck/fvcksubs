@@ -21,10 +21,10 @@ void main() {
     );
   });
 
-  test('fades Home overlays before the pinned toolbar is reached', () {
-    expect(MediaHeroLayout.homeOverlayOpacity(0), 1);
-    expect(MediaHeroLayout.homeOverlayOpacity(36), 0.5);
-    expect(MediaHeroLayout.homeOverlayOpacity(72), 0);
-    expect(MediaHeroLayout.homeOverlayOpacity(100), 0);
+  test('keeps Home overlays until the hero is nearly collapsed', () {
+    expect(MediaHeroLayout.homeOverlayOpacity(0, maxCollapse: 442), 1);
+    expect(MediaHeroLayout.homeOverlayOpacity(406, maxCollapse: 442), 0.5);
+    expect(MediaHeroLayout.homeOverlayOpacity(442, maxCollapse: 442), 0);
+    expect(MediaHeroLayout.homeOverlayOpacity(500, maxCollapse: 442), 0);
   });
 }

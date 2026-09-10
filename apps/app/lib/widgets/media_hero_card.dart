@@ -28,9 +28,9 @@ class MediaHeroCard extends StatelessWidget {
       Color(0x1A000000),
       Color(0x00000000),
       Color(0x00000000),
-      Color(0x34101010),
-      Color(0x78101010),
-      Color(0xD0101010),
+      Color(0x50101010),
+      Color(0xB0101010),
+      Color(0xF0101010),
       Color(0xFF101010),
     ],
     stops: [0, 0.05, 0.09, 0.12, 0.52, 0.60, 0.74, 0.90, 1],
@@ -101,11 +101,20 @@ class _HeroBottomBlur extends StatelessWidget {
     alignment: Alignment.bottomCenter,
     child: FractionallySizedBox(
       widthFactor: 1,
-      heightFactor: 0.28,
+      heightFactor: 0.44,
       child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-          child: const ColoredBox(color: Colors.transparent),
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (bounds) => const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black, Colors.black],
+            stops: [0, 0.60, 1],
+          ).createShader(bounds),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: const ColoredBox(color: Colors.transparent),
+          ),
         ),
       ),
     ),

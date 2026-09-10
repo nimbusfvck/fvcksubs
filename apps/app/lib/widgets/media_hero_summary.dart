@@ -80,6 +80,7 @@ class _MediaHeroTitle extends StatelessWidget {
         away: participants[1].name,
         accent: GeneratedBanner.accentFor(participants, branding: branding),
         singleLine: true,
+        wrapLong: true,
         uppercase: true,
         textKey: textKey,
       );

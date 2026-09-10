@@ -14,8 +14,14 @@ abstract final class MediaHeroLayout {
   static const double homeIndicatorBottom = 8;
   static const double homeOverlayFadeDistance = 72;
 
-  static double homeOverlayOpacity(double collapse) =>
-      (1 - collapse / homeOverlayFadeDistance).clamp(0.0, 1.0).toDouble();
+  static double homeOverlayOpacity(double collapse, {double? maxCollapse}) {
+    final fadeStart = maxCollapse == null
+        ? 0.0
+        : math.max(0, maxCollapse - homeOverlayFadeDistance).toDouble();
+    return (1 - (collapse - fadeStart) / homeOverlayFadeDistance)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
 
   static double heightForViewport(Size viewport) {
     if (viewport.width <= narrowBreakpoint) {

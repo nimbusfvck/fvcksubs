@@ -301,6 +301,7 @@ class MatchupText extends StatelessWidget {
     required this.away,
     required this.accent,
     this.singleLine = false,
+    this.wrapLong = false,
     this.uppercase = true,
     this.textKey,
   });
@@ -309,6 +310,7 @@ class MatchupText extends StatelessWidget {
   final String away;
   final Color accent;
   final bool singleLine;
+  final bool wrapLong;
   final bool uppercase;
   final Key? textKey;
 
@@ -323,21 +325,40 @@ class MatchupText extends StatelessWidget {
         fontWeight: FontWeight.w800,
         letterSpacing: -0.7,
       );
-      return Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: homeText, style: nameStyle),
-            TextSpan(
-              text: ' VS ',
-              style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
-            ),
-            TextSpan(text: awayText, style: nameStyle),
-          ],
-        ),
-        key: textKey,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final separatorStyle = style.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w400,
+          );
+          final singleLineSpan = TextSpan(
+            children: [
+              TextSpan(text: homeText, style: nameStyle),
+              TextSpan(text: ' VS ', style: separatorStyle),
+              TextSpan(text: awayText, style: nameStyle),
+            ],
+          );
+          final painter = TextPainter(
+            text: singleLineSpan,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            maxLines: 1,
+          )..layout(maxWidth: constraints.maxWidth);
+          final children = painter.didExceedMaxLines && wrapLong
+              ? [
+                  TextSpan(text: '$homeText\n', style: nameStyle),
+                  TextSpan(text: 'VS ', style: separatorStyle),
+                  TextSpan(text: awayText, style: nameStyle),
+                ]
+              : singleLineSpan.children!;
+          return Text.rich(
+            TextSpan(children: children),
+            key: textKey,
+            maxLines: wrapLong ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          );
+        },
       );
     }
     return Column(
