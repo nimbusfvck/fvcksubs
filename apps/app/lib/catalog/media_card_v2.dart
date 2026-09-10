@@ -36,8 +36,17 @@ class MediaCardV2 extends StatelessWidget {
   final Object? heroTag;
 
   @override
-  Widget build(BuildContext context) =>
-      Clickable(onTap: onTap, onLongPress: onLongPress, child: _content());
+  Widget build(BuildContext context) => Clickable(
+    onTap: onTap,
+    onLongPress: onLongPress,
+    child: Container(
+      foregroundDecoration: BoxDecoration(
+        border: Border.all(color: AppColors.onDark, width: 0.2),
+        borderRadius: AppRadius.lg,
+      ),
+      child: _content(),
+    ),
+  );
 
   Widget _content() {
     final value = item;
@@ -50,7 +59,6 @@ class MediaCardV2 extends StatelessWidget {
         item: value,
         image: portrait,
         heroTag: heroTag ?? mediaArtworkHeroTag(value.ref),
-        showSubtitle: showSubtitle,
       );
     }
     if (value is EventItemV2) {
@@ -72,48 +80,99 @@ class _Poster extends StatelessWidget {
     required this.item,
     required this.image,
     required this.heroTag,
-    required this.showSubtitle,
   });
 
   final MediaItemV2 item;
   final ImageRef image;
   final Object heroTag;
-  final bool showSubtitle;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
     children: [
-      Expanded(
-        child: Stack(
-          fit: StackFit.expand,
+      Hero(
+        tag: heroTag,
+        child: LayoutBuilder(
+          builder: (context, constraints) => CachedNetworkImage(
+            imageUrl: image.url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            fadeInDuration: Duration.zero,
+            memCacheWidth: artworkCacheDimension(context, constraints.maxWidth),
+            placeholder: (_, _) =>
+                ArtworkPlaceholder(icon: _placeholderIcon(item)),
+            errorWidget: (_, _, _) =>
+                ArtworkPlaceholder(icon: _placeholderIcon(item)),
+          ),
+        ),
+      ),
+      if (item.rating case final rating?) _PosterRatingBadge(rating: rating),
+      if (item.releaseYear case final year?) _PosterYearBadge(year: year),
+    ],
+  );
+}
+
+class _PosterRatingBadge extends StatelessWidget {
+  const _PosterRatingBadge({required this.rating});
+
+  final double rating;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: AppSpacing.xs,
+    right: AppSpacing.xs,
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.7),
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text.rich(
+        TextSpan(
           children: [
-            Hero(
-              tag: heroTag,
-              child: LayoutBuilder(
-                builder: (context, constraints) => CachedNetworkImage(
-                  imageUrl: image.url,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  fadeInDuration: Duration.zero,
-                  memCacheWidth: artworkCacheDimension(
-                    context,
-                    constraints.maxWidth,
-                  ),
-                  placeholder: (_, _) =>
-                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
-                  errorWidget: (_, _, _) =>
-                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
-                ),
+            TextSpan(
+              text: '★',
+              style: AppTypography.liveBadge.copyWith(
+                color: AppColors.ratingAccent,
               ),
             ),
-            if (item.releaseDate case final releaseDate? when item.isUpcoming)
-              _ReleaseDateBadge(releaseDate: releaseDate),
+            TextSpan(
+              text: ' ${rating.toStringAsFixed(1)}',
+              style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+            ),
           ],
         ),
       ),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
-    ],
+    ),
+  );
+}
+
+class _PosterYearBadge extends StatelessWidget {
+  const _PosterYearBadge({required this.year});
+
+  final int year;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: AppSpacing.xs,
+    top: AppSpacing.xs,
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.7),
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text(
+        year.toString(),
+        style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+      ),
+    ),
   );
 }
 

@@ -236,7 +236,9 @@ when supplied, then participant colours when available,
 and a deterministic fallback when it does not. Participant colours that cannot be parsed
 degrade to that fallback; malformed branding is rejected at the protocol boundary.
 
-Scores are carried in the model but **not rendered** — a product decision, reversible
+Poster cards are image-first: they use a 2:3 frame, omit the title, show the release year
+as an upper-left image overlay, and show the rating as an upper-right image overlay. Event and
+summary cards retain their compact footer metadata. These presentation choices are reversible
 without any protocol change.
 
 ## 6.6 Player

@@ -410,12 +410,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
   }) => BlocBuilder<LibraryController, LibraryState>(
     bloc: libraryController,
     builder: (context, state) {
-      if (item.isUpcoming) {
-        return _RemindMeButton(
-          active: state.isReminded(item.ref),
-          onPressed: () => libraryController.toggleReminder(item),
-        );
-      }
       final target = primaryEpisodeTarget(
         detail.episodeGuide,
         detail.item.ref,
@@ -608,28 +602,6 @@ class _PrimaryPlayButton extends StatelessWidget {
     onPressed: onPressed,
     icon: const Icon(Icons.play_arrow_rounded, size: 28),
     label: Text(label),
-    style: FilledButton.styleFrom(
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
-    ),
-  );
-}
-
-class _RemindMeButton extends StatelessWidget {
-  const _RemindMeButton({required this.active, required this.onPressed});
-
-  final bool active;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => FilledButton.icon(
-    onPressed: onPressed,
-    icon: Icon(
-      active
-          ? Icons.notifications_active_rounded
-          : Icons.notifications_none_rounded,
-      size: 24,
-    ),
-    label: Text(active ? 'Reminder Set' : 'Remind Me'),
     style: FilledButton.styleFrom(
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
     ),

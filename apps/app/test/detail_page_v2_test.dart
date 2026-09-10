@@ -63,7 +63,7 @@ void main() {
   });
 
   testWidgets(
-    'an unreleased movie shows Remind Me instead of Play, with its release date',
+    'an unreleased movie still shows Watch Now, with its release date',
     (tester) async {
       final item = VideoItemV2(
         ref: const MediaRef(
@@ -85,15 +85,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(FilledButton, 'Play'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Remind Me'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Watch Now'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Remind Me'), findsNothing);
       expect(find.textContaining('Releases'), findsOneWidget);
-
-      await tester.tap(find.widgetWithText(FilledButton, 'Remind Me'));
-      await tester.pumpAndSettle();
-
-      expect(library.isReminded(item.ref), isTrue);
-      expect(find.widgetWithText(FilledButton, 'Reminder Set'), findsOneWidget);
     },
   );
 

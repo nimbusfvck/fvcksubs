@@ -86,6 +86,56 @@ void main() {
     expect(find.textContaining('8.4'), findsOneWidget);
   });
 
+  testWidgets('poster cards use a 2:3 image with overlay metadata', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: MediaGridV2(
+              sections: [
+                const CatalogSectionV2(
+                  id: 'movies',
+                  items: [
+                    VersionedMediaItem(
+                      item: VideoItemV2(
+                        ref: MediaRef(
+                          extensionId: 'example',
+                          providerId: 'example.catalog',
+                          id: 'poster',
+                        ),
+                        title: 'Poster title',
+                        artwork: Artwork(
+                          portrait: ImageRef('https://cdn.example/poster.jpg'),
+                        ),
+                        releaseYear: 2026,
+                        rating: 8.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              onTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final card = find.byType(MediaCardV2);
+    final size = tester.getSize(card);
+    expect(size.width / size.height, closeTo(2 / 3, 0.001));
+    expect(find.text('Poster title'), findsNothing);
+    expect(find.text('2026'), findsOneWidget);
+    expect(find.text('★ 8.4'), findsOneWidget);
+    final yearTopLeft = tester.getTopLeft(find.text('2026'));
+    final ratingTopRight = tester.getTopRight(find.text('★ 8.4'));
+    expect(yearTopLeft.dy, closeTo(ratingTopRight.dy, 1));
+    expect(yearTopLeft.dx, lessThan(ratingTopRight.dx));
+  });
+
   testWidgets(
     'two-participant event with portrait artwork keeps banner ratio',
     (tester) async {

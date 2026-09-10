@@ -55,7 +55,7 @@ class MediaGridV2 extends StatelessWidget {
             crossAxisCount: count,
             crossAxisSpacing: AppSpacing.md,
             mainAxisSpacing: AppSpacing.md,
-            childAspectRatio: 0.6,
+            childAspectRatio: 2 / 3,
           )
         : SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: count,

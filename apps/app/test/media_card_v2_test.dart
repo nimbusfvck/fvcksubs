@@ -41,7 +41,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Standalone video'), findsOneWidget);
+    expect(find.text('Standalone video'), findsNothing);
     expect(find.text('LIVE'), findsNothing);
     expect(find.byType(Hero), findsOneWidget);
   });
@@ -131,7 +131,7 @@ void main() {
     expect(detailsOpened, isTrue);
   });
 
-  testWidgets('an unreleased movie shows its release date over the poster', (
+  testWidgets('an unreleased poster omits the coming soon badge', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -144,6 +144,9 @@ void main() {
               item: VideoItemV2(
                 ref: ref,
                 title: 'Future movie',
+                artwork: Artwork(
+                  portrait: ImageRef('https://cdn.example/future.jpg'),
+                ),
                 releaseDate: DateTime.utc(2099, 1, 15),
               ),
               onTap: _noop,
@@ -153,7 +156,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Jan 15'), findsOneWidget);
+    expect(find.text('Jan 15'), findsNothing);
   });
 
   testWidgets('rounds a rating in the card metadata', (tester) async {
