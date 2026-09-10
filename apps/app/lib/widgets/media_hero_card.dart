@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -21,12 +23,17 @@ class MediaHeroCard extends StatelessWidget {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [
-      Color(0xD9000000),
-      Color(0x40000000),
-      Color(0xF0101010),
+      Color(0xD0000000),
+      Color(0x7A000000),
+      Color(0x1A000000),
+      Color(0x00000000),
+      Color(0x00000000),
+      Color(0x34101010),
+      Color(0x78101010),
+      Color(0xD0101010),
       Color(0xFF101010),
     ],
-    stops: [0, 0.24, 0.58, 1],
+    stops: [0, 0.05, 0.09, 0.12, 0.52, 0.60, 0.74, 0.90, 1],
   );
 
   final MediaItemV2 item;
@@ -62,6 +69,7 @@ class MediaHeroCard extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         artwork,
+        const _HeroBottomBlur(),
         if (preview case final preview?) Positioned.fill(child: preview),
         const DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
       ],
@@ -83,4 +91,23 @@ class MediaHeroCard extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HeroBottomBlur extends StatelessWidget {
+  const _HeroBottomBlur();
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.bottomCenter,
+    child: FractionallySizedBox(
+      widthFactor: 1,
+      heightFactor: 0.28,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: const ColoredBox(color: Colors.transparent),
+        ),
+      ),
+    ),
+  );
 }
