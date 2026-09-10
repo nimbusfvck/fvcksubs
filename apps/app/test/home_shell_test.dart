@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/addons/addons_page.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
+import 'package:fvcksubs_app/home/continue_watching_shelf.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/app_nav_rail.dart';
@@ -319,6 +320,49 @@ void main() {
     expect(find.text('Continue Watching'), findsNothing);
     expect(find.text('Mature item'), findsNothing);
   });
+
+  testWidgets(
+    'Continue Watching shows remaining duration beside a smaller checklist',
+    (tester) async {
+      final registry = ExtensionRegistry([FakeExtension()]);
+      final item = fakeItem(title: 'In progress');
+      final library = LibraryController(
+        store: _TestLibraryStore(),
+        initial: {
+          UserMediaState.keyFor(item.ref): UserMediaState(
+            item: item,
+            progress: const Duration(minutes: 25),
+            duration: const Duration(hours: 2),
+            lastWatched: DateTime.utc(2026, 9, 10),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: ContinueWatchingShelf(controller: library, registry: registry),
+          registry: registry,
+          libraryController: library,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1h 35m left'), findsOneWidget);
+      final checkButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.check_rounded),
+      );
+      expect(checkButton.iconSize, 16);
+      expect(
+        checkButton.constraints,
+        const BoxConstraints.tightFor(width: 36, height: 36),
+      );
+      expect(
+        tester.getSize(find.byType(LinearProgressIndicator)),
+        const Size(280, 4),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('expanded sectioned catalogs keep their section heading', (
     tester,
