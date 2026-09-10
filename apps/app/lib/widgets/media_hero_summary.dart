@@ -6,7 +6,6 @@ import '../catalog/artwork_cache.dart';
 import '../catalog/generated_banner.dart';
 import '../catalog/start_time_label.dart';
 import '../theme/tokens.dart';
-import 'shimmer_placeholder.dart';
 
 /// Shared centered title and metadata used by Home and Detail hero cards.
 class MediaHeroSummary extends StatelessWidget {
@@ -136,16 +135,10 @@ class _MediaHeroTitle extends StatelessWidget {
                 imageUrl: logo.url,
                 alignment: titleAlignment,
                 fit: BoxFit.contain,
-                fadeInDuration: Duration.zero,
+                fadeInDuration: const Duration(milliseconds: 320),
+                fadeInCurve: Curves.easeOutCubic,
                 memCacheWidth: artworkCacheDimension(context, 280),
-                placeholder: (_, _) => Align(
-                  alignment: titleAlignment,
-                  child: ShimmerPlaceholder(
-                    width: 180,
-                    height: 32,
-                    borderRadius: AppRadius.sm,
-                  ),
-                ),
+                placeholder: (_, _) => const SizedBox.shrink(),
                 errorWidget: (_, _, _) =>
                     Align(alignment: titleAlignment, child: fallback),
               ),
@@ -192,13 +185,19 @@ class _MediaHeroMeta extends StatelessWidget {
             ),
           ),
         if (item.rating case final rating?) ...[
-          const Icon(Icons.star, size: 15, color: Colors.amber),
-          Text(
-            rating.toStringAsFixed(1),
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.onDark,
-              shadows: MediaHeroSummary.textShadows,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.star, size: 15, color: Colors.amber),
+              const SizedBox(width: AppSpacing.xxs),
+              Text(
+                rating.toStringAsFixed(1),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.onDark,
+                  shadows: MediaHeroSummary.textShadows,
+                ),
+              ),
+            ],
           ),
         ],
         if (eventLabel != null)

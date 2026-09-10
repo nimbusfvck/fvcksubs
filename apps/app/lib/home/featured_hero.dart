@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_app/widgets/media_hero_layout.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -107,15 +108,35 @@ class FeaturedHeroPlaceholder extends StatelessWidget {
   );
 }
 
-class _FeaturedHeroState extends State<FeaturedHero> {
+const _featuredIndicatorStartProgress = 0.12;
+
+class _FeaturedHeroState extends State<FeaturedHero>
+    with SingleTickerProviderStateMixin {
+  static const _noTrailerAutoSlideDelay = Duration(seconds: 8);
+  static const _completedPreviewHold = Duration(milliseconds: 420);
+
   late final PageController _pageController;
+  final ValueNotifier<bool> _dragging = ValueNotifier(false);
+  final ValueNotifier<MediaRef?> _previewRef = ValueNotifier(null);
+  final ValueNotifier<double?> _previewProgress = ValueNotifier(null);
+  final ValueNotifier<bool> _animatePosterIn = ValueNotifier(false);
+  final ValueNotifier<bool?> _previewHasTrailer = ValueNotifier(null);
   final ValueNotifier<bool> _scrolling = ValueNotifier(false);
+  late final AnimationController _noTrailerAutoSlideController;
+  Timer? _autoSlideTimer;
+  bool _previewCompletionPending = false;
+  bool _heroVisible = true;
   int _page = 0;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _noTrailerAutoSlideController =
+        AnimationController(vsync: this, duration: _noTrailerAutoSlideDelay)
+          ..addListener(_onNoTrailerAutoSlideProgress)
+          ..addStatusListener(_onNoTrailerAutoSlideStatus);
+    _previewHasTrailer.addListener(_onPreviewAvailabilityChanged);
   }
 
   @override
@@ -126,7 +147,9 @@ class _FeaturedHeroState extends State<FeaturedHero> {
         : null;
     if (widget.items.isEmpty) {
       _page = 0;
-      if (_pageController.hasClients) _pageController.jumpToPage(0);
+      if (_pageController.hasClients && !_pageViewIsScrolling) {
+        _pageController.jumpToPage(0);
+      }
       return;
     }
 
@@ -136,6 +159,16 @@ class _FeaturedHeroState extends State<FeaturedHero> {
     final nextPage = matchingPage >= 0
         ? matchingPage
         : _page.clamp(0, widget.items.length - 1).toInt();
+    if (_pageViewIsScrolling) return;
+    final nextRef = widget.items[nextPage].item.ref;
+    if (nextRef != oldRef) {
+      _autoSlideTimer?.cancel();
+      _autoSlideTimer = null;
+      _noTrailerAutoSlideController.reset();
+      _previewProgress.value = null;
+      _previewHasTrailer.value = null;
+      _animatePosterIn.value = false;
+    }
     _page = nextPage;
     if (_pageController.hasClients &&
         _pageController.page?.round() != nextPage) {
@@ -146,6 +179,14 @@ class _FeaturedHeroState extends State<FeaturedHero> {
   @override
   void dispose() {
     _pageController.dispose();
+    _noTrailerAutoSlideController.dispose();
+    _autoSlideTimer?.cancel();
+    _previewHasTrailer.removeListener(_onPreviewAvailabilityChanged);
+    _dragging.dispose();
+    _previewRef.dispose();
+    _previewProgress.dispose();
+    _animatePosterIn.dispose();
+    _previewHasTrailer.dispose();
     _scrolling.dispose();
     super.dispose();
   }
@@ -157,152 +198,693 @@ class _FeaturedHeroState extends State<FeaturedHero> {
       MediaHeroCollapseScope.of(context),
       maxCollapse: MediaHeroCollapseScope.maxCollapseOf(context),
     );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        NotificationListener<ScrollNotification>(
-          onNotification: _onScrollNotification,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: widget.items.length,
-            onPageChanged: (value) => setState(() => _page = value),
-            itemBuilder: (context, index) {
-              final item = widget.items[index];
-              return _FeaturedSlide(
-                key: ValueKey(item.item.ref),
-                item: item,
-                active: index == _page,
-                scrolling: _scrolling,
-              );
-            },
-          ),
-        ),
-        if (widget.items.length > 1)
-          Positioned(
-            key: const Key('featured-page-indicator'),
-            left: 0,
-            right: 0,
-            bottom: MediaHeroLayout.homeIndicatorBottom,
-            child: Opacity(
-              opacity: overlayOpacity,
-              child: Center(
-                child: _FeaturedPageIndicator(
-                  page: _page,
-                  count: widget.items.length,
+    final activeItem = widget.items[_page];
+    final collapse = MediaHeroCollapseScope.of(context);
+    final maxCollapse = MediaHeroCollapseScope.maxCollapseOf(context);
+    final heroVisible = maxCollapse <= 0 || collapse < maxCollapse;
+    _updateHeroVisibility(heroVisible);
+    return TickerMode(
+      enabled: heroVisible,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: Transform.translate(
+                  offset: Offset(0, -collapse * 0.28),
+                  child: _FeaturedPreview(
+                    item: activeItem,
+                    previewRef: _previewRef,
+                    previewProgress: _previewProgress,
+                    animatePosterIn: _animatePosterIn,
+                    previewHasTrailer: _previewHasTrailer,
+                    visible: heroVisible,
+                    onCompleted: _onPreviewCompleted,
+                    scrolling: _scrolling,
+                  ),
                 ),
               ),
             ),
           ),
-      ],
+          NotificationListener<ScrollNotification>(
+            onNotification: _onScrollNotification,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.items.length,
+              pageSnapping: true,
+              itemBuilder: (context, index) => const SizedBox.expand(),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: _FeaturedPosterLayer(
+                items: widget.items,
+                selectedPage: _page,
+                pageController: _pageController,
+                dragging: _dragging,
+                previewRef: _previewRef,
+                animatePosterIn: _animatePosterIn,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: Transform.translate(
+                  offset: Offset(0, -collapse * 0.28),
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(gradient: MediaHeroCard.gradient),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: AppSpacing.lg,
+            right: AppSpacing.md,
+            bottom: MediaHeroLayout.homeSummaryBottom,
+            child: Visibility(
+              visible: heroVisible,
+              maintainState: true,
+              maintainAnimation: false,
+              child: TickerMode(
+                // The hero ticker pauses offscreen, but this small ticker must
+                // finish the summary fade before it leaves the toolbar.
+                enabled: true,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _scrolling,
+                  builder: (context, scrolling, child) => AnimatedSlide(
+                    offset: scrolling ? const Offset(0, 0.12) : Offset.zero,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeInOutCubic,
+                    child: AnimatedOpacity(
+                      opacity: scrolling ? 0.0 : overlayOpacity,
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeInOutCubic,
+                      child: child,
+                    ),
+                  ),
+                  child: Align(
+                    alignment: MediaHeroLayout.isLargeScreen(context)
+                        ? Alignment.bottomLeft
+                        : Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: _FeaturedDetails(item: activeItem),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (widget.items.length > 1)
+            Positioned(
+              key: const Key('featured-page-indicator'),
+              left: 0,
+              right: 0,
+              bottom: MediaHeroLayout.homeIndicatorBottom,
+              child: Opacity(
+                opacity: overlayOpacity,
+                child: Center(
+                  child: _FeaturedPageIndicator(
+                    selectedPage: _page,
+                    itemRefs: [for (final item in widget.items) item.item.ref],
+                    previewProgress: _previewProgress,
+                    previewHasTrailer: _previewHasTrailer,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   bool _onScrollNotification(ScrollNotification notification) {
     if (notification is ScrollStartNotification) {
-      _setScrolling(true);
+      _autoSlideTimer?.cancel();
+      _autoSlideTimer = null;
+      _noTrailerAutoSlideController.stop();
+      _dragging.value = true;
+      _scrolling.value = true;
+    } else if (notification is UserScrollNotification &&
+        notification.direction == ScrollDirection.idle) {
+      // The finger is up while PageView is still completing its snap.
+      _dragging.value = false;
     } else if (notification is ScrollEndNotification) {
-      _setScrolling(false);
+      final settledPage = _pageController.hasClients
+          ? _pageController.page?.round() ?? _page
+          : _page;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentRef = _page < widget.items.length
+            ? widget.items[_page].item.ref
+            : null;
+        final settledRef = settledPage < widget.items.length
+            ? widget.items[settledPage].item.ref
+            : null;
+        if (settledRef != currentRef) {
+          _noTrailerAutoSlideController.reset();
+          _previewProgress.value = null;
+          _previewHasTrailer.value = null;
+          _animatePosterIn.value = false;
+        }
+        if (settledPage != _page) setState(() => _page = settledPage);
+        _dragging.value = false;
+        _scrolling.value = false;
+        _scheduleAutoSlide();
+      });
     }
     return false;
   }
 
-  void _setScrolling(bool scrolling) {
-    if (!mounted || _scrolling.value == scrolling) return;
-    // Only the preview reacts; rebuilding PageView during a drag can stall the
-    // gesture when its active page contains a native video texture.
-    _scrolling.value = scrolling;
+  bool get _pageViewIsScrolling =>
+      _dragging.value ||
+      (_pageController.hasClients &&
+          _pageController.position.isScrollingNotifier.value);
+
+  void _onPreviewAvailabilityChanged() {
+    _scheduleAutoSlide();
+  }
+
+  void _onNoTrailerAutoSlideProgress() {
+    if (_previewHasTrailer.value != false || !mounted) return;
+    _previewProgress.value =
+        _featuredIndicatorStartProgress +
+        ((1.0 - _featuredIndicatorStartProgress) *
+            _noTrailerAutoSlideController.value);
+  }
+
+  void _onNoTrailerAutoSlideStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _advanceToNextPage();
+  }
+
+  void _updateHeroVisibility(bool visible) {
+    if (_heroVisible == visible) return;
+    _heroVisible = visible;
+    if (!visible) {
+      _autoSlideTimer?.cancel();
+      _autoSlideTimer = null;
+      _noTrailerAutoSlideController.stop();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        if (_previewCompletionPending) {
+          _onPreviewCompleted();
+        } else {
+          _scheduleAutoSlide();
+        }
+      }
+    });
+  }
+
+  void _scheduleAutoSlide() {
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = null;
+    _noTrailerAutoSlideController.stop();
+    if (!_heroVisible ||
+        widget.items.length < 2 ||
+        _scrolling.value ||
+        _dragging.value ||
+        _previewHasTrailer.value != false) {
+      return;
+    }
+    if (_noTrailerAutoSlideController.status == AnimationStatus.completed) {
+      _noTrailerAutoSlideController.reset();
+    }
+    _noTrailerAutoSlideController.forward();
+  }
+
+  void _onPreviewCompleted() {
+    _previewCompletionPending = true;
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = Timer(_completedPreviewHold, _advanceToNextPage);
+  }
+
+  void _advanceToNextPage() {
+    _autoSlideTimer = null;
+    _previewCompletionPending = false;
+    if (!mounted ||
+        !_heroVisible ||
+        widget.items.length < 2 ||
+        _scrolling.value ||
+        _dragging.value ||
+        !_pageController.hasClients) {
+      return;
+    }
+    final nextPage = (_page + 1) % widget.items.length;
+    unawaited(
+      _pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      ),
+    );
   }
 }
 
 class _FeaturedPageIndicator extends StatelessWidget {
-  const _FeaturedPageIndicator({required this.page, required this.count});
+  const _FeaturedPageIndicator({
+    required this.selectedPage,
+    required this.itemRefs,
+    required this.previewProgress,
+    required this.previewHasTrailer,
+  });
 
-  final int page;
-  final int count;
+  final int selectedPage;
+  final List<MediaRef> itemRefs;
+  final ValueListenable<double?> previewProgress;
+  final ValueListenable<bool?> previewHasTrailer;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Featured item ${page + 1} of $count',
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark.withValues(alpha: 0.82),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xs,
-          vertical: AppSpacing.xxs,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var index = 0; index < count; index++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  width: index == page ? 20 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: index == page
-                        ? AppColors.primaryAction
-                        : AppColors.onDarkSoft.withValues(alpha: 0.7),
-                    borderRadius: AppRadius.pill,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([previewProgress, previewHasTrailer]),
+    builder: (context, _) {
+      final progress = previewProgress.value;
+      final activeColor = AppColors.primaryAction;
+      final inactiveColor = AppColors.onDarkSoft.withValues(alpha: 0.7);
+      return Semantics(
+        label: 'Featured item ${selectedPage + 1} of ${itemRefs.length}',
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDark.withValues(alpha: 0.82),
+            borderRadius: AppRadius.pill,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.xxs,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var index = 0; index < itemRefs.length; index++)
+                  Padding(
+                    key: ValueKey(itemRefs[index]),
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: _FeaturedIndicatorDot(
+                      active: index == selectedPage,
+                      progress: index == selectedPage ? progress : null,
+                      activeColor: activeColor,
+                      inactiveColor: inactiveColor,
+                    ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
-class _FeaturedSlide extends StatefulWidget {
-  const _FeaturedSlide({
-    super.key,
-    required this.item,
+class _FeaturedIndicatorDot extends StatelessWidget {
+  const _FeaturedIndicatorDot({
     required this.active,
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+  });
+
+  final bool active;
+  final double? progress;
+  final Color activeColor;
+  final Color inactiveColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = (progress ?? (active ? 0.12 : 0.0)).clamp(0.0, 1.0).toDouble();
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      width: active ? 20 : 6,
+      height: 6,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: active ? activeColor.withValues(alpha: 0.32) : inactiveColor,
+        borderRadius: AppRadius.pill,
+      ),
+      child: active
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 20 * fill,
+                  height: 6,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: activeColor,
+                      borderRadius: AppRadius.pill,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _FeaturedSlide extends StatelessWidget {
+  const _FeaturedSlide({required this.item, this.artworkAlignment});
+
+  final VersionedMediaItem item;
+  final Alignment? artworkAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = item.item;
+    final fallbackArtwork = _fallbackArtwork(media);
+    return RepaintBoundary(
+      child: MediaHeroCard(
+        item: media,
+        fallback: fallbackArtwork,
+        showGradient: false,
+        artworkAlignment: artworkAlignment ?? Alignment.topCenter,
+        foreground: const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _FeaturedPosterLayer extends StatelessWidget {
+  const _FeaturedPosterLayer({
+    required this.items,
+    required this.selectedPage,
+    required this.pageController,
+    required this.dragging,
+    required this.previewRef,
+    required this.animatePosterIn,
+  });
+
+  final List<VersionedMediaItem> items;
+  final int selectedPage;
+  final PageController pageController;
+  final ValueListenable<bool> dragging;
+  final ValueListenable<MediaRef?> previewRef;
+  final ValueListenable<bool> animatePosterIn;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: Listenable.merge([
+      pageController,
+      dragging,
+      previewRef,
+      animatePosterIn,
+    ]),
+    builder: (context, _) {
+      final page = pageController.hasClients
+          ? pageController.page ?? selectedPage.toDouble()
+          : selectedPage.toDouble();
+      final direction = page.compareTo(selectedPage.toDouble());
+      final targetIndex = (selectedPage + direction).clamp(0, items.length - 1);
+      final rawProgress = (page - selectedPage)
+          .abs()
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final currentItem = items[selectedPage];
+      final currentPosterOpacity = previewRef.value == currentItem.item.ref
+          ? 0.0
+          : 1.0;
+      // Let the PageView own the horizontal drag and snap. The poster layer
+      // The poster remains full-screen. Its artwork alignment trails the
+      // finger and catches up during the release snap, matching a classic
+      // PageView parallax without moving the layer bounds.
+      const dragFollowThrough = 0.68;
+      final posterProgress = dragging.value
+          ? rawProgress * dragFollowThrough
+          : rawProgress;
+      const posterParallax = 0.32;
+      final artworkOffset = direction < 0
+          ? posterParallax * (1 - posterProgress)
+          : -posterParallax * (1 - posterProgress);
+      final targetOpacity = Curves.easeInOutCubic.transform(rawProgress);
+      final currentPosterFadeDuration = currentPosterOpacity == 0.0
+          ? const Duration(milliseconds: 360)
+          : animatePosterIn.value
+          ? const Duration(milliseconds: 420)
+          : Duration.zero;
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedOpacity(
+            opacity: currentPosterOpacity,
+            duration: currentPosterFadeDuration,
+            curve: Curves.easeInOut,
+            child: _FeaturedSlide(item: currentItem),
+          ),
+          if (direction != 0 && targetIndex != selectedPage)
+            AnimatedOpacity(
+              opacity: targetOpacity,
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              child: _FeaturedSlide(
+                item: items[targetIndex],
+                artworkAlignment: Alignment(artworkOffset, -1),
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _FeaturedPreview extends StatefulWidget {
+  const _FeaturedPreview({
+    required this.item,
+    required this.previewRef,
+    required this.previewProgress,
+    required this.animatePosterIn,
+    required this.previewHasTrailer,
+    required this.visible,
+    required this.onCompleted,
     required this.scrolling,
   });
 
   final VersionedMediaItem item;
-  final bool active;
+  final ValueNotifier<MediaRef?> previewRef;
+  final ValueNotifier<double?> previewProgress;
+  final ValueNotifier<bool> animatePosterIn;
+  final ValueNotifier<bool?> previewHasTrailer;
+  final bool visible;
+  final VoidCallback onCompleted;
   final ValueListenable<bool> scrolling;
 
   @override
-  State<_FeaturedSlide> createState() => _FeaturedSlideState();
+  State<_FeaturedPreview> createState() => _FeaturedPreviewState();
 }
 
-class _FeaturedSlideState extends State<_FeaturedSlide> {
-  Future<MediaDetailV2>? _detail;
+class _FeaturedPreviewState extends State<_FeaturedPreview> {
+  MediaTrailer? _trailer;
+  MediaRef? _trailerRef;
+  MediaRef? _loadedRef;
+  MediaRef? _loadingRef;
+  MediaTrailer? _pendingTrailer;
+  MediaRef? _pendingRef;
+  bool _hasPendingPreview = false;
+  bool _playing = false;
+  Timer? _playDelay;
+  int _loadGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrolling.addListener(_onScrollChanged);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ensureDetailLoaded();
+    if (_loadingRef == null && _loadedRef != widget.item.item.ref) {
+      _loadPreview();
+    }
   }
 
   @override
-  void didUpdateWidget(covariant _FeaturedSlide oldWidget) {
+  void didUpdateWidget(covariant _FeaturedPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.item.ref != widget.item.item.ref) {
-      _detail = null;
+    if (oldWidget.scrolling != widget.scrolling) {
+      oldWidget.scrolling.removeListener(_onScrollChanged);
+      widget.scrolling.addListener(_onScrollChanged);
     }
-    _ensureDetailLoaded();
+    if (oldWidget.item.item.ref != widget.item.item.ref) _loadPreview();
   }
 
-  void _ensureDetailLoaded() {
-    if (!widget.active || _detail != null) return;
-    _detail = _loadDetail();
+  @override
+  void dispose() {
+    _playDelay?.cancel();
+    widget.scrolling.removeListener(_onScrollChanged);
+    super.dispose();
+  }
+
+  void _onScrollChanged() {
+    if (!widget.scrolling.value) _commitPendingPreview();
+  }
+
+  void _loadPreview() {
+    final ref = widget.item.item.ref;
+    _playDelay?.cancel();
+    _playDelay = null;
+    _loadedRef = ref;
+    _loadingRef = ref;
+    _pendingTrailer = null;
+    _pendingRef = null;
+    _hasPendingPreview = false;
+    final future = _loadDetail();
+    final generation = ++_loadGeneration;
+    if (future == null) {
+      _loadingRef = null;
+      _trailer = null;
+      _trailerRef = null;
+      _playing = false;
+      _publishPreviewHasTrailer(false, generation);
+      _publishPreviewRef(null, generation);
+      return;
+    }
+    unawaited(_resolvePreview(future, ref, generation));
+  }
+
+  Future<void> _resolvePreview(
+    Future<MediaDetailV2> future,
+    MediaRef ref,
+    int generation,
+  ) async {
+    try {
+      final detail = await future;
+      if (!mounted || generation != _loadGeneration) return;
+      final trailer = _autoplayTrailer(detail);
+      _loadingRef = null;
+      if (widget.scrolling.value) {
+        _pendingTrailer = trailer;
+        _pendingRef = ref;
+        _hasPendingPreview = true;
+        return;
+      }
+      _applyPreview(trailer, ref, generation);
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      _loadingRef = null;
+      if (widget.scrolling.value) {
+        _pendingTrailer = null;
+        _pendingRef = ref;
+        _hasPendingPreview = true;
+        return;
+      }
+      _applyPreview(null, ref, generation);
+    }
+  }
+
+  void _commitPendingPreview() {
+    if (!_hasPendingPreview || _pendingRef != widget.item.item.ref) return;
+    final trailer = _pendingTrailer;
+    final ref = _pendingRef!;
+    _pendingTrailer = null;
+    _pendingRef = null;
+    _hasPendingPreview = false;
+    _applyPreview(trailer, ref, _loadGeneration);
+  }
+
+  void _applyPreview(MediaTrailer? trailer, MediaRef ref, int generation) {
+    if (!mounted || generation != _loadGeneration) return;
+    widget.previewProgress.value = null;
+    widget.animatePosterIn.value = false;
+    _publishPreviewHasTrailer(trailer != null, generation);
+    final autoplayEnabled = AppScope.of(
+      context,
+    ).previewAutoplayPreferenceController.enabled;
+    final delayPlayback =
+        autoplayEnabled &&
+        trailer != null &&
+        _trailerRef != null &&
+        _trailerRef != ref;
+    setState(() {
+      _trailer = trailer;
+      _trailerRef = trailer == null ? null : ref;
+      _playing = trailer != null && autoplayEnabled && !delayPlayback;
+    });
+    if (trailer == null) {
+      _publishPreviewRef(null, generation);
+      return;
+    }
+    if (!autoplayEnabled) {
+      _publishPreviewRef(null, generation);
+      return;
+    }
+    if (!delayPlayback) {
+      _publishPreviewRef(ref, generation);
+      return;
+    }
+    _playDelay = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || generation != _loadGeneration || _trailerRef != ref) {
+        return;
+      }
+      setState(() => _playing = true);
+    });
+  }
+
+  void _onTrailerPlaying(bool playing) {
+    if (!mounted || _trailerRef == null) return;
+    final autoplayEnabled = AppScope.of(
+      context,
+    ).previewAutoplayPreferenceController.enabled;
+    if (!autoplayEnabled) {
+      _publishPreviewRef(null, _loadGeneration);
+      return;
+    }
+    if (!playing) return;
+    // Start fading the poster only once TrailerPreview's autoplay timer has
+    // actually started native playback.
+    _publishPreviewRef(_trailerRef, _loadGeneration);
+  }
+
+  void _onTrailerProgress(double? progress) {
+    if (!mounted) return;
+    if (progress == null) {
+      widget.previewProgress.value = null;
+      return;
+    }
+    final normalized = progress.clamp(0.0, 1.0).toDouble();
+    widget.previewProgress.value =
+        _featuredIndicatorStartProgress +
+        ((1.0 - _featuredIndicatorStartProgress) * normalized);
+  }
+
+  void _onTrailerCompleted() {
+    if (!mounted || _trailerRef == null) return;
+    final generation = _loadGeneration;
+    setState(() => _playing = false);
+    widget.previewProgress.value = 1.0;
+    widget.animatePosterIn.value = true;
+    _publishPreviewRef(null, generation);
+    widget.onCompleted();
+  }
+
+  void _publishPreviewRef(MediaRef? ref, int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _loadGeneration) return;
+      widget.previewRef.value = ref;
+    });
+  }
+
+  void _publishPreviewHasTrailer(bool hasTrailer, int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _loadGeneration) return;
+      widget.previewHasTrailer.value = hasTrailer;
+    });
   }
 
   Future<MediaDetailV2>? _loadDetail() {
     final item = widget.item;
-    if (item.item is! VideoItemV2 && item.item is! SeriesItemV2) {
-      return null;
-    }
+    if (item.item is! VideoItemV2 && item.item is! SeriesItemV2) return null;
     final registry = AppScope.of(context).registry;
     final manifest = registry.installed.where(
       (entry) => entry.id == item.item.ref.extensionId,
@@ -312,65 +894,18 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<MediaDetailV2>(
-    future: _detail,
-    builder: (context, snapshot) {
-      // FutureBuilder retains the previous snapshot while a new detail future
-      // is waiting. Never let that old detail keep a trailer playing for the
-      // item that now occupies this page position.
-      final detail = snapshot.connectionState == ConnectionState.done
-          ? snapshot.data
-          : null;
-      return _buildSlide(
-        detail,
-        !widget.active || detail == null ? null : _autoplayTrailer(detail),
-      );
-    },
-  );
-
-  Widget _buildSlide(MediaDetailV2? detail, MediaTrailer? preview) {
-    final media = widget.item.item;
-    final displayItem = widget.item;
-    final fallbackArtwork = _fallbackArtwork(media);
-    final alignStart = MediaHeroLayout.isLargeScreen(context);
-    final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
-      MediaHeroCollapseScope.of(context),
-      maxCollapse: MediaHeroCollapseScope.maxCollapseOf(context),
-    );
-    return RepaintBoundary(
-      child: MediaHeroCard(
-        item: media,
-        fallback: fallbackArtwork,
-        preview: preview == null
-            ? null
-            : ValueListenableBuilder<bool>(
-                valueListenable: widget.scrolling,
-                builder: (context, scrolling, child) => TrailerPreview(
-                  trailer: preview,
-                  playing: widget.active && !scrolling,
-                ),
-              ),
-        foreground: Positioned(
-          left: AppSpacing.lg,
-          right: AppSpacing.md,
-          bottom: MediaHeroLayout.homeSummaryBottom,
-          child: Opacity(
-            opacity: overlayOpacity,
-            child: Align(
-              alignment: alignStart
-                  ? Alignment.bottomLeft
-                  : Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: _FeaturedDetails(item: displayItem),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+  Widget build(BuildContext context) {
+    final trailer = _trailer;
+    if (trailer == null) return const SizedBox.shrink();
+    // Keep the player visible and playing while the poster layer transitions.
+    // If the selected item changes, the previous trailer stays here until the
+    // new detail resolves and the poster can cover the handoff.
+    return TrailerPreview(
+      trailer: trailer,
+      playing: _playing && widget.visible,
+      onPlayingChanged: _onTrailerPlaying,
+      onProgressChanged: _onTrailerProgress,
+      onCompleted: _onTrailerCompleted,
     );
   }
 }

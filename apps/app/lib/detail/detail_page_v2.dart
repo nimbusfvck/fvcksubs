@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -56,6 +57,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
   int? _selectedRangeIndex;
   bool _descriptionExpanded = false;
   bool _sourcePrefetchStarted = false;
+  final ValueNotifier<double> _heroToolbarOpacity = ValueNotifier(0);
+
+  @override
+  void dispose() {
+    _heroToolbarOpacity.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -111,10 +119,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
     ),
   );
 
-  Widget _buildDetail(
-    MediaDetailV2 detail, {
-    required bool metadataLoading,
-  }) {
+  Widget _buildDetail(MediaDetailV2 detail, {required bool metadataLoading}) {
     if (!metadataLoading) _prefetchPrimarySources(detail);
     final item = detail.item;
     final trailers = detail.trailers
@@ -127,221 +132,237 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
     return Stack(
       children: [
-        CustomScrollView(
-          slivers: [
-            _DetailHeroSliver(
-              detail: detail,
-              heroTag: widget.heroTag,
-              actions: _heroActions(
+        NotificationListener<ScrollNotification>(
+          onNotification: _onDetailScrollNotification,
+          child: CustomScrollView(
+            slivers: [
+              _DetailHeroSliver(
                 detail: detail,
-                item: item,
-                guide: guide,
-                libraryController: libraryController,
-                alignStart: alignStart,
+                heroTag: widget.heroTag,
+                actions: _heroActions(
+                  detail: detail,
+                  item: item,
+                  guide: guide,
+                  libraryController: libraryController,
+                  alignStart: alignStart,
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.xs,
-                AppSpacing.md,
-                AppSpacing.md,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: CenteredContent(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (item.isUpcoming && item.releaseDate != null) ...[
-                        Text(
-                          'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.onDarkSoft,
-                          ),
-                        ),
-                      ],
-                      if (metadataLoading || detail.description != null) ...[
-                        SizedBox(
-                      height:
-                          item.isUpcoming && item.releaseDate != null
-                          ? AppSpacing.md
-                          : AppSpacing.sm,
-                        ),
-                        if (metadataLoading)
-                          const _DescriptionShimmer()
-                        else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.xs,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: CenteredContent(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (item.isUpcoming && item.releaseDate != null) ...[
                           Text(
-                            detail.description!,
-                            maxLines: _descriptionExpanded ? null : 4,
-                            overflow: _descriptionExpanded
-                                ? TextOverflow.visible
-                                : TextOverflow.ellipsis,
-                            style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onDark,
-                              height: 1.5,
+                            'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.onDarkSoft,
                             ),
                           ),
-                        if (!metadataLoading)
-                          TextButton(
-                            onPressed: () => setState(
-                          () => _descriptionExpanded = !_descriptionExpanded,
+                        ],
+                        if (metadataLoading || detail.description != null) ...[
+                          SizedBox(
+                            height: item.isUpcoming && item.releaseDate != null
+                                ? AppSpacing.md
+                                : AppSpacing.sm,
+                          ),
+                          if (metadataLoading)
+                            const _DescriptionShimmer()
+                          else
+                            Text(
+                              detail.description!,
+                              maxLines: _descriptionExpanded ? null : 4,
+                              overflow: _descriptionExpanded
+                                  ? TextOverflow.visible
+                                  : TextOverflow.ellipsis,
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onDark,
+                                height: 1.5,
+                              ),
                             ),
-                            child: Text(
-                              _descriptionExpanded ? 'Show less' : 'Show more',
+                          if (!metadataLoading)
+                            TextButton(
+                              onPressed: () => setState(
+                                () => _descriptionExpanded =
+                                    !_descriptionExpanded,
+                              ),
+                              child: Text(
+                                _descriptionExpanded
+                                    ? 'Show less'
+                                    : 'Show more',
+                              ),
+                            ),
+                        ],
+                        if (trailers.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          const _SectionTitle('Trailers'),
+                          const SizedBox(height: AppSpacing.sm),
+                          SizedBox(
+                            height: 192,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: trailers.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: AppSpacing.sm),
+                              itemBuilder: (context, index) {
+                                final trailer = trailers[index];
+                                return _TrailerCard(
+                                  trailer: trailer,
+                                  onTap: () => _openTrailer(context, trailer),
+                                );
+                              },
                             ),
                           ),
-                      ],
-                      if (trailers.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        const _SectionTitle('Trailers'),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          height: 192,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: trailers.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: AppSpacing.sm),
-                            itemBuilder: (context, index) {
-                              final trailer = trailers[index];
-                              return _TrailerCard(
-                                trailer: trailer,
-                                onTap: () => _openTrailer(context, trailer),
-                              );
-                            },
-                          ),
+                        ],
+                        if (detail.facts.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          _Facts(values: detail.facts),
+                        ],
+                        if (detail.credits.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          const _SectionTitle('Credits'),
+                          const SizedBox(height: AppSpacing.sm),
+                          _Credits(values: detail.credits),
+                        ],
+                        _episodesSection(
+                          detail: detail,
+                          guide: guide,
+                          groups: groups,
+                          libraryController: libraryController,
                         ),
-                      ],
-                      if (detail.facts.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        _Facts(values: detail.facts),
-                      ],
-                      if (detail.credits.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        const _SectionTitle('Credits'),
-                        const SizedBox(height: AppSpacing.sm),
-                        _Credits(values: detail.credits),
-                      ],
-                      _episodesSection(
-                        detail: detail,
-                        guide: guide,
-                        groups: groups,
-                        libraryController: libraryController,
-                      ),
-                      if (detail.collection case final collection?
-                          when collection.items.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        _SectionTitle(collection.name),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          height: 248 + Clickable.ringBleed * 2,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: collection.items.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: AppSpacing.sm),
-                            itemBuilder: (context, index) {
-                              final collectionItem = collection.items[index];
-                              final heroTag = Object();
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: Clickable.ringBleed,
-                                ),
-                                child: SizedBox(
-                                  width: 152,
-                                  child: MediaCardV2(
-                                    item: collectionItem,
-                                    heroTag: heroTag,
-                                    onTap: () => openVersionedItem(
-                                      context,
-                                      VersionedMediaItem(item: collectionItem),
+                        if (detail.collection case final collection?
+                            when collection.items.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          _SectionTitle(collection.name),
+                          const SizedBox(height: AppSpacing.sm),
+                          SizedBox(
+                            height: 228 + Clickable.ringBleed * 2,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: collection.items.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: AppSpacing.sm),
+                              itemBuilder: (context, index) {
+                                final collectionItem = collection.items[index];
+                                final heroTag = Object();
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: Clickable.ringBleed,
+                                  ),
+                                  child: SizedBox(
+                                    width: 152,
+                                    child: MediaCardV2(
+                                      item: collectionItem,
                                       heroTag: heroTag,
-                                      contentRating: widget.contentRating,
-                                    ),
-                                    onLongPress: () => showMediaCardActions(
-                                      context,
-                                      collectionItem,
-                                      onViewDetails: () => openDetails(
+                                      onTap: () => openVersionedItem(
+                                        context,
+                                        VersionedMediaItem(
+                                          item: collectionItem,
+                                        ),
+                                        heroTag: heroTag,
+                                        contentRating: widget.contentRating,
+                                      ),
+                                      onLongPress: () => showMediaCardActions(
                                         context,
                                         collectionItem,
-                                        heroTag: heroTag,
-                                        contentRating: widget.contentRating,
+                                        onViewDetails: () => openDetails(
+                                          context,
+                                          collectionItem,
+                                          heroTag: heroTag,
+                                          contentRating: widget.contentRating,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
-                      if (detail.recommendations.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        const _SectionTitle('You Might Also Like'),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          height: 248 + Clickable.ringBleed * 2,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: detail.recommendations.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: AppSpacing.sm),
-                            itemBuilder: (context, index) {
-                          final recommendation = detail.recommendations[index];
-                              final heroTag = Object();
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: Clickable.ringBleed,
-                                ),
-                                child: SizedBox(
-                                  width: 152,
-                                  child: MediaCardV2(
-                                    item: recommendation,
-                                    heroTag: heroTag,
-                                    onTap: () => openVersionedItem(
-                                      context,
-                                      VersionedMediaItem(item: recommendation),
+                        ],
+                        if (detail.recommendations.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          const _SectionTitle('You Might Also Like'),
+                          const SizedBox(height: AppSpacing.sm),
+                          SizedBox(
+                            height: 228 + Clickable.ringBleed * 2,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: detail.recommendations.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: AppSpacing.sm),
+                              itemBuilder: (context, index) {
+                                final recommendation =
+                                    detail.recommendations[index];
+                                final heroTag = Object();
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: Clickable.ringBleed,
+                                  ),
+                                  child: SizedBox(
+                                    width: 152,
+                                    child: MediaCardV2(
+                                      item: recommendation,
                                       heroTag: heroTag,
-                                      contentRating: widget.contentRating,
-                                    ),
-                                    onLongPress: () => showMediaCardActions(
-                                      context,
-                                      recommendation,
-                                      onViewDetails: () => openDetails(
+                                      onTap: () => openVersionedItem(
+                                        context,
+                                        VersionedMediaItem(
+                                          item: recommendation,
+                                        ),
+                                        heroTag: heroTag,
+                                        contentRating: widget.contentRating,
+                                      ),
+                                      onLongPress: () => showMediaCardActions(
                                         context,
                                         recommendation,
-                                        heroTag: heroTag,
-                                        contentRating: widget.contentRating,
+                                        onViewDetails: () => openDetails(
+                                          context,
+                                          recommendation,
+                                          heroTag: heroTag,
+                                          contentRating: widget.contentRating,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        Positioned(
-          top: 0,
-          left: 0,
-          child: SafeArea(
-            bottom: false,
-            child: IconButton(
-              tooltip: 'Back',
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
+            ],
           ),
+        ),
+        _DetailBackToolbar(
+          opacity: _heroToolbarOpacity,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );
+  }
+
+  bool _onDetailScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    final heroHeight = MediaHeroLayout.heightForViewport(
+      MediaQuery.sizeOf(context),
+    );
+    final fadeDistance = MediaHeroLayout.homeOverlayFadeDistance;
+    final fadeStart = math.max(0.0, heroHeight - fadeDistance);
+    _heroToolbarOpacity.value =
+        ((notification.metrics.pixels - fadeStart) / fadeDistance)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    return false;
   }
 
   void _prefetchPrimarySources(MediaDetailV2 detail) {
@@ -662,6 +683,48 @@ class _Header extends StatelessWidget {
   }
 }
 
+class _DetailBackToolbar extends StatelessWidget {
+  const _DetailBackToolbar({required this.opacity, required this.onPressed});
+
+  final ValueListenable<double> opacity;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    child: SizedBox(
+      height: MediaQuery.paddingOf(context).top + kToolbarHeight,
+      child: ValueListenableBuilder<double>(
+        valueListenable: opacity,
+        builder: (context, value, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              child: ColoredBox(
+                key: const Key('detail-toolbar-scrim'),
+                color: AppColors.surfaceDark.withValues(alpha: value),
+              ),
+            ),
+            SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  tooltip: 'Back',
+                  onPressed: onPressed,
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _DetailHeroSliver extends StatelessWidget {
   const _DetailHeroSliver({
     required this.detail,
@@ -693,11 +756,7 @@ class _DetailHeroSliver extends StatelessWidget {
       flexibleSpace: MediaHeroFlexibleSpace(
         expandedHeight: height,
         child: CenteredContent(
-          child: _Header(
-            detail: detail,
-            actions: actions,
-            heroTag: heroTag,
-          ),
+          child: _Header(detail: detail, actions: actions, heroTag: heroTag),
         ),
       ),
     );

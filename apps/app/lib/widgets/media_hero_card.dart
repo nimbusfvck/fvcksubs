@@ -15,6 +15,8 @@ class MediaHeroCard extends StatelessWidget {
     required this.item,
     required this.foreground,
     this.preview,
+    this.showGradient = true,
+    this.artworkAlignment = Alignment.topCenter,
     this.fallback,
     this.heroTag,
   });
@@ -39,6 +41,8 @@ class MediaHeroCard extends StatelessWidget {
   final MediaItemV2 item;
   final Widget foreground;
   final Widget? preview;
+  final bool showGradient;
+  final Alignment artworkAlignment;
   final Widget? fallback;
   final Object? heroTag;
 
@@ -52,7 +56,7 @@ class MediaHeroCard extends StatelessWidget {
         : CachedNetworkImage(
             imageUrl: image.url,
             fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
+            alignment: artworkAlignment,
             fadeInDuration: Duration.zero,
             memCacheWidth: artworkCacheDimension(
               context,
@@ -71,7 +75,8 @@ class MediaHeroCard extends StatelessWidget {
         artwork,
         const _HeroBottomBlur(),
         if (preview case final preview?) Positioned.fill(child: preview),
-        const DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
+        if (showGradient)
+          const DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
       ],
     );
     final collapse = MediaHeroCollapseScope.of(context);

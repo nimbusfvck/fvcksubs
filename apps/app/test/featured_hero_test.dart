@@ -47,6 +47,7 @@ void main() {
     );
     expect(logo.imageUrl, logoUrl);
     expect(logo.fit, BoxFit.contain);
+    expect(logo.fadeInDuration, const Duration(milliseconds: 320));
     expect(tester.takeException(), isNull);
   });
 
@@ -291,6 +292,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('items without trailers auto-advance after eight seconds', (
+    tester,
+  ) async {
+    const items = [
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '1'),
+          title: 'First fallback item',
+        ),
+      ),
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '2'),
+          title: 'Second fallback item',
+        ),
+      ),
+    ];
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('First fallback item'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 8));
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Second fallback item'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('horizontal drag moves to the next featured item', (
     tester,
   ) async {
@@ -337,9 +378,92 @@ void main() {
     );
 
     await tester.drag(find.byType(PageView), const Offset(-300, 0));
-    await tester.pumpAndSettle();
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.text('Second event'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('swiping keeps the featured preview playing and mounted', (
+    tester,
+  ) async {
+    const first = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'first'),
+        title: 'First movie',
+      ),
+    );
+    const second = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'second'),
+        title: 'Second movie',
+      ),
+    );
+    final extension = FakeExtension(
+      metaDetail: const MediaDetailV2(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'first'),
+          title: 'First movie',
+        ),
+        trailers: [
+          MediaTrailer(
+            title: 'Trailer',
+            url: 'https://video.example/featured.mp4',
+            mimeType: 'video/mp4',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [first, second]),
+        ),
+        registry: ExtensionRegistry([extension]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(VideoPlayerView), findsOneWidget);
+    expect(
+      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
+      isTrue,
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(PageView)),
+    );
+    await gesture.moveBy(const Offset(-240, 0));
+    await tester.pump();
+
+    expect(find.text('First movie'), findsOneWidget);
+    expect(
+      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
+      isTrue,
+    );
+    expect(find.byType(VideoPlayerView), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Second movie'), findsOneWidget);
+    expect(
+      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
+      isFalse,
+    );
+    expect(find.byType(VideoPlayerView), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(
+      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -372,7 +496,10 @@ void main() {
       ),
     );
     await tester.drag(find.byType(PageView), const Offset(-300, 0));
-    await tester.pumpAndSettle();
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.text('Second update'), findsOneWidget);
 
     await tester.pumpWidget(

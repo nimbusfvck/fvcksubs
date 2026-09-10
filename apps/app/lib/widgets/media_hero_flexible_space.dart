@@ -16,14 +16,20 @@ class MediaHeroFlexibleSpace extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final collapse = (expandedHeight - constraints.maxHeight)
-          .clamp(0.0, expandedHeight)
+      final settings = context
+          .dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
+      final maxExtent = settings?.maxExtent ?? expandedHeight;
+      final minExtent = settings?.minExtent ?? collapsedHeight;
+      final currentExtent = settings?.currentExtent ?? constraints.maxHeight;
+      final maxCollapse = (maxExtent - minExtent)
+          .clamp(0.0, maxExtent)
+          .toDouble();
+      final collapse = (maxExtent - currentExtent)
+          .clamp(0.0, maxCollapse)
           .toDouble();
       return MediaHeroCollapseScope(
         collapse: collapse,
-        maxCollapse: (expandedHeight - collapsedHeight)
-            .clamp(0.0, expandedHeight)
-            .toDouble(),
+        maxCollapse: maxCollapse,
         child: child,
       );
     },
