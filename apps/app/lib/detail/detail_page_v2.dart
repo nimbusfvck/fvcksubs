@@ -123,6 +123,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
 
     return Stack(
       children: [
@@ -136,6 +137,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                 item: item,
                 guide: guide,
                 libraryController: libraryController,
+                alignStart: alignStart,
               ),
             ),
             SliverPadding(
@@ -363,8 +365,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
     required MediaItemV2 item,
     required EpisodeGuide? guide,
     required LibraryController libraryController,
+    required bool alignStart,
   }) => Wrap(
-    alignment: WrapAlignment.center,
+    alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
     spacing: AppSpacing.xs,
     runSpacing: AppSpacing.xs,
     children: [
@@ -625,6 +628,7 @@ class _Header extends StatelessWidget {
     final image = item.artwork?.portrait ?? item.artwork?.landscape;
     final preview = _autoplayTrailer(detail);
     final viewport = MediaQuery.sizeOf(context);
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
     return SizedBox(
       key: const Key('detail-poster-header'),
       height: MediaHeroLayout.heightForViewport(viewport),
@@ -639,12 +643,15 @@ class _Header extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Positioned(
-              left: AppSpacing.md,
+              left: AppSpacing.lg,
               right: AppSpacing.md,
               bottom: MediaHeroLayout.summaryBottom,
               child: MediaHeroSummary(
                 item: item,
-                extra: detail.tags.isEmpty ? null : _Tags(values: detail.tags),
+                alignStart: alignStart,
+                extra: detail.tags.isEmpty
+                    ? null
+                    : _Tags(values: detail.tags, alignStart: alignStart),
                 actions: actions,
               ),
             ),
@@ -843,13 +850,14 @@ class _TrailerImageFallback extends StatelessWidget {
 }
 
 class _Tags extends StatelessWidget {
-  const _Tags({required this.values});
+  const _Tags({required this.values, required this.alignStart});
 
   final List<String> values;
+  final bool alignStart;
 
   @override
   Widget build(BuildContext context) => Wrap(
-    alignment: WrapAlignment.center,
+    alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
     spacing: AppSpacing.xs,
     runSpacing: AppSpacing.xs,
     children: [

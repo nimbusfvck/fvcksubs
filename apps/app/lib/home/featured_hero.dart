@@ -332,6 +332,7 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
     final media = widget.item.item;
     final displayItem = widget.item;
     final fallbackArtwork = _fallbackArtwork(media);
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
     final overlayOpacity = MediaHeroLayout.homeOverlayOpacity(
       MediaHeroCollapseScope.of(context),
       maxCollapse: MediaHeroCollapseScope.maxCollapseOf(context),
@@ -350,13 +351,15 @@ class _FeaturedSlideState extends State<_FeaturedSlide> {
                 ),
               ),
         foreground: Positioned(
-          left: AppSpacing.md,
+          left: AppSpacing.lg,
           right: AppSpacing.md,
           bottom: MediaHeroLayout.homeSummaryBottom,
           child: Opacity(
             opacity: overlayOpacity,
             child: Align(
-              alignment: Alignment.bottomCenter,
+              alignment: alignStart
+                  ? Alignment.bottomLeft
+                  : Alignment.bottomCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 680),
                 child: SizedBox(
@@ -389,7 +392,7 @@ Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {
       eventName: subtitle ?? '',
       brandAboveParticipants: true,
       centerContent: true,
-      participantLogoSize: 56,
+      participantLogoSize: 64,
       showMatchup: false,
       showBrand: false,
       branding: branding,
@@ -423,12 +426,14 @@ class _FeaturedDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = item.item;
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
     return MediaHeroSummary(
       item: media,
+      alignStart: alignStart,
       titleTextKey: const Key('featured-title-text'),
       titleLogoKey: const Key('featured-title-logo'),
       actions: Wrap(
-        alignment: WrapAlignment.center,
+        alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
         spacing: AppSpacing.xs,
         runSpacing: AppSpacing.xs,
         children: [

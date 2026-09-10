@@ -87,6 +87,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('large featured summary and actions align to the left', (
+    tester,
+  ) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'large-screen',
+        ),
+        title: 'Large screen movie',
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: MediaQuery(
+          data: const MediaQueryData(size: Size(1000, 560)),
+          child: const SizedBox(
+            width: 1000,
+            height: 560,
+            child: FeaturedHero(items: [item]),
+          ),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.byKey(const Key('featured-title-text'))).dx,
+      closeTo(24, 1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('featured-play'))).dx,
+      closeTo(24, 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('featured event uses the shared banner layout', (tester) async {
     final item = VersionedMediaItem(
       item: EventItemV2(
@@ -133,7 +173,7 @@ void main() {
     expect(find.byType(CachedNetworkImage), findsNWidgets(2));
     expect(
       tester.getSize(find.byType(CachedNetworkImage).first),
-      const Size(50, 50),
+      const Size(64, 64),
     );
     for (final logo in tester.widgetList<CachedNetworkImage>(
       find.byType(CachedNetworkImage),

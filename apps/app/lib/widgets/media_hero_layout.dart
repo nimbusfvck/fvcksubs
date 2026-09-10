@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../theme/breakpoints.dart';
+
 /// Shared responsive sizing for prominent Home and Detail media artwork.
 abstract final class MediaHeroLayout {
   static const double narrowBreakpoint = 600;
@@ -13,6 +15,9 @@ abstract final class MediaHeroLayout {
   static const double homeSummaryBottom = 40;
   static const double homeIndicatorBottom = 8;
   static const double homeOverlayFadeDistance = 72;
+
+  static bool isLargeScreen(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= AppBreakpoints.railWidth;
 
   static double homeOverlayOpacity(double collapse, {double? maxCollapse}) {
     final fadeStart = maxCollapse == null

@@ -303,6 +303,7 @@ class MatchupText extends StatelessWidget {
     this.singleLine = false,
     this.wrapLong = false,
     this.uppercase = true,
+    this.textAlign = TextAlign.center,
     this.textKey,
   });
 
@@ -312,6 +313,7 @@ class MatchupText extends StatelessWidget {
   final bool singleLine;
   final bool wrapLong;
   final bool uppercase;
+  final TextAlign textAlign;
   final Key? textKey;
 
   @override
@@ -356,7 +358,7 @@ class MatchupText extends StatelessWidget {
             key: textKey,
             maxLines: wrapLong ? 2 : 1,
             overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            textAlign: textAlign,
           );
         },
       );

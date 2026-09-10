@@ -17,6 +17,7 @@ class MediaHeroSummary extends StatelessWidget {
     this.actions,
     this.titleTextKey,
     this.titleLogoKey,
+    this.alignStart = false,
   });
 
   static const textShadows = [
@@ -28,22 +29,30 @@ class MediaHeroSummary extends StatelessWidget {
   final Widget? actions;
   final Key? titleTextKey;
   final Key? titleLogoKey;
+  final bool alignStart;
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.center,
+    crossAxisAlignment: alignStart
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      _MediaHeroTitle(item: item, textKey: titleTextKey, logoKey: titleLogoKey),
+      _MediaHeroTitle(
+        item: item,
+        textKey: titleTextKey,
+        logoKey: titleLogoKey,
+        alignStart: alignStart,
+      ),
       const SizedBox(height: AppSpacing.xs),
-      _MediaHeroMeta(item: item),
+      _MediaHeroMeta(item: item, alignStart: alignStart),
       if (item.subtitle case final subtitle?) ...[
         const SizedBox(height: AppSpacing.xs),
         Text(
           subtitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
+          textAlign: alignStart ? TextAlign.start : TextAlign.center,
           style: AppTypography.bodySm.copyWith(
             color: AppColors.onDarkSoft,
             shadows: textShadows,
@@ -63,11 +72,17 @@ class MediaHeroSummary extends StatelessWidget {
 }
 
 class _MediaHeroTitle extends StatelessWidget {
-  const _MediaHeroTitle({required this.item, this.textKey, this.logoKey});
+  const _MediaHeroTitle({
+    required this.item,
+    this.textKey,
+    this.logoKey,
+    required this.alignStart,
+  });
 
   final MediaItemV2 item;
   final Key? textKey;
   final Key? logoKey;
+  final bool alignStart;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +97,7 @@ class _MediaHeroTitle extends StatelessWidget {
         singleLine: true,
         wrapLong: true,
         uppercase: true,
+        textAlign: alignStart ? TextAlign.start : TextAlign.center,
         textKey: textKey,
       );
     }
@@ -89,12 +105,13 @@ class _MediaHeroTitle extends StatelessWidget {
       VideoItemV2() || SeriesItemV2() => item.artwork?.logo,
       _ => null,
     };
+    final titleAlignment = alignStart ? Alignment.centerLeft : Alignment.center;
     final fallback = Text(
       item.title,
       key: textKey,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      textAlign: TextAlign.center,
+      textAlign: alignStart ? TextAlign.start : TextAlign.center,
       style: AppTypography.displaySm.copyWith(
         color: AppColors.onDark,
         fontWeight: FontWeight.w800,
@@ -107,24 +124,31 @@ class _MediaHeroTitle extends StatelessWidget {
       label: item.title,
       image: true,
       child: ExcludeSemantics(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 280),
-          child: SizedBox(
-            height: 56,
-            child: CachedNetworkImage(
-              key: logoKey,
-              imageUrl: logo.url,
-              fit: BoxFit.contain,
-              fadeInDuration: Duration.zero,
-              memCacheWidth: artworkCacheDimension(context, 280),
-              placeholder: (_, _) => Center(
-                child: ShimmerPlaceholder(
-                  width: 180,
-                  height: 32,
-                  borderRadius: AppRadius.sm,
+        child: Align(
+          alignment: titleAlignment,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: CachedNetworkImage(
+                key: logoKey,
+                imageUrl: logo.url,
+                alignment: titleAlignment,
+                fit: BoxFit.contain,
+                fadeInDuration: Duration.zero,
+                memCacheWidth: artworkCacheDimension(context, 280),
+                placeholder: (_, _) => Align(
+                  alignment: titleAlignment,
+                  child: ShimmerPlaceholder(
+                    width: 180,
+                    height: 32,
+                    borderRadius: AppRadius.sm,
+                  ),
                 ),
+                errorWidget: (_, _, _) =>
+                    Align(alignment: titleAlignment, child: fallback),
               ),
-              errorWidget: (_, _, _) => Center(child: fallback),
             ),
           ),
         ),
@@ -134,9 +158,10 @@ class _MediaHeroTitle extends StatelessWidget {
 }
 
 class _MediaHeroMeta extends StatelessWidget {
-  const _MediaHeroMeta({required this.item});
+  const _MediaHeroMeta({required this.item, required this.alignStart});
 
   final MediaItemV2 item;
+  final bool alignStart;
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +171,7 @@ class _MediaHeroMeta extends StatelessWidget {
         ? null
         : event.schedule.label ?? startTimeLabel(event.schedule.startsAt);
     return Wrap(
-      alignment: WrapAlignment.center,
+      alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.xxs,
       crossAxisAlignment: WrapCrossAlignment.center,
