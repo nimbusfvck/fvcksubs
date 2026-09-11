@@ -86,6 +86,7 @@ class _CategoryPageState extends State<CategoryPage> {
         category: widget.category,
         scrollController: _scrollController,
         sliver: true,
+        eagerLoad: true,
       );
     }
     return SliverToBoxAdapter(
@@ -186,6 +187,10 @@ class _EmptyCategory extends StatelessWidget {
   );
 }
 
-String _categoryLabel(String category) => category.isEmpty
-    ? category
-    : category[0].toUpperCase() + category.substring(1);
+String _categoryLabel(String category) {
+  if (category.toLowerCase() == 'tv') return 'Shows';
+  if (category.toLowerCase() == 'movie') return 'Movies';
+  return category.isEmpty
+      ? category
+      : category[0].toUpperCase() + category.substring(1);
+}

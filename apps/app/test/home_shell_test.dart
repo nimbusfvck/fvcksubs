@@ -5,6 +5,7 @@ import 'package:fvcksubs_app/addons/addons_page.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/catalog/category_page.dart';
 import 'package:fvcksubs_app/home/continue_watching_shelf.dart';
+import 'package:fvcksubs_app/home/category_chips.dart';
 import 'package:fvcksubs_app/home/home_page.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
@@ -28,6 +29,51 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('tv category is labeled Shows', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['all', 'tv'],
+          selected: 'all',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Shows'), findsOneWidget);
+    expect(find.text('Tv'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['movie'],
+          selected: 'movie',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('Movie'), findsNothing);
+  });
+
+  testWidgets('live category shows an animated indicator', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['live'],
+          selected: '',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Live'), findsOneWidget);
+    expect(find.byKey(const Key('live-category-indicator')), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 550));
+    expect(find.byKey(const Key('live-category-indicator')), findsOneWidget);
+  });
 
   testWidgets('nav is fixed and does not depend on installed extensions', (
     tester,
@@ -313,12 +359,13 @@ void main() {
     expect(find.byType(CategoryPage), findsNothing);
     expect(find.text('All'), findsNothing);
 
-    await tester.tap(find.text('Movie'));
+    await tester.tap(find.text('Movies'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byType(CategoryPage), findsOneWidget);
-    expect(find.widgetWithText(AppPageBar, 'Movie'), findsOneWidget);
+    expect(find.widgetWithText(AppPageBar, 'Movies'), findsOneWidget);
+    expect(find.text('Home item'), findsWidgets);
   });
 
   testWidgets(
