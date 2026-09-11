@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
-import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'addons/addons_controller.dart';
 import 'addons/installer_controller.dart';
@@ -34,7 +33,6 @@ class AppScope extends InheritedWidget {
     required this.qualityPreferenceController,
     required this.subtitlePreferenceController,
     required this.sourcePriorityController,
-    required this.homeCategoryStore,
     required this.sourceCache,
     required this.pictureInPictureSession,
     required this.pictureInPicturePreferenceController,
@@ -67,8 +65,6 @@ class AppScope extends InheritedWidget {
   final SubtitlePreferenceController subtitlePreferenceController;
 
   final SourcePriorityController sourcePriorityController;
-
-  final CategorySelectionStore homeCategoryStore;
 
   final SourceCache sourceCache;
 
@@ -103,7 +99,6 @@ class AppScope extends InheritedWidget {
       qualityPreferenceController != oldWidget.qualityPreferenceController ||
       subtitlePreferenceController != oldWidget.subtitlePreferenceController ||
       sourcePriorityController != oldWidget.sourcePriorityController ||
-      homeCategoryStore != oldWidget.homeCategoryStore ||
       sourceCache != oldWidget.sourceCache ||
       pictureInPictureSession != oldWidget.pictureInPictureSession ||
       pictureInPicturePreferenceController !=

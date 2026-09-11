@@ -111,19 +111,24 @@ highlight only newly requested hosts; previously granted hosts remain visually s
 
 ```mermaid
 flowchart TB
-    U(["User opens the app"]) --> CAT["Category chips<br/><i>declared by installed extensions</i>"]
-    CAT --> PICK["Plugin selector<br/><i>whose data, when several extensions serve this category</i>"]
+    U(["User opens the app"]) --> CAT["Category choices<br/><i>declared by installed extensions</i>"]
+    CAT --> HOME["all → Home<br/><i>featured + curated shelves</i>"]
+    CAT --> PAGE["other category → category screen<br/><i>full catalog browsing</i>"]
+    HOME --> PICK["Plugin selector<br/><i>when several extensions serve Home</i>"]
+    PAGE --> PICKPAGE["Plugin selector<br/><i>when several extensions serve the category</i>"]
     PICK --> SHELF["One shelf per catalog<br/><i>each loads and fails independently</i>"]
+    PICKPAGE --> GRID["Catalog grid/list and pagination"]
     SHELF --> SEC["Sections within a shelf<br/><i>each capped on its own</i>"]
     SEC --> MORE["'See more' → the full catalog,<br/>already narrowed to that section"]
-    MORE --> CHIPS["Subcategory chips + filters + endless scroll"]
+    GRID --> CHIPS["Subcategory chips + filters + endless scroll"]
+    MORE --> CHIPS
 ```
 
 Three narrowings, and **only the first is the shell's**:
 
 | Level | Chosen by | Behaviour |
 |---|---|---|
-| Category | the user, from chips the extensions declare | There is no shell-invented "All" chip and no "featured" flag. An extension wanting a curated front page declares its own category, and it lands first. |
+| Category | the user, from choices the extensions declare | `all` is the Home entry. Other categories open their own catalog screen. The shell does not invent verticals or a "featured" flag. |
 | Subcategory | the user, from chips the extension **returned** | Ids are opaque and echoed straight back. The list arrives with every response, so the chips stay put while the user moves between them. |
 | Group | the extension | Headings inside one response. Shown on the full screen, hidden in previews where a handful of items across as many groups would be mostly headings. |
 
@@ -143,11 +148,12 @@ sequenceDiagram
     participant R as Registry
     participant X as Extension
 
-    U->>H: taps a different category
+    U->>H: taps a non-all category
+    H->>H: opens the category screen
     H->>C: already have this catalog + category?
     alt yes
         C-->>H: hand it back synchronously
-        Note over H: no spinner, no round trip, scroll position kept
+        Note over H: no spinner, route opens with cached content
     else no
         H->>C: load
         C->>R: catalog query
@@ -155,13 +161,11 @@ sequenceDiagram
         X-->>R: a page of items
         C-->>H: page
     end
-    U->>H: taps the same category again later
-    H->>C: served from cache again
-    U->>H: pulls to refresh
-    H->>C: reload — the old content stays visible until the new lands
+    U->>H: returns to Home
+    H-->>U: shows the all category
 ```
 
-Switching category never refetches. **Asking for fresh data is something the user does**, not
+Opening a category never refetches when its catalog is cached. **Asking for fresh data is something the user does**, not
 a side effect of navigating — and while a refresh runs, what is already on screen stays on
 screen instead of blanking.
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
-import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'addons/addons_controller.dart';
 import 'addons/installer_controller.dart';
@@ -37,7 +36,6 @@ class FvcksubsApp extends StatelessWidget {
     required this.qualityPreferenceController,
     required this.subtitlePreferenceController,
     required this.sourcePriorityController,
-    required this.homeCategoryStore,
     required this.sourceCache,
     required this.pictureInPictureSession,
     required this.pictureInPicturePreferenceController,
@@ -67,8 +65,6 @@ class FvcksubsApp extends StatelessWidget {
   final SubtitlePreferenceController subtitlePreferenceController;
 
   final SourcePriorityController sourcePriorityController;
-
-  final CategorySelectionStore homeCategoryStore;
 
   final SourceCache sourceCache;
 
@@ -101,7 +97,6 @@ class FvcksubsApp extends StatelessWidget {
     qualityPreferenceController: qualityPreferenceController,
     subtitlePreferenceController: subtitlePreferenceController,
     sourcePriorityController: sourcePriorityController,
-    homeCategoryStore: homeCategoryStore,
     sourceCache: sourceCache,
     pictureInPictureSession: pictureInPictureSession,
     pictureInPicturePreferenceController: pictureInPicturePreferenceController,

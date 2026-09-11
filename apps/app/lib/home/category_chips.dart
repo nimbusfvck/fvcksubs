@@ -8,6 +8,8 @@ class CategoryChips extends StatelessWidget {
     required this.categories,
     required this.selected,
     required this.onSelected,
+    this.backgroundColor = AppColors.surfaceDarkElevated,
+    this.selectedColor = AppColors.onDark,
   });
 
   final List<String> categories;
@@ -15,6 +17,10 @@ class CategoryChips extends StatelessWidget {
   final String selected;
 
   final ValueChanged<String> onSelected;
+
+  final Color backgroundColor;
+
+  final Color selectedColor;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -29,31 +35,38 @@ class CategoryChips extends StatelessWidget {
         for (final category in categories)
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.xs),
-            child: ChoiceChip(
-              label: SizedBox(
-                height: 28,
-                child: Center(
-                  child: Text(
-                    _label(category),
-                    style: AppTypography.titleSm.copyWith(
-                      color: category == selected
-                          ? AppColors.surfaceDark
-                          : AppColors.onDark,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => onSelected(category),
+                borderRadius: AppRadius.pill,
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: category == selected
+                        ? selectedColor
+                        : backgroundColor,
+                    borderRadius: AppRadius.pill,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    child: SizedBox(
+                      height: 28,
+                      child: Center(
+                        child: Text(
+                          _label(category),
+                          style: AppTypography.titleSm.copyWith(
+                            color: category == selected
+                                ? AppColors.surfaceDark
+                                : AppColors.onDark,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-              selected: category == selected,
-              onSelected: (_) => onSelected(category),
-              showCheckmark: false,
-              labelPadding: EdgeInsets.zero,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-              backgroundColor: AppColors.surfaceDarkElevated,
-              selectedColor: AppColors.onDark,
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
             ),
           ),
       ],

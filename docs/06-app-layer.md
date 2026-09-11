@@ -32,8 +32,9 @@ Two entries provide test seams:
 - the **extension loader** used by the installer, so the whole install flow is exercisable
   without a real engine.
 
-Persisted state is loaded before the UI so the first frame uses the saved category,
-extension, and preferences.
+Persisted state is loaded before the UI so the first frame uses the saved extension
+and preferences. Home always opens on the `all` category; category screens own their
+route-local scroll state.
 
 **Extension storage** is read in that same startup pass, and for a stricter reason than the
 rest: it backs `host.storage`, whose functions are synchronous, so every value an extension
@@ -58,8 +59,9 @@ flowchart TB
     end
 
     B -->|search field| S["Search"]
+    B -->|category other than all| CP["Category screen"]
     B -->|see more| CV["Full catalog"]
-    B & S & CV & L -->|tap an item| RT{"has detail<br/>worth reading?"}
+    B & CP & S & CV & L -->|tap an item| RT{"has detail<br/>worth reading?"}
     RT -->|yes| D["Detail"]
     RT -->|no| P["Player"]
     D -->|Play| P
@@ -69,6 +71,10 @@ flowchart TB
 Search is **not** a navigation destination. It spans every extension and no category, so it
 opens from a field on the browse screen onto its own surface rather than contradicting the
 category chips above it.
+
+Home is always the `all` category, which is implicit rather than a visible Home chip. Other declared categories open a separate category screen
+with its own app bar, scroll position, catalog cache, and pagination. Returning to Home always
+returns to `all`; the category itself is not a persisted Home selection.
 
 Whichever destination is showing is rebuilt when settings or the library change, so
 toggling an extension or favouriting an item takes effect immediately without either screen
@@ -139,9 +145,10 @@ Video and series items use `artwork.logo` as the featured title mark when suppli
 otherwise the text title is limited to one line. A failed logo request falls back to the
 text title.
 
-The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips are a separate pinned sliver below the app bar. This keeps the current category
-available while the hero collapses normally.
+The featured artwork and gradient extend behind the status bar on handhelds. Home's category
+chips are a separate auto-hiding header below the app bar. The `all` entry is implicit because
+Home already represents it; the visible chips keep the other category choices available while
+the hero collapses normally, and selecting one opens its category screen.
 While the featured feed is loading, the hero keeps the same expanded height and shows a
 shimmer placeholder. An empty or failed feed removes the hero instead of leaving a blank
 surface. Featured trailer previews are inline-only and are never eligible for native Picture
@@ -149,7 +156,8 @@ in Picture.
 
 At app startup, a persisted catalog renders first and Home silently refreshes it in the
 background; a failed refresh leaves that usable snapshot visible. Pull-to-refresh still
-explicitly refetches what is on screen while keeping it visible.
+explicitly refetches what is on screen while keeping it visible. Home itself always starts at
+`all`.
 
 When an extension declares an `all` category, Home places the app-owned Continue Watching
 shelf above its catalogs. It shows at most ten latest unfinished items, uses the saved landscape

@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/addons/addons_page.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
+import 'package:fvcksubs_app/catalog/category_page.dart';
 import 'package:fvcksubs_app/home/continue_watching_shelf.dart';
+import 'package:fvcksubs_app/home/home_page.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/app_nav_rail.dart';
@@ -289,6 +291,73 @@ void main() {
     expect(find.byType(AppNavRail), findsNothing);
     expect(find.byType(NavigationBar), findsOneWidget);
   });
+
+  testWidgets('all stays on Home while other categories open a category page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: ExtensionRegistry([
+          FakeExtension(
+            categories: ['all', 'movie'],
+            expanded: true,
+            items: [fakeItem(title: 'Home item')],
+          ),
+        ]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(CategoryPage), findsNothing);
+    expect(find.text('All'), findsNothing);
+
+    await tester.tap(find.text('Movie'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(CategoryPage), findsOneWidget);
+    expect(find.widgetWithText(AppPageBar, 'Movie'), findsOneWidget);
+  });
+
+  testWidgets(
+    'category chips hide while scrolling down and show while scrolling up',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapApp(
+          child: const HomePage(),
+          registry: ExtensionRegistry([
+            FakeExtension(
+              expanded: true,
+              items: [
+                for (var index = 0; index < 30; index++)
+                  fakeItem(id: 'item-$index', title: 'Item $index'),
+              ],
+            ),
+          ]),
+        ),
+      );
+      // The Home page contains long-lived scroll/preview state, so settling the
+      // entire tree is not a reliable way to wait for its catalog response.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      AnimatedSlide header() => tester.widget<AnimatedSlide>(
+        find.byKey(const Key('home-category-header-animation')),
+      );
+
+      expect(header().offset, Offset.zero);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(header().offset, const Offset(0, -1));
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(header().offset, Offset.zero);
+    },
+  );
 
   testWidgets('Continue Watching hides mature records when NSFW is off', (
     tester,

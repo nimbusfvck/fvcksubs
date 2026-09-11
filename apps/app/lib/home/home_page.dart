@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../app_scope.dart';
 import '../addons/installer_controller.dart';
+import '../catalog/category_page.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
 import '../theme/tokens.dart';
@@ -32,9 +34,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String? _selectedCategory;
-
-  bool _restored = false;
+  bool _showCategoryHeader = true;
 
   int _generation = 0;
 
@@ -45,7 +45,14 @@ class _HomePageState extends State<HomePage> {
   String? _featuredSignature;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     if (_featuredReady) unawaited(_featuredController.close());
     super.dispose();
@@ -54,29 +61,40 @@ class _HomePageState extends State<HomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_featuredReady) {
-      final scope = AppScope.of(context);
-      _featuredController = FeaturedController(
-        registry: scope.registry,
-        catalogCache: scope.catalogCache,
-        pluginController: scope.pluginController,
-      );
-      _featuredReady = true;
+    if (_featuredReady) return;
+    final scope = AppScope.of(context);
+    _featuredController = FeaturedController(
+      registry: scope.registry,
+      catalogCache: scope.catalogCache,
+      pluginController: scope.pluginController,
+    );
+    _featuredReady = true;
+  }
+
+  String _homeCategory(List<String> categories) {
+    // Keep older extensions usable until they declare the Home category.
+    return categories.contains('all') ? 'all' : categories.first;
+  }
+
+  void _openCategory(String category) {
+    if (category.toLowerCase() == 'all') return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => CategoryPage(category: category)),
+    );
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    var showHeader = _showCategoryHeader;
+    if (position.pixels <= position.minScrollExtent ||
+        position.userScrollDirection == ScrollDirection.forward) {
+      showHeader = true;
+    } else if (position.userScrollDirection == ScrollDirection.reverse) {
+      showHeader = false;
     }
-    if (_restored) return;
-    _restored = true;
-    _restore();
-  }
-
-  Future<void> _restore() async {
-    final category = await AppScope.of(context).homeCategoryStore.load();
-    if (!mounted) return;
-    setState(() => _selectedCategory = category);
-  }
-
-  void _selectCategory(String category) {
-    setState(() => _selectedCategory = category);
-    unawaited(AppScope.of(context).homeCategoryStore.save(category));
+    if (showHeader == _showCategoryHeader || !mounted) return;
+    setState(() => _showCategoryHeader = showHeader);
   }
 
   void _selectPlugin(AppScope scope, String id) {
@@ -85,15 +103,13 @@ class _HomePageState extends State<HomePage> {
     unawaited(
       _featuredController.load(
         refresh: true,
-        priorityCategory: _selectedCategory,
+        priorityCategory: _homeCategory(scope.registry.categories),
       ),
     );
   }
 
   void _ensureFeaturedLoaded(AppScope scope, List<String> categories) {
-    final priorityCategory = categories.contains(_selectedCategory)
-        ? _selectedCategory
-        : categories.first;
+    final priorityCategory = _homeCategory(categories);
     final signature = [
       'priority:$priorityCategory',
       for (final category in categories) ...[
@@ -110,16 +126,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
-    // Force-refreshes every category's catalogs, not just the selected one —
+    // Force-refreshes every category's catalogs, not just Home's one —
     // the Featured hero draws live/upcoming events from all of them, so a
     // category the viewer isn't looking at (e.g. "live") would otherwise keep
     // serving a stale session cache indefinitely and never surface a newly
-    // live event. The selected category's shelves are covered by the same
-    // pass, so `_generation` can bump straight off this cache once it lands.
+    // live event. Home's shelves are covered by the same pass, so `_generation`
+    // can bump straight off this cache once it lands.
     final categories = AppScope.of(context).registry.categories;
-    final priorityCategory = categories.contains(_selectedCategory)
-        ? _selectedCategory
-        : (categories.isEmpty ? null : categories.first);
+    final priorityCategory = categories.isEmpty
+        ? null
+        : _homeCategory(categories);
     await _featuredController.load(
       refresh: true,
       priorityCategory: priorityCategory,
@@ -189,9 +205,14 @@ class _HomePageState extends State<HomePage> {
 
     _ensureFeaturedLoaded(scope, categories);
 
-    final selected = categories.contains(_selectedCategory)
-        ? _selectedCategory!
-        : categories.first;
+    final selected = _homeCategory(categories);
+    final hasAllCategory = categories.any(
+      (category) => category.toLowerCase() == 'all',
+    );
+    final categoryChoices = [
+      for (final category in categories)
+        if (category.toLowerCase() != 'all') category,
+    ];
 
     final plugins = registry.pluginsFor(selected);
     final pluginId = scope.pluginController.resolve([
@@ -212,99 +233,141 @@ class _HomePageState extends State<HomePage> {
             : MediaHeroLayout.heightForViewport(viewport) -
                   MediaQuery.paddingOf(context).top;
         return Scaffold(
-          body: RefreshIndicator(
-            onRefresh: _refresh,
-            child: CustomScrollView(
-              key: bindings.isEmpty ? null : const Key('home-catalog-content'),
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: featuredHeight,
-                  pinned: true,
-                  floating: false,
-                  flexibleSpace: featuredHeight == null
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              RefreshIndicator(
+                onRefresh: _refresh,
+                child: CustomScrollView(
+                  key: bindings.isEmpty
                       ? null
-                      : MediaHeroFlexibleSpace(
-                          expandedHeight: featuredHeight,
-                          collapsedHeight:
-                              kToolbarHeight +
-                              MediaQuery.paddingOf(context).top,
-                          child: CenteredContent(
-                            child: featured.items.isEmpty
-                                ? const FeaturedHeroPlaceholder()
-                                : FeaturedHero(items: featured.items),
+                      : const Key('home-catalog-content'),
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverAppBar(
+                      expandedHeight: featuredHeight,
+                      pinned: true,
+                      floating: false,
+                      flexibleSpace: featuredHeight == null
+                          ? null
+                          : MediaHeroFlexibleSpace(
+                              expandedHeight: featuredHeight,
+                              collapsedHeight:
+                                  kToolbarHeight +
+                                  MediaQuery.paddingOf(context).top,
+                              child: CenteredContent(
+                                child: featured.items.isEmpty
+                                    ? const FeaturedHeroPlaceholder()
+                                    : FeaturedHero(items: featured.items),
+                              ),
+                            ),
+                      backgroundColor: AppColors.surfaceDark,
+                      foregroundColor: AppColors.onDark,
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      centerTitle: false,
+                      titleSpacing: AppSpacing.md,
+                      title: const _HomeLogoTitle(),
+                      actions: [
+                        if (defaultTargetPlatform == TargetPlatform.macOS)
+                          IconButton(
+                            tooltip: 'Refresh',
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _refresh,
+                          ),
+                        IconButton(
+                          tooltip: 'Search',
+                          icon: const Icon(Icons.search),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              // Searching from the anime chip means searching
+                              // anime: carry the browsing scope across.
+                              builder: (_) =>
+                                  SearchPage(initialScope: selected),
+                            ),
                           ),
                         ),
-                  backgroundColor: AppColors.surfaceDark,
-                  foregroundColor: AppColors.onDark,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  centerTitle: false,
-                  titleSpacing: AppSpacing.md,
-                  title: const _HomeLogoTitle(),
-                  actions: [
-                    if (defaultTargetPlatform == TargetPlatform.macOS)
-                      IconButton(
-                        tooltip: 'Refresh',
-                        icon: const Icon(Icons.refresh),
-                        onPressed: _refresh,
-                      ),
-                    IconButton(
-                      tooltip: 'Search',
-                      icon: const Icon(Icons.search),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          // Searching from the anime chip means searching
-                          // anime: carry the browsing scope across.
-                          builder: (_) => SearchPage(initialScope: selected),
+                        if (plugins.length > 1 && pluginId != null)
+                          PluginSelector(
+                            plugins: plugins,
+                            selectedId: pluginId,
+                            onSelected: (id) => _selectPlugin(scope, id),
+                          ),
+                      ],
+                    ),
+                    if (selected.toLowerCase() == 'all')
+                      SliverToBoxAdapter(
+                        child: CenteredContent(
+                          child: ContinueWatchingShelf(
+                            controller: scope.libraryController,
+                            registry: registry,
+                          ),
                         ),
                       ),
-                    ),
-                    if (plugins.length > 1 && pluginId != null)
-                      PluginSelector(
-                        plugins: plugins,
-                        selectedId: pluginId,
-                        onSelected: (id) => _selectPlugin(scope, id),
+                    if (bindings.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _EmptyCategory(category: selected),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        sliver: SliverMainAxisGroup(
+                          slivers: [
+                            for (final group in groups)
+                              _catalogGroupSliver(group, selected),
+                          ],
+                        ),
                       ),
                   ],
                 ),
-                SliverPersistentHeader(
-                  key: const Key('home-category-header'),
-                  pinned: true,
-                  delegate: _CategoryHeaderDelegate(
-                    categories: categories,
-                    selected: selected,
-                    onSelected: _selectCategory,
-                  ),
-                ),
-                if (selected.toLowerCase() == 'all')
-                  SliverToBoxAdapter(
-                    child: CenteredContent(
-                      child: ContinueWatchingShelf(
-                        controller: scope.libraryController,
-                        registry: registry,
+              ),
+              if (categoryChoices.isNotEmpty)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+                  left: 0,
+                  right: 0,
+                  child: ClipRect(
+                    child: AnimatedSlide(
+                      key: const Key('home-category-header-animation'),
+                      offset: _showCategoryHeader
+                          ? Offset.zero
+                          : const Offset(0, -1),
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedOpacity(
+                        opacity: _showCategoryHeader ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        child: IgnorePointer(
+                          ignoring: !_showCategoryHeader,
+                          child: Material(
+                            key: const Key('home-category-header'),
+                            color: Colors.transparent,
+                            child: SizedBox(
+                              height: 48,
+                              child: CenteredContent(
+                                child: CategoryChips(
+                                  categories: categoryChoices,
+                                  // Home is the implicit `all` destination, so
+                                  // no visible category chip is selected.
+                                  selected: hasAllCategory ? '' : selected,
+                                  onSelected: _openCategory,
+                                  backgroundColor:
+                                      AppColors.surfaceDarkElevated,
+                                  selectedColor: AppColors.onDark,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                if (bindings.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _EmptyCategory(category: selected),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                    sliver: SliverMainAxisGroup(
-                      slivers: [
-                        for (final group in groups)
-                          _catalogGroupSliver(group, selected),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
+                ),
+            ],
           ),
         );
       },
@@ -328,50 +391,6 @@ class _HomeLogoTitle extends StatelessWidget {
       alignment: Alignment.centerLeft,
     ),
   );
-}
-
-class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _CategoryHeaderDelegate({
-    required this.categories,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<String> categories;
-  final String selected;
-  final ValueChanged<String> onSelected;
-
-  @override
-  double get minExtent => 48;
-
-  @override
-  double get maxExtent => 48;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) => Material(
-    color: AppColors.surfaceDark,
-    elevation: overlapsContent ? 2 : 0,
-    child: SizedBox(
-      height: 48,
-      child: CenteredContent(
-        child: CategoryChips(
-          categories: categories,
-          selected: selected,
-          onSelected: onSelected,
-        ),
-      ),
-    ),
-  );
-
-  @override
-  bool shouldRebuild(covariant _CategoryHeaderDelegate oldDelegate) =>
-      oldDelegate.categories != categories ||
-      oldDelegate.selected != selected ||
-      oldDelegate.onSelected != onSelected;
 }
 
 class _NoExtensions extends StatelessWidget {

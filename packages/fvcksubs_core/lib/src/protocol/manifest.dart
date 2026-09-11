@@ -146,8 +146,9 @@ class CatalogDecl extends Equatable {
   /// Display name (`"Live Now"`).
   final String name;
 
-  /// Categories this catalog serves (`["live", "sport"]`) — each becomes a
-  /// chip on Home, and arrives back as [CatalogQuery.category].
+  /// Categories this catalog serves (`["live", "sport"]`) — `all` is the
+  /// Home entry and other values open category screens. The selected value
+  /// arrives back as [CatalogQuery.category].
   final List<String> categories;
 
   /// Requested layout on Home.

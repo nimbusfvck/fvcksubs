@@ -170,7 +170,7 @@ class ExtensionRegistry {
   }
 
   /// Categories declared by installed, *enabled* extensions, de-duplicated,
-  /// first-seen order. These become the chips on Home.
+  /// first-seen order. These become Home's category choices.
   List<String> get categories {
     final seen = <String>{};
     final ordered = <String>[];

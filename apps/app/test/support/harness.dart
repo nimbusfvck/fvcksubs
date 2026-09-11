@@ -826,21 +826,6 @@ class FakePictureInPicturePreferenceStore
   Future<void> save(bool enabled) async => saved = enabled;
 }
 
-/// In-memory [CategorySelectionStore].
-class FakeCategorySelectionStore implements CategorySelectionStore {
-  /// Seeds the store as if [initial] had already been saved — for tests that
-  /// check a screen restores the category it was left on.
-  FakeCategorySelectionStore({String? initial}) : saved = initial;
-
-  String? saved;
-
-  @override
-  Future<String?> load() async => saved;
-
-  @override
-  Future<void> save(String? category) async => saved = category;
-}
-
 /// In-memory [PluginSelectionStore].
 class FakePluginSelectionStore implements PluginSelectionStore {
   /// Seeds the store as if [initial] had already been saved.
@@ -889,7 +874,6 @@ Widget wrapApp({
   QualityPreferenceController? qualityPreferenceController,
   SubtitlePreferenceController? subtitlePreferenceController,
   SourcePriorityController? sourcePriorityController,
-  CategorySelectionStore? homeCategoryStore,
   SourceCache? sourceCache,
   NsfwController? nsfwController,
   PictureInPictureSession? pictureInPictureSession,
@@ -929,7 +913,6 @@ Widget wrapApp({
         registry: registry,
         store: FakeSourcePriorityStore(),
       ),
-  homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
   pictureInPictureSession: pictureInPictureSession ?? PictureInPictureSession(),
   pictureInPicturePreferenceController:

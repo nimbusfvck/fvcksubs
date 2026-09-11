@@ -204,7 +204,6 @@ Future<void> main() async {
       qualityPreferenceController: qualityPreferenceController,
       subtitlePreferenceController: subtitlePreferenceController,
       sourcePriorityController: sourcePriorityController,
-      homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
       pictureInPictureSession: PictureInPictureSession(),
       pictureInPicturePreferenceController:
