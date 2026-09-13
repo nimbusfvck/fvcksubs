@@ -162,7 +162,11 @@ class _MediaHeroMeta extends StatelessWidget {
     final eventLabel =
         event == null || event.schedule.state == ScheduleState.live
         ? null
-        : event.schedule.label ?? startTimeLabel(event.schedule.startsAt);
+        : event.schedule.label ??
+              eventTimeRangeLabel(
+                event.schedule.startsAt,
+                event.schedule.endsAt,
+              );
     return Wrap(
       alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
       spacing: AppSpacing.sm,

@@ -243,7 +243,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
                           _SectionTitle(collection.name),
                           const SizedBox(height: AppSpacing.sm),
                           SizedBox(
-                            height: 228 + Clickable.ringBleed * 2,
+                            height:
+                                mediaCardPosterHeight(152) +
+                                Clickable.ringBleed * 2,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: collection.items.length,
@@ -291,7 +293,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
                           const _SectionTitle('You Might Also Like'),
                           const SizedBox(height: AppSpacing.sm),
                           SizedBox(
-                            height: 228 + Clickable.ringBleed * 2,
+                            height:
+                                mediaCardPosterHeight(152) +
+                                Clickable.ringBleed * 2,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: detail.recommendations.length,

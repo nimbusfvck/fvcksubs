@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
+import 'package:fvcksubs_app/widgets/media_hero_flexible_space.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
@@ -329,6 +331,112 @@ void main() {
     }
 
     expect(find.text('Second fallback item'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pauses auto-slide once less than half of the hero is visible', (
+    tester,
+  ) async {
+    const items = [
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '1'),
+          title: 'First visibility item',
+        ),
+      ),
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '2'),
+          title: 'Second visibility item',
+        ),
+      ),
+    ];
+
+    Widget buildHero(double collapse) => wrapApp(
+      child: MediaHeroCollapseScope(
+        collapse: collapse,
+        maxCollapse: 400,
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+      ),
+      registry: ExtensionRegistry([]),
+    );
+
+    await tester.pumpWidget(buildHero(201));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 9));
+
+    expect(find.text('First visibility item'), findsOneWidget);
+    expect(find.text('Second visibility item'), findsNothing);
+
+    await tester.pumpWidget(buildHero(100));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 8));
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Second visibility item'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an attached player pauses featured auto-slide', (tester) async {
+    final items = [
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.p',
+            id: 'one',
+          ),
+          title: 'First live event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.p',
+            id: 'two',
+          ),
+          title: 'Second live event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+    ];
+    final session = PictureInPictureSession();
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+        pictureInPictureSession: session,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('First live event'), findsOneWidget);
+
+    session.attach(const SizedBox());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 9));
+
+    expect(find.text('First live event'), findsOneWidget);
+    expect(find.text('Second live event'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

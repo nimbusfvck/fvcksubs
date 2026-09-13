@@ -11,6 +11,7 @@ import '../app_scope.dart';
 import '../catalog/generated_banner.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
+import '../player/state/picture_in_picture_session.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
 import '../theme/tokens.dart';
@@ -112,6 +113,7 @@ const _featuredIndicatorStartProgress = 0.12;
 const _featuredIncomingTravelFactor = 0.09;
 const _featuredOutgoingTravelFactor = 0.04;
 const _featuredArtworkOverscan = 0.28;
+const _featuredAutoSlideVisibilityThreshold = 0.5;
 
 class _FeaturedHeroState extends State<FeaturedHero>
     with SingleTickerProviderStateMixin {
@@ -127,7 +129,9 @@ class _FeaturedHeroState extends State<FeaturedHero>
   final ValueNotifier<bool> _scrolling = ValueNotifier(false);
   late final AnimationController _noTrailerAutoSlideController;
   Timer? _autoSlideTimer;
+  PictureInPictureSession? _playerSession;
   bool _previewCompletionPending = false;
+  bool _playerActive = false;
   bool _heroVisible = true;
   int _page = 0;
 
@@ -180,10 +184,22 @@ class _FeaturedHeroState extends State<FeaturedHero>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final session = AppScope.of(context).pictureInPictureSession;
+    if (session == _playerSession) return;
+    _playerSession?.removeListener(_onPlayerSessionChanged);
+    _playerSession = session;
+    _playerSession!.addListener(_onPlayerSessionChanged);
+    _playerActive = session.player != null;
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     _noTrailerAutoSlideController.dispose();
     _autoSlideTimer?.cancel();
+    _playerSession?.removeListener(_onPlayerSessionChanged);
     _previewHasTrailer.removeListener(_onPreviewAvailabilityChanged);
     _dragging.dispose();
     _previewRef.dispose();
@@ -192,6 +208,18 @@ class _FeaturedHeroState extends State<FeaturedHero>
     _previewHasTrailer.dispose();
     _scrolling.dispose();
     super.dispose();
+  }
+
+  void _onPlayerSessionChanged() {
+    final playerActive = _playerSession?.player != null;
+    if (_playerActive == playerActive) return;
+    _playerActive = playerActive;
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = null;
+    _noTrailerAutoSlideController.stop();
+    if (!mounted) return;
+    setState(() {});
+    if (!playerActive) _scheduleAutoSlide();
   }
 
   @override
@@ -205,7 +233,10 @@ class _FeaturedHeroState extends State<FeaturedHero>
     final collapse = MediaHeroCollapseScope.of(context);
     final maxCollapse = MediaHeroCollapseScope.maxCollapseOf(context);
     final heroVisible = maxCollapse <= 0 || collapse < maxCollapse;
-    _updateHeroVisibility(heroVisible);
+    final autoSlideVisible =
+        maxCollapse <= 0 ||
+        collapse < maxCollapse * _featuredAutoSlideVisibilityThreshold;
+    _updateHeroVisibility(autoSlideVisible);
     return TickerMode(
       enabled: heroVisible,
       child: Stack(
@@ -224,7 +255,7 @@ class _FeaturedHeroState extends State<FeaturedHero>
                     previewProgress: _previewProgress,
                     animatePosterIn: _animatePosterIn,
                     previewHasTrailer: _previewHasTrailer,
-                    visible: heroVisible,
+                    visible: heroVisible && !_playerActive,
                     onCompleted: _onPreviewCompleted,
                     scrolling: _scrolling,
                   ),
@@ -425,6 +456,7 @@ class _FeaturedHeroState extends State<FeaturedHero>
     _autoSlideTimer = null;
     _noTrailerAutoSlideController.stop();
     if (!_heroVisible ||
+        _playerActive ||
         widget.items.length < 2 ||
         _scrolling.value ||
         _dragging.value ||
@@ -448,6 +480,7 @@ class _FeaturedHeroState extends State<FeaturedHero>
     _previewCompletionPending = false;
     if (!mounted ||
         !_heroVisible ||
+        _playerActive ||
         widget.items.length < 2 ||
         _scrolling.value ||
         _dragging.value ||
@@ -810,7 +843,8 @@ class _FeaturedPreview extends StatefulWidget {
   State<_FeaturedPreview> createState() => _FeaturedPreviewState();
 }
 
-class _FeaturedPreviewState extends State<_FeaturedPreview> {
+class _FeaturedPreviewState extends State<_FeaturedPreview>
+    with SingleTickerProviderStateMixin {
   MediaTrailer? _trailer;
   MediaRef? _trailerRef;
   MediaRef? _loadedRef;
@@ -821,10 +855,15 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
   bool _playing = false;
   Timer? _playDelay;
   int _loadGeneration = 0;
+  late final AnimationController _trailerIndicatorController;
 
   @override
   void initState() {
     super.initState();
+    _trailerIndicatorController = AnimationController(
+      vsync: this,
+      duration: TrailerPreview.maxAutoplayDuration,
+    )..addListener(_onTrailerIndicatorProgress);
     widget.scrolling.addListener(_onScrollChanged);
   }
 
@@ -849,6 +888,7 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
   @override
   void dispose() {
     _playDelay?.cancel();
+    _trailerIndicatorController.dispose();
     widget.scrolling.removeListener(_onScrollChanged);
     super.dispose();
   }
@@ -923,6 +963,7 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
   void _applyPreview(MediaTrailer? trailer, MediaRef ref, int generation) {
     if (!mounted || generation != _loadGeneration) return;
     widget.previewProgress.value = null;
+    _trailerIndicatorController.reset();
     widget.animatePosterIn.value = false;
     _publishPreviewHasTrailer(trailer != null, generation);
     final autoplayEnabled = AppScope.of(
@@ -965,21 +1006,22 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
     ).previewAutoplayPreferenceController.enabled;
     if (!autoplayEnabled) {
       _publishPreviewRef(null, _loadGeneration);
+      _trailerIndicatorController.stop();
       return;
     }
-    if (!playing) return;
+    if (!playing) {
+      _trailerIndicatorController.stop();
+      return;
+    }
     // Start fading the poster only once TrailerPreview's autoplay timer has
     // actually started native playback.
     _publishPreviewRef(_trailerRef, _loadGeneration);
+    _trailerIndicatorController.forward();
   }
 
-  void _onTrailerProgress(double? progress) {
+  void _onTrailerIndicatorProgress() {
     if (!mounted) return;
-    if (progress == null) {
-      widget.previewProgress.value = null;
-      return;
-    }
-    final normalized = progress.clamp(0.0, 1.0).toDouble();
+    final normalized = _trailerIndicatorController.value;
     widget.previewProgress.value =
         _featuredIndicatorStartProgress +
         ((1.0 - _featuredIndicatorStartProgress) * normalized);
@@ -989,6 +1031,7 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
     if (!mounted || _trailerRef == null) return;
     final generation = _loadGeneration;
     setState(() => _playing = false);
+    _trailerIndicatorController.stop();
     widget.previewProgress.value = 1.0;
     widget.animatePosterIn.value = true;
     _publishPreviewRef(null, generation);
@@ -1051,7 +1094,6 @@ class _FeaturedPreviewState extends State<_FeaturedPreview> {
         trailer: trailer,
         playing: _playing && widget.visible,
         onPlayingChanged: _onTrailerPlaying,
-        onProgressChanged: _onTrailerProgress,
         onCompleted: _onTrailerCompleted,
       ),
     );

@@ -437,11 +437,10 @@ class _Carousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final posterMode = items.any(
-      (entry) =>
-          entry.item.artwork?.portrait != null && entry.item is! EventItemV2,
+      (entry) => isPosterMediaItem(entry.item),
     );
     final itemWidth = posterMode ? 140.0 : 300.0;
-    final height = posterMode ? 210.0 : 172.0;
+    final height = posterMode ? mediaCardPosterHeight(itemWidth) : 172.0;
 
     return SizedBox(
       height: height + Clickable.ringBleed * 2,

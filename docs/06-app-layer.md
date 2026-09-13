@@ -177,6 +177,9 @@ that name shape, keeps its declared title and existing shelf behavior.
 Home uses a pinned app bar with the featured hero in its expanded area, followed by a separate
 pinned category header. The hero collapses normally; no snap animation is used.
 When collapsed, the hero fades out completely so its artwork does not remain behind the toolbar.
+Featured auto-slide pauses once the hero is less than half visible and resumes when at least half
+of it is visible again. Its progress indicator uses the fixed maximum preview duration rather
+than reading the trailer's source duration.
 
 ### Full catalog
 
@@ -244,10 +247,10 @@ when supplied, then participant colours when available,
 and a deterministic fallback when it does not. Participant colours that cannot be parsed
 degrade to that fallback; malformed branding is rejected at the protocol boundary.
 
-Poster cards are image-first: they use a 2:3 frame, omit the title, show the release year
-as an upper-left image overlay, and show the rating as an upper-right image overlay. Event and
-summary cards retain their compact footer metadata. These presentation choices are reversible
-without any protocol change.
+Poster cards are image-first: they use a 2:3 frame, show the title below the frame, show the
+release year as an upper-left image overlay, and show the rating as an upper-right image overlay.
+Event and summary cards retain their compact footer metadata. These presentation choices are
+reversible without any protocol change.
 
 ## 6.6 Player
 
@@ -279,7 +282,7 @@ flowchart TB
 | Picture in Picture | On iOS, active full playback is eligible for native PiP when the app backgrounds, whether its app-owned presentation is full-screen or the in-app mini-player; Detail and Featured Hero previews are never eligible. The player is attached to a persistent entry in the app Navigator's overlay from playback start, so Detail/Home routes remain the real caller underneath. Clear playback uses the texture backend: its invisible AVPlayerLayer is registered with AVKit for PiP while Flutter controls remain above the rendered video; protected playback may use a platform view. Full playback opts out of the video package's normal background pause observer so AVPlayer can continue through the native PiP transition. Back never requests native PiP: it changes the session to the in-app mini-player, which remains eligible for automatic PiP if the app is subsequently backgrounded. Expanding PIP restores the app-owned presentation that was active when PIP started. Native PiP restore and close continue to use the same persistent surface; closing the PiP window pauses and disposes the hosted player. PiP renders the native video layer only; Flutter controls and subtitles are not part of the PiP surface. |
 | In-app mini-player | The shared `video_player_mini_player` host keeps the same Flutter/native player widget in one persistent overlay. A downward drag publishes progress continuously, interpolating the surface into a bottom-right-docked card; release past the threshold commits the minimized state, while a short drag springs back. Tapping the card restores full screen; the minimized card can be dragged directly and follows the pointer until release, then snaps to the nearest of the four corners. The host stays below newly pushed routes, so the caller remains usable without reparenting the native surface. |
 | Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Cached VOD descriptors resolve in parallel: the preferred descriptor gets a short grace window, then a ready fallback may open playback while slower alternatives continue toward the picker. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
-| Errors | If the first source fails before playback initializes, mark it failed and try the next resolved source, including one that arrives through the active background fan-out. After playback starts, never auto-advance; keep retry and source switching available. |
+| Errors | If the first source fails before playback initializes, mark it failed and try the next resolved source, including one that arrives through the active background fan-out. A resume or source-switch seek is bounded so a slow HLS origin cannot hold startup forever. During playback, a frozen VOD position eventually enters recovery even when the origin keeps advancing the buffered endpoint by tiny amounts. After playback starts, never auto-advance; keep retry and source switching available. |
 
 ## 6.7 Platform handling
 

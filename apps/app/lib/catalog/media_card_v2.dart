@@ -17,6 +17,14 @@ import 'start_time_label.dart';
 bool isMatchBannerItem(MediaItemV2 item) =>
     item is EventItemV2 && item.participants.length == 2;
 
+bool isPosterMediaItem(MediaItemV2 item) =>
+    item.artwork?.portrait != null && item is! EventItemV2;
+
+const double _posterTitleHeight = 18;
+
+double mediaCardPosterHeight(double width) =>
+    width * 1.5 + AppSpacing.xs + _posterTitleHeight;
+
 class MediaCardV2 extends StatelessWidget {
   const MediaCardV2({
     super.key,
@@ -39,13 +47,8 @@ class MediaCardV2 extends StatelessWidget {
   Widget build(BuildContext context) => Clickable(
     onTap: onTap,
     onLongPress: onLongPress,
-    child: Container(
-      foregroundDecoration: BoxDecoration(
-        border: Border.all(color: AppColors.onDark, width: 0.2),
-        borderRadius: AppRadius.lg,
-      ),
-      child: _content(),
-    ),
+    color: Colors.transparent,
+    child: _content(),
   );
 
   Widget _content() {
@@ -54,7 +57,7 @@ class MediaCardV2 extends StatelessWidget {
       return _Match(item: value, showSubtitle: showSubtitle);
     }
     final portrait = value.artwork?.portrait;
-    if (portrait != null) {
+    if (portrait != null && value is! EventItemV2) {
       return _Poster(
         item: value,
         image: portrait,
@@ -87,27 +90,53 @@ class _Poster extends StatelessWidget {
   final Object heroTag;
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Hero(
-        tag: heroTag,
-        child: LayoutBuilder(
-          builder: (context, constraints) => CachedNetworkImage(
-            imageUrl: image.url,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            fadeInDuration: Duration.zero,
-            memCacheWidth: artworkCacheDimension(context, constraints.maxWidth),
-            placeholder: (_, _) =>
-                ArtworkPlaceholder(icon: _placeholderIcon(item)),
-            errorWidget: (_, _, _) =>
-                ArtworkPlaceholder(icon: _placeholderIcon(item)),
+      Expanded(
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(borderRadius: AppRadius.lg),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Hero(
+                tag: heroTag,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => CachedNetworkImage(
+                    imageUrl: image.url,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    fadeInDuration: Duration.zero,
+                    memCacheWidth: artworkCacheDimension(
+                      context,
+                      constraints.maxWidth,
+                    ),
+                    placeholder: (_, _) =>
+                        ArtworkPlaceholder(title: item.title),
+                    errorWidget: (_, _, _) =>
+                        ArtworkPlaceholder(title: item.title),
+                  ),
+                ),
+              ),
+              if (item.rating case final rating?)
+                _PosterRatingBadge(rating: rating),
+              if (item.releaseYear case final year?)
+                _PosterYearBadge(year: year),
+            ],
           ),
         ),
       ),
-      if (item.rating case final rating?) _PosterRatingBadge(rating: rating),
-      if (item.releaseYear case final year?) _PosterYearBadge(year: year),
+      const SizedBox(height: AppSpacing.xs),
+      SizedBox(
+        height: _posterTitleHeight,
+        child: Text(
+          item.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+        ),
+      ),
     ],
   );
 }
@@ -176,11 +205,41 @@ class _PosterYearBadge extends StatelessWidget {
   );
 }
 
-class _Match extends StatelessWidget {
+class _Match extends StatefulWidget {
   const _Match({required this.item, required this.showSubtitle});
 
   final EventItemV2 item;
   final bool showSubtitle;
+
+  @override
+  State<_Match> createState() => _MatchState();
+}
+
+class _MatchState extends State<_Match> {
+  final Set<int> _failedParticipantLogos = {};
+
+  bool get _hasAllParticipantLogoUrls => widget.item.participants.every(
+    (participant) => participant.logo?.url.trim().isNotEmpty ?? false,
+  );
+
+  bool get _showLeaguePlaceholder =>
+      !_hasAllParticipantLogoUrls || _failedParticipantLogos.isNotEmpty;
+
+  void _onParticipantLogoStateChanged(int index, bool loaded) {
+    if (!mounted) return;
+    final changed = loaded
+        ? _failedParticipantLogos.remove(index)
+        : _failedParticipantLogos.add(index);
+    if (changed) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _Match oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.ref != widget.item.ref) {
+      _failedParticipantLogos.clear();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -188,12 +247,14 @@ class _Match extends StatelessWidget {
     children: [
       Expanded(
         child: GeneratedBanner(
-          participants: item.participants,
-          eventName: item.subtitle ?? '',
-          branding: item.branding,
+          participants: widget.item.participants,
+          eventName: widget.item.subtitle ?? '',
+          forceLeaguePlaceholder: _showLeaguePlaceholder,
+          onParticipantLogoStateChanged: _onParticipantLogoStateChanged,
+          branding: widget.item.branding,
         ),
       ),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
+      _CardFooter(item: widget.item, showSubtitle: widget.showSubtitle),
     ],
   );
 }
@@ -239,8 +300,10 @@ class _SingleEventArtwork extends StatelessWidget {
                 context,
                 constraints.maxWidth,
               ),
-              placeholder: (_, _) => const _EventArtworkFallback(),
-              errorWidget: (_, _, _) => const _EventArtworkFallback(),
+              placeholder: (_, _) =>
+                  _EventArtworkFallback(label: _eventPlaceholderLabel(item)),
+              errorWidget: (_, _, _) =>
+                  _EventArtworkFallback(label: _eventPlaceholderLabel(item)),
             ),
           );
 
@@ -267,15 +330,18 @@ class _SingleEventArtwork extends StatelessWidget {
 }
 
 class _EventArtworkFallback extends StatelessWidget {
-  const _EventArtworkFallback();
+  const _EventArtworkFallback({required this.label});
+
+  final String label;
 
   @override
-  Widget build(BuildContext context) => const ColoredBox(
-    color: AppColors.surfaceDarkElevated,
-    child: Center(
-      child: Icon(Icons.live_tv_outlined, color: AppColors.onDarkSoft),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      ArtworkPlaceholder(icon: Icons.live_tv_outlined, title: label);
+}
+
+String _eventPlaceholderLabel(EventItemV2 item) {
+  final league = item.subtitle?.trim();
+  return league == null || league.isEmpty ? item.title : league;
 }
 
 String _eventArtworkSeed(EventItemV2 item) {
@@ -291,16 +357,16 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = item is EventItemV2
-        ? Icons.live_tv_outlined
-        : Icons.movie_outlined;
+    final placeholderTitle = item is EventItemV2
+        ? _eventPlaceholderLabel(item as EventItemV2)
+        : item.title;
     return Column(
       children: [
         Expanded(
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ArtworkPlaceholder(icon: icon),
+              ArtworkPlaceholder(title: placeholderTitle),
               if (item.releaseDate case final releaseDate? when item.isUpcoming)
                 _ReleaseDateBadge(releaseDate: releaseDate),
             ],
@@ -365,7 +431,9 @@ class _CardFooter extends StatelessWidget {
             item.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            style:
+                (event != null ? AppTypography.bodySm : AppTypography.titleSm)
+                    .copyWith(color: AppColors.onDark),
           ),
           if (detail != null)
             event != null
@@ -394,9 +462,6 @@ class _CardFooter extends StatelessWidget {
   }
 }
 
-IconData _placeholderIcon(MediaItemV2 item) =>
-    item is EventItemV2 ? Icons.live_tv_outlined : Icons.movie_outlined;
-
 class _ScheduleStatus extends StatelessWidget {
   const _ScheduleStatus({required this.schedule, this.showLabel = true});
 
@@ -424,9 +489,11 @@ class _ScheduleStatus extends StatelessWidget {
     ],
   );
 
-  String? get _label => schedule.label ?? startTimeLabel(schedule.startsAt);
+  String? get _label =>
+      schedule.label ?? eventTimeRangeLabel(schedule.startsAt, schedule.endsAt);
 }
 
 String? _eventMeta(EventItemV2 item) {
-  return item.schedule.label ?? startTimeLabel(item.schedule.startsAt);
+  return item.schedule.label ??
+      eventTimeRangeLabel(item.schedule.startsAt, item.schedule.endsAt);
 }

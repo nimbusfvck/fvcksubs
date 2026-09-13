@@ -84,6 +84,39 @@ void main() {
     expect(item.schedule.startsAt, DateTime.utc(2026, 8, 19, 12, 30));
   });
 
+  test('event schedule round-trips an endsAt timestamp', () {
+    final item =
+        MediaItemV2.fromJson({
+              'ref': ref.toJson(),
+              'kind': 'event',
+              'title': 'Timed event',
+              'schedule': {
+                'startsAt': '2026-08-19T12:30:00Z',
+                'endsAt': '2026-08-19T14:45:00Z',
+                'state': 'scheduled',
+              },
+            })
+            as EventItemV2;
+
+    expect(item.schedule.endsAt, DateTime.utc(2026, 8, 19, 14, 45));
+    expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('event schedule rejects an end that is not after its start', () {
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'event',
+        'title': 'Invalid timed event',
+        'schedule': {
+          'startsAt': '2026-08-19T12:30:00Z',
+          'endsAt': '2026-08-19T12:30:00Z',
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('event branding round-trips with a logo and competition colors', () {
     final item = EventItemV2(
       ref: ref,

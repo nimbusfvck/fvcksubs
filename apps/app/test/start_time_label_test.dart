@@ -56,4 +56,13 @@ void main() {
       '${expected.minute.toString().padLeft(2, '0')}',
     );
   });
+
+  test('an event range uses the device timezone for its end time', () {
+    final startsAt = DateTime(2026, 8, 17, 16, 30);
+    final endsAt = DateTime(2026, 8, 17, 18, 45);
+    expect(
+      eventTimeRangeLabel(startsAt, endsAt, now: DateTime(2026, 8, 17, 9)),
+      '16:30–18:45',
+    );
+  });
 }

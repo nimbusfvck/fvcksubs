@@ -22,6 +22,7 @@ class VideoPlayerStartup {
     required this.maxHeight,
     this.preferredQualityDone = false,
     this.liveInitializeTimeout = const Duration(seconds: 8),
+    this.initialSeekTimeout = const Duration(seconds: 8),
   });
 
   final vp.VideoPlayerController player;
@@ -36,6 +37,11 @@ class VideoPlayerStartup {
   /// Prevents a live source that buffers forever before AVPlayer becomes ready
   /// from leaving the player route in an endless loading state.
   final Duration liveInitializeTimeout;
+
+  /// Bounds a resume/source-switch seek that is waiting on a slow HLS origin.
+  /// The controller generation is replaced after this error, so a late native
+  /// completion cannot start playback from an obsolete source.
+  final Duration initialSeekTimeout;
 
   Future<bool> open({
     required bool initialized,
@@ -109,7 +115,17 @@ class VideoPlayerStartup {
     final target = startPosition?.target(player.value.duration, isLive: isLive);
     if (target != null) {
       log('initial_seek_start', details: 'target_ms=${target.inMilliseconds}');
-      await player.seekTo(target);
+      try {
+        await player.seekTo(target).timeout(initialSeekTimeout);
+      } on TimeoutException {
+        log(
+          'initial_seek_timeout',
+          details:
+              'target_ms=${target.inMilliseconds} '
+              'timeout_s=${initialSeekTimeout.inMilliseconds / 1000}',
+        );
+        rethrow;
+      }
       if (!isCurrent()) return false;
       log('initial_seek_done');
     }

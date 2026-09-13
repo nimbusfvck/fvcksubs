@@ -87,11 +87,17 @@ class Schedule extends Equatable {
     required this.startsAt,
     this.state = ScheduleState.unknown,
     this.label,
+    this.endsAt,
   });
 
   /// Decodes and validates a schedule.
   factory Schedule.fromJson(Map<String, Object?> json) {
-    _rejectUnknown(json, const {'startsAt', 'state', 'label'}, 'schedule');
+    _rejectUnknown(json, const {
+      'startsAt',
+      'state',
+      'label',
+      'endsAt',
+    }, 'schedule');
     final rawStartsAt = json['startsAt'];
     if (rawStartsAt is! String) {
       throw const FormatException('schedule.startsAt must be a string');
@@ -106,6 +112,22 @@ class Schedule extends Equatable {
     if (label != null && label is! String) {
       throw const FormatException('schedule.label must be a string');
     }
+    final rawEndsAt = json['endsAt'];
+    DateTime? parsedEndsAt;
+    if (rawEndsAt != null) {
+      if (rawEndsAt is! String) {
+        throw const FormatException('schedule.endsAt must be a string');
+      }
+      parsedEndsAt = DateTime.tryParse(rawEndsAt);
+      if (parsedEndsAt == null || !rawEndsAt.toUpperCase().endsWith('Z')) {
+        throw const FormatException(
+          'schedule.endsAt must be an ISO-8601 UTC timestamp',
+        );
+      }
+      if (!parsedEndsAt.isAfter(parsed)) {
+        throw const FormatException('schedule.endsAt must be after startsAt');
+      }
+    }
     return Schedule(
       startsAt: parsed,
       state: enumByName(
@@ -114,6 +136,7 @@ class Schedule extends Equatable {
         orElse: ScheduleState.unknown,
       ),
       label: label as String?,
+      endsAt: parsedEndsAt,
     );
   }
 
@@ -126,15 +149,19 @@ class Schedule extends Equatable {
   /// Optional short status rendered verbatim.
   final String? label;
 
+  /// Estimated or provider-supplied event end in UTC.
+  final DateTime? endsAt;
+
   /// Encodes this schedule.
   Map<String, Object?> toJson() => {
     'startsAt': startsAt.toUtc().toIso8601String(),
     'state': state.name,
     if (label != null) 'label': label,
+    if (endsAt != null) 'endsAt': endsAt!.toUtc().toIso8601String(),
   };
 
   @override
-  List<Object?> get props => [startsAt, state, label];
+  List<Object?> get props => [startsAt, state, label, endsAt];
 }
 
 /// Typed navigation context for an episode.

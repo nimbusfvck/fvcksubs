@@ -229,6 +229,36 @@ void main() {
     expect(player.calls, isNot(contains('play')));
   });
 
+  test(
+    'a stalled initial seek times out instead of spinning forever',
+    () async {
+      final player = _NativePlayer(_stream.url)..seekGate = Completer<void>();
+      final stages = <String>[];
+      final startup = _startup(
+        player,
+        _Controller(player.calls),
+        initialSeekTimeout: const Duration(milliseconds: 1),
+        log: (stage, {details}) => stages.add(stage),
+      );
+
+      await expectLater(
+        startup.open(
+          initialized: false,
+          looping: false,
+          muted: false,
+          playing: true,
+          isLive: false,
+          startPosition: const PlaybackStartPosition.resume(
+            Duration(minutes: 3),
+          ),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(stages, contains('initial_seek_timeout'));
+      expect(player.calls, isNot(contains('play')));
+    },
+  );
+
   test('times out a live initialize that never becomes ready', () async {
     final player = _NativePlayer(_stream.url)
       ..initializeGate = Completer<void>();
@@ -259,6 +289,8 @@ VideoPlayerStartup _startup(
   bool preselected = false,
   bool Function()? isCurrent,
   Duration liveInitializeTimeout = const Duration(seconds: 8),
+  Duration initialSeekTimeout = const Duration(seconds: 8),
+  void Function(String stage, {String? details})? log,
 }) => VideoPlayerStartup(
   player: player,
   controller: controller,
@@ -267,10 +299,11 @@ VideoPlayerStartup _startup(
     player.calls.add('tracks');
   },
   isCurrent: isCurrent ?? () => true,
-  log: (_, {details}) {},
+  log: log ?? (_, {details}) {},
   maxHeight: 720,
   preferredQualityDone: preselected,
   liveInitializeTimeout: liveInitializeTimeout,
+  initialSeekTimeout: initialSeekTimeout,
 );
 
 class _NativePlayer extends vp.VideoPlayerController {

@@ -149,6 +149,11 @@ abstract final class HostApi {
         iv: _base64(arg('iv')),
         data: _base64(arg('data')),
       ),
+      'crypto.aesCbcEncrypt' => _aesCbcEncrypt(
+        key: _base64(arg('key')),
+        iv: _base64(arg('iv')),
+        data: _base64(arg('data')),
+      ),
       'crypto.aesGcmDecrypt' => _aesGcmDecrypt(
         key: _base64(arg('key')),
         nonce: _base64(arg('nonce')),
@@ -258,6 +263,25 @@ abstract final class HostApi {
     }
   }
 
+  /// AES-CBC + PKCS7 encrypt. The result remains base64 so binary stays on
+  /// the host side of the JSON bridge.
+  static String _aesCbcEncrypt({
+    required Uint8List key,
+    required Uint8List iv,
+    required Uint8List data,
+  }) {
+    final cipher =
+        PaddedBlockCipherImpl(PKCS7Padding(), CBCBlockCipher(AESEngine()))
+          ..init(
+            true,
+            PaddedBlockCipherParameters<CipherParameters, CipherParameters>(
+              ParametersWithIV<KeyParameter>(KeyParameter(key), iv),
+              null,
+            ),
+          );
+    return base64.encode(cipher.process(data));
+  }
+
   /// AES-GCM decrypt, 128-bit tag. [data] is ciphertext with the tag
   /// concatenated on the end — the `javax.crypto`/Kotlin convention Vidrock's
   /// payload follows, so no reshaping is needed on the JS side beyond
@@ -336,6 +360,8 @@ abstract final class HostApi {
       // caller can try the next one.
       aesCbcDecrypt: (key, iv, data) =>
         call('crypto.aesCbcDecrypt', { key, iv, data }),
+      aesCbcEncrypt: (key, iv, data) =>
+        call('crypto.aesCbcEncrypt', { key, iv, data }),
       // Same null-on-failure contract as aesCbcDecrypt. `data` carries the
       // 16-byte GCM tag concatenated on the end.
       aesGcmDecrypt: (key, nonce, data) =>

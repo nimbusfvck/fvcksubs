@@ -40,8 +40,8 @@ void main() {
     );
 
     expect(find.text('Featured'), findsOneWidget);
-    expect(find.text('First'), findsOneWidget);
-    await tester.tap(find.text('First'));
+    expect(find.text('First'), findsNWidgets(2));
+    await tester.tap(find.byType(MediaCardV2).first);
     expect(tapped, same(first));
   });
 
@@ -86,9 +86,7 @@ void main() {
     expect(find.textContaining('8.4'), findsOneWidget);
   });
 
-  testWidgets('poster cards use a 2:3 image with overlay metadata', (
-    tester,
-  ) async {
+  testWidgets('poster cards show a title below the 2:3 image', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -125,9 +123,10 @@ void main() {
     );
 
     final card = find.byType(MediaCardV2);
-    final size = tester.getSize(card);
-    expect(size.width / size.height, closeTo(2 / 3, 0.001));
-    expect(find.text('Poster title'), findsNothing);
+    final frame = tester.getSize(find.byType(Hero));
+    expect(frame.width / frame.height, closeTo(2 / 3, 0.001));
+    expect(tester.getSize(card).height, greaterThan(frame.height));
+    expect(find.text('Poster title'), findsNWidgets(2));
     expect(find.text('2026'), findsOneWidget);
     expect(find.text('★ 8.4'), findsOneWidget);
     final yearTopLeft = tester.getTopLeft(find.text('2026'));

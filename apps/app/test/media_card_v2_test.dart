@@ -41,7 +41,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Standalone video'), findsNothing);
+    expect(find.text('Standalone video'), findsNWidgets(2));
     expect(find.text('LIVE'), findsNothing);
     expect(find.byType(Hero), findsOneWidget);
   });
@@ -213,8 +213,19 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.movie_outlined), findsOneWidget);
-    expect(find.text('Text-only video'), findsOneWidget);
+    expect(find.byIcon(Icons.movie_outlined), findsNothing);
+    expect(find.text('Text-only video'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<Material>(
+            find.descendant(
+              of: find.byType(MediaCardV2),
+              matching: find.byType(Material),
+            ),
+          )
+          .color,
+      Colors.transparent,
+    );
   });
 
   testWidgets('event renders schedule and participants', (tester) async {
@@ -246,6 +257,8 @@ void main() {
     );
 
     expect(find.text('Main event'), findsOneWidget);
+    final title = tester.widget<Text>(find.text('Main event'));
+    expect(title.style?.fontSize, AppTypography.bodySm.fontSize);
     expect(find.text('In progress'), findsOneWidget);
     expect(find.text('LIVE'), findsOneWidget);
   });
@@ -371,8 +384,9 @@ void main() {
         ),
       );
 
-      expect(find.text('MMA'), findsOneWidget);
-      expect(find.text('Mixed Martial Arts'), findsNothing);
+      expect(find.text('Mixed Martial Arts'), findsOneWidget);
+      expect(find.text('MMA'), findsNothing);
+      expect(find.text('VS'), findsNothing);
       expect(find.byIcon(Icons.shield_outlined), findsNothing);
     },
   );
@@ -407,9 +421,135 @@ void main() {
     );
 
     expect(find.byType(CachedNetworkImage), findsOneWidget);
-    expect(find.text('Single-sided broadcast'), findsOneWidget);
+    expect(find.text('Single-sided broadcast'), findsNWidgets(2));
     expect(find.text('20 Aug 21:00'), findsOneWidget);
     expect(find.text('UPCOMING'), findsOneWidget);
+  });
+
+  testWidgets('event without artwork uses its league as the placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Home vs Away',
+                subtitle: 'Premier League',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Premier League'), findsOneWidget);
+    expect(find.text('Home vs Away'), findsOneWidget);
+  });
+
+  testWidgets('event image errors use its league as the placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Home vs Away',
+                subtitle: 'Premier League',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                artwork: const Artwork(
+                  landscape: ImageRef('https://cdn.example/missing.jpg'),
+                ),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final image = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
+    final errorWidget = image.errorWidget;
+    expect(errorWidget, isNotNull);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => errorWidget!(
+            context,
+            'https://cdn.example/missing.jpg',
+            StateError('missing'),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Premier League'), findsOneWidget);
+  });
+
+  testWidgets('failed participant logos use the full league placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Home vs Away',
+                subtitle: 'Premier League',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                participants: const [
+                  Participant(
+                    name: 'Home',
+                    logo: ImageRef('https://cdn.example/home.png'),
+                  ),
+                  Participant(
+                    name: 'Away',
+                    logo: ImageRef('https://cdn.example/away.png'),
+                  ),
+                ],
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final image = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage).first,
+    );
+    final errorWidget = image.errorWidget;
+    expect(errorWidget, isNotNull);
+    errorWidget!(
+      tester.element(find.byType(GeneratedBanner)),
+      image.imageUrl,
+      StateError('missing'),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Premier League'), findsOneWidget);
+    expect(find.text('VS'), findsNothing);
+    expect(find.text('HOME'), findsNothing);
+    expect(find.text('AWAY'), findsNothing);
   });
 
   testWidgets('single participant logo uses generated event artwork', (

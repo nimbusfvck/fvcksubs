@@ -102,11 +102,29 @@ void main() {
     expect(feed(subject, atSecond: 316, positionSeconds: 100), isTrue);
   });
 
-  test('a rebuffer that keeps filling is not a stall', () {
+  test(
+    'a rebuffer that keeps filling stays healthy below the freeze limit',
+    () {
+      final subject = detector();
+      // libmpv holds the frame while the cushion refills. The position is
+      // frozen throughout; only the buffered end moves.
+      for (var second = 0; second < 30; second += 2) {
+        expect(
+          feed(
+            subject,
+            atSecond: second,
+            positionSeconds: 100,
+            bufferedSeconds: 100 + second,
+          ),
+          isFalse,
+        );
+      }
+    },
+  );
+
+  test('a trickling buffer cannot hide a permanently frozen picture', () {
     final subject = detector();
-    // libmpv holds the frame while the cushion refills. The position is
-    // frozen throughout; only the buffered end moves.
-    for (var second = 0; second < 60; second += 2) {
+    for (var second = 0; second < 30; second += 2) {
       expect(
         feed(
           subject,
@@ -117,6 +135,14 @@ void main() {
         isFalse,
       );
     }
+    expect(
+      feed(subject, atSecond: 30, positionSeconds: 100, bufferedSeconds: 130),
+      isTrue,
+    );
+    expect(
+      feed(subject, atSecond: 32, positionSeconds: 100, bufferedSeconds: 132),
+      isFalse,
+    );
   });
 
   test('a rebuffer that stops filling stalls from the moment it stops', () {
@@ -208,13 +234,21 @@ void main() {
         );
 
     expect(sampleAt(const Duration(seconds: 6), bufferedSeconds: 200), isFalse);
-    expect(sampleAt(const Duration(seconds: 10), bufferedSeconds: 260), isFalse);
-    expect(sampleAt(const Duration(seconds: 20), bufferedSeconds: 400), isFalse);
+    expect(
+      sampleAt(const Duration(seconds: 10), bufferedSeconds: 260),
+      isFalse,
+    );
+    expect(
+      sampleAt(const Duration(seconds: 20), bufferedSeconds: 400),
+      isFalse,
+    );
     expect(sampleAt(const Duration(seconds: 26), bufferedSeconds: 500), isTrue);
   });
 
   test('an ordinary rebuffer is still progress', () {
-    final detector = PlaybackStallDetector();
+    final detector = PlaybackStallDetector(
+      maxFrozenDuration: const Duration(minutes: 2),
+    );
     final start = DateTime(2026);
     // No deliberate interruption: libmpv is rebuilding its cushion, which the
     // watchdog must keep waiting through.
@@ -228,7 +262,13 @@ void main() {
         );
 
     expect(sampleAt(Duration.zero, bufferedSeconds: 200), isFalse);
-    expect(sampleAt(const Duration(seconds: 20), bufferedSeconds: 260), isFalse);
-    expect(sampleAt(const Duration(seconds: 40), bufferedSeconds: 320), isFalse);
+    expect(
+      sampleAt(const Duration(seconds: 20), bufferedSeconds: 260),
+      isFalse,
+    );
+    expect(
+      sampleAt(const Duration(seconds: 40), bufferedSeconds: 320),
+      isFalse,
+    );
   });
 }

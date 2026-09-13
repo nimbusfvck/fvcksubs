@@ -11,7 +11,10 @@ library;
 /// Fed samples on a timer rather than on value changes — a frozen player is
 /// precisely the case that emits no changes.
 class PlaybackStallDetector {
-  PlaybackStallDetector({this.threshold = const Duration(seconds: 15)});
+  PlaybackStallDetector({
+    this.threshold = const Duration(seconds: 15),
+    this.maxFrozenDuration = const Duration(seconds: 30),
+  });
 
   /// How long a frozen position must persist before it counts as a stall.
   ///
@@ -19,9 +22,17 @@ class PlaybackStallDetector {
   /// costing a re-resolve, while a dead URL is still caught quickly.
   final Duration threshold;
 
+  /// Maximum time playback may remain on one frame while still fetching.
+  ///
+  /// A slow origin can keep advancing the buffered endpoint by tiny amounts
+  /// forever. That is network activity, but it is not viewing progress, so it
+  /// must not leave the viewer behind a permanent spinner.
+  final Duration maxFrozenDuration;
+
   Duration? _lastPosition;
   Duration? _lastBufferedPosition;
   DateTime? _movingAt;
+  DateTime? _positionMovingAt;
   DateTime? _quietUntil;
   bool _awaitingPosition = false;
   bool _reported = false;
@@ -32,11 +43,10 @@ class PlaybackStallDetector {
   /// until playback makes progress again, so a caller can act without
   /// debouncing.
   ///
-  /// A rebuffer is progress. The native player can hold the picture while it
-  /// rebuilds its cushion, and on a live stream that cushion only refills as
-  /// the broadcast produces it. Re-resolving there destroys a stream that was
-  /// seconds from resuming and starts the wait over. Only a player fetching
-  /// nothing *and* showing nothing has stalled.
+  /// A rebuffer is progress up to [maxFrozenDuration]. The native player can
+  /// hold the picture while it rebuilds its cushion, and on a live stream that
+  /// cushion only refills as the broadcast produces it. Re-resolving too early
+  /// destroys a stream that was seconds from resuming and starts the wait over.
   bool sample({
     required Duration position,
     required Duration bufferedPosition,
@@ -50,6 +60,7 @@ class PlaybackStallDetector {
         _lastPosition = position;
         _lastBufferedPosition = bufferedPosition;
         _movingAt = now;
+        _positionMovingAt = now;
         _reported = false;
         return false;
       }
@@ -63,14 +74,15 @@ class PlaybackStallDetector {
     // as progress leaves the watchdog asleep and the viewer on a spinner that
     // never ends. Until the position itself moves, only the position counts.
     final positionMoved = position != _lastPosition;
-    final progressed =
-        positionMoved ||
-        (!_awaitingPosition && bufferedPosition != _lastBufferedPosition);
+    final bufferMoved =
+        !_awaitingPosition && bufferedPosition != _lastBufferedPosition;
     _lastPosition = position;
     _lastBufferedPosition = bufferedPosition;
-    if (progressed) {
-      if (positionMoved) _awaitingPosition = false;
+
+    if (positionMoved) {
+      _awaitingPosition = false;
       _movingAt = now;
+      _positionMovingAt = now;
       _reported = false;
       return false;
     }
@@ -80,11 +92,25 @@ class PlaybackStallDetector {
     // at the present and the stall is measured from the resume.
     if (!isBuffering && !isPlaying) {
       _movingAt = now;
+      _positionMovingAt = now;
+      _reported = false;
+      return false;
+    }
+
+    final positionMovingAt = _positionMovingAt ??= now;
+    if (!_reported && now.difference(positionMovingAt) >= maxFrozenDuration) {
+      _reported = true;
+      return true;
+    }
+    if (_reported) return false;
+
+    if (bufferMoved) {
+      _movingAt = now;
       return false;
     }
 
     final movingAt = _movingAt ??= now;
-    if (_reported || now.difference(movingAt) < threshold) return false;
+    if (now.difference(movingAt) < threshold) return false;
     _reported = true;
     return true;
   }
@@ -94,6 +120,7 @@ class PlaybackStallDetector {
     _lastPosition = null;
     _lastBufferedPosition = null;
     _movingAt = null;
+    _positionMovingAt = null;
     _quietUntil = null;
     _awaitingPosition = false;
     _reported = false;

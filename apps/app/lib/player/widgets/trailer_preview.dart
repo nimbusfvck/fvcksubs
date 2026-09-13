@@ -10,6 +10,8 @@ import 'platform_player_builder.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.
 class TrailerPreview extends StatefulWidget {
+  static const maxAutoplayDuration = Duration(seconds: 25);
+
   const TrailerPreview({
     super.key,
     required this.trailer,
@@ -31,7 +33,6 @@ class TrailerPreview extends StatefulWidget {
 
 class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
   static const _autoplayDelay = Duration(seconds: 1);
-  static const _maxAutoplayDuration = Duration(seconds: 25);
 
   bool _ready = false;
   ModalRoute<void>? _route;
@@ -180,7 +181,10 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
       if (!mounted || !_mayAutoplay()) return;
       setState(() => _playing = true);
       widget.onPlayingChanged?.call(true);
-      _maxAutoplayTimer = Timer(_maxAutoplayDuration, _onAutoplayLimitReached);
+      _maxAutoplayTimer = Timer(
+        TrailerPreview.maxAutoplayDuration,
+        _onAutoplayLimitReached,
+      );
     });
   }
 
