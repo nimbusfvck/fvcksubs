@@ -263,6 +263,36 @@ void main() {
     expect(find.text('LIVE'), findsOneWidget);
   });
 
+  testWidgets('live event hides the derived end time', (tester) async {
+    final now = DateTime.now().toUtc();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 260,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Live match',
+                schedule: Schedule(
+                  startsAt: now.subtract(const Duration(minutes: 10)),
+                  endsAt: now.add(const Duration(minutes: 50)),
+                  state: ScheduleState.live,
+                ),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Live match'), findsNWidgets(2));
+    expect(find.text('LIVE'), findsOneWidget);
+    expect(find.textContaining('–'), findsNothing);
+  });
+
   testWidgets('event branding reaches the generated match banner', (
     tester,
   ) async {
@@ -550,6 +580,38 @@ void main() {
     expect(find.text('VS'), findsNothing);
     expect(find.text('HOME'), findsNothing);
     expect(find.text('AWAY'), findsNothing);
+  });
+
+  testWidgets('generic Other subtitle does not become the league placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Home vs Away',
+                subtitle: 'Other',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                participants: const [
+                  Participant(name: 'Home'),
+                  Participant(name: 'Away'),
+                ],
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Other'), findsNothing);
+    expect(find.text('OTHE'), findsNothing);
+    expect(find.byIcon(Icons.shield_outlined), findsNWidgets(2));
   });
 
   testWidgets('single participant logo uses generated event artwork', (

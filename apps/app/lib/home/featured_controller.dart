@@ -56,6 +56,9 @@ class FeaturedController extends Cubit<FeaturedState> {
 
     final categories = registry.categories;
     final requests = <_FeaturedLoadRequest>[];
+    for (final binding in registry.featuredCatalogs()) {
+      requests.add(_FeaturedLoadRequest(binding, 'all'));
+    }
     for (final category in categories) {
       final pluginId = pluginController.resolve([
         for (final plugin in registry.pluginsFor(category)) plugin.id,
@@ -454,6 +457,9 @@ abstract final class FeaturedAlgorithm {
   }
 
   static bool _isEligible(MediaItemV2 item) {
+    // Channels remain available in catalogs, but the hero is reserved for
+    // editorial content and scheduled events.
+    if (item is ChannelItemV2) return false;
     if (item case EventItemV2(
       schedule: final schedule,
     ) when schedule.state == ScheduleState.ended) {

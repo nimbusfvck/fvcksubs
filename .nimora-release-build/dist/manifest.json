@@ -1,0 +1,357 @@
+{
+  "apiVersion": 2,
+  "id": "nimora",
+  "name": "Nimora",
+  "version": "1.0.59",
+  "runtime": "js",
+  "description": "Live and upcoming sports, movie and TV catalogs, plus anime streams, running as a JavaScript bundle in the sandboxed QuickJS runtime.",
+  "author": "nimbusfvck",
+  "entry": "bundle.js",
+  "categories": [
+    "all",
+    "live",
+    "movie",
+    "tv",
+    "anime",
+    "nsfw"
+  ],
+  "providers": [
+    {
+      "id": "nimora.matches",
+      "name": "Sports Matches",
+      "roles": [
+        "catalog"
+      ],
+      "catalogs": [
+        {
+          "id": "fixtures_schedule",
+          "name": "Live Timeline",
+          "categories": ["live"],
+          "kind": "liveEvent",
+          "display": "timeline"
+        },
+        {
+          "id": "fixtures_featured",
+          "name": "Featured Sports",
+          "categories": [],
+          "kind": "liveEvent",
+          "display": "row",
+          "surface": "featured"
+        }
+      ]
+    },
+    {
+      "id": "nimora.timesoccer",
+      "name": "Time Soccer TV",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.moviebox",
+      "name": "MovieBox",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.idlix",
+      "name": "Idlix",
+      "roles": [
+        "stream"
+      ],
+      "locales": {
+        "countries": ["ID"],
+        "languages": ["id"]
+      }
+    },
+    {
+      "id": "nimora.kora",
+      "name": "Kora",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.cricfy",
+      "name": "Cricfy",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.metegol",
+      "name": "MeteGol",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.dramadev",
+      "name": "Dramadev",
+      "roles": [
+        "stream",
+        "meta"
+      ]
+    },
+    {
+      "id": "nimora.savefilm",
+      "name": "Savefilm",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.layarkaca.catalog",
+      "name": "LayarKaca",
+      "roles": ["meta"],
+      "locales": {
+        "countries": [
+          "ID"
+        ],
+        "languages": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": "nimora.layarkaca.hydrax",
+      "name": "LayarKaca · HYDRAX",
+      "roles": [
+        "stream"
+      ],
+      "locales": {
+        "countries": ["ID"],
+        "languages": ["id"]
+      }
+    },
+    {
+      "id": "nimora.layarkaca.p2p",
+      "name": "LayarKaca · P2P",
+      "roles": [
+        "stream"
+      ],
+      "locales": {
+        "countries": ["ID"],
+        "languages": ["id"]
+      }
+    },
+    {
+      "id": "nimora.layarkaca.turbovip",
+      "name": "LayarKaca · TURBOVIP",
+      "roles": [
+        "stream"
+      ],
+      "locales": {
+        "countries": ["ID"],
+        "languages": ["id"]
+      }
+    },
+    {
+      "id": "nimora.layarkaca.cast",
+      "name": "LayarKaca · CAST",
+      "roles": [
+        "stream"
+      ],
+      "locales": {
+        "countries": ["ID"],
+        "languages": ["id"]
+      }
+    },
+    {
+      "id": "nimora.playz",
+      "name": "PlayZTV Live Events",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.roxie",
+      "name": "RoxieStreams",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.cdnlivetv",
+      "name": "CDNLiveTV",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.league_channels",
+      "name": "League Channels",
+      "roles": [
+        "catalog",
+        "stream"
+      ],
+      "catalogs": [
+        {
+          "id": "league_channels",
+          "name": "League Channels",
+          "categories": ["live"],
+          "kind": "channel",
+          "display": "row"
+        }
+      ]
+    },
+    {
+      "id": "nimora.tmdb",
+      "name": "Movie & Series",
+      "roles": [
+        "catalog",
+        "meta",
+        "search"
+      ],
+      "catalogs": [
+        {
+          "id": "highlights",
+          "name": "Movie & Series",
+          "categories": [
+            "all",
+            "movie",
+            "tv"
+          ],
+          "kind": "movie",
+          "display": "row"
+        },
+        {
+          "id": "discover",
+          "name": "Movie & Series",
+          "categories": [
+            "movie",
+            "tv"
+          ],
+          "kind": "movie",
+          "display": "grid",
+          "expanded": true
+        }
+      ]
+    },
+    {
+      "id": "nimora.shorts",
+      "name": "Shorts",
+      "roles": [
+        "catalog"
+      ],
+      "catalogs": [
+        {
+          "id": "shorts",
+          "name": "Shorts",
+          "categories": [],
+          "surface": "preview"
+        }
+      ]
+    },
+    {
+      "id": "nimora.anilist",
+      "name": "Anime Metadata (legacy)",
+      "roles": [
+        "meta"
+      ]
+    },
+    {
+      "id": "nimora.flystream",
+      "name": "FlyStream",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.vidrock",
+      "name": "Vidrock",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.videasy",
+      "name": "Videasy",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.vaplayer",
+      "name": "VaPlayer",
+      "roles": [
+        "stream"
+      ]
+    },
+    {
+      "id": "nimora.sokuja",
+      "name": "Sokuja",
+      "roles": [
+        "catalog",
+        "meta",
+        "search",
+        "stream"
+      ],
+      "catalogs": [
+        {
+          "id": "sokuja",
+          "name": "Anime",
+          "categories": [
+            "anime"
+          ],
+          "kind": "movie",
+          "display": "grid",
+          "expanded": true,
+          "contentRating": "general"
+        }
+      ]
+    },
+    {
+      "id": "nimora.indomax",
+      "name": "Indomax",
+      "roles": [
+        "stream",
+        "search",
+        "meta"
+      ]
+    },
+    {
+      "id": "nimora.catalog.nsfw",
+      "name": "NSFW",
+      "roles": ["catalog"],
+      "catalogs": [
+        {
+          "id": "savefilm_nsfw",
+          "name": "NSFW",
+          "categories": ["nsfw"],
+          "kind": "movie",
+          "display": "row",
+          "contentRating": "mature"
+        },
+        {
+          "id": "nsfw",
+          "name": "NSFW",
+          "categories": ["nsfw"],
+          "kind": "movie",
+          "display": "row",
+          "contentRating": "mature"
+        }
+      ]
+    },
+    {
+      "id": "nimora.shegu",
+      "name": "Shegu",
+      "roles": [
+        "subtitles"
+      ]
+    },
+    {
+      "id": "nimora.skipintro",
+      "name": "Skip Intro",
+      "roles": [
+        "segments"
+      ]
+    }
+  ],
+  "permissions": {
+    "hosts": [
+      "*"
+    ]
+  }
+}

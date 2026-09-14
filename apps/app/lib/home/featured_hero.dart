@@ -11,6 +11,7 @@ import '../app_scope.dart';
 import '../catalog/generated_banner.dart';
 import '../detail/open_versioned_item.dart';
 import '../library/library_controller.dart';
+import '../navigation/app_route_observer.dart';
 import '../player/state/picture_in_picture_session.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
@@ -116,7 +117,7 @@ const _featuredArtworkOverscan = 0.28;
 const _featuredAutoSlideVisibilityThreshold = 0.5;
 
 class _FeaturedHeroState extends State<FeaturedHero>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RouteAware {
   static const _noTrailerAutoSlideDelay = Duration(seconds: 8);
   static const _completedPreviewHold = Duration(milliseconds: 420);
 
@@ -130,8 +131,10 @@ class _FeaturedHeroState extends State<FeaturedHero>
   late final AnimationController _noTrailerAutoSlideController;
   Timer? _autoSlideTimer;
   PictureInPictureSession? _playerSession;
+  ModalRoute<void>? _route;
   bool _previewCompletionPending = false;
   bool _playerActive = false;
+  bool _routeVisible = true;
   bool _heroVisible = true;
   int _page = 0;
 
@@ -186,6 +189,12 @@ class _FeaturedHeroState extends State<FeaturedHero>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final route = ModalRoute.of<void>(context);
+    if (route != null && route != _route) {
+      if (_route != null) appRouteObserver.unsubscribe(this);
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
     final session = AppScope.of(context).pictureInPictureSession;
     if (session == _playerSession) return;
     _playerSession?.removeListener(_onPlayerSessionChanged);
@@ -207,7 +216,22 @@ class _FeaturedHeroState extends State<FeaturedHero>
     _animatePosterIn.dispose();
     _previewHasTrailer.dispose();
     _scrolling.dispose();
+    appRouteObserver.unsubscribe(this);
     super.dispose();
+  }
+
+  @override
+  void didPushNext() {
+    _routeVisible = false;
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = null;
+    _noTrailerAutoSlideController.stop();
+  }
+
+  @override
+  void didPopNext() {
+    _routeVisible = true;
+    if (mounted) _scheduleAutoSlide();
   }
 
   void _onPlayerSessionChanged() {
@@ -255,7 +279,7 @@ class _FeaturedHeroState extends State<FeaturedHero>
                     previewProgress: _previewProgress,
                     animatePosterIn: _animatePosterIn,
                     previewHasTrailer: _previewHasTrailer,
-                    visible: heroVisible && !_playerActive,
+                    visible: heroVisible && _routeVisible && !_playerActive,
                     onCompleted: _onPreviewCompleted,
                     scrolling: _scrolling,
                   ),
@@ -456,6 +480,7 @@ class _FeaturedHeroState extends State<FeaturedHero>
     _autoSlideTimer = null;
     _noTrailerAutoSlideController.stop();
     if (!_heroVisible ||
+        !_routeVisible ||
         _playerActive ||
         widget.items.length < 2 ||
         _scrolling.value ||
@@ -1162,14 +1187,21 @@ class _FeaturedDetails extends StatelessWidget {
         spacing: AppSpacing.xs,
         runSpacing: AppSpacing.xs,
         children: [
-          FilledButton.icon(
-            key: const Key('featured-play'),
-            onPressed: () => unawaited(_play(context)),
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Watch Now'),
-            style: FilledButton.styleFrom(
-              shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
-            ),
+          BlocBuilder<LibraryController, LibraryState>(
+            bloc: AppScope.of(context).libraryController,
+            builder: (context, state) {
+              final progress = state.recordFor(media.ref)?.progress;
+              final isContinuing = (progress ?? Duration.zero) > Duration.zero;
+              return FilledButton.icon(
+                key: const Key('featured-play'),
+                onPressed: () => unawaited(_play(context)),
+                icon: const Icon(Icons.play_arrow),
+                label: Text(isContinuing ? 'Continue Watching' : 'Watch Now'),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
+                ),
+              );
+            },
           ),
           BlocBuilder<LibraryController, LibraryState>(
             bloc: AppScope.of(context).libraryController,

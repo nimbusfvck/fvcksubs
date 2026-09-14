@@ -5,6 +5,7 @@ import 'package:fvcksubs_app/player/mappers/startup_stream.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
 import 'package:fvcksubs_app/player/models/playback_start_position.dart';
 import 'package:fvcksubs_app/player/state/video_player_startup.dart';
+import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:video_player/video_player.dart' as vp;
 
@@ -21,6 +22,39 @@ const _stream = PlayableStream(
 );
 
 void main() {
+  test('startup readiness does not trust a buffering isPlaying signal', () {
+    expect(
+      startupPlaybackIsReady(
+        isPlaying: true,
+        isBuffering: true,
+        isLive: false,
+        bufferedPosition: const Duration(seconds: 12),
+        positionAdvanced: false,
+      ),
+      isFalse,
+    );
+    expect(
+      startupPlaybackIsReady(
+        isPlaying: true,
+        isBuffering: true,
+        isLive: false,
+        bufferedPosition: const Duration(seconds: 12),
+        positionAdvanced: true,
+      ),
+      isTrue,
+    );
+    expect(
+      startupPlaybackIsReady(
+        isPlaying: true,
+        isBuffering: false,
+        isLive: false,
+        bufferedPosition: const Duration(seconds: 12),
+        positionAdvanced: false,
+      ),
+      isTrue,
+    );
+  });
+
   test(
     'selects the startup URL under the cap while retaining all variants',
     () {
@@ -280,6 +314,13 @@ void main() {
     );
     expect(player.calls, ['initialize']);
   });
+
+  test('keeps a slow live replay within the extended startup budget', () {
+    final player = _NativePlayer(_stream.url);
+    final startup = _startup(player, _Controller(player.calls));
+
+    expect(startup.liveInitializeTimeout, const Duration(seconds: 20));
+  });
 }
 
 VideoPlayerStartup _startup(
@@ -288,7 +329,7 @@ VideoPlayerStartup _startup(
   PlayableStream stream = _stream,
   bool preselected = false,
   bool Function()? isCurrent,
-  Duration liveInitializeTimeout = const Duration(seconds: 8),
+  Duration liveInitializeTimeout = const Duration(seconds: 20),
   Duration initialSeekTimeout = const Duration(seconds: 8),
   void Function(String stage, {String? details})? log,
 }) => VideoPlayerStartup(

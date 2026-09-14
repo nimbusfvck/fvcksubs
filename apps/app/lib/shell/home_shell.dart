@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../addons/addons_controller.dart';
 import '../app_scope.dart';
+import '../catalog/category_page.dart';
+import '../catalog/live_timeline_page.dart';
 import '../home/home_page.dart';
 import '../library/library_page.dart';
 import '../settings/settings_page.dart';
@@ -26,20 +29,39 @@ class _HomeShellState extends State<HomeShell> {
   // resets on every destination switch, since re-entering Shorts always
   // starts back at the letterboxed fit (see ShortsPage's `_fitMode`).
   bool _shortsImmersive = false;
+  String? _selectedCategory;
 
-  Widget get _body => switch (_destination) {
-    AppDestination.home => const HomePage(),
-    AppDestination.library => const LibraryPage(),
-    AppDestination.shorts => ShortsPage(
-      onImmersiveChanged: (immersive) =>
-          setState(() => _shortsImmersive = immersive),
-    ),
-    AppDestination.settings => const SettingsPage(),
-  };
+  Widget _body(AppScope scope) {
+    final category = _selectedCategory;
+    if (_destination == AppDestination.home && category != null) {
+      final opensTimeline = scope.registry
+          .catalogsFor(category)
+          .any((binding) => binding.catalog.display == CatalogDisplay.timeline);
+      return opensTimeline
+          ? CatalogTimelinePage(category: category)
+          : CategoryPage(category: category);
+    }
+    return switch (_destination) {
+      AppDestination.home => const HomePage(),
+      AppDestination.library => const LibraryPage(),
+      AppDestination.shorts => ShortsPage(
+        onImmersiveChanged: (immersive) =>
+            setState(() => _shortsImmersive = immersive),
+      ),
+      AppDestination.settings => const SettingsPage(),
+    };
+  }
 
   void _select(int index) => setState(() {
     _destination = AppDestination.values[index];
     _shortsImmersive = false;
+    _selectedCategory = null;
+  });
+
+  void _openCategory(String category) => setState(() {
+    _destination = AppDestination.home;
+    _shortsImmersive = false;
+    _selectedCategory = category;
   });
 
   @override
@@ -48,7 +70,7 @@ class _HomeShellState extends State<HomeShell> {
     final scope = AppScope.of(context);
     final body = BlocBuilder<AddonsController, AddonsState>(
       bloc: scope.addonsController,
-      builder: (context, _) => _body,
+      builder: (context, _) => _body(scope),
     );
 
     final useRail =
@@ -58,7 +80,19 @@ class _HomeShellState extends State<HomeShell> {
       return Scaffold(
         body: Row(
           children: [
-            AppNavRail(selectedIndex: index, onDestinationSelected: _select),
+            BlocBuilder<AddonsController, AddonsState>(
+              bloc: scope.addonsController,
+              builder: (context, _) => AppNavRail(
+                selectedIndex: index,
+                onDestinationSelected: _select,
+                categories: [
+                  for (final category in scope.registry.categories)
+                    if (category.toLowerCase() != 'all') category,
+                ],
+                selectedCategory: _selectedCategory,
+                onCategorySelected: _openCategory,
+              ),
+            ),
             const VerticalDivider(
               width: 1,
               thickness: 1,
@@ -77,7 +111,8 @@ class _HomeShellState extends State<HomeShell> {
       // Home owns an edge-to-edge hero so its artwork and gradients continue
       // behind the status bar. Other destinations keep the shared safe inset.
       body:
-          _destination == AppDestination.home || _destination == AppDestination.shorts
+          _destination == AppDestination.home ||
+              _destination == AppDestination.shorts
           ? body
           : SafeArea(child: body),
       // Only Shorts' own full/cover fit mode asks the video to run behind
@@ -87,7 +122,9 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: _select,
-        backgroundColor: immersiveShorts ? Colors.black.withValues(alpha: 0.35) : null,
+        backgroundColor: immersiveShorts
+            ? Colors.black.withValues(alpha: 0.35)
+            : null,
         destinations: [
           for (final destination in AppDestination.values)
             NavigationDestination(

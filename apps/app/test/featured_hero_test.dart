@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_app/widgets/media_hero_flexible_space.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -128,6 +130,46 @@ void main() {
       closeTo(24, 1),
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('featured video with progress shows Continue Watching', (
+    tester,
+  ) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'in-progress',
+        ),
+        title: 'In-progress movie',
+      ),
+    );
+    final library = LibraryController(
+      store: _MemoryLibraryStore(),
+      initial: {
+        UserMediaState.keyFor(item.item.ref): UserMediaState(
+          item: item.item,
+          progress: const Duration(minutes: 3),
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+        libraryController: library,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('Watch Now'), findsNothing);
   });
 
   testWidgets('featured event uses the shared banner layout', (tester) async {
@@ -714,4 +756,12 @@ void main() {
     expect(find.byKey(const Key('featured-title-text')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+class _MemoryLibraryStore implements LibraryStore {
+  @override
+  Future<Map<String, UserMediaState>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

@@ -60,9 +60,18 @@ class CategoryChips extends StatelessWidget {
                             if (category.toLowerCase() == 'live') ...[
                               const _LiveIndicator(),
                               const SizedBox(width: AppSpacing.xs),
+                            ] else ...[
+                              Icon(
+                                categoryIcon(category),
+                                size: 16,
+                                color: category == selected
+                                    ? AppColors.surfaceDark
+                                    : AppColors.onDark,
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
                             ],
                             Text(
-                              _label(category),
+                              categoryLabel(category),
                               style: AppTypography.titleSm.copyWith(
                                 color: category == selected
                                     ? AppColors.surfaceDark
@@ -81,14 +90,25 @@ class CategoryChips extends StatelessWidget {
       ],
     ),
   );
+}
 
-  static String _label(String category) {
-    if (category.toLowerCase() == 'tv') return 'Shows';
-    if (category.toLowerCase() == 'movie') return 'Movies';
-    return category.isEmpty
-        ? category
-        : category[0].toUpperCase() + category.substring(1);
-  }
+String categoryLabel(String category) {
+  if (category.toLowerCase() == 'tv') return 'Shows';
+  if (category.toLowerCase() == 'movie') return 'Movies';
+  return category.isEmpty
+      ? category
+      : category[0].toUpperCase() + category.substring(1);
+}
+
+IconData categoryIcon(String category) {
+  return switch (category.toLowerCase()) {
+    'live' => Icons.live_tv_outlined,
+    'movie' => Icons.movie_outlined,
+    'tv' => Icons.tv_outlined,
+    'anime' => Icons.animation_outlined,
+    'sport' || 'sports' => Icons.sports_soccer_outlined,
+    _ => Icons.category_outlined,
+  };
 }
 
 class _LiveIndicator extends StatefulWidget {

@@ -307,12 +307,13 @@ class _SourceGroup {
   final List<ResolvedSource> sources;
 }
 
-class PlayerQualityPickerSheet extends StatelessWidget {
+class PlayerQualityPickerSheet extends StatefulWidget {
   const PlayerQualityPickerSheet({
     super.key,
     required this.tracks,
     required this.current,
     this.playing,
+    this.onSelect,
   });
 
   final List<AppQualityTrack> tracks;
@@ -327,13 +328,52 @@ class PlayerQualityPickerSheet extends StatelessWidget {
   /// 480p or 1080p. Naming it turns the row into an answer.
   final AppQualityTrack? playing;
 
-  bool get _autoSelected => current == null;
+  /// Applies a choice without closing the sheet until the native player
+  /// confirms the requested rendition is active.
+  final Future<bool> Function(AppQualityTrack track)? onSelect;
+
+  @override
+  State<PlayerQualityPickerSheet> createState() =>
+      _PlayerQualityPickerSheetState();
+}
+
+class _PlayerQualityPickerSheetState extends State<PlayerQualityPickerSheet> {
+  String? _pendingId;
+  String? _error;
+
+  bool get _autoSelected => widget.current == null;
 
   String get _autoLabel {
-    final rung = playing == null
+    final rung = widget.playing == null
         ? null
-        : qualityRungLabel(width: playing!.width, height: playing!.height);
+        : qualityRungLabel(
+            width: widget.playing!.width,
+            height: widget.playing!.height,
+          );
     return rung == null ? 'Auto' : 'Auto ($rung)';
+  }
+
+  Future<void> _select(AppQualityTrack track) async {
+    if (_pendingId != null) return;
+    final apply = widget.onSelect;
+    if (apply == null) {
+      Navigator.of(context).pop(track);
+      return;
+    }
+    setState(() {
+      _pendingId = track.id;
+      _error = null;
+    });
+    final applied = await apply(track);
+    if (!mounted) return;
+    if (applied) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _pendingId = null;
+      _error = 'Variant belum aktif. Video tetap memakai kualitas sebelumnya.';
+    });
   }
 
   @override
@@ -360,6 +400,15 @@ class PlayerQualityPickerSheet extends StatelessWidget {
               style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
             ),
             const SizedBox(height: AppSpacing.xs),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.error),
+                ),
+              ),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
@@ -371,14 +420,22 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                         color: AppColors.onDark,
                       ),
                     ),
-                    trailing: _autoSelected
+                    trailing: _pendingId == 'auto'
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.brandAccent,
+                            ),
+                          )
+                        : _autoSelected
                         ? const Icon(Icons.check, color: AppColors.brandAccent)
                         : null,
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop(const AppQualityTrack(id: 'auto', height: 0)),
+                    onTap: () =>
+                        _select(const AppQualityTrack(id: 'auto', height: 0)),
                   ),
-                  for (final track in tracks)
+                  for (final track in widget.tracks)
                     ListTile(
                       title: Text(
                         qualityRungLabel(
@@ -390,13 +447,22 @@ class PlayerQualityPickerSheet extends StatelessWidget {
                           color: AppColors.onDark,
                         ),
                       ),
-                      trailing: !_autoSelected && current?.id == track.id
+                      trailing: _pendingId == track.id
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.brandAccent,
+                              ),
+                            )
+                          : !_autoSelected && widget.current?.id == track.id
                           ? const Icon(
                               Icons.check,
                               color: AppColors.brandAccent,
                             )
                           : null,
-                      onTap: () => Navigator.of(context).pop(track),
+                      onTap: () => _select(track),
                     ),
                 ],
               ),

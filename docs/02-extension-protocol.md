@@ -164,7 +164,7 @@ flowchart LR
 
 | Level | Declared where | Interpreted by the shell? | Rendered as |
 |---|---|---|---|
-| catalog | manifest | no | one shelf, or one full screen |
+| catalog | manifest | no | one shelf, one full screen, or a featured hero feed |
 | category | manifest, as a **list** | `all` is reserved as Home; other ids remain opaque | Home choice or category route |
 | subCategory | **response** | no — ids are opaque and echoed back | chips, or sections on the browse screen |
 | group | a field on each item | no | headings within one list |
@@ -204,9 +204,19 @@ Only the extension knows whether its catalog is a curated shelf or a long list t
 | `row` | horizontal carousel | short curated shelves |
 | `grid` | vertical grid, everything visible | long lists worth scanning |
 | `list` | single column | items needing full width to read |
+| `timeline` | time-positioned vertical schedule | timestamped event feeds |
 
 The value describes layout shape, not dimensions. The shell controls column count, cell
-size, and row height. `list` uses one column.
+size, and row height. `list` uses one column; `timeline` uses the event schedule timestamps
+and the viewer's local clock.
+
+### Catalog surface
+
+The optional `surface` field controls which app-owned surface consumes a
+catalog. It defaults to `browse`, which renders the catalog as a Home shelf or
+category screen. `featured` feeds Home's Featured Hero and is excluded from
+ordinary shelves. `preview` feeds the Shorts surface and is also excluded from
+browse categories.
 
 ## 2.5 Call and response shapes
 

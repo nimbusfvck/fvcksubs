@@ -29,13 +29,27 @@ void main() {
             {
               'id': 'catalog-$index',
               'name': 'Catalog $index',
-              'categories': surface == CatalogSurface.browse ? ['movie'] : <String>[],
+              'categories': switch (surface) {
+                CatalogSurface.browse => ['movie'],
+                CatalogSurface.featured => ['all'],
+                CatalogSurface.preview => <String>[],
+              },
               'surface': surface.name,
             },
         ],
       },
     ],
     'permissions': {'hosts': <String>[]},
+  });
+
+  test('featured catalogs are hidden from browse shelves', () {
+    final registry = ExtensionRegistry([
+      _Stub(manifestWith('a', surfaces: [CatalogSurface.featured])),
+    ]);
+
+    expect(registry.catalogsFor('all'), isEmpty);
+    expect(registry.featuredCatalogs(), hasLength(1));
+    expect(registry.featuredCatalogs().single.isFeaturedSurface, isTrue);
   });
 
   test('only preview-surface catalogs are returned', () {

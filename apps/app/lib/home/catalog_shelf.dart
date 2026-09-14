@@ -43,6 +43,7 @@ class CatalogShelf extends StatefulWidget {
     CatalogDisplay.list => listPreviewLimit,
     CatalogDisplay.row => rowPreviewLimit,
     CatalogDisplay.grid => previewLimit,
+    CatalogDisplay.timeline => listPreviewLimit,
   };
 
   @override
@@ -315,6 +316,13 @@ class _Section extends StatelessWidget {
             scrollable: false,
             columns: 1,
           ),
+          CatalogDisplay.timeline => MediaGridV2(
+            sections: [CatalogSectionV2(id: section.id, items: preview)],
+            onTap: onTap,
+            onTapWithHero: onTapWithHero,
+            scrollable: false,
+            columns: 1,
+          ),
         },
       ],
     );
@@ -436,9 +444,7 @@ class _Carousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final posterMode = items.any(
-      (entry) => isPosterMediaItem(entry.item),
-    );
+    final posterMode = items.any((entry) => isPosterMediaItem(entry.item));
     final itemWidth = posterMode ? 140.0 : 300.0;
     final height = posterMode ? mediaCardPosterHeight(itemWidth) : 172.0;
 

@@ -151,6 +151,7 @@ class GeneratedBanner extends StatelessWidget {
     final showLeaguePlaceholder =
         eventName.trim().isNotEmpty &&
         (forceLeaguePlaceholder || !hasParticipantLogo);
+    final hasEventName = eventName.trim().isNotEmpty;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -201,6 +202,7 @@ class GeneratedBanner extends StatelessWidget {
                                   participant: participants[0],
                                   size: crestSize,
                                   index: 0,
+                                  showFallback: !hasEventName,
                                   onImageStateChanged:
                                       onParticipantLogoStateChanged,
                                 ),
@@ -209,6 +211,7 @@ class GeneratedBanner extends StatelessWidget {
                                   participant: participants[1],
                                   size: crestSize,
                                   index: 1,
+                                  showFallback: !hasEventName,
                                   onImageStateChanged:
                                       onParticipantLogoStateChanged,
                                 ),
@@ -242,8 +245,7 @@ class GeneratedBanner extends StatelessWidget {
                 fallback: _brandFallback(accent, showLeaguePlaceholder),
               ),
             ),
-          if (branding?.logo == null &&
-              (hasParticipantLogo || eventName.trim().isEmpty))
+          if (branding?.logo == null && hasEventName && hasParticipantLogo)
             Positioned(
               top: AppSpacing.xs,
               right: AppSpacing.xs,
@@ -320,19 +322,21 @@ class _BannerTeam extends StatelessWidget {
     required this.participant,
     required this.size,
     required this.index,
+    required this.showFallback,
     this.onImageStateChanged,
   });
 
   final Participant participant;
   final double size;
   final int index;
+  final bool showFallback;
   final void Function(int index, bool loaded)? onImageStateChanged;
 
   @override
   Widget build(BuildContext context) => _Crest(
     imageUrl: participant.logo?.url,
     size: size,
-    showFallback: false,
+    showFallback: showFallback,
     onImageStateChanged: onImageStateChanged == null
         ? null
         : (loaded) => onImageStateChanged!(index, loaded),

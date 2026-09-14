@@ -60,6 +60,7 @@ flowchart TB
 
     B -->|search field| S["Search"]
     B -->|category other than all| CP["Category screen"]
+    CP -->|timeline display hint| LT["Timeline"]
     B -->|see more| CV["Full catalog"]
     B & CP & S & CV & L -->|tap an item| RT{"has detail<br/>worth reading?"}
     RT -->|yes| D["Detail"]
@@ -73,8 +74,14 @@ opens from a field on the browse screen onto its own surface rather than contrad
 category chips above it.
 
 Home is always the `all` category, which is implicit rather than a visible Home chip. Other declared categories open a separate category screen
-with its own app bar, scroll position, catalog cache, and pagination. Returning to Home always
-returns to `all`; the category itself is not a persisted Home selection.
+with its own app bar, scroll position, catalog cache, and pagination. A catalog may declare the
+`timeline` display hint to request the app-owned event surface: the toolbar can switch between a
+local-clock timeline and a single-column list grouped by the event's subtitle or tags (for
+example, a league or sport). The extension decides which category slice contains live items,
+upcoming items, or both, while the app draws the NOW line without knowing the provider or sport.
+Home also derives its `Live Now` shelf from the live timeline's schedule window, so an extension
+does not need to publish a separate all-category shelf for currently live events.
+Returning to Home always returns to `all`; the category itself is not a persisted Home selection.
 
 Whichever destination is showing is rebuilt when settings or the library change, so
 toggling an extension or favouriting an item takes effect immediately without either screen
@@ -131,9 +138,10 @@ content. Remaining slots use a combined editorial, freshness, rating, and artwor
 Soft per-kind limits keep the carousel varied when several kinds are available without
 leaving it short when the catalog contains only one kind. Duplicate references and ended
 events are removed. Items without portrait or landscape artwork are left out because the
-hero is artwork-led, except events and channels: those receive deterministic full-bleed
-artwork from their opaque identity, participant colors, and participant logos. The same
-generator is used when a supplied live artwork URL fails. Equal candidates use a stable
+hero is artwork-led, except events: those receive deterministic full-bleed artwork from
+their opaque identity, participant colors, and participant logos. Channels remain available
+in their catalog shelves but are not selected for the Featured Hero. The same generator is
+used when a supplied live artwork URL fails. Equal candidates use a stable
 daily tie-break so their order does not change during a session. When a refresh changes the
 item occupying a hero page, the page remains at that position but the slide is keyed by the
 item's opaque reference; any previous trailer preview is disposed instead of continuing
@@ -145,10 +153,16 @@ Video and series items use `artwork.logo` as the featured title mark when suppli
 otherwise the text title is limited to one line. A failed logo request falls back to the
 text title.
 
+Catalogs marked with the `featured` surface are loaded for this hero but are
+not rendered as ordinary Home shelves. Catalogs marked `preview` belong to the
+Shorts surface and are likewise excluded from Home browsing.
+
 The featured artwork and gradient extend behind the status bar on handhelds. Home's category
 chips are a separate auto-hiding header below the app bar. The `all` entry is implicit because
 Home already represents it; the visible chips keep the other category choices available while
-the hero collapses normally, and selecting one opens its category screen.
+the hero collapses normally. A category backed by a catalog with the `timeline` display hint
+opens the event surface; its toolbar can switch between timeline and list presentation. Other
+choices open their category screen.
 While the featured feed is loading, the hero keeps the same expanded height and shows a
 shimmer placeholder. An empty or failed feed removes the hero instead of leaving a blank
 surface. Featured trailer previews are inline-only and are never eligible for native Picture

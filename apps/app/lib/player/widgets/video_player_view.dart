@@ -24,7 +24,28 @@ part 'video_player_view_subtitles.dart';
 
 const _playbackDiagnosticsInterval = Duration(seconds: 2);
 const _startupHealthTimeout = Duration(seconds: 8);
+const _startupHealthMaxTimeout = Duration(seconds: 30);
 const _livePlaybackProgressTolerance = Duration(milliseconds: 250);
+const _variantSeekTimeout = Duration(seconds: 20);
+
+/// Returns true only when startup has evidence that media can be rendered.
+///
+/// A native controller may report `isPlaying` while it is still waiting for a
+/// first frame. For a buffering VOD, a non-zero position is only meaningful
+/// after it has advanced from the first sample; buffered bytes alone are not a
+/// first-frame signal.
+@visibleForTesting
+bool startupPlaybackIsReady({
+  required bool isPlaying,
+  required bool isBuffering,
+  required bool isLive,
+  required Duration bufferedPosition,
+  required bool positionAdvanced,
+}) {
+  if (!isPlaying) return false;
+  if (positionAdvanced) return true;
+  return !isLive && !isBuffering && bufferedPosition > Duration.zero;
+}
 
 /// The app's native video player for HLS, DRM, live, and on-demand playback.
 class VideoPlayerView extends StatefulWidget {
@@ -125,9 +146,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
   Timer? _livePlaybackKickTimer;
   StreamSubscription<vp.VideoEvent>? _videoEventSubscription;
   DateTime? _startupHealthStartedAt;
+  DateTime? _startupHealthLastProgressAt;
+  Duration? _startupHealthLastPosition;
+  Duration? _startupHealthLastContiguousBuffered;
   bool _startupHealthPassed = false;
   bool _disposed = false;
-  Future<void>? _variantSwitch;
+  Future<bool>? _variantSwitch;
   LocalHlsProxy? _playbackProxy;
   int _playerGeneration = 0;
 
@@ -262,9 +286,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     });
   }
 
-  Future<void> _selectVariant(StreamVariant? variant) {
-    final previous = _variantSwitch ?? Future<void>.value();
-    final next = previous.then<void>((_) => _selectVariantNow(variant));
+  Future<bool> _selectVariant(StreamVariant? variant) {
+    final previous = _variantSwitch ?? Future<bool>.value(true);
+    final next = previous.then<bool>((_) => _selectVariantNow(variant));
     _variantSwitch = next;
     unawaited(
       next.whenComplete(() {
@@ -274,10 +298,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     return next;
   }
 
-  Future<void> _selectVariantNow(StreamVariant? variant) async {
+  Future<bool> _selectVariantNow(StreamVariant? variant) async {
     final oldPlayer = _player;
     final adapter = _adapter;
-    if (!_isActive || oldPlayer == null || adapter == null) return;
+    if (!_isActive || oldPlayer == null || adapter == null) return false;
     final generation = ++_playerGeneration;
     final restorePlaying = oldPlayer.value.isPlaying;
     var oldPlayerPaused = false;
@@ -293,7 +317,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         await proxy.dispose();
       }
     }
-    if (!_isCurrentGeneration(generation)) return;
+    if (!_isCurrentGeneration(generation)) return false;
     final nextPlayer = _createPlayer(nextStream);
     final stopwatch = Stopwatch()..start();
     var swapped = false;
@@ -311,7 +335,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       await nextPlayer.initialize();
       if (!_isCurrentGeneration(generation)) {
         await nextPlayer.dispose();
-        return;
+        return false;
       }
       _logOpenStage(
         'quality_initialize_done',
@@ -323,19 +347,21 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       await nextPlayer.setLooping(widget.looping);
       if (!_isCurrentGeneration(generation)) {
         await nextPlayer.dispose();
-        return;
+        return false;
       }
       await nextPlayer.setVolume(widget.muted ? 0 : 1);
       if (!_isCurrentGeneration(generation)) {
         await nextPlayer.dispose();
-        return;
-      }
-      if (restorePlaying) {
-        await oldPlayer.pause();
-        oldPlayerPaused = true;
-        _logOpenStage('quality_old_player_paused', stopwatch);
+        return false;
       }
       final restorePosition = oldPlayer.value.position;
+      if (restorePlaying && nextStream.format == StreamFormat.other) {
+        // Some remote MP4 origins do not complete a seek until playback has
+        // started. Warm the replacement while the old controller remains
+        // visible, then seek to the matching position before swapping.
+        await nextPlayer.play();
+        _logOpenStage('quality_prepare_play', stopwatch);
+      }
       if (restorePosition > Duration.zero) {
         final duration = nextPlayer.value.duration;
         final target = duration > Duration.zero && restorePosition > duration
@@ -346,12 +372,21 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
           stopwatch,
           details: 'target_ms=${target.inMilliseconds}',
         );
-        await nextPlayer.seekTo(target);
+        // Keep the old player running while the replacement seeks. AVPlayer's
+        // completion callback can be delayed by a slow rendition; the old
+        // player must remain usable if that happens.
+        await nextPlayer.seekTo(target).timeout(_variantSeekTimeout);
         if (!_isCurrentGeneration(generation)) {
           await nextPlayer.dispose();
-          return;
+          return false;
         }
         _logOpenStage('quality_seek_done', stopwatch);
+      }
+
+      if (restorePlaying) {
+        await oldPlayer.pause();
+        oldPlayerPaused = true;
+        _logOpenStage('quality_old_player_paused', stopwatch);
       }
 
       await _videoEventSubscription?.cancel();
@@ -359,6 +394,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       oldPlayer.removeListener(_onValueChanged);
       _playbackDiagnosticsTimer?.cancel();
       _startupHealthStartedAt = null;
+      _startupHealthLastProgressAt = null;
+      _startupHealthLastPosition = null;
+      _startupHealthLastContiguousBuffered = null;
       _startupHealthPassed = false;
       _activeStream = nextStream;
       _player = nextPlayer;
@@ -373,12 +411,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         restorePlaying: restorePlaying,
         applyPreferredQuality: false,
         initialized: true,
+        skipStartPosition: true,
         generation: generation,
         stopwatch: stopwatch,
       );
+      return true;
     } catch (error) {
       if (!swapped) await nextPlayer.dispose();
-      if (!_isCurrentGeneration(generation)) return;
+      if (!_isCurrentGeneration(generation)) return false;
       if (oldPlayerPaused) {
         try {
           await oldPlayer.play();
@@ -394,6 +434,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       );
       // The old player was intentionally kept alive until initialization
       // succeeded, so a failed rendition leaves playback usable.
+      return false;
     }
   }
 
@@ -416,6 +457,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     bool? restorePlaying,
     bool applyPreferredQuality = true,
     bool initialized = false,
+    bool skipStartPosition = false,
     int? generation,
     Stopwatch? stopwatch,
   }) async {
@@ -444,7 +486,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         muted: widget.muted,
         playing: playing,
         isLive: widget.isLive,
-        startPosition: restorePosition == null
+        startPosition: skipStartPosition
+            ? null
+            : restorePosition == null
             ? widget.startPosition
             : PlaybackStartPosition.exact(restorePosition),
         subtitleLanguage: widget.preferredSubtitleLanguage,
@@ -489,6 +533,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   void _startPlaybackDiagnostics(Stopwatch stopwatch) {
     _startupHealthStartedAt = DateTime.now();
+    _startupHealthLastProgressAt = null;
+    _startupHealthLastPosition = null;
+    _startupHealthLastContiguousBuffered = null;
+    _startupHealthPassed = false;
     _playbackDiagnosticsTimer?.cancel();
     _playbackDiagnosticsTimer = Timer.periodic(
       _playbackDiagnosticsInterval,
@@ -539,6 +587,21 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     final contiguousAhead = contiguousBufferedPosition > value.position
         ? contiguousBufferedPosition - value.position
         : Duration.zero;
+    final previousPosition = _startupHealthLastPosition;
+    final previousContiguousBuffered = _startupHealthLastContiguousBuffered;
+    final positionAdvanced =
+        previousPosition != null &&
+        value.position > previousPosition + _livePlaybackProgressTolerance;
+    final bufferAdvanced =
+        previousContiguousBuffered != null &&
+        contiguousBufferedPosition >
+            previousContiguousBuffered + _livePlaybackProgressTolerance;
+    final now = DateTime.now();
+    _startupHealthLastPosition = value.position;
+    _startupHealthLastContiguousBuffered = contiguousBufferedPosition;
+    if (positionAdvanced || bufferAdvanced) {
+      _startupHealthLastProgressAt = now;
+    }
     final seekablePosition = value.seekable.fold<Duration>(
       Duration.zero,
       (latest, range) => range.end > latest ? range.end : latest,
@@ -559,24 +622,35 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     );
 
     if (!_startupHealthPassed) {
-      final hasMediaProgress = widget.isLive
-          ? value.position > Duration.zero
-          : value.position > Duration.zero || bufferedPosition > Duration.zero;
-      if (value.isPlaying && !value.isBuffering && hasMediaProgress) {
+      if (startupPlaybackIsReady(
+        isPlaying: value.isPlaying,
+        isBuffering: value.isBuffering,
+        isLive: widget.isLive,
+        bufferedPosition: bufferedPosition,
+        positionAdvanced: positionAdvanced,
+      )) {
         _startupHealthPassed = true;
         _reportPlaybackReady(stopwatch);
         return;
       }
       final startedAt = _startupHealthStartedAt;
-      if (startedAt != null &&
-          DateTime.now().difference(startedAt) >= _startupHealthTimeout) {
+      final lastProgressAt = _startupHealthLastProgressAt;
+      final elapsed = startedAt == null
+          ? Duration.zero
+          : now.difference(startedAt);
+      final idle = lastProgressAt == null
+          ? elapsed
+          : now.difference(lastProgressAt);
+      final exceededIdleBudget = idle >= _startupHealthTimeout;
+      final exceededMaxBudget = elapsed >= _startupHealthMaxTimeout;
+      if (startedAt != null && (exceededIdleBudget || exceededMaxBudget)) {
         _startupHealthPassed = true;
         _logOpenStage(
           'startup_health_failed',
           stopwatch,
           details:
-              'reason=${widget.isLive ? 'live_position_not_advancing' : 'no_media_progress'} '
-              'timeout_s=8',
+              'reason=${lastProgressAt == null ? 'no_media_progress' : 'startup_progress_stalled'} '
+              'idle_s=${idle.inSeconds} max_timeout_s=${_startupHealthMaxTimeout.inSeconds}',
         );
         adapter.reportError(
           StateError('Playback made no media progress during startup.'),

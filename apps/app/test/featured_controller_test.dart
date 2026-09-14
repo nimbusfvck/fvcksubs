@@ -178,7 +178,7 @@ void main() {
     expect(featured.single.item.title, 'Live without artwork');
   });
 
-  test('keeps live channels that can use generated artwork', () {
+  test('does not feature channels', () {
     const channel = VersionedMediaItem(
       item: ChannelItemV2(
         ref: MediaRef(
@@ -192,7 +192,7 @@ void main() {
 
     final featured = FeaturedAlgorithm.select([channel], now: now);
 
-    expect(featured.single.item.title, 'Channel without artwork');
+    expect(featured, isEmpty);
   });
 
   test('relaxes kind limits when only one kind is available', () {

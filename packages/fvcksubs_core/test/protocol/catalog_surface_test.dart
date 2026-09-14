@@ -25,6 +25,18 @@ void main() {
     expect(catalog.categories, isEmpty);
   });
 
+  test('a catalog declaring "surface": "featured" decodes correctly', () {
+    final catalog = CatalogDecl.fromJson({
+      'id': 'featured',
+      'name': 'Featured',
+      'categories': ['all'],
+      'surface': 'featured',
+    });
+
+    expect(catalog.surface, CatalogSurface.featured);
+    expect(catalog.categories, ['all']);
+  });
+
   test('CatalogDecl round-trips with a non-default surface', () {
     const catalog = CatalogDecl(
       id: 'previews',

@@ -128,13 +128,16 @@ class _Poster extends StatelessWidget {
         ),
       ),
       const SizedBox(height: AppSpacing.xs),
-      SizedBox(
-        height: _posterTitleHeight,
-        child: Text(
-          item.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        child: SizedBox(
+          height: _posterTitleHeight,
+          child: Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+          ),
         ),
       ),
     ],
@@ -248,7 +251,7 @@ class _MatchState extends State<_Match> {
       Expanded(
         child: GeneratedBanner(
           participants: widget.item.participants,
-          eventName: widget.item.subtitle ?? '',
+          eventName: _eventContextLabel(widget.item) ?? '',
           forceLeaguePlaceholder: _showLeaguePlaceholder,
           onParticipantLogoStateChanged: _onParticipantLogoStateChanged,
           branding: widget.item.branding,
@@ -340,8 +343,15 @@ class _EventArtworkFallback extends StatelessWidget {
 }
 
 String _eventPlaceholderLabel(EventItemV2 item) {
-  final league = item.subtitle?.trim();
-  return league == null || league.isEmpty ? item.title : league;
+  return _eventContextLabel(item) ?? item.title;
+}
+
+String? _eventContextLabel(EventItemV2 item) {
+  final label = item.subtitle?.trim();
+  if (label == null || label.isEmpty || label.toLowerCase() == 'other') {
+    return null;
+  }
+  return label;
 }
 
 String _eventArtworkSeed(EventItemV2 item) {
@@ -494,6 +504,10 @@ class _ScheduleStatus extends StatelessWidget {
 }
 
 String? _eventMeta(EventItemV2 item) {
+  if (item.schedule.state == ScheduleState.live &&
+      item.schedule.label == null) {
+    return null;
+  }
   return item.schedule.label ??
       eventTimeRangeLabel(item.schedule.startsAt, item.schedule.endsAt);
 }

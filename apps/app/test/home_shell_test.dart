@@ -269,6 +269,13 @@ void main() {
 
     expect(find.byType(AppNavRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('Sport'), findsOneWidget);
+    expect(find.byKey(const Key('home-category-header')), findsNothing);
+
+    await tester.tap(find.text('Sport'));
+    await tester.pump();
+    expect(find.byType(AppNavRail), findsOneWidget);
+    expect(find.byType(CategoryPage), findsOneWidget);
   });
 
   testWidgets(
@@ -397,11 +404,11 @@ void main() {
       expect(header().offset, Offset.zero);
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 300));
       expect(header().offset, const Offset(0, -1));
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 300));
       expect(header().offset, Offset.zero);
     },
   );

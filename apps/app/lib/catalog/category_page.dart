@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../addons/installer_controller.dart';
@@ -8,10 +11,13 @@ import '../home/catalog_grid_section.dart';
 import '../home/catalog_group_shelf.dart';
 import '../home/catalog_grouping.dart';
 import '../home/catalog_shelf.dart';
+import '../home/featured_controller.dart';
+import '../home/featured_hero.dart';
 import '../settings/nsfw_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 import '../widgets/centered_content.dart';
+import '../widgets/media_hero_layout.dart';
 import 'plugin_selector.dart';
 
 /// Full-screen browsing for one of Home's non-[all] categories.
@@ -27,6 +33,8 @@ class CategoryPage extends StatefulWidget {
 class _CategoryPageState extends State<CategoryPage> {
   final ScrollController _scrollController = ScrollController();
   int _generation = 0;
+  String? _featuredSignature;
+  List<VersionedMediaItem> _featuredItems = const [];
 
   Future<void> _refresh() async {
     final scope = AppScope.of(context);
@@ -59,7 +67,46 @@ class _CategoryPageState extends State<CategoryPage> {
 
   void _selectPlugin(AppScope scope, String id) {
     scope.pluginController.select(id);
-    setState(() => _generation++);
+    setState(() {
+      _generation++;
+      _featuredSignature = null;
+      _featuredItems = const [];
+    });
+  }
+
+  void _ensureFeaturedLoaded(AppScope scope, List<CatalogBinding> bindings) {
+    final signature =
+        '$_generation/${widget.category}/${bindings.map((binding) => '${binding.extensionId}/'
+            '${binding.extension.manifest.version}/'
+            '${binding.catalog.id}').join('|')}';
+    if (signature == _featuredSignature) return;
+    _featuredSignature = signature;
+    unawaited(_loadFeatured(scope, bindings, signature));
+  }
+
+  Future<void> _loadFeatured(
+    AppScope scope,
+    List<CatalogBinding> bindings,
+    String signature,
+  ) async {
+    final pages = <VersionedCatalogPage>[];
+    for (final binding in bindings) {
+      try {
+        pages.add(
+          await scope.catalogCache.fetchCatalog(
+            scope.registry,
+            binding,
+            category: widget.category,
+          ),
+        );
+      } catch (_) {
+        // The category content remains usable when one catalog fails.
+      }
+    }
+    if (!mounted || signature != _featuredSignature) return;
+    setState(() {
+      _featuredItems = FeaturedAlgorithm.selectPages(pages);
+    });
   }
 
   Widget _catalogGroupSliver(HomeCatalogGroup group, String pluginId) {
@@ -131,6 +178,7 @@ class _CategoryPageState extends State<CategoryPage> {
         if (binding.extensionId == pluginId) binding,
     ];
     final groups = groupHomeCatalogs(bindings);
+    _ensureFeaturedLoaded(scope, bindings);
 
     return Scaffold(
       appBar: AppPageBar(
@@ -151,6 +199,15 @@ class _CategoryPageState extends State<CategoryPage> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            if (_featuredItems.isNotEmpty)
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaHeroLayout.heightForViewport(
+                    MediaQuery.sizeOf(context),
+                  ),
+                  child: FeaturedHero(items: _featuredItems),
+                ),
+              ),
             if (bindings.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,

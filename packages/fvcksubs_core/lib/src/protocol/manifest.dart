@@ -39,7 +39,7 @@ class ManifestException implements Exception {
   String toString() => 'ManifestException: $message';
 }
 
-/// How a catalog wants to be laid out on the Home screen.
+/// How a catalog wants to be laid out on a browse surface.
 ///
 /// Only the extension knows whether its catalog is a short curated shelf or a
 /// long list meant to be scanned — the app can't infer it from the data. In
@@ -58,9 +58,14 @@ enum CatalogDisplay {
   /// Still a shape, not a measurement: the extension says "one per line",
   /// the app decides how tall a line is and what it holds.
   list,
+
+  /// Time-positioned vertical schedule. The extension supplies event
+  /// timestamps; the app owns the timeline layout and local-clock indicator.
+  timeline,
 }
 
-/// What a catalog is for — a Home browse shelf, or a preview feed (Shorts).
+/// What a catalog is for — a Home browse shelf, a featured hero feed, or a
+/// preview feed (Shorts).
 ///
 /// Additive to protocol version 2: an older host that has never heard of
 /// [preview] should still load the manifest and simply not surface the
@@ -69,6 +74,9 @@ enum CatalogDisplay {
 enum CatalogSurface {
   /// An ordinary Home/Discover browse shelf. The default.
   browse,
+
+  /// A feed used by Home's Featured Hero rather than a browse shelf.
+  featured,
 
   /// A preview feed (e.g. Shorts) rather than a browse shelf. Carries no
   /// [CatalogDecl.categories] of its own, so an app that predates this
@@ -151,7 +159,7 @@ class CatalogDecl extends Equatable {
   /// arrives back as [CatalogQuery.category].
   final List<String> categories;
 
-  /// Requested layout on Home.
+  /// Requested layout on the browse surface.
   final CatalogDisplay display;
 
   /// Filter keys this catalog accepts (`"date"`, `"genre"`).

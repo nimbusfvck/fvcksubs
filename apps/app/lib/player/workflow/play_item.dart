@@ -723,15 +723,30 @@ Future<List<StreamSource>> _loadSources(
       'discovery_timeout mode=${fast ? 'fast' : 'full'} '
       'after=${stopwatch.elapsedMilliseconds}ms',
     );
-    return const [];
+    return _staleSourceList(scope, item, fast: fast);
   } catch (error) {
     _debugSourceLog(
       'discovery_error mode=${fast ? 'fast' : 'full'} '
       'error=${redactPlaybackLogText(error)} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
-    return const [];
+    return _staleSourceList(scope, item, fast: fast);
   }
+}
+
+List<StreamSource> _staleSourceList(
+  AppScope scope,
+  PlaybackMedia item, {
+  required bool fast,
+}) {
+  final cached = scope.sourceCache.peekSourceList(item.ref);
+  if (cached == null || cached.isEmpty) return const [];
+  final sources = scope.sourcePriorityController.order(cached);
+  _debugSourceLog(
+    'discovery_stale_ok count=${sources.length} '
+    'mode=${fast ? 'fast' : 'full'}',
+  );
+  return sources;
 }
 
 /// Chooses the highest-priority source that resolves successfully, while

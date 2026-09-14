@@ -46,6 +46,7 @@ const Duration _livePositionProgressTolerance = Duration(milliseconds: 250);
 const Duration _renewalStabilityThreshold = Duration(seconds: 20);
 const Duration _orientationReleaseDelay = Duration(milliseconds: 260);
 const Duration _fallbackWaitTimeout = Duration(seconds: 10);
+const Duration _livePlaybackWaitTimeout = Duration(seconds: 20);
 
 /// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
@@ -221,6 +222,8 @@ class _PlayerPageState extends State<PlayerPage> {
   void Function(bool visibility)? _onVisibilityChanged;
 
   bool get _isLive => widget.media.isLive;
+  Duration get _fallbackWaitDuration =>
+      _isLive ? _livePlaybackWaitTimeout : _fallbackWaitTimeout;
   bool get _supportsFullScreen => defaultTargetPlatform == TargetPlatform.macOS;
   ResolvedSource get _current => _resolvedSources[_currentIndex];
 
@@ -569,7 +572,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _pendingFallbackSourceId = _current.source.id;
       _pendingFallbackError = message;
       _fallbackWaitTimer?.cancel();
-      _fallbackWaitTimer = Timer(_fallbackWaitTimeout, _finishFallbackWait);
+      _fallbackWaitTimer = Timer(_fallbackWaitDuration, _finishFallbackWait);
       setState(() {
         _waitingForFallback = true;
         _playbackError = null;
@@ -655,7 +658,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _playbackError = null;
     });
     _fallbackWaitTimer?.cancel();
-    _fallbackWaitTimer = Timer(_fallbackWaitTimeout, _finishRetryWait);
+    _fallbackWaitTimer = Timer(_fallbackWaitDuration, _finishRetryWait);
     try {
       final scope = AppScope.of(context);
       final stream = await scope.registry.resolveSource(
@@ -1217,7 +1220,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (kDebugMode) {
       debugPrint(
         '[PlaybackSources] fallback_wait_timeout '
-        'timeout_s=${_fallbackWaitTimeout.inSeconds}',
+        'timeout_s=${_fallbackWaitDuration.inSeconds}',
       );
     }
     final message = _pendingFallbackError;
@@ -1233,7 +1236,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (kDebugMode) {
       debugPrint(
         '[PlaybackSources] retry_timeout '
-        'timeout_s=${_fallbackWaitTimeout.inSeconds}',
+        'timeout_s=${_fallbackWaitDuration.inSeconds}',
       );
     }
     setState(() {

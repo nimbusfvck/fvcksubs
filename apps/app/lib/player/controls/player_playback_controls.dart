@@ -134,6 +134,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   double _playbackSpeed = 1.0;
   String? _activeSubtitleLabel;
   String? _activeQualityLabel;
+  int _qualityRequestGeneration = 0;
+  bool _qualitySwitching = false;
+  AppPlayerController? _qualityController;
 
   /// Whether a rendition was chosen, here or in Settings, rather than left to
   /// the player. Only a viewer's own pick puts the tick on a height; Auto
@@ -234,13 +237,23 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   void _syncVideoValue() {
     final ValueListenable<AppPlayerValue>? next = widget.controller?.value;
-    if (identical(next, _videoValue)) return;
+    if (identical(next, _videoValue) &&
+        identical(_qualityController, widget.controller)) {
+      return;
+    }
+    final controllerChanged = !identical(_qualityController, widget.controller);
+    _qualityController = widget.controller;
     _controlsCubit.cancelSeek();
     _videoValue?.removeListener(_onValueChanged);
     _stopPausedLiveEdgeTracking();
     _liveEdge = Duration.zero;
     _liveEdgeLead = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
+    if (controllerChanged) {
+      _qualityRequestGeneration++;
+      _qualitySwitching = false;
+      _activeQualityLabel = _qualityLabel(widget.controller?.activeQuality);
+    }
     _publishControlState();
   }
 
@@ -297,6 +310,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       }
     } else {
       _syncActiveSubtitleLabel();
+      if (!_qualitySwitching) {
+        _activeQualityLabel = _qualityLabel(widget.controller?.activeQuality);
+      }
     }
 
     if (_wasBuffering && !isBuffering && isPlaying) _restartHideTimer();
@@ -339,6 +355,17 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   void _syncActiveSubtitleLabel() {
     final label = widget.controller?.activeSubtitle?.label;
     _activeSubtitleLabel = label == null ? null : subtitleIndicatorLabel(label);
+  }
+
+  String? _qualityLabel(AppQualityTrack? track) {
+    if (track == null || track.height <= 0) return null;
+    return qualityRungLabel(width: track.width, height: track.height) ??
+        '${track.height}p';
+  }
+
+  String _requestedQualityLabel(AppQualityTrack track) {
+    if (track.id == 'auto' || track.height <= 0) return 'Auto';
+    return _qualityLabel(track) ?? '${track.height}p';
   }
 
   void _restartHideTimer() {
@@ -622,13 +649,17 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   Future<void> _openQualityPicker() async {
+    if (_qualitySwitching) {
+      _revealControls();
+      return;
+    }
     _hideTimer?.cancel();
     final tracks = widget.controller?.qualityTracks ?? const [];
     final active = widget.controller?.activeQuality;
     final pinned =
         _qualityPinned ??
         (AppScope.of(context).qualityPreferenceController.maxHeight != null);
-    final picked = await showModalBottomSheet<AppQualityTrack>(
+    await showModalBottomSheet<void>(
       context: _modalContext,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
@@ -639,20 +670,52 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         tracks: tracks,
         current: pinned ? active : null,
         playing: active,
+        onSelect: _requestQuality,
       ),
     );
     if (!mounted) return;
-    if (picked != null) {
-      widget.onSettling(_settlingGrace(trackSwitch: true));
-      unawaited(widget.controller?.setQuality(picked));
-      final height = picked.height;
-      _qualityPinned = height > 0;
-      _activeQualityLabel = height > 0
-          ? qualityRungLabel(width: picked.width, height: height)
-          : null;
-      _publishControlState();
-    }
     _revealControls();
+  }
+
+  Future<bool> _requestQuality(AppQualityTrack picked) async {
+    if (!mounted) return false;
+    widget.onSettling(_settlingGrace(trackSwitch: true));
+    final controller = widget.controller;
+    if (controller == null) return false;
+    final requestGeneration = ++_qualityRequestGeneration;
+    final previousLabel =
+        _activeQualityLabel ?? _qualityLabel(controller.activeQuality);
+    final previousPinned = _qualityPinned;
+    _qualitySwitching = true;
+    _activeQualityLabel = '${_requestedQualityLabel(picked)}…';
+    _publishControlState();
+    try {
+      await controller.setQuality(picked);
+      if (!mounted ||
+          requestGeneration != _qualityRequestGeneration ||
+          !identical(controller, widget.controller)) {
+        return false;
+      }
+      _qualityPinned = picked.id == 'auto' ? false : picked.height > 0;
+      _qualitySwitching = false;
+      _activeQualityLabel = _qualityLabel(controller.activeQuality);
+      _publishControlState();
+      return true;
+    } catch (error) {
+      if (!mounted ||
+          requestGeneration != _qualityRequestGeneration ||
+          !identical(controller, widget.controller)) {
+        return false;
+      }
+      _qualityPinned = previousPinned;
+      _qualitySwitching = false;
+      _activeQualityLabel = previousLabel;
+      if (kDebugMode) {
+        debugPrint('[Player] quality_switch_rejected ${error.runtimeType}');
+      }
+      _publishControlState();
+      return false;
+    }
   }
 
   Future<void> _openAudioPicker() async {

@@ -21,7 +21,10 @@ class VideoPlayerStartup {
     required this.log,
     required this.maxHeight,
     this.preferredQualityDone = false,
-    this.liveInitializeTimeout = const Duration(seconds: 8),
+    // Live HLS can expose a valid playlist and segment before AVPlayer marks
+    // the item ready. Keep replay/source-renewal initialization alive long
+    // enough for that first moving live window to become playable.
+    this.liveInitializeTimeout = const Duration(seconds: 20),
     this.initialSeekTimeout = const Duration(seconds: 8),
   });
 

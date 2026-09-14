@@ -32,4 +32,7 @@ class CatalogBinding {
   /// Whether this is a preview feed (Shorts) catalog rather than an ordinary
   /// Home browse shelf.
   bool get isPreviewSurface => catalog.surface == CatalogSurface.preview;
+
+  /// Whether this catalog supplies Home's Featured Hero rather than a shelf.
+  bool get isFeaturedSurface => catalog.surface == CatalogSurface.featured;
 }

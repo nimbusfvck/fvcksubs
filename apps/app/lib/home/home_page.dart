@@ -5,12 +5,15 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
 import '../addons/installer_controller.dart';
 import '../catalog/category_page.dart';
+import '../catalog/live_timeline_page.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
+import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 import '../widgets/centered_content.dart';
@@ -24,7 +27,10 @@ import 'category_chips.dart';
 import 'continue_watching_shelf.dart';
 import 'featured_controller.dart';
 import 'featured_hero.dart';
+import 'live_now_shelf.dart';
 import '../settings/nsfw_controller.dart';
+
+const _categoryHeaderAnimationDuration = Duration(milliseconds: 260);
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -78,8 +84,16 @@ class _HomePageState extends State<HomePage> {
 
   void _openCategory(String category) {
     if (category.toLowerCase() == 'all') return;
+    final scope = AppScope.of(context);
+    final opensTimeline = scope.registry
+        .catalogsFor(category)
+        .any((binding) => binding.catalog.display == CatalogDisplay.timeline);
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => CategoryPage(category: category)),
+      MaterialPageRoute<void>(
+        builder: (_) => opensTimeline
+            ? CatalogTimelinePage(category: category)
+            : CategoryPage(category: category),
+      ),
     );
   }
 
@@ -195,6 +209,8 @@ class _HomePageState extends State<HomePage> {
   Widget _body(BuildContext context, AppScope scope) {
     final registry = scope.registry;
     final categories = registry.categories;
+    final useRail =
+        scope.deviceClass.isTv || AppBreakpoints.usesNavigationRail(context);
 
     if (categories.isEmpty) {
       return const Scaffold(
@@ -306,6 +322,16 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+                    if (selected.toLowerCase() == 'all')
+                      SliverToBoxAdapter(
+                        child: CenteredContent(
+                          child: LiveNowShelf(
+                            catalogCache: scope.catalogCache,
+                            registry: registry,
+                            refreshToken: _generation,
+                          ),
+                        ),
+                      ),
                     if (bindings.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -324,7 +350,7 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-              if (categoryChoices.isNotEmpty)
+              if (categoryChoices.isNotEmpty && !useRail)
                 Positioned(
                   top: MediaQuery.paddingOf(context).top + kToolbarHeight,
                   left: 0,
@@ -335,12 +361,12 @@ class _HomePageState extends State<HomePage> {
                       offset: _showCategoryHeader
                           ? Offset.zero
                           : const Offset(0, -1),
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
+                      duration: _categoryHeaderAnimationDuration,
+                      curve: Curves.easeInOutCubic,
                       child: AnimatedOpacity(
                         opacity: _showCategoryHeader ? 1 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
+                        duration: _categoryHeaderAnimationDuration,
+                        curve: Curves.easeInOutCubic,
                         child: IgnorePointer(
                           ignoring: !_showCategoryHeader,
                           child: Material(
@@ -355,8 +381,8 @@ class _HomePageState extends State<HomePage> {
                                   // no visible category chip is selected.
                                   selected: hasAllCategory ? '' : selected,
                                   onSelected: _openCategory,
-                                  backgroundColor:
-                                      AppColors.surfaceDarkElevated,
+                                  backgroundColor: AppColors.surfaceDarkElevated
+                                      .withValues(alpha: 0.62),
                                   selectedColor: AppColors.onDark,
                                 ),
                               ),

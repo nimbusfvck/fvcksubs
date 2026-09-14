@@ -106,6 +106,7 @@ class _CatalogShimmerSection extends StatelessWidget {
         CatalogDisplay.row => const _RowShimmer(),
         CatalogDisplay.grid => const _GridShimmer(),
         CatalogDisplay.list => const _ListShimmer(),
+        CatalogDisplay.timeline => const _ListShimmer(),
       },
     ],
   );

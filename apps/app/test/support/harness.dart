@@ -430,6 +430,7 @@ MediaItemV2 fakeItem({
   String? statusLabel,
   DateTime? startsAt,
   List<Participant> participants = const [],
+  EventBranding? branding,
   ImageRef? poster,
   String? group,
 }) {
@@ -456,6 +457,7 @@ MediaItemV2 fakeItem({
       label: statusLabel,
     ),
     participants: participants,
+    branding: branding,
   );
 }
 
