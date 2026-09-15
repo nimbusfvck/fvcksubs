@@ -343,7 +343,10 @@ class _VideoPlayerControllerAdapter
           'language=${track.language} format=$format',
         );
       }
-      final captionDownload = await _downloadCaptionFile(track.url);
+      final captionDownload = await _downloadCaptionFile(
+        track.url,
+        headers: track.headers,
+      );
       if (kDebugMode) {
         final captions = captionDownload.captionFile.captions;
         debugPrint(
