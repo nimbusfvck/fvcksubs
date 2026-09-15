@@ -28,6 +28,9 @@ import 'continue_watching_shelf.dart';
 import 'featured_controller.dart';
 import 'featured_hero.dart';
 import 'live_now_shelf.dart';
+import 'recommended_shelf.dart';
+import 'surprise_me_banner.dart';
+import 'top_ten_shelf.dart';
 import '../settings/nsfw_controller.dart';
 
 const _categoryHeaderAnimationDuration = Duration(milliseconds: 260);
@@ -320,6 +323,31 @@ class _HomePageState extends State<HomePage> {
                             controller: scope.libraryController,
                             registry: registry,
                           ),
+                        ),
+                      ),
+                    if (selected.toLowerCase() == 'all')
+                      SliverToBoxAdapter(
+                        child: RecommendedShelf(
+                          controller: scope.libraryController,
+                          registry: registry,
+                          catalogCache: scope.catalogCache,
+                          refreshToken: _generation,
+                        ),
+                      ),
+                    if (selected.toLowerCase() == 'all')
+                      SliverToBoxAdapter(
+                        child: TopTenShelf(
+                          registry: registry,
+                          catalogCache: scope.catalogCache,
+                          refreshToken: _generation,
+                        ),
+                      ),
+                    if (selected.toLowerCase() == 'all')
+                      SliverToBoxAdapter(
+                        child: SurpriseMeBanner(
+                          registry: registry,
+                          catalogCache: scope.catalogCache,
+                          refreshToken: _generation,
                         ),
                       ),
                     if (selected.toLowerCase() == 'all')

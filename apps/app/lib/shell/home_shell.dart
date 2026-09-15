@@ -83,7 +83,7 @@ class _HomeShellState extends State<HomeShell> {
             BlocBuilder<AddonsController, AddonsState>(
               bloc: scope.addonsController,
               builder: (context, _) => AppNavRail(
-                selectedIndex: index,
+                selectedIndex: _selectedCategory == null ? index : -1,
                 onDestinationSelected: _select,
                 categories: [
                   for (final category in scope.registry.categories)

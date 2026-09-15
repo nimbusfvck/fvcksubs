@@ -94,7 +94,7 @@ class _CategoryRailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.onDark : AppColors.onDarkSoft;
+    final color = selected ? AppColors.brandAccent : AppColors.onDarkSoft;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -105,9 +105,7 @@ class _CategoryRailRow extends StatelessWidget {
         selected: selected,
         label: categoryLabel(category),
         child: Material(
-          color: selected
-              ? AppColors.brandAccent.withValues(alpha: 0.18)
-              : Colors.transparent,
+          color: selected ? AppColors.surfaceDarkElevated : Colors.transparent,
           borderRadius: AppRadius.md,
           child: InkWell(
             onTap: onTap,

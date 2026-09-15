@@ -15,8 +15,8 @@ import '../home/featured_controller.dart';
 import '../home/featured_hero.dart';
 import '../settings/nsfw_controller.dart';
 import '../theme/tokens.dart';
-import '../widgets/app_page_bar.dart';
 import '../widgets/centered_content.dart';
+import '../widgets/media_hero_flexible_space.dart';
 import '../widgets/media_hero_layout.dart';
 import 'plugin_selector.dart';
 
@@ -179,19 +179,12 @@ class _CategoryPageState extends State<CategoryPage> {
     ];
     final groups = groupHomeCatalogs(bindings);
     _ensureFeaturedLoaded(scope, bindings);
+    final featuredHeight = _featuredItems.isEmpty
+        ? null
+        : MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)) -
+              MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      appBar: AppPageBar(
-        title: _categoryLabel(widget.category),
-        actions: [
-          if (plugins.length > 1 && pluginId != null)
-            PluginSelector(
-              plugins: plugins,
-              selectedId: pluginId,
-              onSelected: (id) => _selectPlugin(scope, id),
-            ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
@@ -199,15 +192,38 @@ class _CategoryPageState extends State<CategoryPage> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            if (_featuredItems.isNotEmpty)
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaHeroLayout.heightForViewport(
-                    MediaQuery.sizeOf(context),
-                  ),
-                  child: FeaturedHero(items: _featuredItems),
-                ),
+            SliverAppBar(
+              expandedHeight: featuredHeight,
+              pinned: true,
+              floating: false,
+              flexibleSpace: featuredHeight == null
+                  ? null
+                  : MediaHeroFlexibleSpace(
+                      expandedHeight: featuredHeight,
+                      collapsedHeight:
+                          kToolbarHeight + MediaQuery.paddingOf(context).top,
+                      child: FeaturedHero(items: _featuredItems),
+                    ),
+              backgroundColor: AppColors.surfaceDark,
+              foregroundColor: AppColors.onDark,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              centerTitle: false,
+              titleSpacing: AppSpacing.md,
+              title: Text(
+                _categoryLabel(widget.category),
+                style: AppTypography.titleLg.copyWith(color: AppColors.onDark),
               ),
+              actions: [
+                if (plugins.length > 1 && pluginId != null)
+                  PluginSelector(
+                    plugins: plugins,
+                    selectedId: pluginId,
+                    onSelected: (id) => _selectPlugin(scope, id),
+                  ),
+              ],
+            ),
             if (bindings.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,

@@ -18,28 +18,30 @@ class ArtworkPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: 'No artwork available',
     image: true,
-    child: switch (title) {
-      final label? => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+    child: Material(
+      color: AppColors.surfaceDarkElevated,
+      child: switch (title) {
+        final label? => SizedBox.expand(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+                ),
+              ),
             ),
           ),
         ),
-      ),
-      _ => ExcludeSemantics(
-        child: ColoredBox(
-          color: AppColors.surfaceDarkElevated,
+        _ => ExcludeSemantics(
           child: Center(
             child: Icon(icon, size: iconSize, color: AppColors.onDarkSoft),
           ),
         ),
-      ),
-    },
+      },
+    ),
   );
 }

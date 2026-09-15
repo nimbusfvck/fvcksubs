@@ -130,9 +130,8 @@ void main() {
     expect(find.text('2026'), findsOneWidget);
     expect(find.text('★ 8.4'), findsOneWidget);
     final yearTopLeft = tester.getTopLeft(find.text('2026'));
-    final ratingTopRight = tester.getTopRight(find.text('★ 8.4'));
-    expect(yearTopLeft.dy, closeTo(ratingTopRight.dy, 1));
-    expect(yearTopLeft.dx, lessThan(ratingTopRight.dx));
+    final posterBottom = tester.getBottomLeft(find.byType(Hero)).dy;
+    expect(yearTopLeft.dy, greaterThan(posterBottom));
   });
 
   testWidgets(

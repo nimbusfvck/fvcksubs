@@ -20,7 +20,7 @@ bool isMatchBannerItem(MediaItemV2 item) =>
 bool isPosterMediaItem(MediaItemV2 item) =>
     item.artwork?.portrait != null && item is! EventItemV2;
 
-const double _posterTitleHeight = 18;
+const double _posterTitleHeight = 34;
 
 double mediaCardPosterHeight(double width) =>
     width * 1.5 + AppSpacing.xs + _posterTitleHeight;
@@ -33,6 +33,8 @@ class MediaCardV2 extends StatelessWidget {
     this.onLongPress,
     this.showSubtitle = true,
     this.heroTag,
+    this.enableHero = true,
+    this.rank,
   });
 
   final MediaItemV2 item;
@@ -42,6 +44,13 @@ class MediaCardV2 extends StatelessWidget {
 
   /// Optional route-specific tag used when the same item appears more than once.
   final Object? heroTag;
+
+  /// Disables the shared artwork flight when a page renders many copies of
+  /// the same Home cards at once.
+  final bool enableHero;
+
+  /// Optional rank badge used by the app-owned Top 10 shelf.
+  final int? rank;
 
   @override
   Widget build(BuildContext context) => Clickable(
@@ -61,7 +70,8 @@ class MediaCardV2 extends StatelessWidget {
       return _Poster(
         item: value,
         image: portrait,
-        heroTag: heroTag ?? mediaArtworkHeroTag(value.ref),
+        heroTag: enableHero ? heroTag ?? mediaArtworkHeroTag(value.ref) : null,
+        rank: rank,
       );
     }
     if (value is EventItemV2) {
@@ -83,11 +93,13 @@ class _Poster extends StatelessWidget {
     required this.item,
     required this.image,
     required this.heroTag,
+    this.rank,
   });
 
   final MediaItemV2 item;
   final ImageRef image;
-  final Object heroTag;
+  final Object? heroTag;
+  final int? rank;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -100,29 +112,23 @@ class _Poster extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Hero(
-                tag: heroTag,
-                child: LayoutBuilder(
-                  builder: (context, constraints) => CachedNetworkImage(
-                    imageUrl: image.url,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    fadeInDuration: Duration.zero,
-                    memCacheWidth: artworkCacheDimension(
-                      context,
-                      constraints.maxWidth,
+              _PosterImage(item: item, image: image, heroTag: heroTag),
+              if (item.rating case final rating?)
+                _PosterRatingBadge(rating: rating),
+              if (rank case final value?) _PosterRankBadge(rank: value),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadius.lg,
+                      border: Border.all(
+                        color: AppColors.outlineDark,
+                        width: 0.6,
+                      ),
                     ),
-                    placeholder: (_, _) =>
-                        ArtworkPlaceholder(title: item.title),
-                    errorWidget: (_, _, _) =>
-                        ArtworkPlaceholder(title: item.title),
                   ),
                 ),
               ),
-              if (item.rating case final rating?)
-                _PosterRatingBadge(rating: rating),
-              if (item.releaseYear case final year?)
-                _PosterYearBadge(year: year),
             ],
           ),
         ),
@@ -132,16 +138,60 @@ class _Poster extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         child: SizedBox(
           height: _posterTitleHeight,
-          child: Text(
-            item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+              ),
+              if (item.releaseYear case final year?)
+                Text(
+                  year.toString(),
+                  maxLines: 1,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+            ],
           ),
         ),
       ),
     ],
   );
+}
+
+class _PosterImage extends StatelessWidget {
+  const _PosterImage({
+    required this.item,
+    required this.image,
+    required this.heroTag,
+  });
+
+  final MediaItemV2 item;
+  final ImageRef image;
+  final Object? heroTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageWidget = LayoutBuilder(
+      builder: (context, constraints) => CachedNetworkImage(
+        imageUrl: image.url,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        fadeInDuration: const Duration(milliseconds: 220),
+        fadeOutDuration: const Duration(milliseconds: 100),
+        fadeInCurve: Curves.easeOut,
+        memCacheWidth: artworkCacheDimension(context, constraints.maxWidth),
+        placeholder: (_, _) => ArtworkPlaceholder(title: item.title),
+        errorWidget: (_, _, _) => ArtworkPlaceholder(title: item.title),
+      ),
+    );
+    final tag = heroTag;
+    return tag == null ? imageWidget : Hero(tag: tag, child: imageWidget);
+  }
 }
 
 class _PosterRatingBadge extends StatelessWidget {
@@ -156,7 +206,7 @@ class _PosterRatingBadge extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
-        vertical: 2,
+        vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceDark.withValues(alpha: 0.7),
@@ -182,27 +232,47 @@ class _PosterRatingBadge extends StatelessWidget {
   );
 }
 
-class _PosterYearBadge extends StatelessWidget {
-  const _PosterYearBadge({required this.year});
+class _PosterRankBadge extends StatelessWidget {
+  const _PosterRankBadge({required this.rank});
 
-  final int year;
+  final int rank;
 
   @override
   Widget build(BuildContext context) => Positioned(
-    left: AppSpacing.xs,
-    top: AppSpacing.xs,
+    top: 0,
+    left: 0,
     child: Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
         vertical: 2,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark.withValues(alpha: 0.7),
-        borderRadius: AppRadius.sm,
+      decoration: const BoxDecoration(
+        color: AppColors.liveAccent,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(AppRadius.lgValue),
+          bottomRight: Radius.circular(AppRadius.smValue),
+        ),
       ),
-      child: Text(
-        year.toString(),
-        style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'TOP',
+            style: AppTypography.liveBadge.copyWith(
+              color: AppColors.onDark,
+              fontSize: 8,
+              height: 1,
+            ),
+          ),
+          Text(
+            rank.toString(),
+            style: AppTypography.liveBadge.copyWith(
+              color: AppColors.onDark,
+              fontSize: 12,
+              height: 1.1,
+            ),
+          ),
+        ],
       ),
     ),
   );
