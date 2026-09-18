@@ -18,6 +18,11 @@ class MediaHeroCard extends StatefulWidget {
     required this.foreground,
     this.preview,
     this.showGradient = true,
+    this.overlayGradient,
+    this.bottomBlurSigma = 20,
+    this.bottomBlurHeightFactor = 0.44,
+    this.bottomBlurFadeStop = 0.60,
+    this.artworkDim = 0,
     this.artworkAlignment = Alignment.topCenter,
     this.fallback,
     this.heroTag,
@@ -40,10 +45,32 @@ class MediaHeroCard extends StatefulWidget {
     stops: [0, 0.05, 0.09, 0.12, 0.52, 0.60, 0.74, 0.90, 1],
   );
 
+  static const detailGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color(0x00000000),
+      Color(0x08000000),
+      Color(0x30000000),
+      Color(0x80101010),
+      Color(0xC8101010),
+      Color(0xF0101010),
+      Color(0xFA101010),
+      Color(0xFF101010),
+      Color(0xFF101010),
+    ],
+    stops: [0, 0.16, 0.30, 0.42, 0.56, 0.70, 0.88, 0.98, 1],
+  );
+
   final MediaItemV2 item;
   final Widget foreground;
   final Widget? preview;
   final bool showGradient;
+  final Gradient? overlayGradient;
+  final double bottomBlurSigma;
+  final double bottomBlurHeightFactor;
+  final double bottomBlurFadeStop;
+  final double artworkDim;
   final Alignment artworkAlignment;
   final Widget? fallback;
   final Object? heroTag;
@@ -121,11 +148,14 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
       fit: StackFit.expand,
       children: [
         artwork,
-        const _HeroBottomBlur(),
+        if (widget.artworkDim > 0)
+          ColoredBox(color: Colors.black.withValues(alpha: widget.artworkDim)),
         if (widget.preview case final preview?) Positioned.fill(child: preview),
         if (widget.showGradient)
-          const DecoratedBox(
-            decoration: BoxDecoration(gradient: MediaHeroCard.gradient),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: widget.overlayGradient ?? MediaHeroCard.gradient,
+            ),
           ),
       ],
     );
@@ -137,7 +167,7 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
         Positioned.fill(
           child: ClipRect(
             child: Transform.translate(
-              offset: Offset(0, -collapse * 0.28),
+              offset: Offset(0, mediaHeroParallaxOffset(context, collapse)),
               child: backdrop,
             ),
           ),
@@ -148,26 +178,34 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
   }
 }
 
-class _HeroBottomBlur extends StatelessWidget {
-  const _HeroBottomBlur();
+class MediaHeroBottomBlur extends StatelessWidget {
+  const MediaHeroBottomBlur({
+    required this.sigma,
+    required this.heightFactor,
+    required this.fadeStop,
+  });
+
+  final double sigma;
+  final double heightFactor;
+  final double fadeStop;
 
   @override
   Widget build(BuildContext context) => Align(
     alignment: Alignment.bottomCenter,
     child: FractionallySizedBox(
       widthFactor: 1,
-      heightFactor: 0.44,
+      heightFactor: heightFactor,
       child: ClipRect(
         child: ShaderMask(
           blendMode: BlendMode.dstIn,
-          shaderCallback: (bounds) => const LinearGradient(
+          shaderCallback: (bounds) => LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [Colors.transparent, Colors.black, Colors.black],
-            stops: [0, 0.60, 1],
+            stops: [0, fadeStop, 1],
           ).createShader(bounds),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
             child: const ColoredBox(color: Colors.transparent),
           ),
         ),

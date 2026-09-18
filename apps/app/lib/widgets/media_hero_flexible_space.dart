@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 
+/// Returns a pixel-aligned vertical parallax offset for hero layers.
+double mediaHeroParallaxOffset(BuildContext context, double collapse) {
+  final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+  final offset = -collapse * 0.28;
+  return (offset * devicePixelRatio).round() / devicePixelRatio;
+}
+
 /// Shared parallax and collapse behavior for Home and Detail hero cards.
 class MediaHeroFlexibleSpace extends StatelessWidget {
   const MediaHeroFlexibleSpace({

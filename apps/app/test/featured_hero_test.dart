@@ -92,6 +92,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('featured summary shows the media overview', (tester) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'with-overview',
+        ),
+        title: 'Movie with overview',
+        overview: 'A short synopsis for the featured movie.',
+        artwork: Artwork(
+          portrait: ImageRef('https://image.example/overview-poster.jpg'),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('A short synopsis for the featured movie.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getBottomLeft(find.text('A short synopsis for the featured movie.'))
+          .dy,
+      lessThan(tester.getTopLeft(find.byKey(const Key('featured-play'))).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('large featured summary and actions align to the left', (
     tester,
   ) async {

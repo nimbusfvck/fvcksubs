@@ -15,10 +15,14 @@ class MediaHeroSummary extends StatelessWidget {
     required this.item,
     this.extra,
     this.actions,
+    this.description,
     this.titleTextKey,
     this.titleLogoKey,
     this.alignStart = false,
     this.showRatings = false,
+    this.ratingsOverride,
+    this.actionsBeforeMeta = false,
+    this.afterActions,
   });
 
   static const textShadows = [
@@ -28,10 +32,14 @@ class MediaHeroSummary extends StatelessWidget {
   final MediaItemV2 item;
   final Widget? extra;
   final Widget? actions;
+  final String? description;
   final Key? titleTextKey;
   final Key? titleLogoKey;
   final bool alignStart;
   final bool showRatings;
+  final List<MediaRating>? ratingsOverride;
+  final bool actionsBeforeMeta;
+  final Widget? afterActions;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -46,32 +54,62 @@ class MediaHeroSummary extends StatelessWidget {
         logoKey: titleLogoKey,
         alignStart: alignStart,
       ),
-      const SizedBox(height: AppSpacing.xs),
-      _MediaHeroMeta(
-        item: item,
-        alignStart: alignStart,
-        showRatings: showRatings,
-      ),
-      if (item.subtitle case final subtitle?) ...[
+      if (actionsBeforeMeta) ...[
+        if (extra case final extra?) ...[
+          const SizedBox(height: AppSpacing.xs),
+          extra,
+        ],
+        if (actions case final actions?) ...[
+          const SizedBox(height: AppSpacing.sm),
+          actions,
+        ],
+        if (afterActions case final afterActions?) ...[
+          const SizedBox(height: AppSpacing.sm),
+          afterActions,
+        ],
+      ] else ...[
         const SizedBox(height: AppSpacing.xs),
-        Text(
-          subtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: alignStart ? TextAlign.start : TextAlign.center,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.onDarkSoft,
-            shadows: textShadows,
-          ),
+        _MediaHeroMeta(
+          item: item,
+          alignStart: alignStart,
+          showRatings: showRatings,
+          ratings: ratingsOverride ?? item.ratings,
         ),
-      ],
-      if (extra case final extra?) ...[
-        const SizedBox(height: AppSpacing.xs),
-        extra,
-      ],
-      if (actions case final actions?) ...[
-        const SizedBox(height: AppSpacing.sm),
-        actions,
+        if (item.subtitle case final subtitle?) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignStart ? TextAlign.start : TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              shadows: textShadows,
+            ),
+          ),
+        ],
+        if (extra case final extra?) ...[
+          const SizedBox(height: AppSpacing.xs),
+          extra,
+        ],
+        if (description case final value? when value.trim().isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value.trim(),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignStart ? TextAlign.start : TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              height: 1.35,
+              shadows: textShadows,
+            ),
+          ),
+        ],
+        if (actions case final actions?) ...[
+          const SizedBox(height: AppSpacing.sm),
+          actions,
+        ],
       ],
     ],
   );
@@ -128,8 +166,8 @@ class _MediaHeroTitle extends StatelessWidget {
     );
     if (logo == null) return fallback;
     final largeScreen = MediaHeroLayout.isLargeScreen(context);
-    final logoWidth = largeScreen ? 360.0 : 280.0;
-    final logoHeight = largeScreen ? 68.0 : 56.0;
+    final logoWidth = largeScreen ? 440.0 : 340.0;
+    final logoHeight = largeScreen ? 84.0 : 76.0;
     return Semantics(
       label: item.title,
       image: true,
@@ -166,11 +204,13 @@ class _MediaHeroMeta extends StatelessWidget {
     required this.item,
     required this.alignStart,
     required this.showRatings,
+    required this.ratings,
   });
 
   final MediaItemV2 item;
   final bool alignStart;
   final bool showRatings;
+  final List<MediaRating> ratings;
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +273,7 @@ class _MediaHeroMeta extends StatelessWidget {
             ),
           ),
         if (showRatings)
-          for (final rating in item.ratings) _MediaRatingChip(rating: rating),
+          for (final rating in ratings) _MediaRatingChip(rating: rating),
       ],
     );
   }
@@ -261,11 +301,12 @@ class _MediaRatingChip extends StatelessWidget {
               width: 16,
               height: 16,
               fit: BoxFit.contain,
-              errorWidget: (_, _, _) => _ratingFallbackIcon(rating.source),
+              errorWidget: (_, _, _) =>
+                  RatingSourceBadge(source: rating.source),
             ),
           )
         else
-          _ratingFallbackIcon(rating.source),
+          RatingSourceBadge(source: rating.source),
         const SizedBox(width: AppSpacing.xxs),
         Text(
           '${_ratingLabel(rating.source)} $score',
@@ -279,23 +320,57 @@ class _MediaRatingChip extends StatelessWidget {
   }
 }
 
-Widget _ratingFallbackIcon(String source) => Container(
-  width: 16,
-  height: 16,
-  alignment: Alignment.center,
-  decoration: BoxDecoration(
-    color: Colors.white.withValues(alpha: 0.18),
-    borderRadius: BorderRadius.circular(3),
-  ),
-  child: Text(
-    _ratingLabel(source).substring(0, 1),
-    style: const TextStyle(
-      color: Colors.white,
-      fontSize: 9,
-      fontWeight: FontWeight.w800,
-    ),
-  ),
-);
+class RatingSourceBadge extends StatelessWidget {
+  const RatingSourceBadge({super.key, required this.source});
+
+  final String source;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = source.toLowerCase();
+    final localAsset = switch (normalized) {
+      'imdb' => ('assets/logo/imdb.webp', 25.0),
+      'rottentomatoes' => ('assets/logo/rotten.webp', 20.0),
+      _ => null,
+    };
+    if (localAsset case final asset?) {
+      return SizedBox(
+        width: asset.$2,
+        height: 18,
+        child: Image.asset(asset.$1, fit: BoxFit.contain),
+      );
+    }
+    final (label, background, foreground, width) = switch (normalized) {
+      'imdb' => ('IMDb', const Color(0xFFF5C518), Colors.black, 25.0),
+      'rottentomatoes' => ('RT', const Color(0xFFD9232E), Colors.white, 20.0),
+      'metacritic' => ('M', const Color(0xFF2EBD59), Colors.white, 18.0),
+      _ => (
+        source.isEmpty ? '?' : source.characters.first.toUpperCase(),
+        Colors.white.withValues(alpha: 0.18),
+        Colors.white,
+        18.0,
+      ),
+    };
+    return Container(
+      width: width,
+      height: 18,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: label == 'IMDb' ? 8 : 9,
+          fontWeight: FontWeight.w900,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
 
 String _ratingLabel(String source) => switch (source) {
   'imdb' => 'IMDb',

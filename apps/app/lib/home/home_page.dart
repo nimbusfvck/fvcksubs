@@ -249,8 +249,11 @@ class _HomePageState extends State<HomePage> {
         final viewport = MediaQuery.sizeOf(context);
         final featuredHeight = !showFeatured
             ? null
-            : MediaHeroLayout.heightForViewport(viewport) -
-                  MediaQuery.paddingOf(context).top;
+            : MediaHeroLayout.snapToDevicePixel(
+                context,
+                MediaHeroLayout.heightForViewport(viewport) -
+                    MediaQuery.paddingOf(context).top,
+              );
         return Scaffold(
           body: Stack(
             fit: StackFit.expand,
@@ -284,6 +287,8 @@ class _HomePageState extends State<HomePage> {
                       backgroundColor: AppColors.surfaceDark,
                       foregroundColor: AppColors.onDark,
                       surfaceTintColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      forceMaterialTransparency: true,
                       elevation: 0,
                       scrolledUnderElevation: 0,
                       centerTitle: false,

@@ -19,6 +19,12 @@ abstract final class MediaHeroLayout {
   static bool isLargeScreen(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= AppBreakpoints.railWidth;
 
+  /// Aligns a hero boundary to a physical device pixel.
+  static double snapToDevicePixel(BuildContext context, double value) {
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    return (value * devicePixelRatio).round() / devicePixelRatio;
+  }
+
   static double homeOverlayOpacity(double collapse, {double? maxCollapse}) {
     final fadeStart = maxCollapse == null
         ? 0.0

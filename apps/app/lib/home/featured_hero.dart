@@ -266,11 +266,12 @@ class _FeaturedHeroState extends State<FeaturedHero>
       child: Stack(
         fit: StackFit.expand,
         children: [
+          const ColoredBox(color: AppColors.surfaceDark),
           Positioned.fill(
             child: IgnorePointer(
               child: ClipRect(
                 child: Transform.translate(
-                  offset: Offset(0, -collapse * 0.28),
+                  offset: Offset(0, mediaHeroParallaxOffset(context, collapse)),
                   child: _FeaturedPreview(
                     item: activeItem,
                     pageController: _pageController,
@@ -316,9 +317,16 @@ class _FeaturedHeroState extends State<FeaturedHero>
             child: IgnorePointer(
               child: ClipRect(
                 child: Transform.translate(
-                  offset: Offset(0, -collapse * 0.28),
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(gradient: MediaHeroCard.gradient),
+                  offset: Offset(0, mediaHeroParallaxOffset(context, collapse)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: MediaHeroCard.detailGradient,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1184,6 +1192,7 @@ class _FeaturedDetails extends StatelessWidget {
     return MediaHeroSummary(
       item: media,
       alignStart: alignStart,
+      description: media.overview,
       titleTextKey: const Key('featured-title-text'),
       titleLogoKey: const Key('featured-title-logo'),
       actions: Wrap(

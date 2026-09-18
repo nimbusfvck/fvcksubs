@@ -19,6 +19,7 @@ void main() {
           id: 'catalog-item',
         ),
         title: 'Catalog item',
+        overview: 'A catalog synopsis',
       );
 
       await tester.pumpWidget(
@@ -31,9 +32,49 @@ void main() {
 
       expect(find.text('Could not load details.'), findsNothing);
       expect(find.text('Catalog item'), findsWidgets);
-      expect(find.widgetWithText(FilledButton, 'Watch Now'), findsOneWidget);
+      expect(find.text('A catalog synopsis'), findsOneWidget);
+      final watchButton = find.widgetWithText(FilledButton, 'Watch Now');
+      expect(watchButton, findsOneWidget);
+      expect(
+        tester.getBottomLeft(find.text('A catalog synopsis')).dy,
+        greaterThan(tester.getBottomLeft(watchButton).dy),
+      );
     },
   );
+
+  testWidgets('expanded description does not keep a collapse button', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'expanded-description',
+      ),
+      title: 'Expanded description',
+    );
+    const detail = MediaDetailV2(
+      item: item,
+      description:
+          'A long synopsis that continues beyond the compact hero preview. '
+          'The complete description should remain visible after expanding it.',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsOneWidget);
+    await tester.tap(find.text('Read More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsNothing);
+    expect(find.text('Show Less'), findsNothing);
+  });
 
   testWidgets('back button stays visible after the detail hero scrolls away', (
     tester,
@@ -63,7 +104,7 @@ void main() {
   });
 
   testWidgets(
-    'an unreleased movie still shows Watch Now, with its release date',
+    'an unreleased movie still shows Watch Now without release metadata',
     (tester) async {
       final item = VideoItemV2(
         ref: const MediaRef(
@@ -87,7 +128,7 @@ void main() {
 
       expect(find.widgetWithText(FilledButton, 'Watch Now'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Remind Me'), findsNothing);
-      expect(find.textContaining('Releases'), findsOneWidget);
+      expect(find.textContaining('Releases'), findsNothing);
     },
   );
 

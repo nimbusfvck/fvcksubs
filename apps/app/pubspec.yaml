@@ -77,6 +77,8 @@ flutter:
 
   assets:
     - assets/logo/logo_text.png
+    - assets/logo/imdb.webp
+    - assets/logo/rotten.webp
 
   # Inter is bundled rather than fetched at runtime by google_fonts. With the
   # runtime fetch, the first frame laid out against a narrower fallback font

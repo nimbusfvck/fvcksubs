@@ -25,7 +25,6 @@ import '../widgets/media_hero_layout.dart';
 import '../widgets/media_hero_card.dart';
 import '../widgets/media_hero_flexible_space.dart';
 import '../widgets/media_hero_summary.dart';
-import '../widgets/shimmer_placeholder.dart';
 import 'detail_controller.dart';
 import 'detail_state.dart';
 import 'open_versioned_item.dart';
@@ -122,7 +121,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         final detail = state.detail ?? MediaDetailV2(item: widget.item);
         return Scaffold(
           backgroundColor: AppColors.surfaceDark,
-          body: _buildDetail(detail, metadataLoading: state.metadataLoading),
+          body: _buildDetail(detail),
         );
       },
     );
@@ -159,7 +158,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
     controller.loadGroup(group.id);
   }
 
-  Widget _buildDetail(MediaDetailV2 detail, {required bool metadataLoading}) {
+  Widget _buildDetail(MediaDetailV2 detail) {
     final item = detail.item;
     final trailers = detail.trailers
         .where((trailer) => !_isAutoplayTrailer(trailer))
@@ -168,6 +167,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
     final alignStart = MediaHeroLayout.isLargeScreen(context);
+    // Cover the sliver compositing edge with two physical pixels. One pixel
+    // can still expose the antialiased boundary while the hero is scrolling.
+    final contentOverlap = 2 / MediaQuery.devicePixelRatioOf(context);
 
     return Stack(
       children: [
@@ -177,7 +179,12 @@ class _DetailPageV2State extends State<DetailPageV2> {
             slivers: [
               _DetailHeroSliver(
                 detail: detail,
+                fallbackItem: widget.item,
                 heroTag: widget.heroTag,
+                descriptionExpanded: _descriptionExpanded,
+                onToggleDescription: () => setState(
+                  () => _descriptionExpanded = !_descriptionExpanded,
+                ),
                 actions: _heroActions(
                   detail: detail,
                   item: item,
@@ -186,199 +193,187 @@ class _DetailPageV2State extends State<DetailPageV2> {
                   alignStart: alignStart,
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  AppSpacing.xs,
-                  AppSpacing.md,
-                  AppSpacing.md,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: CenteredContent(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (item.isUpcoming && item.releaseDate != null) ...[
-                          Text(
-                            'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        ],
-                        if (metadataLoading || detail.description != null) ...[
-                          SizedBox(
-                            height: item.isUpcoming && item.releaseDate != null
-                                ? AppSpacing.md
-                                : AppSpacing.sm,
-                          ),
-                          if (metadataLoading)
-                            const _DescriptionShimmer()
-                          else
-                            Text(
-                              detail.description!,
-                              maxLines: _descriptionExpanded ? null : 4,
-                              overflow: _descriptionExpanded
-                                  ? TextOverflow.visible
-                                  : TextOverflow.ellipsis,
-                              style: AppTypography.bodyMd.copyWith(
-                                color: AppColors.onDark,
-                                height: 1.5,
+              SliverToBoxAdapter(
+                child: Transform.translate(
+                  offset: Offset(0, -contentOverlap),
+                  child: Material(
+                    color: AppColors.surfaceDark,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.xs,
+                        AppSpacing.md,
+                        AppSpacing.md,
+                      ),
+                      child: CenteredContent(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (trailers.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              const _SectionTitle('Trailers'),
+                              const SizedBox(height: AppSpacing.sm),
+                              SizedBox(
+                                height: 192,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: trailers.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: AppSpacing.sm),
+                                  itemBuilder: (context, index) {
+                                    final trailer = trailers[index];
+                                    return _TrailerCard(
+                                      trailer: trailer,
+                                      onTap: () =>
+                                          _openTrailer(context, trailer),
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                          if (!metadataLoading)
-                            TextButton(
-                              onPressed: () => setState(
-                                () => _descriptionExpanded =
-                                    !_descriptionExpanded,
+                            ],
+                            if (detail.facts.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              _Facts(values: detail.facts),
+                            ],
+                            if ((alignStart
+                                    ? detail.credits
+                                    : detail.credits
+                                          .where(
+                                            (credit) => !_isDirector(credit),
+                                          )
+                                          .toList())
+                                .isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              const _SectionTitle('Credits'),
+                              const SizedBox(height: AppSpacing.sm),
+                              _Credits(
+                                values: alignStart
+                                    ? detail.credits
+                                    : detail.credits
+                                          .where(
+                                            (credit) => !_isDirector(credit),
+                                          )
+                                          .toList(),
                               ),
-                              child: Text(
-                                _descriptionExpanded
-                                    ? 'Show less'
-                                    : 'Show more',
-                              ),
+                            ],
+                            _episodesSection(
+                              detail: detail,
+                              guide: guide,
+                              groups: groups,
+                              libraryController: libraryController,
                             ),
-                        ],
-                        if (trailers.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          const _SectionTitle('Trailers'),
-                          const SizedBox(height: AppSpacing.sm),
-                          SizedBox(
-                            height: 192,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: trailers.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: AppSpacing.sm),
-                              itemBuilder: (context, index) {
-                                final trailer = trailers[index];
-                                return _TrailerCard(
-                                  trailer: trailer,
-                                  onTap: () => _openTrailer(context, trailer),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                        if (detail.facts.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          _Facts(values: detail.facts),
-                        ],
-                        if (detail.credits.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          const _SectionTitle('Credits'),
-                          const SizedBox(height: AppSpacing.sm),
-                          _Credits(values: detail.credits),
-                        ],
-                        _episodesSection(
-                          detail: detail,
-                          guide: guide,
-                          groups: groups,
-                          libraryController: libraryController,
-                        ),
-                        if (detail.collection case final collection?
-                            when collection.items.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          _SectionTitle(collection.name),
-                          const SizedBox(height: AppSpacing.sm),
-                          SizedBox(
-                            height:
-                                mediaCardPosterHeight(152) +
-                                Clickable.ringBleed * 2,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: collection.items.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: AppSpacing.sm),
-                              itemBuilder: (context, index) {
-                                final collectionItem = collection.items[index];
-                                final heroTag = Object();
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: Clickable.ringBleed,
-                                  ),
-                                  child: SizedBox(
-                                    width: 152,
-                                    child: MediaCardV2(
-                                      item: collectionItem,
-                                      heroTag: heroTag,
-                                      onTap: () => openVersionedItem(
-                                        context,
-                                        VersionedMediaItem(
+                            if (detail.collection case final collection?
+                                when collection.items.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              _SectionTitle(collection.name),
+                              const SizedBox(height: AppSpacing.sm),
+                              SizedBox(
+                                height:
+                                    mediaCardPosterHeight(152) +
+                                    Clickable.ringBleed * 2,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: collection.items.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: AppSpacing.sm),
+                                  itemBuilder: (context, index) {
+                                    final collectionItem =
+                                        collection.items[index];
+                                    final heroTag = Object();
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: Clickable.ringBleed,
+                                      ),
+                                      child: SizedBox(
+                                        width: 152,
+                                        child: MediaCardV2(
                                           item: collectionItem,
-                                        ),
-                                        heroTag: heroTag,
-                                        contentRating: widget.contentRating,
-                                      ),
-                                      onLongPress: () => showMediaCardActions(
-                                        context,
-                                        collectionItem,
-                                        onViewDetails: () => openDetails(
-                                          context,
-                                          collectionItem,
                                           heroTag: heroTag,
-                                          contentRating: widget.contentRating,
+                                          onTap: () => openVersionedItem(
+                                            context,
+                                            VersionedMediaItem(
+                                              item: collectionItem,
+                                            ),
+                                            heroTag: heroTag,
+                                            contentRating: widget.contentRating,
+                                          ),
+                                          onLongPress: () =>
+                                              showMediaCardActions(
+                                                context,
+                                                collectionItem,
+                                                onViewDetails: () =>
+                                                    openDetails(
+                                                      context,
+                                                      collectionItem,
+                                                      heroTag: heroTag,
+                                                      contentRating:
+                                                          widget.contentRating,
+                                                    ),
+                                              ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                        if (detail.recommendations.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          const _SectionTitle('You Might Also Like'),
-                          const SizedBox(height: AppSpacing.sm),
-                          SizedBox(
-                            height:
-                                mediaCardPosterHeight(152) +
-                                Clickable.ringBleed * 2,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: detail.recommendations.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: AppSpacing.sm),
-                              itemBuilder: (context, index) {
-                                final recommendation =
-                                    detail.recommendations[index];
-                                final heroTag = Object();
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: Clickable.ringBleed,
-                                  ),
-                                  child: SizedBox(
-                                    width: 152,
-                                    child: MediaCardV2(
-                                      item: recommendation,
-                                      heroTag: heroTag,
-                                      onTap: () => openVersionedItem(
-                                        context,
-                                        VersionedMediaItem(
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            if (detail.recommendations.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              const _SectionTitle('You Might Also Like'),
+                              const SizedBox(height: AppSpacing.sm),
+                              SizedBox(
+                                height:
+                                    mediaCardPosterHeight(152) +
+                                    Clickable.ringBleed * 2,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: detail.recommendations.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: AppSpacing.sm),
+                                  itemBuilder: (context, index) {
+                                    final recommendation =
+                                        detail.recommendations[index];
+                                    final heroTag = Object();
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: Clickable.ringBleed,
+                                      ),
+                                      child: SizedBox(
+                                        width: 152,
+                                        child: MediaCardV2(
                                           item: recommendation,
-                                        ),
-                                        heroTag: heroTag,
-                                        contentRating: widget.contentRating,
-                                      ),
-                                      onLongPress: () => showMediaCardActions(
-                                        context,
-                                        recommendation,
-                                        onViewDetails: () => openDetails(
-                                          context,
-                                          recommendation,
                                           heroTag: heroTag,
-                                          contentRating: widget.contentRating,
+                                          onTap: () => openVersionedItem(
+                                            context,
+                                            VersionedMediaItem(
+                                              item: recommendation,
+                                            ),
+                                            heroTag: heroTag,
+                                            contentRating: widget.contentRating,
+                                          ),
+                                          onLongPress: () =>
+                                              showMediaCardActions(
+                                                context,
+                                                recommendation,
+                                                onViewDetails: () =>
+                                                    openDetails(
+                                                      context,
+                                                      recommendation,
+                                                      heroTag: heroTag,
+                                                      contentRating:
+                                                          widget.contentRating,
+                                                    ),
+                                              ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -396,8 +391,9 @@ class _DetailPageV2State extends State<DetailPageV2> {
 
   bool _onDetailScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) return false;
-    final heroHeight = MediaHeroLayout.heightForViewport(
-      MediaQuery.sizeOf(context),
+    final heroHeight = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)),
     );
     final fadeDistance = MediaHeroLayout.homeOverlayFadeDistance;
     final fadeStart = math.max(0.0, heroHeight - fadeDistance);
@@ -414,20 +410,23 @@ class _DetailPageV2State extends State<DetailPageV2> {
     required EpisodeGuide? guide,
     required LibraryController libraryController,
     required bool alignStart,
-  }) => Wrap(
-    alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
-    spacing: AppSpacing.xs,
-    runSpacing: AppSpacing.xs,
-    children: [
-      _primaryAction(
-        detail: detail,
-        item: item,
-        guide: guide,
-        libraryController: libraryController,
-      ),
-      _FavoriteAction(item: item),
-    ],
-  );
+  }) {
+    final primary = _primaryAction(
+      detail: detail,
+      item: item,
+      guide: guide,
+      libraryController: libraryController,
+    );
+    return Wrap(
+      alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        primary,
+        _FavoriteAction(item: item),
+      ],
+    );
+  }
 
   Widget _primaryAction({
     required MediaDetailV2 detail,
@@ -700,22 +699,38 @@ class _PrimaryPlayButton extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.detail, required this.actions, this.heroTag});
+  const _Header({
+    required this.detail,
+    required this.fallbackItem,
+    required this.actions,
+    required this.descriptionExpanded,
+    required this.onToggleDescription,
+    this.heroTag,
+  });
 
   final MediaDetailV2 detail;
+  final MediaItemV2 fallbackItem;
   final Widget actions;
+  final bool descriptionExpanded;
+  final VoidCallback onToggleDescription;
   final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
     final item = detail.item;
+    final tags = detail.tags.isNotEmpty ? detail.tags : item.genres;
     final image = item.artwork?.portrait ?? item.artwork?.landscape;
     final preview = _autoplayTrailer(detail);
+    final ratings = _mergeRatings(item.ratings, fallbackItem.ratings);
     final viewport = MediaQuery.sizeOf(context);
     final alignStart = MediaHeroLayout.isLargeScreen(context);
+    final heroHeight = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(viewport),
+    );
     return SizedBox(
       key: const Key('detail-poster-header'),
-      height: MediaHeroLayout.heightForViewport(viewport),
+      height: heroHeight,
       child: MediaHeroCard(
         item: item,
         heroTag: image == null
@@ -723,6 +738,10 @@ class _Header extends StatelessWidget {
             : heroTag ?? mediaArtworkHeroTag(item.ref),
         fallback: const ArtworkPlaceholder(icon: Icons.movie_outlined),
         preview: preview == null ? null : TrailerPreview(trailer: preview),
+        overlayGradient: MediaHeroCard.detailGradient,
+        bottomBlurSigma: 30,
+        bottomBlurHeightFactor: 0.58,
+        bottomBlurFadeStop: 0.25,
         foreground: Stack(
           fit: StackFit.expand,
           children: [
@@ -733,11 +752,33 @@ class _Header extends StatelessWidget {
               child: MediaHeroSummary(
                 item: item,
                 alignStart: alignStart,
-                showRatings: true,
-                extra: detail.tags.isEmpty
+                showRatings: alignStart,
+                ratingsOverride: ratings,
+                actionsBeforeMeta: !alignStart,
+                description: alignStart
+                    ? detail.description ?? item.overview
+                    : null,
+                extra: tags.isEmpty
                     ? null
-                    : _Tags(values: detail.tags, alignStart: alignStart),
+                    : _Tags(values: tags, alignStart: alignStart),
                 actions: actions,
+                afterActions: alignStart
+                    ? null
+                    : _DetailHeroAfterActions(
+                        detail: detail,
+                        ratings: ratings,
+                        expanded: descriptionExpanded,
+                        onToggleDescription: onToggleDescription,
+                      ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 2 / MediaQuery.devicePixelRatioOf(context),
+              child: const IgnorePointer(
+                child: ColoredBox(color: AppColors.surfaceDark),
               ),
             ),
           ],
@@ -745,6 +786,273 @@ class _Header extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DetailHeroAfterActions extends StatelessWidget {
+  const _DetailHeroAfterActions({
+    required this.detail,
+    required this.ratings,
+    required this.expanded,
+    required this.onToggleDescription,
+  });
+
+  final MediaDetailV2 detail;
+  final List<MediaRating> ratings;
+  final bool expanded;
+  final VoidCallback onToggleDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = detail.item;
+    final directors = detail.credits
+        .where(_isDirector)
+        .map((credit) => credit.name)
+        .toList(growable: false);
+    final directorFacts = detail.facts
+        .where((fact) => _hasFactLabel(fact, 'director'))
+        .map((fact) => fact.value)
+        .toList(growable: false);
+    final parentalFacts = detail.facts
+        .where((fact) => _hasFactLabel(fact, 'parent'))
+        .map((fact) => fact.value)
+        .toList(growable: false);
+    final heroFacts = detail.facts
+        .where(_isCompactHeroFact)
+        .toList(growable: false);
+    final description = detail.description ?? item.overview;
+    final allDirectors = [...directors, ...directorFacts].toSet().toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _DetailHeroFacts(item: item, facts: heroFacts),
+        if (allDirectors.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Director: ${allDirectors.join(', ')}',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              shadows: MediaHeroSummary.textShadows,
+            ),
+          ),
+        ],
+        if (parentalFacts.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            parentalFacts.join(' · '),
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.underline,
+              decorationStyle: TextDecorationStyle.dotted,
+              shadows: MediaHeroSummary.textShadows,
+            ),
+          ),
+        ],
+        if (description case final value? when value.trim().isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value.trim(),
+            maxLines: expanded ? null : 3,
+            overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              height: 1.35,
+              shadows: MediaHeroSummary.textShadows,
+            ),
+          ),
+          if (!expanded)
+            TextButton(
+              onPressed: onToggleDescription,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.onDark,
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+              ),
+              child: const Text('Read More'),
+            ),
+        ],
+        if (ratings.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final rating in ratings) _DetailHeroRating(rating: rating),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DetailHeroFacts extends StatelessWidget {
+  const _DetailHeroFacts({required this.item, required this.facts});
+
+  final MediaItemV2 item;
+  final List<MediaFact> facts;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[
+      if (item.releaseYear case final year?) _HeroFactText('$year'),
+      for (final fact in facts) _HeroFactText(fact.value, fact: fact),
+      if (item.rating case final rating?)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star, size: 17, color: Colors.amber),
+            const SizedBox(width: AppSpacing.xxs),
+            Text(
+              rating.toStringAsFixed(1),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.onDark,
+                fontWeight: FontWeight.w700,
+                shadows: MediaHeroSummary.textShadows,
+              ),
+            ),
+          ],
+        ),
+    ];
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
+    );
+  }
+}
+
+class _HeroFactText extends StatelessWidget {
+  const _HeroFactText(this.value, {this.fact});
+
+  final String value;
+  final MediaFact? fact;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = fact?.label.toLowerCase() ?? '';
+    final boxed =
+        label.contains('rating') ||
+        label.contains('quality') ||
+        label.contains('resolution') ||
+        label.contains('certification');
+    final text = Text(
+      value,
+      style: AppTypography.bodySm.copyWith(
+        color: AppColors.onDark,
+        fontWeight: FontWeight.w700,
+        shadows: MediaHeroSummary.textShadows,
+      ),
+    );
+    return Semantics(
+      label: fact == null ? value : '${fact!.label}: $value',
+      child: boxed
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.onDarkSoft),
+                borderRadius: AppRadius.sm,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxs,
+                ),
+                child: text,
+              ),
+            )
+          : text,
+    );
+  }
+}
+
+class _DetailHeroRating extends StatelessWidget {
+  const _DetailHeroRating({required this.rating});
+
+  final MediaRating rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = rating.scale == 10
+        ? '${rating.score.toStringAsFixed(1)}/10'
+        : '${rating.score.toStringAsFixed(0)}/${rating.scale.toStringAsFixed(0)}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (rating.icon case final icon?)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: CachedNetworkImage(
+              imageUrl: icon.url,
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+              errorWidget: (_, _, _) =>
+                  RatingSourceBadge(source: rating.source),
+            ),
+          )
+        else
+          RatingSourceBadge(source: rating.source),
+        const SizedBox(width: AppSpacing.xxs),
+        Text(
+          '$score',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDark,
+            fontWeight: FontWeight.w700,
+            shadows: MediaHeroSummary.textShadows,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+bool _isDirector(MediaCredit credit) =>
+    credit.role?.toLowerCase().contains('director') ?? false;
+
+bool _hasFactLabel(MediaFact fact, String value) =>
+    fact.label.toLowerCase().contains(value);
+
+List<MediaRating> _mergeRatings(
+  List<MediaRating> detailRatings,
+  List<MediaRating> catalogRatings,
+) {
+  final merged = <String, MediaRating>{
+    for (final rating in catalogRatings) rating.source: rating,
+  };
+  for (final rating in detailRatings) {
+    final catalogRating = merged[rating.source];
+    merged[rating.source] = catalogRating == null
+        ? rating
+        : MediaRating(
+            source: rating.source,
+            score: rating.score,
+            scale: rating.scale,
+            votes: rating.votes ?? catalogRating.votes,
+            kind: rating.kind ?? catalogRating.kind,
+            icon: rating.icon ?? catalogRating.icon,
+          );
+  }
+  return merged.values.toList(growable: false);
+}
+
+bool _isCompactHeroFact(MediaFact fact) {
+  final label = fact.label.toLowerCase();
+  return label.contains('runtime') ||
+      label.contains('duration') ||
+      label.contains('quality') ||
+      label.contains('resolution') ||
+      label.contains('certification') ||
+      label.contains('content rating') ||
+      label == 'rated' ||
+      label == 'rating';
 }
 
 class _DetailBackToolbar extends StatelessWidget {
@@ -792,18 +1100,25 @@ class _DetailBackToolbar extends StatelessWidget {
 class _DetailHeroSliver extends StatelessWidget {
   const _DetailHeroSliver({
     required this.detail,
+    required this.fallbackItem,
     required this.actions,
+    required this.descriptionExpanded,
+    required this.onToggleDescription,
     this.heroTag,
   });
 
   final MediaDetailV2 detail;
+  final MediaItemV2 fallbackItem;
   final Widget actions;
+  final bool descriptionExpanded;
+  final VoidCallback onToggleDescription;
   final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaHeroLayout.heightForViewport(
-      MediaQuery.sizeOf(context),
+    final height = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)),
     );
     return SliverAppBar(
       expandedHeight: height,
@@ -815,12 +1130,21 @@ class _DetailHeroSliver extends StatelessWidget {
       automaticallyImplyLeading: false,
       backgroundColor: AppColors.surfaceDark,
       surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      forceMaterialTransparency: true,
       elevation: 0,
       scrolledUnderElevation: 0,
       flexibleSpace: MediaHeroFlexibleSpace(
         expandedHeight: height,
         child: CenteredContent(
-          child: _Header(detail: detail, actions: actions, heroTag: heroTag),
+          child: _Header(
+            detail: detail,
+            fallbackItem: fallbackItem,
+            actions: actions,
+            descriptionExpanded: descriptionExpanded,
+            onToggleDescription: onToggleDescription,
+            heroTag: heroTag,
+          ),
         ),
       ),
     );
@@ -838,36 +1162,6 @@ MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
 
 bool _isAutoplayTrailer(MediaTrailer trailer) =>
     trailer.mimeType?.toLowerCase().startsWith('video/') ?? false;
-
-class _DescriptionShimmer extends StatelessWidget {
-  const _DescriptionShimmer();
-
-  @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ShimmerPlaceholder(
-          width: double.infinity,
-          height: 16,
-          borderRadius: AppRadius.sm,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        ShimmerPlaceholder(
-          width: double.infinity,
-          height: 16,
-          borderRadius: AppRadius.sm,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        FractionallySizedBox(
-          widthFactor: 0.7,
-          alignment: Alignment.centerLeft,
-          child: ShimmerPlaceholder(height: 16, borderRadius: AppRadius.sm),
-        ),
-      ],
-    ),
-  );
-}
 
 class _FavoriteAction extends StatelessWidget {
   const _FavoriteAction({required this.item});

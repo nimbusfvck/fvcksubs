@@ -181,8 +181,11 @@ class _CategoryPageState extends State<CategoryPage> {
     _ensureFeaturedLoaded(scope, bindings);
     final featuredHeight = _featuredItems.isEmpty
         ? null
-        : MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)) -
-              MediaQuery.paddingOf(context).top;
+        : MediaHeroLayout.snapToDevicePixel(
+            context,
+            MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)) -
+                MediaQuery.paddingOf(context).top,
+          );
 
     return Scaffold(
       body: RefreshIndicator(
