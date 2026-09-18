@@ -14,7 +14,12 @@ void main() {
     ),
   );
 
-  Future<void> pumpHero(WidgetTester tester, Size size) async {
+  Future<void> pumpHero(
+    WidgetTester tester,
+    Size size, {
+    bool rotateBackdrops = true,
+    Object? heroTag,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
@@ -22,8 +27,10 @@ void main() {
           child: SizedBox(
             width: size.width,
             height: size.height,
-            child: const MediaHeroCard(
+            child: MediaHeroCard(
               item: item,
+              rotateBackdrops: rotateBackdrops,
+              heroTag: heroTag,
               foreground: SizedBox.shrink(),
             ),
           ),
@@ -35,6 +42,29 @@ void main() {
 
   testWidgets('large-screen heroes prefer landscape artwork', (tester) async {
     await pumpHero(tester, const Size(1000, 600));
+
+    expect(
+      tester
+          .widget<CachedNetworkImage>(find.byType(CachedNetworkImage))
+          .imageUrl,
+      'https://image.example/backdrop.jpg',
+    );
+  });
+
+  testWidgets('shared heroes participate in iOS back-swipe transitions', (
+    tester,
+  ) async {
+    await pumpHero(tester, const Size(390, 844), heroTag: 'hero');
+
+    final hero = tester.widget<Hero>(find.byType(Hero));
+    expect(hero.transitionOnUserGestures, isTrue);
+    expect(hero.flightShuttleBuilder, isNotNull);
+  });
+
+  testWidgets('large-screen heroes keep landscape artwork when fixed', (
+    tester,
+  ) async {
+    await pumpHero(tester, const Size(1000, 600), rotateBackdrops: false);
 
     expect(
       tester

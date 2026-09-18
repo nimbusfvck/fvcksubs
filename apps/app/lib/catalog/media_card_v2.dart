@@ -25,6 +25,11 @@ const double _posterTitleHeight = 34;
 double mediaCardPosterHeight(double width) =>
     width * 1.5 + AppSpacing.xs + _posterTitleHeight;
 
+const double recommendationCardFooterHeight = 48;
+
+double mediaRecommendationCardHeight(double width) =>
+    width * 9 / 16 + AppSpacing.xs + recommendationCardFooterHeight;
+
 class MediaCardV2 extends StatelessWidget {
   const MediaCardV2({
     super.key,
@@ -80,6 +85,139 @@ class MediaCardV2 extends StatelessWidget {
       }
     }
     return _Summary(item: value, showSubtitle: showSubtitle);
+  }
+}
+
+/// A wider, landscape card for detail-page recommendations.
+class MediaRecommendationCard extends StatelessWidget {
+  const MediaRecommendationCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.onLongPress,
+    this.heroTag,
+  });
+
+  final MediaItemV2 item;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final Object? heroTag;
+
+  @override
+  Widget build(BuildContext context) {
+    const width = 216.0;
+    final image =
+        item.artwork?.landscape ??
+        item.artwork?.backdrops.firstOrNull ??
+        item.artwork?.portrait;
+    final tag = heroTag ?? mediaArtworkHeroTag(item.ref);
+    final metadata = [
+      if (item.releaseYear case final year?) year.toString(),
+      if (item.genres.isNotEmpty) item.genres.take(2).join(' · '),
+    ].join(' • ');
+
+    return SizedBox(
+      width: width,
+      height: mediaRecommendationCardHeight(width),
+      child: Clickable(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: width * 9 / 16,
+              width: width,
+              child: ClipRRect(
+                borderRadius: AppRadius.lg,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (image == null)
+                      ArtworkPlaceholder(title: item.title)
+                    else
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final artwork = CachedNetworkImage(
+                            imageUrl: image.url,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fadeInDuration: Duration.zero,
+                            useOldImageOnUrlChange: true,
+                            memCacheWidth: artworkCacheDimension(
+                              context,
+                              constraints.maxWidth,
+                            ),
+                            placeholder: (_, _) =>
+                                ArtworkPlaceholder(title: item.title),
+                            errorWidget: (_, _, _) =>
+                                ArtworkPlaceholder(title: item.title),
+                          );
+                          return Hero(
+                            tag: tag,
+                            transitionOnUserGestures: true,
+                            flightShuttleBuilder:
+                                mediaArtworkFlightShuttleBuilder,
+                            child: artwork,
+                          );
+                        },
+                      ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Color(0xD9000000)],
+                        ),
+                      ),
+                    ),
+                    if (item.artwork?.logo case final logo?)
+                      Positioned(
+                        left: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        bottom: AppSpacing.sm,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: CachedNetworkImage(
+                            imageUrl: logo.url,
+                            height: 30,
+                            width: width * 0.62,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                    if (item.rating case final rating?)
+                      _PosterRatingBadge(rating: rating),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            ),
+            if (metadata.isNotEmpty)
+              Text.rich(
+                TextSpan(
+                  text: metadata,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -175,23 +313,31 @@ class _PosterImage extends StatelessWidget {
   final Object? heroTag;
 
   @override
-  Widget build(BuildContext context) {
-    final imageWidget = LayoutBuilder(
-      builder: (context, constraints) => CachedNetworkImage(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final imageWidget = CachedNetworkImage(
         imageUrl: image.url,
         fit: BoxFit.cover,
         width: double.infinity,
         fadeInDuration: const Duration(milliseconds: 220),
         fadeOutDuration: const Duration(milliseconds: 100),
         fadeInCurve: Curves.easeOut,
+        useOldImageOnUrlChange: true,
         memCacheWidth: artworkCacheDimension(context, constraints.maxWidth),
         placeholder: (_, _) => ArtworkPlaceholder(title: item.title),
         errorWidget: (_, _, _) => ArtworkPlaceholder(title: item.title),
-      ),
-    );
-    final tag = heroTag;
-    return tag == null ? imageWidget : Hero(tag: tag, child: imageWidget);
-  }
+      );
+      final tag = heroTag;
+      return tag == null
+          ? imageWidget
+          : Hero(
+              tag: tag,
+              transitionOnUserGestures: true,
+              flightShuttleBuilder: mediaArtworkFlightShuttleBuilder,
+              child: imageWidget,
+            );
+    },
+  );
 }
 
 class _PosterRatingBadge extends StatelessWidget {

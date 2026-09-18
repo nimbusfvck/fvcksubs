@@ -176,20 +176,23 @@ class _MediaHeroTitle extends StatelessWidget {
           alignment: titleAlignment,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: logoWidth),
-            child: SizedBox(
-              width: double.infinity,
-              height: logoHeight,
-              child: CachedNetworkImage(
-                key: logoKey,
-                imageUrl: logo.url,
-                alignment: titleAlignment,
-                fit: BoxFit.contain,
-                fadeInDuration: const Duration(milliseconds: 320),
-                fadeInCurve: Curves.easeOutCubic,
-                memCacheWidth: artworkCacheDimension(context, logoWidth),
-                placeholder: (_, _) => const SizedBox.shrink(),
-                errorWidget: (_, _, _) =>
-                    Align(alignment: titleAlignment, child: fallback),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: SizedBox(
+                width: double.infinity,
+                height: logoHeight,
+                child: CachedNetworkImage(
+                  key: logoKey,
+                  imageUrl: logo.url,
+                  alignment: titleAlignment,
+                  fit: BoxFit.contain,
+                  fadeInDuration: const Duration(milliseconds: 320),
+                  fadeInCurve: Curves.easeOutCubic,
+                  memCacheWidth: artworkCacheDimension(context, logoWidth),
+                  placeholder: (_, _) => const SizedBox.shrink(),
+                  errorWidget: (_, _, _) =>
+                      Align(alignment: titleAlignment, child: fallback),
+                ),
               ),
             ),
           ),
@@ -290,6 +293,10 @@ class _MediaRatingChip extends StatelessWidget {
         ? '${rating.score.toStringAsFixed(1)}/10'
         : '${rating.score.toStringAsFixed(0)}/${rating.scale.toStringAsFixed(0)}';
     final icon = rating.icon;
+    final hasKnownIcon = switch (rating.source.toLowerCase()) {
+      'imdb' || 'rottentomatoes' || 'metacritic' => true,
+      _ => false,
+    };
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -309,7 +316,9 @@ class _MediaRatingChip extends StatelessWidget {
           RatingSourceBadge(source: rating.source),
         const SizedBox(width: AppSpacing.xxs),
         Text(
-          '${_ratingLabel(rating.source)} $score',
+          icon != null || hasKnownIcon
+              ? score
+              : '${_ratingLabel(rating.source)} $score',
           style: AppTypography.bodySm.copyWith(
             color: AppColors.onDark,
             shadows: MediaHeroSummary.textShadows,

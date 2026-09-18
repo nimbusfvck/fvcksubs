@@ -13,15 +13,15 @@ void main() {
   test('uses a cinematic frame for wide-screen heroes', () {
     expect(
       MediaHeroLayout.heightForViewport(const Size(1000, 800)),
-      closeTo(454.55, 0.01),
+      closeTo(562.5, 0.01),
     );
     expect(
       MediaHeroLayout.heightForViewport(const Size(1200, 1000)),
-      closeTo(545.45, 0.01),
+      closeTo(675, 0.01),
     );
     expect(
       MediaHeroLayout.heightForViewport(const Size(1600, 1000)),
-      closeTo(636.36, 0.01),
+      closeTo(787.5, 0.01),
     );
   });
 

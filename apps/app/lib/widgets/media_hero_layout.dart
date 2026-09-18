@@ -9,8 +9,11 @@ abstract final class MediaHeroLayout {
   static const double narrowBreakpoint = 600;
   static const double narrowHeightFactor = 1.4;
 
-  /// Cinematic banner ratio for landscape artwork on wide screens.
-  static const double wideAspectRatio = 2.2;
+  /// Landscape artwork ratio used by the large-screen hero frame.
+  ///
+  /// Artwork references currently carry only a URL, not intrinsic dimensions,
+  /// so a stable 16:9 frame keeps Home and Detail aligned as items change.
+  static const double wideAspectRatio = 16 / 9;
   static const double summaryBottom = 24;
   static const double homeSummaryBottom = 40;
   static const double homeIndicatorBottom = 8;
@@ -18,6 +21,11 @@ abstract final class MediaHeroLayout {
 
   static bool isLargeScreen(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= AppBreakpoints.railWidth;
+
+  static double widthForViewport(Size viewport) =>
+      viewport.width <= narrowBreakpoint
+      ? viewport.width
+      : math.min(viewport.width, AppBreakpoints.maxContentWidth);
 
   /// Aligns a hero boundary to a physical device pixel.
   static double snapToDevicePixel(BuildContext context, double value) {
@@ -38,10 +46,6 @@ abstract final class MediaHeroLayout {
     if (viewport.width <= narrowBreakpoint) {
       return viewport.width * narrowHeightFactor;
     }
-    final contentWidth = math.min(
-      viewport.width,
-      AppBreakpoints.maxContentWidth,
-    );
-    return contentWidth / wideAspectRatio;
+    return widthForViewport(viewport) / wideAspectRatio;
   }
 }

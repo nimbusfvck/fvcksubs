@@ -377,7 +377,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('items without trailers auto-advance after eight seconds', (
+  testWidgets('items without trailers auto-advance after twenty seconds', (
     tester,
   ) async {
     const items = [
@@ -407,13 +407,20 @@ void main() {
     await tester.pump();
     expect(find.text('First fallback item'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 20));
     // The active fallback progress animation intentionally never settles.
     for (var index = 0; index < 10; index++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
     expect(find.text('Second fallback item'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 20));
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('First fallback item'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -457,7 +464,7 @@ void main() {
 
     await tester.pumpWidget(buildHero(100));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 20));
     for (var index = 0; index < 10; index++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -595,7 +602,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('swiping keeps the featured preview playing and mounted', (
+  testWidgets('movie featured items keep the poster without autoplay preview', (
     tester,
   ) async {
     const first = VersionedMediaItem(
@@ -624,6 +631,30 @@ void main() {
           ),
         ],
       ),
+      previewFor: {
+        'first': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-first',
+              stream: PlayableStream(
+                url: 'https://video.example/featured.mp4',
+                label: 'Featured',
+              ),
+            ),
+          ],
+        ),
+        'second': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-second',
+              stream: PlayableStream(
+                url: 'https://video.example/featured.mp4',
+                label: 'Featured',
+              ),
+            ),
+          ],
+        ),
+      },
     );
     await tester.pumpWidget(
       wrapApp(
@@ -638,11 +669,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(VideoPlayerView), findsOneWidget);
-    expect(
-      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
-      isTrue,
-    );
+    expect(find.byType(VideoPlayerView), findsNothing);
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(PageView)),
@@ -651,27 +678,16 @@ void main() {
     await tester.pump();
 
     expect(find.text('Second movie'), findsOneWidget);
-    expect(
-      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
-      isTrue,
-    );
-    expect(find.byType(VideoPlayerView), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
 
     await gesture.up();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 700));
     expect(find.text('Second movie'), findsOneWidget);
-    expect(
-      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
-      isFalse,
-    );
-    expect(find.byType(VideoPlayerView), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump(const Duration(milliseconds: 1200));
-    expect(
-      tester.widget<VideoPlayerView>(find.byType(VideoPlayerView)).playing,
-      isTrue,
-    );
+    expect(find.byType(VideoPlayerView), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -762,6 +778,19 @@ void main() {
           ),
         ],
       ),
+      previewFor: {
+        'movie': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-movie',
+              stream: PlayableStream(
+                url: 'https://video.example/trailer.mp4',
+                label: 'Trailer',
+              ),
+            ),
+          ],
+        ),
+      },
     );
     final registry = ExtensionRegistry([extension]);
     final player = RecordingPlayer();
@@ -778,7 +807,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(VideoPlayerView), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
 
     await tester.pumpWidget(
       wrapApp(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../catalog/artwork_cache.dart';
+import '../catalog/media_hero.dart';
 import '../theme/tokens.dart';
 import 'media_hero_flexible_space.dart';
 import 'media_hero_layout.dart';
@@ -24,6 +25,7 @@ class MediaHeroCard extends StatefulWidget {
     this.bottomBlurFadeStop = 0.60,
     this.artworkDim = 0,
     this.artworkAlignment = Alignment.topCenter,
+    this.rotateBackdrops = true,
     this.fallback,
     this.heroTag,
   });
@@ -72,6 +74,7 @@ class MediaHeroCard extends StatefulWidget {
   final double bottomBlurFadeStop;
   final double artworkDim;
   final Alignment artworkAlignment;
+  final bool rotateBackdrops;
   final Widget? fallback;
   final Object? heroTag;
 
@@ -105,6 +108,7 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!widget.rotateBackdrops) return;
     _backdropTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
       if (!mounted) return;
       final count = _landscapes().length;
@@ -116,10 +120,15 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
   @override
   Widget build(BuildContext context) {
     final artworkData = widget.item.artwork;
+    final viewport = MediaQuery.sizeOf(context);
+    final heroWidth = MediaHeroLayout.widthForViewport(viewport);
+    final heroHeight = MediaHeroLayout.heightForViewport(viewport);
     final landscapes = _landscapes();
     final image = MediaHeroLayout.isLargeScreen(context)
         ? (landscapes.isNotEmpty
-              ? landscapes[_backdropIndex % landscapes.length]
+              ? landscapes[widget.rotateBackdrops
+                    ? _backdropIndex % landscapes.length
+                    : 0]
               : artworkData?.portrait)
         : artworkData?.portrait ?? artworkData?.landscape;
     final fallbackArtwork =
@@ -133,16 +142,19 @@ class _MediaHeroCardState extends State<MediaHeroCard> {
             fit: BoxFit.cover,
             alignment: widget.artworkAlignment,
             fadeInDuration: Duration.zero,
-            memCacheWidth: artworkCacheDimension(
-              context,
-              MediaQuery.sizeOf(context).width,
-            ),
+            memCacheWidth: artworkCacheDimension(context, heroWidth),
+            memCacheHeight: artworkCacheDimension(context, heroHeight),
             placeholder: (_, _) =>
                 const ColoredBox(color: AppColors.surfaceDarkElevated),
             errorWidget: (_, _, _) => fallbackArtwork,
           );
     if (image != null && widget.heroTag != null) {
-      artwork = Hero(tag: widget.heroTag!, child: artwork);
+      artwork = Hero(
+        tag: widget.heroTag!,
+        transitionOnUserGestures: true,
+        flightShuttleBuilder: mediaArtworkFlightShuttleBuilder,
+        child: artwork,
+      );
     }
     final backdrop = Stack(
       fit: StackFit.expand,

@@ -33,6 +33,7 @@ void main() {
       expect(find.text('Could not load details.'), findsNothing);
       expect(find.text('Catalog item'), findsWidgets);
       expect(find.text('A catalog synopsis'), findsOneWidget);
+      expect(find.text('Read More'), findsNothing);
       final watchButton = find.widgetWithText(FilledButton, 'Watch Now');
       expect(watchButton, findsOneWidget);
       expect(
@@ -42,9 +43,7 @@ void main() {
     },
   );
 
-  testWidgets('expanded description does not keep a collapse button', (
-    tester,
-  ) async {
+  testWidgets('expanded description can be collapsed again', (tester) async {
     const item = VideoItemV2(
       ref: MediaRef(
         extensionId: 'fake',
@@ -57,7 +56,9 @@ void main() {
       item: item,
       description:
           'A long synopsis that continues beyond the compact hero preview. '
-          'The complete description should remain visible after expanding it.',
+          'The complete description should remain visible after expanding it. '
+          'This extra sentence makes the text span several lines on narrow '
+          'screens so the Read More affordance is actually exercised.',
     );
 
     await tester.pumpWidget(
@@ -73,7 +74,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Read More'), findsNothing);
-    expect(find.text('Show Less'), findsNothing);
+    expect(find.text('Hide More'), findsOneWidget);
+
+    await tester.tap(find.text('Hide More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsOneWidget);
+    expect(find.text('Hide More'), findsNothing);
   });
 
   testWidgets('back button stays visible after the detail hero scrolls away', (

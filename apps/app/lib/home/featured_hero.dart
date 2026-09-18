@@ -118,7 +118,7 @@ const _featuredAutoSlideVisibilityThreshold = 0.5;
 
 class _FeaturedHeroState extends State<FeaturedHero>
     with SingleTickerProviderStateMixin, RouteAware {
-  static const _noTrailerAutoSlideDelay = Duration(seconds: 8);
+  static const _noTrailerAutoSlideDelay = Duration(seconds: 20);
   static const _completedPreviewHold = Duration(milliseconds: 420);
 
   late final PageController _pageController;
@@ -292,7 +292,10 @@ class _FeaturedHeroState extends State<FeaturedHero>
             onNotification: _onScrollNotification,
             child: PageView.builder(
               controller: _pageController,
-              itemCount: widget.items.length,
+              // Keep one duplicate of the first page so the last -> first
+              // autoplay transition can travel across the viewport instead
+              // of animating backwards over the entire carousel.
+              itemCount: widget.items.length + 1,
               pageSnapping: true,
               itemBuilder: (context, index) => const SizedBox.expand(),
             ),
@@ -350,8 +353,12 @@ class _FeaturedHeroState extends State<FeaturedHero>
                     final page = _pageController.hasClients
                         ? _pageController.page ?? _page.toDouble()
                         : _page.toDouble();
+                    final roundedPage = page.round();
+                    final normalizedPage = roundedPage == widget.items.length
+                        ? 0
+                        : roundedPage.clamp(0, widget.items.length - 1).toInt();
                     final summaryPage = _scrolling.value
-                        ? page.round().clamp(0, widget.items.length - 1).toInt()
+                        ? normalizedPage
                         : _page;
                     final summaryVisible =
                         !_scrolling.value || summaryPage != _page;
@@ -425,11 +432,15 @@ class _FeaturedHeroState extends State<FeaturedHero>
           : _page;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        final wrapsToStart = settledPage == widget.items.length;
+        final settledIndex = wrapsToStart
+            ? 0
+            : settledPage.clamp(0, widget.items.length - 1).toInt();
         final currentRef = _page < widget.items.length
             ? widget.items[_page].item.ref
             : null;
-        final settledRef = settledPage < widget.items.length
-            ? widget.items[settledPage].item.ref
+        final settledRef = settledIndex < widget.items.length
+            ? widget.items[settledIndex].item.ref
             : null;
         if (settledRef != currentRef) {
           _noTrailerAutoSlideController.reset();
@@ -437,7 +448,12 @@ class _FeaturedHeroState extends State<FeaturedHero>
           _previewHasTrailer.value = null;
           _animatePosterIn.value = false;
         }
-        if (settledPage != _page) setState(() => _page = settledPage);
+        if (settledIndex != _page) setState(() => _page = settledIndex);
+        if (wrapsToStart && _pageController.hasClients) {
+          // The duplicate first page is visually identical; reset the
+          // controller only after its smooth animation has completed.
+          _pageController.jumpToPage(0);
+        }
         _dragging.value = false;
         _scrolling.value = false;
         _scheduleAutoSlide();
@@ -524,7 +540,9 @@ class _FeaturedHeroState extends State<FeaturedHero>
         !_pageController.hasClients) {
       return;
     }
-    final nextPage = (_page + 1) % widget.items.length;
+    final nextPage = _page == widget.items.length - 1
+        ? widget.items.length
+        : _page + 1;
     unawaited(
       _pageController.animateToPage(
         nextPage,
@@ -655,6 +673,7 @@ class _FeaturedSlide extends StatelessWidget {
         item: media,
         fallback: fallbackArtwork,
         showGradient: false,
+        rotateBackdrops: false,
         artworkAlignment: artworkAlignment ?? Alignment.topCenter,
         foreground: const SizedBox.shrink(),
       ),
@@ -692,7 +711,9 @@ class _FeaturedPosterLayer extends StatelessWidget {
           ? pageController.page ?? selectedPage.toDouble()
           : selectedPage.toDouble();
       final direction = page.compareTo(selectedPage.toDouble());
-      final targetIndex = (selectedPage + direction).clamp(0, items.length - 1);
+      final targetIndex = direction > 0 && selectedPage == items.length - 1
+          ? 0
+          : (selectedPage + direction).clamp(0, items.length - 1);
       final rawProgress = (page - selectedPage)
           .abs()
           .clamp(0.0, 1.0)
@@ -882,11 +903,11 @@ class _FeaturedPreview extends StatefulWidget {
 
 class _FeaturedPreviewState extends State<_FeaturedPreview>
     with SingleTickerProviderStateMixin {
-  MediaTrailer? _trailer;
+  PreviewSource? _previewSource;
   MediaRef? _trailerRef;
   MediaRef? _loadedRef;
   MediaRef? _loadingRef;
-  MediaTrailer? _pendingTrailer;
+  PreviewSource? _pendingPreviewSource;
   MediaRef? _pendingRef;
   bool _hasPendingPreview = false;
   bool _playing = false;
@@ -940,14 +961,14 @@ class _FeaturedPreviewState extends State<_FeaturedPreview>
     _playDelay = null;
     _loadedRef = ref;
     _loadingRef = ref;
-    _pendingTrailer = null;
+    _pendingPreviewSource = null;
     _pendingRef = null;
     _hasPendingPreview = false;
-    final future = _loadDetail();
+    final future = _loadPreviewSource();
     final generation = ++_loadGeneration;
     if (future == null) {
       _loadingRef = null;
-      _trailer = null;
+      _previewSource = null;
       _trailerRef = null;
       _playing = false;
       _publishPreviewHasTrailer(false, generation);
@@ -958,27 +979,26 @@ class _FeaturedPreviewState extends State<_FeaturedPreview>
   }
 
   Future<void> _resolvePreview(
-    Future<MediaDetailV2> future,
+    Future<PreviewSource?> future,
     MediaRef ref,
     int generation,
   ) async {
     try {
-      final detail = await future;
+      final previewSource = await future;
       if (!mounted || generation != _loadGeneration) return;
-      final trailer = _autoplayTrailer(detail);
       _loadingRef = null;
       if (widget.scrolling.value) {
-        _pendingTrailer = trailer;
+        _pendingPreviewSource = previewSource;
         _pendingRef = ref;
         _hasPendingPreview = true;
         return;
       }
-      _applyPreview(trailer, ref, generation);
+      _applyPreview(previewSource, ref, generation);
     } catch (_) {
       if (!mounted || generation != _loadGeneration) return;
       _loadingRef = null;
       if (widget.scrolling.value) {
-        _pendingTrailer = null;
+        _pendingPreviewSource = null;
         _pendingRef = ref;
         _hasPendingPreview = true;
         return;
@@ -989,34 +1009,38 @@ class _FeaturedPreviewState extends State<_FeaturedPreview>
 
   void _commitPendingPreview() {
     if (!_hasPendingPreview || _pendingRef != widget.item.item.ref) return;
-    final trailer = _pendingTrailer;
+    final previewSource = _pendingPreviewSource;
     final ref = _pendingRef!;
-    _pendingTrailer = null;
+    _pendingPreviewSource = null;
     _pendingRef = null;
     _hasPendingPreview = false;
-    _applyPreview(trailer, ref, _loadGeneration);
+    _applyPreview(previewSource, ref, _loadGeneration);
   }
 
-  void _applyPreview(MediaTrailer? trailer, MediaRef ref, int generation) {
+  void _applyPreview(
+    PreviewSource? previewSource,
+    MediaRef ref,
+    int generation,
+  ) {
     if (!mounted || generation != _loadGeneration) return;
     widget.previewProgress.value = null;
     _trailerIndicatorController.reset();
     widget.animatePosterIn.value = false;
-    _publishPreviewHasTrailer(trailer != null, generation);
+    _publishPreviewHasTrailer(previewSource != null, generation);
     final autoplayEnabled = AppScope.of(
       context,
     ).previewAutoplayPreferenceController.enabled;
     final delayPlayback =
         autoplayEnabled &&
-        trailer != null &&
+        previewSource != null &&
         _trailerRef != null &&
         _trailerRef != ref;
     setState(() {
-      _trailer = trailer;
-      _trailerRef = trailer == null ? null : ref;
-      _playing = trailer != null && autoplayEnabled && !delayPlayback;
+      _previewSource = previewSource;
+      _trailerRef = previewSource == null ? null : ref;
+      _playing = previewSource != null && autoplayEnabled && !delayPlayback;
     });
-    if (trailer == null) {
+    if (previewSource == null) {
       _publishPreviewRef(null, generation);
       return;
     }
@@ -1089,21 +1113,15 @@ class _FeaturedPreviewState extends State<_FeaturedPreview>
     });
   }
 
-  Future<MediaDetailV2>? _loadDetail() {
-    final item = widget.item;
-    if (item.item is! VideoItemV2 && item.item is! SeriesItemV2) return null;
-    final registry = AppScope.of(context).registry;
-    final manifest = registry.installed.where(
-      (entry) => entry.id == item.item.ref.extensionId,
-    );
-    if (manifest.isEmpty || manifest.first.apiVersion < 2) return null;
-    return registry.meta(item.item.ref);
-  }
+  // Featured stays poster-only for movie and series items. Full trailer
+  // playback remains available on the detail page, but resolving a YouTube
+  // preview here adds work and can flash a black player before auto-slide.
+  Future<PreviewSource?>? _loadPreviewSource() => null;
 
   @override
   Widget build(BuildContext context) {
-    final trailer = _trailer;
-    if (trailer == null) return const SizedBox.shrink();
+    final previewSource = _previewSource;
+    if (previewSource == null) return const SizedBox.shrink();
     // Keep the player visible and playing while the poster layer transitions.
     // If the selected item changes, the previous trailer stays here until the
     // new detail resolves and the poster can cover the handoff.
@@ -1128,22 +1146,13 @@ class _FeaturedPreviewState extends State<_FeaturedPreview>
         );
       },
       child: TrailerPreview(
-        trailer: trailer,
+        source: previewSource,
         playing: _playing && widget.visible,
         onPlayingChanged: _onTrailerPlaying,
         onCompleted: _onTrailerCompleted,
       ),
     );
   }
-}
-
-MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
-  for (final trailer in detail.trailers) {
-    if (trailer.mimeType?.toLowerCase().startsWith('video/') ?? false) {
-      return trailer;
-    }
-  }
-  return null;
 }
 
 Widget _fallbackArtwork(MediaItemV2 item) => switch (item) {

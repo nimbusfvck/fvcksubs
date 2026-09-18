@@ -43,7 +43,9 @@ void main() {
 
     expect(find.text('Standalone video'), findsNWidgets(2));
     expect(find.text('LIVE'), findsNothing);
-    expect(find.byType(Hero), findsOneWidget);
+    final hero = tester.widget<Hero>(find.byType(Hero));
+    expect(hero.transitionOnUserGestures, isTrue);
+    expect(hero.flightShuttleBuilder, isNotNull);
   });
 
   testWidgets('poster decode size follows the rendered card size', (
@@ -78,6 +80,7 @@ void main() {
     );
     expect(image.memCacheWidth, 900);
     expect(image.memCacheHeight, isNull);
+    expect(image.useOldImageOnUrlChange, isTrue);
   });
 
   testWidgets('long press opens the favorite action without tapping', (

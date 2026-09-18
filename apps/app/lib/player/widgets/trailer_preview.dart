@@ -6,22 +6,25 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../../app_scope.dart';
 import '../../navigation/app_route_observer.dart';
 import '../models/app_player_controller.dart';
+import 'app_preview_player.dart';
 import 'platform_player_builder.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.
 class TrailerPreview extends StatefulWidget {
-  static const maxAutoplayDuration = Duration(seconds: 25);
+  static const maxAutoplayDuration = Duration(seconds: 20);
 
   const TrailerPreview({
     super.key,
-    required this.trailer,
+    this.trailer,
+    this.source,
     this.playing = true,
     this.onPlayingChanged,
     this.onProgressChanged,
     this.onCompleted,
-  });
+  }) : assert(trailer != null || source != null);
 
-  final MediaTrailer trailer;
+  final MediaTrailer? trailer;
+  final PreviewSource? source;
   final bool playing;
   final ValueChanged<bool>? onPlayingChanged;
   final ValueChanged<double?>? onProgressChanged;
@@ -58,7 +61,9 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
   @override
   void didUpdateWidget(covariant TrailerPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.trailer.url != widget.trailer.url) {
+    final oldSourceKey = oldWidget.source?.id ?? oldWidget.trailer?.url;
+    final sourceKey = widget.source?.id ?? widget.trailer?.url;
+    if (oldSourceKey != sourceKey) {
       _detachController();
       _maxAutoplayTimer?.cancel();
       _maxAutoplayTimer = null;
@@ -196,6 +201,7 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
+    final source = widget.source;
     final session = AppScope.of(context).pictureInPictureSession;
     final preference = AppScope.of(context).previewAutoplayPreferenceController;
     return ListenableBuilder(
@@ -209,13 +215,40 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
             duration: const Duration(milliseconds: 180),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                if (source case DirectPreviewSource(:final stream)) {
+                  return platformPlayerBuilder(
+                    context,
+                    stream,
+                    key: ValueKey(source.id),
+                    isLive: false,
+                    playing: _playing,
+                    preview: true,
+                    muted: true,
+                    looping: false,
+                    fit: BoxFit.cover,
+                    wakelock: false,
+                    onPlaybackReady: _onPlaybackReady,
+                  );
+                }
+                if (source != null) {
+                  return AppPreviewPlayer(
+                    key: ValueKey(source.id),
+                    source: source,
+                    muted: true,
+                    playing: _playing,
+                    fit: BoxFit.cover,
+                    onReady: () {
+                      if (mounted) setState(() => _ready = true);
+                    },
+                    onCompleted: _completePreview,
+                  );
+                }
+                final trailer = widget.trailer;
+                if (trailer == null) return const SizedBox.shrink();
                 return platformPlayerBuilder(
                   context,
-                  PlayableStream(
-                    url: widget.trailer.url,
-                    label: widget.trailer.url,
-                  ),
-                  key: ValueKey(widget.trailer.url),
+                  PlayableStream(url: trailer.url, label: trailer.url),
+                  key: ValueKey(trailer.url),
                   isLive: false,
                   // A full player attached to the session owns the only
                   // active playback session, including while it is in PiP.
