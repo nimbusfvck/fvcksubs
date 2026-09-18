@@ -24,6 +24,7 @@ import 'state/player_orientation_coordinator.dart';
 import 'state/source_fallback_policy.dart';
 import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
+import 'widgets/video_player_view.dart';
 import 'workflow/play_item.dart';
 import 'workflow/primary_episode_target.dart';
 
@@ -68,6 +69,15 @@ Duration? sourceSwitchSeekPosition({
   }
   return previousPosition > duration ? duration : previousPosition;
 }
+
+/// Progressive VOD origins can keep a replacement controller buffering after
+/// a stall. Re-resolving the same MP4 source then drops the working controller
+/// into a renewal loop, so a different already-resolved source is safer.
+@visibleForTesting
+bool shouldFallbackAfterVODStall({
+  required bool isLive,
+  required StreamFormat format,
+}) => !isLive && format == StreamFormat.mp4;
 
 /// Returns the media buffered ahead of the current live playback position.
 @visibleForTesting
@@ -310,6 +320,24 @@ class _PlayerPageState extends State<PlayerPage> {
       // playing remains usable even when the remaining fan-out fails.
     } finally {
       if (mounted) {
+        final cache = AppScope.of(context).sourceCache;
+        final refreshedDescriptors = cache.peekSourceList(widget.media.ref);
+        if (refreshedDescriptors != null) {
+          final playingId = _current.source.id;
+          final reconciled = mergeResolvedSources(
+            _resolvedSources,
+            const [],
+            preserveSourceId: playingId,
+            refreshedDescriptors: refreshedDescriptors,
+          );
+          cache.store(widget.media.ref, reconciled);
+          _resolvedSources = reconciled;
+          _currentIndex = reconciled.indexWhere(
+            (source) => source.source.id == playingId,
+          );
+          if (_currentIndex < 0) _currentIndex = 0;
+          _resolvedSourcesListenable.value = reconciled;
+        }
         _pendingSourcesSettled = true;
         _backgroundSourceLoading.value = false;
         _continuePendingFallback();
@@ -333,13 +361,15 @@ class _PlayerPageState extends State<PlayerPage> {
     final found = await refetchPlayableSources(scope, widget.media);
     if (!mounted || found.isEmpty) return _resolvedSources;
 
-    // Merge, never replace: the source being watched keeps playing and keeps
-    // its place, exactly as it does for sources that settle late.
+    // Replace stale descriptors only for providers represented in this full
+    // refresh. Providers that failed discovery remain available as fallbacks,
+    // and the source being watched keeps playing.
     final playingId = _current.source.id;
     final merged = mergeResolvedSources(
       _resolvedSources,
       found,
       preserveSourceId: playingId,
+      refreshedDescriptors: scope.sourceCache.peekSourceList(widget.media.ref),
     );
     scope.sourceCache.store(widget.media.ref, merged);
     scope.sourceCache.promote(widget.media.ref, playingId);
@@ -781,6 +811,21 @@ class _PlayerPageState extends State<PlayerPage> {
     // A failing player reports the same error many times a second. One
     // recovery is in flight at a time; the rest are the same news twice.
     if (_renewing) return;
+    if (shouldFallbackAfterVODStall(
+      isLive: _isLive,
+      format: _current.stream.format,
+    )) {
+      _consecutiveRenewals = 0;
+      _stallDetector.reset();
+      if (kDebugMode) {
+        debugPrint(
+          '[PlaybackSources] vod_mp4_stall_fallback '
+          'source=${_current.source.providerId}/${_current.source.label}',
+        );
+      }
+      _fallBackAfterFailedRenewal(_current.source.id);
+      return;
+    }
     final since = _lastRenewalAt;
     final now = DateTime.now();
     _consecutiveRenewals =
@@ -1421,7 +1466,19 @@ class _PlayerPageState extends State<PlayerPage> {
           unawaited(controller.setViewportAspectRatio(ratio));
         }
         final player = _buildPlayer(context);
-        return SizedBox(width: maxWidth, height: maxHeight, child: player);
+        final playerWithSubtitleVisibility =
+            ValueListenableBuilder<MiniPlayerPresentationState>(
+              valueListenable: _pictureInPictureSession!.presentation,
+              builder: (context, state, _) => PlayerSubtitleVisibility(
+                showSubtitles: state.mode == MiniPlayerMode.fullScreen,
+                child: player,
+              ),
+            );
+        return SizedBox(
+          width: maxWidth,
+          height: maxHeight,
+          child: playerWithSubtitleVisibility,
+        );
       },
     );
   }

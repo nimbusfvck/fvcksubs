@@ -28,6 +28,17 @@ const _startupHealthMaxTimeout = Duration(seconds: 30);
 const _livePlaybackProgressTolerance = Duration(milliseconds: 250);
 const _variantSeekTimeout = Duration(seconds: 20);
 
+void _logFullPlaybackUrl(String stage, String url) {
+  if (!kDebugMode) return;
+  debugPrint('[VideoPlayerVOD] ${stage}_full url=$url');
+}
+
+/// Progressive provider variants may not complete a remote seek until the
+/// native player has started reading the asset.
+@visibleForTesting
+bool shouldWarmVariantBeforeSeek(StreamFormat format) =>
+    format == StreamFormat.mp4 || format == StreamFormat.other;
+
 /// Returns true only when startup has evidence that media can be rendered.
 ///
 /// A native controller may report `isPlaying` while it is still waiting for a
@@ -45,6 +56,27 @@ bool startupPlaybackIsReady({
   if (!isPlaying) return false;
   if (positionAdvanced) return true;
   return !isLive && !isBuffering && bufferedPosition > Duration.zero;
+}
+
+/// Controls whether the Flutter-rendered subtitle overlay is visible.
+class PlayerSubtitleVisibility extends InheritedWidget {
+  const PlayerSubtitleVisibility({
+    super.key,
+    required this.showSubtitles,
+    required super.child,
+  });
+
+  final bool showSubtitles;
+
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<PlayerSubtitleVisibility>()
+          ?.showSubtitles ??
+      true;
+
+  @override
+  bool updateShouldNotify(PlayerSubtitleVisibility oldWidget) =>
+      showSubtitles != oldWidget.showSubtitles;
 }
 
 /// The app's native video player for HLS, DRM, live, and on-demand playback.
@@ -208,6 +240,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     if (!_isActive) return;
     _activeStream = playerStream;
     final player = _createPlayer(playerStream);
+    _logFullPlaybackUrl('player_url', playerStream.url);
     final adapter = _VideoPlayerControllerAdapter(
       player,
       onSetFit: (mode) {
@@ -319,6 +352,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     }
     if (!_isCurrentGeneration(generation)) return false;
     final nextPlayer = _createPlayer(nextStream);
+    _logFullPlaybackUrl('quality_url', nextStream.url);
     final stopwatch = Stopwatch()..start();
     var swapped = false;
     try {
@@ -355,7 +389,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         return false;
       }
       final restorePosition = oldPlayer.value.position;
-      if (restorePlaying && nextStream.format == StreamFormat.other) {
+      if (restorePlaying && shouldWarmVariantBeforeSeek(nextStream.format)) {
         // Some remote MP4 origins do not complete a seek until playback has
         // started. Warm the replacement while the old controller remains
         // visible, then seek to the matching position before swapping.
@@ -401,12 +435,19 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       _activeStream = nextStream;
       _player = nextPlayer;
       swapped = true;
-      _videoSurface = vp.VideoPlayer(nextPlayer);
+      // Detach the old texture before disposing its native player. The widget
+      // tree may still contain the previous TextureLayer until the scheduled
+      // frame is committed; disposing the player immediately can make the
+      // macOS raster thread resolve an already-unregistered texture.
+      _videoSurface = const ColoredBox(color: Colors.black);
       adapter.attachPlayer(nextPlayer);
       adapter.setActiveUrl(_activeStream.url);
       _bindPlayer();
       if (mounted) setState(() {});
+      if (mounted) await WidgetsBinding.instance.endOfFrame;
       await oldPlayer.dispose();
+      _videoSurface = vp.VideoPlayer(nextPlayer);
+      if (mounted) setState(() {});
       await _open(
         restorePlaying: restorePlaying,
         applyPreferredQuality: false,
@@ -789,15 +830,16 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                         child: child!,
                       ),
                     ),
-                    Positioned.fromRect(
-                      rect: subtitleRect,
-                      child: SubtitleHtmlText(
-                        text: value.caption.text,
-                        textStyle:
-                            widget.subtitleAppearance?.textStyle ??
-                            playerSubtitleTextStyle,
+                    if (PlayerSubtitleVisibility.of(context))
+                      Positioned.fromRect(
+                        rect: subtitleRect,
+                        child: SubtitleHtmlText(
+                          text: value.caption.text,
+                          textStyle:
+                              widget.subtitleAppearance?.textStyle ??
+                              playerSubtitleTextStyle,
+                        ),
                       ),
-                    ),
                   ],
                 );
               },

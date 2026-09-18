@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -15,7 +14,6 @@ import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
-import '../player/models/playback_media.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
 import '../player/workflow/primary_episode_target.dart';
@@ -28,6 +26,8 @@ import '../widgets/media_hero_card.dart';
 import '../widgets/media_hero_flexible_space.dart';
 import '../widgets/media_hero_summary.dart';
 import '../widgets/shimmer_placeholder.dart';
+import 'detail_controller.dart';
+import 'detail_state.dart';
 import 'open_versioned_item.dart';
 
 class DetailPageV2 extends StatefulWidget {
@@ -52,15 +52,15 @@ class _DetailPageV2State extends State<DetailPageV2> {
   /// tile is built eagerly, so the chips bound the work as well as the scroll.
   static const int _episodesPerRange = 100;
 
-  Future<MediaDetailV2>? _detail;
+  DetailController? _detailController;
   String? _selectedGroupId;
   int? _selectedRangeIndex;
   bool _descriptionExpanded = false;
-  bool _sourcePrefetchStarted = false;
   final ValueNotifier<double> _heroToolbarOpacity = ValueNotifier(0);
 
   @override
   void dispose() {
+    _detailController?.close();
     _heroToolbarOpacity.dispose();
     super.dispose();
   }
@@ -68,16 +68,13 @@ class _DetailPageV2State extends State<DetailPageV2> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _detail ??= _loadDetail();
-  }
-
-  Future<MediaDetailV2> _loadDetail() async {
-    try {
-      return await AppScope.of(context).registry.meta(widget.item.ref);
-    } catch (_) {
-      // Catalogs may provide playable items without a separate metadata role.
-      // Keep the listing snapshot usable so the item's Play action still works.
-      return MediaDetailV2(item: widget.item);
+    if (_detailController == null) {
+      final controller = DetailController(
+        registry: AppScope.of(context).registry,
+        item: widget.item,
+      );
+      _detailController = controller;
+      controller.load();
     }
   }
 
@@ -87,7 +84,12 @@ class _DetailPageV2State extends State<DetailPageV2> {
     Duration? movieProgress,
   ) {
     if (target == null) {
-      if (hasEpisodes(detail.episodeGuide)) return 'Coming soon';
+      if (detail.episodeGuide != null) {
+        final loading = detail.episodeGuide!.groups.any(
+          (group) => !group.loaded,
+        );
+        return loading ? 'Loading episodes…' : 'Coming soon';
+      }
       return (movieProgress ?? Duration.zero) > Duration.zero
           ? 'Continue Watching'
           : 'Watch Now';
@@ -105,22 +107,59 @@ class _DetailPageV2State extends State<DetailPageV2> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.surfaceDark,
-    body: FutureBuilder<MediaDetailV2>(
-      future: _detail,
-      builder: (context, snapshot) {
-        final detail = snapshot.data ?? MediaDetailV2(item: widget.item);
-        return _buildDetail(
-          detail,
-          metadataLoading: snapshot.connectionState != ConnectionState.done,
+  Widget build(BuildContext context) {
+    final controller = _detailController;
+    if (controller == null) {
+      return const Scaffold(backgroundColor: AppColors.surfaceDark);
+    }
+    return BlocConsumer<DetailController, DetailState>(
+      bloc: controller,
+      listenWhen: (previous, current) =>
+          previous.status != current.status ||
+          previous.detail != current.detail,
+      listener: (context, state) => _ensureSelectedGroupLoaded(state),
+      builder: (context, state) {
+        final detail = state.detail ?? MediaDetailV2(item: widget.item);
+        return Scaffold(
+          backgroundColor: AppColors.surfaceDark,
+          body: _buildDetail(detail, metadataLoading: state.metadataLoading),
         );
       },
-    ),
-  );
+    );
+  }
+
+  void _ensureSelectedGroupLoaded(DetailState state) {
+    final detail = state.detail;
+    final guide = detail?.episodeGuide;
+    if (detail == null || guide == null) return;
+    final library = AppScope.of(context).libraryController.state;
+    final group = _selectedGroup(detail, guide.groups, library);
+    if (group == null ||
+        group.loaded ||
+        state.isGroupLoading(group.id) ||
+        state.groupErrorFor(group.id) != null) {
+      return;
+    }
+    _detailController?.loadGroup(group.id);
+  }
+
+  void _requestGroupLoad(String? groupId) {
+    if (groupId == null) return;
+    final controller = _detailController;
+    final groups = controller?.state.detail?.episodeGuide?.groups;
+    if (controller == null || groups == null) return;
+    final group = groups
+        .where((candidate) => candidate.id == groupId)
+        .firstOrNull;
+    if (group == null ||
+        group.loaded ||
+        controller.state.isGroupLoading(group.id)) {
+      return;
+    }
+    controller.loadGroup(group.id);
+  }
 
   Widget _buildDetail(MediaDetailV2 detail, {required bool metadataLoading}) {
-    if (!metadataLoading) _prefetchPrimarySources(detail);
     final item = detail.item;
     final trailers = detail.trailers
         .where((trailer) => !_isAutoplayTrailer(trailer))
@@ -369,22 +408,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
     return false;
   }
 
-  void _prefetchPrimarySources(MediaDetailV2 detail) {
-    if (_sourcePrefetchStarted) return;
-    _sourcePrefetchStarted = true;
-    if (detail.item.isUpcoming) return;
-    final scope = AppScope.of(context);
-    final target = primaryEpisodeTarget(
-      detail.episodeGuide,
-      detail.item.ref,
-      scope.libraryController.state,
-    );
-    final item = primaryPlaybackTarget(detail, target);
-    if (item != null) {
-      unawaited(prefetchPlaybackSources(scope, PlaybackMedia(item)));
-    }
-  }
-
   Widget _heroActions({
     required MediaDetailV2 detail,
     required MediaItemV2 item,
@@ -445,6 +468,29 @@ class _DetailPageV2State extends State<DetailPageV2> {
     builder: (context, state) {
       final selectedGroup = _selectedGroup(detail, groups, state);
       if (selectedGroup == null) return const SizedBox.shrink();
+      if (!selectedGroup.loaded) {
+        final detailController = _detailController;
+        final groupError = detailController?.state.groupErrorFor(
+          selectedGroup.id,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: AppSpacing.xl),
+            _episodeGroupHeader(groups, selectedGroup),
+            const SizedBox(height: AppSpacing.md),
+            if (groupError == null)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              const Text('Could not load episodes.'),
+              TextButton(
+                onPressed: () => detailController?.loadGroup(selectedGroup.id),
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        );
+      }
       final rangeCount = (selectedGroup.episodes.length / _episodesPerRange)
           .ceil();
       final rangeIndex = _rangeIndexFor(
@@ -462,35 +508,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              const Expanded(child: _SectionTitle('Episodes')),
-              if (groups.length > 1)
-                Flexible(
-                  child: DropdownButton<String>(
-                    value: selectedGroup.id,
-                    isExpanded: true,
-                    dropdownColor: AppColors.surfaceDarkElevated,
-                    items: [
-                      for (final group in groups)
-                        DropdownMenuItem(
-                          value: group.id,
-                          child: Text(
-                            group.title,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() {
-                      _selectedGroupId = value;
-                      // Another season's ranges are its own; keeping the index
-                      // would land on an arbitrary hundred of it.
-                      _selectedRangeIndex = null;
-                    }),
-                  ),
-                ),
-            ],
-          ),
+          _episodeGroupHeader(groups, selectedGroup),
           const SizedBox(height: AppSpacing.sm),
           if (rangeCount > 1) ...[
             _EpisodeRangeChips(
@@ -540,7 +558,43 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final resumed = detail.episodeGuide == null
         ? null
         : resumedEpisodeTarget(detail.episodeGuide!, detail.item.ref, library);
-    return resumed?.group ?? groups.last;
+    if (resumed != null) return resumed.group;
+
+    // Lazy groups have no episodes yet, so resumedEpisodeTarget cannot match
+    // the saved episode ref. Its EpisodeIdentity still carries the exact
+    // season, which lets the controller load the right group first.
+    final resumedGroupId = _latestWatchedGroupId(detail.item.ref, library);
+    if (resumedGroupId != null) {
+      final resumedGroup = groups
+          .where((group) => group.id == resumedGroupId)
+          .firstOrNull;
+      if (resumedGroup != null) return resumedGroup;
+    }
+    return groups.last;
+  }
+
+  String? _latestWatchedGroupId(MediaRef parentRef, LibraryState library) {
+    final watchedEpisodes =
+        library.records.values
+            .where(
+              (record) =>
+                  record.progress != null &&
+                  record.progress! > Duration.zero &&
+                  record.item is EpisodeItemV2 &&
+                  (record.item as EpisodeItemV2).episode.parentRef == parentRef,
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                  a.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0),
+                ),
+          );
+    for (final record in watchedEpisodes) {
+      final groupId = (record.item as EpisodeItemV2).episode.groupId;
+      if (groupId != null) return groupId;
+    }
+    return null;
   }
 
   /// The range the list opens on: the one holding whatever Play would start,
@@ -593,6 +647,39 @@ class _DetailPageV2State extends State<DetailPageV2> {
         .clamp(0, 1)
         .toDouble();
   }
+
+  Widget _episodeGroupHeader(
+    List<EpisodeGroup> groups,
+    EpisodeGroup selectedGroup,
+  ) => Row(
+    children: [
+      const Expanded(child: _SectionTitle('Episodes')),
+      if (groups.length > 1)
+        Flexible(
+          child: DropdownButton<String>(
+            value: selectedGroup.id,
+            isExpanded: true,
+            dropdownColor: AppColors.surfaceDarkElevated,
+            items: [
+              for (final group in groups)
+                DropdownMenuItem(
+                  value: group.id,
+                  child: Text(group.title, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedGroupId = value;
+                // Another season's ranges are its own; keeping the index would
+                // land on an arbitrary hundred of it.
+                _selectedRangeIndex = null;
+              });
+              _requestGroupLoad(value);
+            },
+          ),
+        ),
+    ],
+  );
 }
 
 class _PrimaryPlayButton extends StatelessWidget {
@@ -646,6 +733,7 @@ class _Header extends StatelessWidget {
               child: MediaHeroSummary(
                 item: item,
                 alignStart: alignStart,
+                showRatings: true,
                 extra: detail.tags.isEmpty
                     ? null
                     : _Tags(values: detail.tags, alignStart: alignStart),

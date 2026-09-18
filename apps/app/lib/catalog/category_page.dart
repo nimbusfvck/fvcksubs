@@ -202,7 +202,9 @@ class _CategoryPageState extends State<CategoryPage> {
                       expandedHeight: featuredHeight,
                       collapsedHeight:
                           kToolbarHeight + MediaQuery.paddingOf(context).top,
-                      child: FeaturedHero(items: _featuredItems),
+                      child: CenteredContent(
+                        child: FeaturedHero(items: _featuredItems),
+                      ),
                     ),
               backgroundColor: AppColors.surfaceDark,
               foregroundColor: AppColors.onDark,

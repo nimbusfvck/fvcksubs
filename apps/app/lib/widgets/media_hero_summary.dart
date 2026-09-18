@@ -6,6 +6,7 @@ import '../catalog/artwork_cache.dart';
 import '../catalog/generated_banner.dart';
 import '../catalog/start_time_label.dart';
 import '../theme/tokens.dart';
+import 'media_hero_layout.dart';
 
 /// Shared centered title and metadata used by Home and Detail hero cards.
 class MediaHeroSummary extends StatelessWidget {
@@ -17,6 +18,7 @@ class MediaHeroSummary extends StatelessWidget {
     this.titleTextKey,
     this.titleLogoKey,
     this.alignStart = false,
+    this.showRatings = false,
   });
 
   static const textShadows = [
@@ -29,6 +31,7 @@ class MediaHeroSummary extends StatelessWidget {
   final Key? titleTextKey;
   final Key? titleLogoKey;
   final bool alignStart;
+  final bool showRatings;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -44,7 +47,11 @@ class MediaHeroSummary extends StatelessWidget {
         alignStart: alignStart,
       ),
       const SizedBox(height: AppSpacing.xs),
-      _MediaHeroMeta(item: item, alignStart: alignStart),
+      _MediaHeroMeta(
+        item: item,
+        alignStart: alignStart,
+        showRatings: showRatings,
+      ),
       if (item.subtitle case final subtitle?) ...[
         const SizedBox(height: AppSpacing.xs),
         Text(
@@ -112,6 +119,7 @@ class _MediaHeroTitle extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       textAlign: alignStart ? TextAlign.start : TextAlign.center,
       style: AppTypography.displaySm.copyWith(
+        fontSize: 26,
         color: AppColors.onDark,
         fontWeight: FontWeight.w800,
         letterSpacing: -0.7,
@@ -119,6 +127,9 @@ class _MediaHeroTitle extends StatelessWidget {
       ),
     );
     if (logo == null) return fallback;
+    final largeScreen = MediaHeroLayout.isLargeScreen(context);
+    final logoWidth = largeScreen ? 360.0 : 280.0;
+    final logoHeight = largeScreen ? 68.0 : 56.0;
     return Semantics(
       label: item.title,
       image: true,
@@ -126,10 +137,10 @@ class _MediaHeroTitle extends StatelessWidget {
         child: Align(
           alignment: titleAlignment,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
+            constraints: BoxConstraints(maxWidth: logoWidth),
             child: SizedBox(
               width: double.infinity,
-              height: 56,
+              height: logoHeight,
               child: CachedNetworkImage(
                 key: logoKey,
                 imageUrl: logo.url,
@@ -137,7 +148,7 @@ class _MediaHeroTitle extends StatelessWidget {
                 fit: BoxFit.contain,
                 fadeInDuration: const Duration(milliseconds: 320),
                 fadeInCurve: Curves.easeOutCubic,
-                memCacheWidth: artworkCacheDimension(context, 280),
+                memCacheWidth: artworkCacheDimension(context, logoWidth),
                 placeholder: (_, _) => const SizedBox.shrink(),
                 errorWidget: (_, _, _) =>
                     Align(alignment: titleAlignment, child: fallback),
@@ -151,10 +162,15 @@ class _MediaHeroTitle extends StatelessWidget {
 }
 
 class _MediaHeroMeta extends StatelessWidget {
-  const _MediaHeroMeta({required this.item, required this.alignStart});
+  const _MediaHeroMeta({
+    required this.item,
+    required this.alignStart,
+    required this.showRatings,
+  });
 
   final MediaItemV2 item;
   final bool alignStart;
+  final bool showRatings;
 
   @override
   Widget build(BuildContext context) {
@@ -216,10 +232,77 @@ class _MediaHeroMeta extends StatelessWidget {
               shadows: MediaHeroSummary.textShadows,
             ),
           ),
+        if (showRatings)
+          for (final rating in item.ratings) _MediaRatingChip(rating: rating),
       ],
     );
   }
 }
+
+class _MediaRatingChip extends StatelessWidget {
+  const _MediaRatingChip({required this.rating});
+
+  final MediaRating rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = rating.scale == 10
+        ? '${rating.score.toStringAsFixed(1)}/10'
+        : '${rating.score.toStringAsFixed(0)}/${rating.scale.toStringAsFixed(0)}';
+    final icon = rating.icon;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: CachedNetworkImage(
+              imageUrl: icon.url,
+              width: 16,
+              height: 16,
+              fit: BoxFit.contain,
+              errorWidget: (_, _, _) => _ratingFallbackIcon(rating.source),
+            ),
+          )
+        else
+          _ratingFallbackIcon(rating.source),
+        const SizedBox(width: AppSpacing.xxs),
+        Text(
+          '${_ratingLabel(rating.source)} $score',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDark,
+            shadows: MediaHeroSummary.textShadows,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Widget _ratingFallbackIcon(String source) => Container(
+  width: 16,
+  height: 16,
+  alignment: Alignment.center,
+  decoration: BoxDecoration(
+    color: Colors.white.withValues(alpha: 0.18),
+    borderRadius: BorderRadius.circular(3),
+  ),
+  child: Text(
+    _ratingLabel(source).substring(0, 1),
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 9,
+      fontWeight: FontWeight.w800,
+    ),
+  ),
+);
+
+String _ratingLabel(String source) => switch (source) {
+  'imdb' => 'IMDb',
+  'rottenTomatoes' => 'RT',
+  'metacritic' => 'MC',
+  _ => source,
+};
 
 String _kindLabel(MediaItemV2 item) => switch (item.kind) {
   MediaKindV2.video => 'Movie',

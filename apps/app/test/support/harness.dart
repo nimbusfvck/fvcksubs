@@ -19,6 +19,7 @@ import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
 import 'package:fvcksubs_app/settings/preview_autoplay_preference_controller.dart';
+import 'package:fvcksubs_app/settings/febbox_cookie_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -46,6 +47,7 @@ class FakeExtension extends ContentExtension {
     this.resolved,
     this.resolveFailsFor = const {},
     this.metaDetail,
+    this.metaForGroup,
     this.previewFor = const {},
     this.searchable = false,
     this.searchResults = const [],
@@ -277,10 +279,13 @@ class FakeExtension extends ContentExtension {
   /// What [meta] returns; `null` leaves it throwing, matching the protocol
   /// default for extensions that don't implement the role.
   MediaDetailV2? metaDetail;
+  final MediaDetailV2? Function(String? groupId)? metaForGroup;
 
   @override
-  Future<MediaDetailV2> meta(MediaRef ref) async =>
-      metaDetail ?? (throw UnsupportedError('$id does not provide meta'));
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) async =>
+      metaForGroup?.call(groupId) ??
+      metaDetail ??
+      (throw UnsupportedError('$id does not provide meta'));
 
   /// What [preview] returns per item id; an id with no entry leaves it
   /// throwing, matching the protocol default for extensions that don't
@@ -881,6 +886,7 @@ Widget wrapApp({
   PictureInPictureSession? pictureInPictureSession,
   PictureInPicturePreferenceController? pictureInPicturePreferenceController,
   PreviewAutoplayPreferenceController? previewAutoplayPreferenceController,
+  FebboxCookieController? febboxCookieController,
 }) => AppScope(
   navigatorKey: _testNavigatorKey,
   registry: registry,
@@ -934,6 +940,7 @@ Widget wrapApp({
         store: FakeNsfwSettingsStore(),
         showNsfw: registry.showNsfw,
       ),
+  febboxCookieController: febboxCookieController,
   child: MaterialApp(
     navigatorKey: _testNavigatorKey,
     builder: (context, routeChild) => Stack(

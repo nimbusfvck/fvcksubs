@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as html;
 import 'package:html/parser.dart' as html_parser;
 
+import 'player_subtitle_style.dart';
+
 /// Renders the safe inline HTML formatting commonly found in subtitle cues.
 ///
 /// Captions are untrusted upstream text. This deliberately supports text
@@ -22,13 +24,19 @@ class SubtitleHtmlText extends StatelessWidget {
         DefaultTextStyle.of(
           context,
         ).style.copyWith(fontSize: 36, color: Colors.white);
+    final backgroundColor =
+        style.backgroundColor ?? playerSubtitleBackgroundColor;
+    // Paint the cue background once around the whole caption. A background
+    // on TextStyle is painted per glyph/line and creates stacked bands for
+    // multiline captions.
+    final textOnlyStyle = style.copyWith(backgroundColor: Colors.transparent);
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 24),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xB8000000),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(2),
           ),
           child: Padding(
@@ -36,8 +44,8 @@ class SubtitleHtmlText extends StatelessWidget {
             child: RichText(
               textAlign: TextAlign.center,
               text: TextSpan(
-                style: style,
-                children: subtitleHtmlSpans(text, style),
+                style: textOnlyStyle,
+                children: subtitleHtmlSpans(text, textOnlyStyle),
               ),
             ),
           ),
@@ -130,9 +138,6 @@ TextStyle _styleForElement(html.Element element, TextStyle parent) {
       case 'color':
         final color = _htmlColor(value);
         if (color != null) style = style.copyWith(color: color);
-      case 'background-color':
-        final color = _htmlColor(value);
-        if (color != null) style = style.copyWith(backgroundColor: color);
       case 'font-style':
         if (value.toLowerCase() == 'italic') {
           style = style.copyWith(fontStyle: FontStyle.italic);

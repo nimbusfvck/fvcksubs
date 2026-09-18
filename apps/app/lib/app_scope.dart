@@ -17,6 +17,7 @@ import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
 import 'settings/nsfw_controller.dart';
 import 'settings/preview_autoplay_preference_controller.dart';
+import 'settings/febbox_cookie_controller.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({
@@ -38,6 +39,7 @@ class AppScope extends InheritedWidget {
     required this.pictureInPicturePreferenceController,
     required this.previewAutoplayPreferenceController,
     required this.nsfwController,
+    this.febboxCookieController,
     this.navigatorKey,
     required super.child,
   });
@@ -77,6 +79,8 @@ class AppScope extends InheritedWidget {
 
   final NsfwController nsfwController;
 
+  final FebboxCookieController? febboxCookieController;
+
   final GlobalKey<NavigatorState>? navigatorKey;
 
   static AppScope of(BuildContext context) {
@@ -106,5 +110,6 @@ class AppScope extends InheritedWidget {
       previewAutoplayPreferenceController !=
           oldWidget.previewAutoplayPreferenceController ||
       nsfwController != oldWidget.nsfwController ||
+      febboxCookieController != oldWidget.febboxCookieController ||
       navigatorKey != oldWidget.navigatorKey;
 }

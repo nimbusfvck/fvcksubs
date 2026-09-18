@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,9 +8,10 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import '../catalog/artwork_cache.dart';
 import '../theme/tokens.dart';
 import 'media_hero_flexible_space.dart';
+import 'media_hero_layout.dart';
 
 /// Shared visual frame for prominent media on Home and Detail.
-class MediaHeroCard extends StatelessWidget {
+class MediaHeroCard extends StatefulWidget {
   const MediaHeroCard({
     super.key,
     required this.item,
@@ -47,16 +49,62 @@ class MediaHeroCard extends StatelessWidget {
   final Object? heroTag;
 
   @override
+  State<MediaHeroCard> createState() => _MediaHeroCardState();
+}
+
+class _MediaHeroCardState extends State<MediaHeroCard> {
+  Timer? _backdropTimer;
+  int _backdropIndex = 0;
+
+  @override
+  void dispose() {
+    _backdropTimer?.cancel();
+    super.dispose();
+  }
+
+  List<ImageRef> _landscapes() {
+    final artwork = widget.item.artwork;
+    if (artwork == null) return const [];
+    final images = <ImageRef>[];
+    if (artwork.landscape != null) images.add(artwork.landscape!);
+    for (final image in artwork.backdrops) {
+      if (!images.any((existing) => existing.url == image.url)) {
+        images.add(image);
+      }
+    }
+    return images;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _backdropTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!mounted) return;
+      final count = _landscapes().length;
+      if (count < 2) return;
+      setState(() => _backdropIndex = (_backdropIndex + 1) % count);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final image = item.artwork?.portrait ?? item.artwork?.landscape;
+    final artworkData = widget.item.artwork;
+    final landscapes = _landscapes();
+    final image = MediaHeroLayout.isLargeScreen(context)
+        ? (landscapes.isNotEmpty
+              ? landscapes[_backdropIndex % landscapes.length]
+              : artworkData?.portrait)
+        : artworkData?.portrait ?? artworkData?.landscape;
     final fallbackArtwork =
-        fallback ?? const ColoredBox(color: AppColors.surfaceDarkElevated);
+        widget.fallback ??
+        const ColoredBox(color: AppColors.surfaceDarkElevated);
     Widget artwork = image == null
         ? fallbackArtwork
         : CachedNetworkImage(
+            key: ValueKey(image.url),
             imageUrl: image.url,
             fit: BoxFit.cover,
-            alignment: artworkAlignment,
+            alignment: widget.artworkAlignment,
             fadeInDuration: Duration.zero,
             memCacheWidth: artworkCacheDimension(
               context,
@@ -66,17 +114,19 @@ class MediaHeroCard extends StatelessWidget {
                 const ColoredBox(color: AppColors.surfaceDarkElevated),
             errorWidget: (_, _, _) => fallbackArtwork,
           );
-    if (image != null && heroTag != null) {
-      artwork = Hero(tag: heroTag!, child: artwork);
+    if (image != null && widget.heroTag != null) {
+      artwork = Hero(tag: widget.heroTag!, child: artwork);
     }
     final backdrop = Stack(
       fit: StackFit.expand,
       children: [
         artwork,
         const _HeroBottomBlur(),
-        if (preview case final preview?) Positioned.fill(child: preview),
-        if (showGradient)
-          const DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
+        if (widget.preview case final preview?) Positioned.fill(child: preview),
+        if (widget.showGradient)
+          const DecoratedBox(
+            decoration: BoxDecoration(gradient: MediaHeroCard.gradient),
+          ),
       ],
     );
     final collapse = MediaHeroCollapseScope.of(context);
@@ -92,7 +142,7 @@ class MediaHeroCard extends StatelessWidget {
             ),
           ),
         ),
-        foreground,
+        widget.foreground,
       ],
     );
   }

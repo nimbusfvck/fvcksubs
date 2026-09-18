@@ -902,6 +902,14 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
                           if (status == AVKeyValueStatusLoaded) {
                             NSArray<AVAssetVariant *> *variants = urlAsset.variants;
                             double currentBitrate = MAX(currentItem.preferredPeakBitRate, 0);
+                            if (currentBitrate <= 0) {
+                              // Auto quality leaves preferredPeakBitRate at 0.
+                              // The access log reports the rendition AVPlayer
+                              // actually selected for the latest segment.
+                              AVPlayerItemAccessLogEvent *event =
+                                  currentItem.accessLog.events.lastObject;
+                              currentBitrate = MAX(event.indicatedBitrate, 0);
+                            }
 
                             NSInteger variantIndex = 0;
                             for (AVAssetVariant *variant in variants) {

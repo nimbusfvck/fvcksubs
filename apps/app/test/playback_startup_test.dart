@@ -220,6 +220,23 @@ void main() {
     },
   );
 
+  test('selects the only native audio track when none is active', () async {
+    final player = _NativePlayer(_stream.url);
+    final controller = _Controller(player.calls, audioSelected: false);
+    final startup = _startup(player, controller);
+
+    await startup.open(
+      initialized: false,
+      looping: false,
+      muted: false,
+      playing: false,
+      isLive: false,
+    );
+
+    expect(controller.audioSelectionCalls, 1);
+    expect(player.calls, contains('audio'));
+  });
+
   test(
     'replacement during initial seek cannot start the old controller',
     () async {
@@ -386,14 +403,19 @@ class _NativePlayer extends vp.VideoPlayerController {
 }
 
 class _Controller extends FakeAppPlayerController {
-  _Controller(this.calls);
+  _Controller(this.calls, {this.audioSelected = true});
   final List<String> calls;
+  bool audioSelected;
   int qualityCalls = 0;
+  int audioSelectionCalls = 0;
 
   @override
   List<AppAudioTrack> get audioTracks => const [
     AppAudioTrack(id: 'audio', label: 'Audio'),
   ];
+
+  @override
+  AppAudioTrack? get activeAudio => audioSelected ? audioTracks.single : null;
 
   @override
   List<AppQualityTrack> get qualityTracks => const [
@@ -403,5 +425,12 @@ class _Controller extends FakeAppPlayerController {
   Future<void> setQuality(AppQualityTrack? track) async {
     calls.add('quality');
     qualityCalls++;
+  }
+
+  @override
+  Future<void> setAudioTrack(AppAudioTrack track) async {
+    calls.add('audio');
+    audioSelectionCalls++;
+    audioSelected = true;
   }
 }

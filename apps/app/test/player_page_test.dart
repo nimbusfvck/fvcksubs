@@ -11,12 +11,28 @@ import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
+import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
 
 void main() {
+  test('VOD MP4 stalls use a different source instead of renewal', () {
+    expect(
+      shouldFallbackAfterVODStall(isLive: false, format: StreamFormat.mp4),
+      isTrue,
+    );
+    expect(
+      shouldFallbackAfterVODStall(isLive: false, format: StreamFormat.hls),
+      isFalse,
+    );
+    expect(
+      shouldFallbackAfterVODStall(isLive: true, format: StreamFormat.mp4),
+      isFalse,
+    );
+  });
+
   test('live buffering and renewal health use playback progress', () {
     expect(
       liveForwardBuffer(
@@ -555,6 +571,14 @@ void main() {
       ),
     );
     await tester.pump();
+    expect(
+      tester
+          .widget<PlayerSubtitleVisibility>(
+            find.byType(PlayerSubtitleVisibility),
+          )
+          .showSubtitles,
+      isTrue,
+    );
 
     final controller = player.controllers.single;
     controller.emitValue(
@@ -571,6 +595,14 @@ void main() {
 
     expect(controller.pictureInPictureCalls, 0);
     expect(session.isMinimized, isTrue);
+    expect(
+      tester
+          .widget<PlayerSubtitleVisibility>(
+            find.byType(PlayerSubtitleVisibility),
+          )
+          .showSubtitles,
+      isFalse,
+    );
     expect(controller.pictureInPictureAllowed, contains(true));
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(find.byType(DetailPageV2), findsNothing);

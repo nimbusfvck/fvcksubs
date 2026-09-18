@@ -62,11 +62,13 @@ void main() {
           EpisodeGroup(
             id: 'volume-1',
             title: 'Volume 1',
+            loaded: false,
             episodes: [
               EpisodeSummary(
                 ref: episodeRef,
                 title: 'Episode 1',
                 position: 1,
+                absoluteEpisode: 62,
                 durationSeconds: 1200,
               ),
             ],

@@ -111,6 +111,8 @@ class VideoPlayerStartup {
     );
     await applyPreferredQuality();
     if (!isCurrent()) return false;
+    await _selectOnlyAudioTrackIfNeeded();
+    if (!isCurrent()) return false;
     log(
       'quality_initial_done',
       details: 'active=${controller.activeQuality?.id ?? 'auto'}',
@@ -202,6 +204,8 @@ class VideoPlayerStartup {
         if (!isCurrent()) return;
         await applyPreferredQuality();
         if (!isCurrent()) return;
+        await _selectOnlyAudioTrackIfNeeded();
+        if (!isCurrent()) return;
         log(
           'tracks_retry_done',
           details:
@@ -212,6 +216,21 @@ class VideoPlayerStartup {
       } catch (_) {
         log('tracks_retry_failed', details: 'attempt=$attempt');
       }
+    }
+  }
+
+  Future<void> _selectOnlyAudioTrackIfNeeded() async {
+    final tracks = controller.audioTracks;
+    if (tracks.length != 1 || controller.activeAudio != null) return;
+    final track = tracks.single;
+    log('audio_default_start', details: 'track=${track.id}');
+    try {
+      await controller.setAudioTrack(track);
+      if (isCurrent()) log('audio_default_done', details: 'track=${track.id}');
+    } catch (error) {
+      // A provider's audio metadata must not make otherwise playable video
+      // fail during startup.
+      log('audio_default_failed', details: '${error.runtimeType}');
     }
   }
 

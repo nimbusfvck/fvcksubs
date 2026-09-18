@@ -135,7 +135,7 @@ void main() {
 
     expect(controller.appearance.fontSize, 36);
     expect(controller.appearance.textColor, const Color(0xffffeb3b));
-    expect(controller.appearance.backgroundColor, const Color(0xdd10243d));
+    expect(controller.appearance.backgroundColor, const Color(0xbb10243d));
     expect(controller.appearance.outline, isTrue);
     expect(store.appearanceSaved.fontSize, 36);
     expect(store.appearanceSaved.outline, isTrue);

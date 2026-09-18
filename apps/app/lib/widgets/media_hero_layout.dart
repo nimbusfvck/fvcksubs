@@ -8,9 +8,9 @@ import '../theme/breakpoints.dart';
 abstract final class MediaHeroLayout {
   static const double narrowBreakpoint = 600;
   static const double narrowHeightFactor = 1.4;
-  static const double wideMinHeight = 460;
-  static const double wideMaxHeight = 520;
-  static const double wideViewportHeightFactor = 0.57;
+
+  /// Cinematic banner ratio for landscape artwork on wide screens.
+  static const double wideAspectRatio = 2.2;
   static const double summaryBottom = 24;
   static const double homeSummaryBottom = 40;
   static const double homeIndicatorBottom = 8;
@@ -32,11 +32,10 @@ abstract final class MediaHeroLayout {
     if (viewport.width <= narrowBreakpoint) {
       return viewport.width * narrowHeightFactor;
     }
-    return math
-        .min(
-          wideMaxHeight,
-          math.max(wideMinHeight, viewport.height * wideViewportHeightFactor),
-        )
-        .toDouble();
+    final contentWidth = math.min(
+      viewport.width,
+      AppBreakpoints.maxContentWidth,
+    );
+    return contentWidth / wideAspectRatio;
   }
 }

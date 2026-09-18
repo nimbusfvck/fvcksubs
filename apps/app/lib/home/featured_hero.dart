@@ -298,13 +298,17 @@ class _FeaturedHeroState extends State<FeaturedHero>
           ),
           Positioned.fill(
             child: IgnorePointer(
-              child: _FeaturedPosterLayer(
-                items: widget.items,
-                selectedPage: _page,
-                pageController: _pageController,
-                dragging: _dragging,
-                previewRef: _previewRef,
-                animatePosterIn: _animatePosterIn,
+              child: ClipRect(
+                // Keep the parallax overscan inside CenteredContent on very
+                // wide windows instead of letting artwork escape its bounds.
+                child: _FeaturedPosterLayer(
+                  items: widget.items,
+                  selectedPage: _page,
+                  pageController: _pageController,
+                  dragging: _dragging,
+                  previewRef: _previewRef,
+                  animatePosterIn: _animatePosterIn,
+                ),
               ),
             ),
           ),

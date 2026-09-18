@@ -592,8 +592,8 @@ class ExtensionRegistry {
   /// (PLAN.md §14) only needs to treat a ref as unavailable once its
   /// extension is actually gone from [installed], which callers check via
   /// [extensionById] throwing.
-  Future<MediaDetailV2> meta(MediaRef ref) =>
-      extensionById(ref.extensionId).meta(ref);
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) =>
+      extensionById(ref.extensionId).meta(ref, groupId: groupId);
 
   /// The installed extension with [id]. Throws [StateError] if none.
   ContentExtension extensionById(String id) => _extensions.firstWhere(

@@ -4,7 +4,8 @@ class _VideoPlayerControllerAdapter
     implements
         AppPlayerController,
         AppPlayerPictureInPictureRestorer,
-        AppPlayerPictureInPicturePolicy {
+        AppPlayerPictureInPicturePolicy,
+        AppPlayerTrackRefresher {
   _VideoPlayerControllerAdapter(
     this._player, {
     required this.onSetFit,
@@ -59,7 +60,7 @@ class _VideoPlayerControllerAdapter
           bitrate: variant.bitrate,
           variant: variant,
         ),
-  ]);
+  ], preferredId: _hasPendingVariant ? _pendingVariantId : _selectedVariantId);
   @override
   AppQualityTrack? get activeQuality {
     final variantId = _hasPendingVariant

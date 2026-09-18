@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/player/widgets/subtitle_html_text.dart';
 
 void main() {
@@ -37,5 +38,46 @@ void main() {
     final spans = subtitleHtmlSpans('Use {this} exactly', const TextStyle());
 
     expect(TextSpan(children: spans).toPlainText(), 'Use {this} exactly');
+  });
+
+  testWidgets('multiline captions use one shared background', (tester) async {
+    const background = Color(0xbb10243d);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SubtitleHtmlText(
+          text: 'First line\nSecond line',
+          textStyle: TextStyle(
+            color: Colors.white,
+            backgroundColor: background,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(DecoratedBox), findsOneWidget);
+    final richText = tester.widget<RichText>(find.byType(RichText));
+    final text = richText.text as TextSpan;
+    expect(text.style?.backgroundColor, Colors.transparent);
+    expect(
+      text.children!.every(
+        (span) => (span as TextSpan).style?.backgroundColor != background,
+      ),
+      isTrue,
+    );
+  });
+
+  test('normalizes legacy dark subtitle backgrounds', () {
+    expect(
+      normalizedSubtitleBackgroundColor(const Color(0xaa000000)),
+      const Color(0x88000000),
+    );
+    expect(
+      normalizedSubtitleBackgroundColor(const Color(0xdd151515)),
+      const Color(0xbb151515),
+    );
+    expect(
+      normalizedSubtitleBackgroundColor(const Color(0xdd10243d)),
+      const Color(0xbb10243d),
+    );
   });
 }

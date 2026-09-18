@@ -204,6 +204,40 @@ void main() {
       expect(cache.peekSourceList(ref)!.single.id, 'c2');
     });
 
+    test('a provider refresh replaces its old descriptors only', () {
+      final cache = SourceCache();
+      cache.recordSourceList(ref, [
+        const StreamSource(
+          id: 'febbox-auto-old',
+          label: 'Febbox Auto',
+          providerId: 'nimora.showbox',
+        ),
+        const StreamSource(
+          id: 'febbox-1080-old',
+          label: 'Febbox 1080p',
+          providerId: 'nimora.showbox',
+        ),
+        const StreamSource(
+          id: 'other',
+          label: 'Other source',
+          providerId: 'nimora.other',
+        ),
+      ]);
+
+      cache.recordSourceList(ref, [
+        const StreamSource(
+          id: 'febbox-auto-new',
+          label: 'Febbox Auto',
+          providerId: 'nimora.showbox',
+        ),
+      ]);
+
+      expect(cache.peekSourceList(ref)!.map((entry) => entry.id), [
+        'febbox-auto-new',
+        'other',
+      ]);
+    });
+
     test('recordSourceList persists through sourceListStore', () async {
       final store = FakeSourceListStore();
       final cache = SourceCache(sourceListStore: store);

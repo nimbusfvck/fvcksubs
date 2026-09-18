@@ -57,6 +57,41 @@ void main() {
     },
   );
 
+  test('Febbox label migration does not duplicate the same source', () {
+    const oldSource = StreamSource(
+      id: 'nimora.showbox:stable-file-share',
+      label: 'Febbox ⚡ · Auto · 2.2 GB',
+      provider: 'Nimora',
+      providerId: 'nimora.showbox',
+    );
+    const refreshedSource = StreamSource(
+      id: 'nimora.showbox:stable-file-share',
+      label: 'Febbox ⚡',
+      provider: 'Nimora',
+      providerId: 'nimora.showbox',
+    );
+    const oldResolved = ResolvedSource(
+      source: oldSource,
+      stream: PlayableStream(
+        url: 'https://stream.example/old.m3u8',
+        format: StreamFormat.hls,
+      ),
+    );
+    const refreshedResolved = ResolvedSource(
+      source: refreshedSource,
+      stream: PlayableStream(
+        url: 'https://stream.example/refreshed.m3u8',
+        format: StreamFormat.hls,
+      ),
+    );
+
+    final merged = mergeResolvedSources([oldResolved], [refreshedResolved]);
+
+    expect(merged, hasLength(1));
+    expect(merged.single.source.label, 'Febbox ⚡');
+    expect(merged.single.stream.url, 'https://stream.example/refreshed.m3u8');
+  });
+
   test('refresh keeps the source currently playing stable', () {
     final refreshed = _source('c2', 'Server 4', 'Cricfy');
 
@@ -68,6 +103,41 @@ void main() {
 
     expect(merged, hasLength(1));
     expect(merged.single.source.id, 'c1');
+  });
+
+  test(
+    'full refresh removes stale quality entries from a refreshed provider',
+    () {
+      final febboxAuto = _source('auto-new', 'Febbox Auto', 'Febbox');
+      final febbox1080 = _source('1080-old', 'Febbox 1080p', 'Febbox');
+      final febbox720 = _source('720-old', 'Febbox 720p', 'Febbox');
+
+      final merged = mergeResolvedSources(
+        [febbox1080, febbox720, kora],
+        [febboxAuto],
+        refreshedDescriptors: [febboxAuto.source],
+      );
+
+      expect(merged.map((source) => source.source.id), ['k1', 'auto-new']);
+    },
+  );
+
+  test('full refresh retains a stale descriptor only while it is playing', () {
+    final febboxAuto = _source('auto-new', 'Febbox Auto', 'Febbox');
+    final febbox1080 = _source('1080-old', 'Febbox 1080p', 'Febbox');
+
+    final merged = mergeResolvedSources(
+      [febbox1080, kora],
+      [febboxAuto],
+      preserveSourceId: '1080-old',
+      refreshedDescriptors: [febboxAuto.source],
+    );
+
+    expect(merged.map((source) => source.source.id), [
+      '1080-old',
+      'k1',
+      'auto-new',
+    ]);
   });
 
   testWidgets('the refresh control is hidden when no handler is given', (

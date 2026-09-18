@@ -226,7 +226,7 @@ class SubtitleAppearance {
   const SubtitleAppearance({
     this.fontSize = 16,
     this.textColor = Colors.white,
-    this.backgroundColor = const Color(0xaa000000),
+    this.backgroundColor = const Color(0x88000000),
     this.outline = false,
   });
 
@@ -237,7 +237,9 @@ class SubtitleAppearance {
       : SubtitleAppearance(
           fontSize: value.fontSize,
           textColor: Color(value.textColorValue),
-          backgroundColor: Color(value.backgroundColorValue),
+          backgroundColor: normalizedSubtitleBackgroundColor(
+            Color(value.backgroundColorValue),
+          ),
           outline: value.outline,
         );
 
@@ -295,3 +297,16 @@ class SubtitleAppearance {
   int get hashCode =>
       Object.hash(fontSize, textColor, backgroundColor, outline);
 }
+
+/// Keeps the built-in dark subtitle backgrounds readable without making them
+/// look like a solid block behind the caption.
+///
+/// The first three values are the previous built-in choices. Normalize them
+/// when loading so existing users get the lighter presentation as well.
+Color normalizedSubtitleBackgroundColor(Color color) =>
+    switch (color.toARGB32()) {
+      0xaa000000 => const Color(0x88000000),
+      0xdd151515 => const Color(0xbb151515),
+      0xdd10243d => const Color(0xbb10243d),
+      _ => color,
+    };

@@ -19,34 +19,6 @@ import '../state/subtitle_preference_controller.dart';
 /// player route on top of the first workflow.
 final Set<NavigatorState> _activePlayNavigators = <NavigatorState>{};
 
-/// Warms the cheap, opaque source descriptors while a detail page is open.
-///
-/// This intentionally does not resolve signed playback URLs. Resolution stays
-/// just-in-time, while a later Play tap can reuse the discovery already in
-/// flight (or the persisted descriptor list).
-Future<void> prefetchPlaybackSources(AppScope scope, PlaybackMedia item) async {
-  if (!canUseCachedPlaybackSources(item)) return;
-  if (scope.sourceCache.peekSourceList(item.ref)?.isNotEmpty ?? false) return;
-  final stopwatch = Stopwatch()..start();
-  _debugSourceLog('detail_source_prefetch_start ref=${item.ref.id}');
-  try {
-    final sources = await _loadSources(scope, item);
-    if (sources.isNotEmpty) {
-      scope.sourceCache.recordSourceList(item.ref, sources);
-    }
-    _debugSourceLog(
-      'detail_source_prefetch_done count=${sources.length} '
-      'elapsed=${stopwatch.elapsedMilliseconds}ms',
-    );
-  } catch (_) {
-    // Detail prefetch is opportunistic; Play will try discovery again if it
-    // failed or timed out here.
-    _debugSourceLog(
-      'detail_source_prefetch_failed elapsed=${stopwatch.elapsedMilliseconds}ms',
-    );
-  }
-}
-
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
@@ -381,7 +353,11 @@ const _sourceRetryDelay = Duration(milliseconds: 250);
 const _preferredSourceGrace = Duration(milliseconds: 750);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
-const _sourceDiscoveryTimeout = Duration(seconds: 20);
+// Cloudflare-backed providers may need to finish a visible macOS challenge
+// before the extension can retry its API request. Keep this budget longer than
+// CloudflareKiller's 25-second solver window so a valid source is not discarded
+// while that browser context is still being established.
+const _sourceDiscoveryTimeout = Duration(seconds: 30);
 // Browser-backed providers can need more than one nested iframe/request before
 // the JS resolver reaches the final media URL. Resolution runs in parallel and
 // the first fast source still opens the player immediately, so this only keeps

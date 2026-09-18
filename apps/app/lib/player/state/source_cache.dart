@@ -88,11 +88,44 @@ class SourceCache {
     final refreshedByKey = {
       for (final source in refreshed) sourceDescriptorKey(source): source,
     };
-    final retained = <StreamSource>[
-      for (final source in existing)
-        ?refreshedByKey.remove(sourceDescriptorKey(source)),
-    ];
-    return [...retained, ...refreshedByKey.values];
+    final refreshedByProvider = <String, List<StreamSource>>{};
+    for (final source in refreshed) {
+      refreshedByProvider
+          .putIfAbsent(sourceProviderKey(source), () => [])
+          .add(source);
+    }
+    final refreshedProviders = refreshedByProvider.keys.toSet();
+    final providerHasMatchingKey = <String, bool>{};
+    for (final source in existing) {
+      final provider = sourceProviderKey(source);
+      if (!refreshedProviders.contains(provider)) continue;
+      providerHasMatchingKey[provider] =
+          providerHasMatchingKey[provider] == true ||
+          refreshedByKey.containsKey(sourceDescriptorKey(source));
+    }
+    final replacedProviders = <String>{};
+    final retained = <StreamSource>[];
+    for (final source in existing) {
+      final provider = sourceProviderKey(source);
+      if (!refreshedProviders.contains(provider)) {
+        retained.add(source);
+        continue;
+      }
+      if (providerHasMatchingKey[provider] == true) {
+        final replacement = refreshedByKey.remove(sourceDescriptorKey(source));
+        if (replacement != null) retained.add(replacement);
+      } else if (replacedProviders.add(provider)) {
+        for (final replacement in refreshedByProvider[provider]!) {
+          retained.add(replacement);
+          refreshedByKey.remove(sourceDescriptorKey(replacement));
+        }
+      }
+    }
+    for (final source in refreshed) {
+      final key = sourceDescriptorKey(source);
+      if (refreshedByKey.remove(key) != null) retained.add(source);
+    }
+    return retained;
   }
 
   void _evictOldestPersisted() {
@@ -147,6 +180,12 @@ class SourceCache {
   void clear() {
     _resolved.clear();
     _resolvedAt.clear();
+  }
+
+  void clearAll() {
+    clear();
+    _persisted.clear();
+    _persist();
   }
 }
 

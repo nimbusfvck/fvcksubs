@@ -52,6 +52,16 @@ class _HomeShellState extends State<HomeShell> {
     };
   }
 
+  Widget _largeScreenBody(Widget body) => Navigator(
+    key: ValueKey(
+      'large-screen-content:${_destination.index}:${_selectedCategory ?? ''}',
+    ),
+    onGenerateRoute: (_) => MaterialPageRoute<void>(
+      settings: const RouteSettings(name: 'large-screen-content'),
+      builder: (_) => body,
+    ),
+  );
+
   void _select(int index) => setState(() {
     _destination = AppDestination.values[index];
     _shortsImmersive = false;
@@ -98,7 +108,7 @@ class _HomeShellState extends State<HomeShell> {
               thickness: 1,
               color: AppColors.hairlineDark,
             ),
-            Expanded(child: body),
+            Expanded(child: _largeScreenBody(body)),
           ],
         ),
       );

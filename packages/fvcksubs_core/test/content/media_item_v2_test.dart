@@ -16,13 +16,58 @@ void main() {
       tags: ['dracin', 'dramaverse'],
       releaseYear: 2026,
       rating: 8.7,
+      imdbId: 'tt1234567',
+      ratings: [
+        const MediaRating(
+          source: 'imdb',
+          score: 8.7,
+          scale: 10,
+          votes: 1234,
+          icon: ImageRef('https://cdn.example/imdb.svg'),
+        ),
+      ],
       artwork: Artwork(
         portrait: ImageRef('https://cdn.example/poster.jpg'),
         landscape: ImageRef('https://cdn.example/backdrop.jpg'),
+        backdrops: [
+          ImageRef('https://cdn.example/backdrop-2.jpg'),
+          ImageRef('https://cdn.example/backdrop-3.jpg'),
+        ],
       ),
     );
 
     expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('rating contract validates score, scale, votes, and icon', () {
+    final rating = MediaRating.fromJson({
+      'source': 'rottenTomatoes',
+      'score': 86,
+      'scale': 100,
+      'kind': 'critic',
+      'icon': {'url': 'https://cdn.example/rt.svg'},
+    });
+
+    expect(rating.score, 86);
+    expect(rating.scale, 100);
+    expect(rating.kind, 'critic');
+    expect(rating.icon, const ImageRef('https://cdn.example/rt.svg'));
+    expect(
+      () => MediaRating.fromJson({'source': 'imdb', 'score': 11, 'scale': 10}),
+      throwsFormatException,
+    );
+  });
+
+  test('IMDb identity rejects malformed identifiers', () {
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid IMDb id',
+        'imdbId': 'movie-1',
+      }),
+      throwsFormatException,
+    );
   });
 
   test('item tags require non-empty strings', () {
@@ -195,6 +240,7 @@ void main() {
         parentRef: ref,
         groupId: 'volume-a',
         position: 4,
+        absoluteEpisode: 62,
       ),
     );
 

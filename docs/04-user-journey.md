@@ -207,10 +207,9 @@ flowchart TD
     D -->|Play| P
 ```
 
-Long-form content opens a detail screen. While that screen is visible, the shell may warm
-the cheap source descriptors for the primary/resume episode in the background; signed stream
-URLs are still resolved only after the user selects Play. Live events and channels start the
-playback flow directly.
+Long-form content opens a detail screen. Source discovery and signed stream URL resolution
+start only after the user selects Play. Live events and channels start the playback flow
+directly.
 
 ### On the detail screen
 

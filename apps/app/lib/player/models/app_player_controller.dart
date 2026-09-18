@@ -122,13 +122,21 @@ class AppQualityTrack {
 ///
 /// Native HLS tracks and provider-supplied fixed renditions can describe the
 /// same height. The picker should expose one row per quality, preferring the
-/// track with the larger reported bitrate.
-List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
+/// track with the larger reported bitrate, unless a provider variant is the
+/// active/pending choice. In that case keep its identity so the picker does
+/// not fall back to `Auto` after a native player replacement.
+List<AppQualityTrack> dedupedQualityTracks(
+  List<AppQualityTrack> tracks, {
+  String? preferredId,
+}) {
   final byHeight = <int, AppQualityTrack>{};
   for (final track in tracks) {
     if (track.height <= 0) continue;
     final existing = byHeight[track.height];
-    if (existing == null || (track.bitrate ?? 0) > (existing.bitrate ?? 0)) {
+    if (existing == null ||
+        track.id == preferredId ||
+        (existing.id != preferredId &&
+            (track.bitrate ?? 0) > (existing.bitrate ?? 0))) {
       byHeight[track.height] = track;
     }
   }
@@ -137,11 +145,10 @@ List<AppQualityTrack> dedupedQualityTracks(List<AppQualityTrack> tracks) {
 
 /// Names a rendition the way viewers meet it elsewhere: 720p, 1080p, 4K.
 ///
-/// A wide release is letterboxed into its frame, so the rung a provider calls
-/// 1080p arrives as 1920x800 and its 720p as 1280x534. The height is whatever
-/// the aspect ratio left over — calling that "800p" names nothing anyone
-/// recognises — while the width is the rung itself. So width decides, and
-/// height only stands in for a backend that reports no width.
+/// A wide release can be letterboxed into its frame, so a provider's 1080p
+/// rendition may arrive as 1920x800. Prefer a height that closely matches a
+/// named rung, but use width when the frame height is just the leftover from
+/// its aspect ratio. This keeps ultrawide 2580x1080 from being called 1440p.
 ///
 /// Answers `null` when neither says anything useful, which is a caller's cue
 /// to say nothing rather than to invent a number.
@@ -177,7 +184,20 @@ String? qualityRungLabel({int? width, int? height}) {
     return null;
   }
 
-  final named = rungFor(width, byWidth) ?? rungFor(height, byHeight);
+  String? closeHeightRung(int? value) {
+    if (value == null || value <= 0) return null;
+    for (final rung in byHeight.entries) {
+      if ((value - rung.key).abs() <= rung.key * 0.05) {
+        return rung.value;
+      }
+    }
+    return null;
+  }
+
+  final named =
+      closeHeightRung(height) ??
+      rungFor(width, byWidth) ??
+      rungFor(height, byHeight);
   if (named != null) return named;
   // Below every rung the app names, the height is at least honest.
   return height != null && height > 0 ? '${height}p' : null;
@@ -414,4 +434,10 @@ abstract interface class AppPlayerPictureInPictureRestorer {
 /// between the full player and the in-app mini-player.
 abstract interface class AppPlayerPictureInPicturePolicy {
   Future<void> setPictureInPictureAllowed(bool allowed);
+}
+
+/// Optional bridge for refreshing native rendition metadata before a picker
+/// is shown. This lets Auto report the rendition AVPlayer actually selected.
+abstract interface class AppPlayerTrackRefresher {
+  Future<void> refreshTracks();
 }

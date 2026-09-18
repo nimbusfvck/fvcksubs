@@ -654,6 +654,13 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       return;
     }
     _hideTimer?.cancel();
+    final trackRefresher = widget.controller is AppPlayerTrackRefresher
+        ? widget.controller! as AppPlayerTrackRefresher
+        : null;
+    if (trackRefresher != null) {
+      await trackRefresher.refreshTracks();
+      if (!mounted) return;
+    }
     final tracks = widget.controller?.qualityTracks ?? const [];
     final active = widget.controller?.activeQuality;
     final pinned =

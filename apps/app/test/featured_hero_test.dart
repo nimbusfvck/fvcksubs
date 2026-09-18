@@ -88,7 +88,7 @@ void main() {
     );
     expect(title.maxLines, 1);
     expect(title.overflow, TextOverflow.ellipsis);
-    expect(title.style?.fontSize, 22);
+    expect(title.style?.fontSize, 26);
     expect(tester.takeException(), isNull);
   });
 

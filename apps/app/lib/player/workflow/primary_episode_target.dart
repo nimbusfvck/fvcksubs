@@ -96,7 +96,7 @@ MediaItemV2? primaryPlaybackTarget(
   PrimaryEpisodeTarget? target,
 ) {
   if (target == null) {
-    return hasEpisodes(detail.episodeGuide) ? null : detail.item;
+    return detail.episodeGuide != null ? null : detail.item;
   }
   return episodeItemFrom(detail.item, target.group, target.index);
 }
@@ -128,6 +128,7 @@ EpisodeItemV2 episodeItemFrom(
       parentRef: parentRef,
       groupId: group.id,
       position: episode.position,
+      absoluteEpisode: episode.absoluteEpisode,
     ),
     availableAt: episode.availableAt,
   );
