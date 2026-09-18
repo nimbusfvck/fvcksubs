@@ -13,9 +13,15 @@ void main() {
       ref: ref,
       title: 'Standalone video',
       subtitle: 'Drama',
+      overview: 'A short synopsis.',
+      originalTitle: 'Original title',
+      originalLanguage: 'en',
+      genres: ['Drama', 'Thriller'],
+      countries: ['US'],
       tags: ['dracin', 'dramaverse'],
       releaseYear: 2026,
       rating: 8.7,
+      ratingVotes: 1234,
       imdbId: 'tt1234567',
       ratings: [
         const MediaRating(

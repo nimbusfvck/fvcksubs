@@ -360,10 +360,16 @@ sealed class MediaItemV2 extends Equatable {
     required this.ref,
     required this.title,
     this.subtitle,
+    this.overview,
+    this.originalTitle,
+    this.originalLanguage,
+    this.genres = const [],
+    this.countries = const [],
     this.tags = const [],
     this.releaseYear,
     this.releaseDate,
     this.rating,
+    this.ratingVotes,
     this.ratings = const [],
     this.imdbId,
     this.artwork,
@@ -455,6 +461,21 @@ sealed class MediaItemV2 extends Equatable {
   /// Optional secondary display text.
   final String? subtitle;
 
+  /// Optional short synopsis suitable for list previews.
+  final String? overview;
+
+  /// Optional title in the source's original language.
+  final String? originalTitle;
+
+  /// Optional ISO 639-1 original language code.
+  final String? originalLanguage;
+
+  /// Optional normalized genre names.
+  final List<String> genres;
+
+  /// Optional ISO 3166-1 country codes associated with the item.
+  final List<String> countries;
+
   /// Normalized extension-supplied labels used for lightweight filtering.
   final List<String> tags;
 
@@ -467,6 +488,9 @@ sealed class MediaItemV2 extends Equatable {
 
   /// Extension-supplied audience or editorial rating.
   final double? rating;
+
+  /// Optional number of votes behind [rating].
+  final int? ratingVotes;
 
   /// Optional ratings from external services.
   final List<MediaRating> ratings;
@@ -489,10 +513,16 @@ sealed class MediaItemV2 extends Equatable {
     'kind': kind.name,
     'title': title,
     if (subtitle != null) 'subtitle': subtitle,
+    if (overview != null) 'overview': overview,
+    if (originalTitle != null) 'originalTitle': originalTitle,
+    if (originalLanguage != null) 'originalLanguage': originalLanguage,
+    if (genres.isNotEmpty) 'genres': genres,
+    if (countries.isNotEmpty) 'countries': countries,
     if (releaseYear != null) 'releaseYear': releaseYear,
     if (releaseDate != null)
       'releaseDate': releaseDate!.toUtc().toIso8601String(),
     if (rating != null) 'rating': rating,
+    if (ratingVotes != null) 'ratingVotes': ratingVotes,
     if (ratings.isNotEmpty)
       'ratings': ratings.map((value) => value.toJson()).toList(),
     if (imdbId != null) 'imdbId': imdbId,
@@ -509,10 +539,16 @@ sealed class MediaItemV2 extends Equatable {
     kind,
     title,
     subtitle,
+    overview,
+    originalTitle,
+    originalLanguage,
+    genres,
+    countries,
     tags,
     releaseYear,
     releaseDate,
     rating,
+    ratingVotes,
     ratings,
     imdbId,
     artwork,
@@ -526,10 +562,16 @@ final class VideoItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.overview,
+    super.originalTitle,
+    super.originalLanguage,
+    super.genres,
+    super.countries,
     super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
+    super.ratingVotes,
     super.ratings,
     super.imdbId,
     super.artwork,
@@ -540,10 +582,16 @@ final class VideoItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        overview: value.overview,
+        originalTitle: value.originalTitle,
+        originalLanguage: value.originalLanguage,
+        genres: value.genres,
+        countries: value.countries,
         tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
+        ratingVotes: value.ratingVotes,
         ratings: value.ratings,
         imdbId: value.imdbId,
         artwork: value.artwork,
@@ -564,10 +612,16 @@ final class SeriesItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.overview,
+    super.originalTitle,
+    super.originalLanguage,
+    super.genres,
+    super.countries,
     super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
+    super.ratingVotes,
     super.ratings,
     super.imdbId,
     super.artwork,
@@ -578,10 +632,16 @@ final class SeriesItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        overview: value.overview,
+        originalTitle: value.originalTitle,
+        originalLanguage: value.originalLanguage,
+        genres: value.genres,
+        countries: value.countries,
         tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
+        ratingVotes: value.ratingVotes,
         ratings: value.ratings,
         imdbId: value.imdbId,
         artwork: value.artwork,
@@ -603,10 +663,16 @@ final class EpisodeItemV2 extends MediaItemV2 {
     required super.title,
     required this.episode,
     super.subtitle,
+    super.overview,
+    super.originalTitle,
+    super.originalLanguage,
+    super.genres,
+    super.countries,
     super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
+    super.ratingVotes,
     super.ratings,
     super.imdbId,
     super.artwork,
@@ -621,10 +687,16 @@ final class EpisodeItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        overview: value.overview,
+        originalTitle: value.originalTitle,
+        originalLanguage: value.originalLanguage,
+        genres: value.genres,
+        countries: value.countries,
         tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
+        ratingVotes: value.ratingVotes,
         ratings: value.ratings,
         imdbId: value.imdbId,
         artwork: value.artwork,
@@ -664,10 +736,16 @@ final class ChannelItemV2 extends MediaItemV2 {
     required super.ref,
     required super.title,
     super.subtitle,
+    super.overview,
+    super.originalTitle,
+    super.originalLanguage,
+    super.genres,
+    super.countries,
     super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
+    super.ratingVotes,
     super.ratings,
     super.imdbId,
     super.artwork,
@@ -678,10 +756,16 @@ final class ChannelItemV2 extends MediaItemV2 {
         ref: value.ref,
         title: value.title,
         subtitle: value.subtitle,
+        overview: value.overview,
+        originalTitle: value.originalTitle,
+        originalLanguage: value.originalLanguage,
+        genres: value.genres,
+        countries: value.countries,
         tags: value.tags,
         releaseYear: value.releaseYear,
         releaseDate: value.releaseDate,
         rating: value.rating,
+        ratingVotes: value.ratingVotes,
         ratings: value.ratings,
         imdbId: value.imdbId,
         artwork: value.artwork,
@@ -703,10 +787,16 @@ final class EventItemV2 extends MediaItemV2 {
     required super.title,
     required this.schedule,
     super.subtitle,
+    super.overview,
+    super.originalTitle,
+    super.originalLanguage,
+    super.genres,
+    super.countries,
     super.tags,
     super.releaseYear,
     super.releaseDate,
     super.rating,
+    super.ratingVotes,
     super.ratings,
     super.imdbId,
     super.artwork,
@@ -723,10 +813,16 @@ final class EventItemV2 extends MediaItemV2 {
          ref: value.ref,
          title: value.title,
          subtitle: value.subtitle,
+         overview: value.overview,
+         originalTitle: value.originalTitle,
+         originalLanguage: value.originalLanguage,
+         genres: value.genres,
+         countries: value.countries,
          tags: value.tags,
          releaseYear: value.releaseYear,
          releaseDate: value.releaseDate,
          rating: value.rating,
+         ratingVotes: value.ratingVotes,
          ratings: value.ratings,
          imdbId: value.imdbId,
          artwork: value.artwork,
@@ -763,10 +859,16 @@ const _baseKeys = {
   'kind',
   'title',
   'subtitle',
+  'overview',
+  'originalTitle',
+  'originalLanguage',
+  'genres',
+  'countries',
   'tags',
   'releaseYear',
   'releaseDate',
   'rating',
+  'ratingVotes',
   'ratings',
   'imdbId',
   'artwork',
@@ -777,10 +879,16 @@ final class _CommonItemFields {
     required this.ref,
     required this.title,
     this.subtitle,
+    this.overview,
+    this.originalTitle,
+    this.originalLanguage,
+    this.genres = const [],
+    this.countries = const [],
     this.tags = const [],
     this.releaseYear,
     this.releaseDate,
     this.rating,
+    this.ratingVotes,
     this.ratings = const [],
     this.imdbId,
     this.artwork,
@@ -790,10 +898,16 @@ final class _CommonItemFields {
     final ref = json['ref'];
     final title = json['title'];
     final subtitle = json['subtitle'];
+    final overview = json['overview'];
+    final originalTitle = json['originalTitle'];
+    final originalLanguage = json['originalLanguage'];
+    final genres = json['genres'];
+    final countries = json['countries'];
     final tags = json['tags'];
     final releaseYear = json['releaseYear'];
     final releaseDate = json['releaseDate'];
     final rating = json['rating'];
+    final ratingVotes = json['ratingVotes'];
     final ratings = json['ratings'];
     final imdbId = json['imdbId'];
     final artwork = json['artwork'];
@@ -804,6 +918,17 @@ final class _CommonItemFields {
     if (subtitle != null && subtitle is! String) {
       throw const FormatException('item.subtitle must be a string');
     }
+    if (overview != null && overview is! String) {
+      throw const FormatException('item.overview must be a string');
+    }
+    if (originalTitle != null && originalTitle is! String) {
+      throw const FormatException('item.originalTitle must be a string');
+    }
+    if (originalLanguage != null && originalLanguage is! String) {
+      throw const FormatException('item.originalLanguage must be a string');
+    }
+    final parsedGenres = _stringListFromJson(genres, 'item.genres');
+    final parsedCountries = _stringListFromJson(countries, 'item.countries');
     if (tags != null && tags is! List) {
       throw const FormatException('item.tags must be a list');
     }
@@ -834,6 +959,12 @@ final class _CommonItemFields {
     if (rating != null && (rating is! num || !rating.isFinite || rating < 0)) {
       throw const FormatException('item.rating must be a non-negative number');
     }
+    if (ratingVotes != null &&
+        (ratingVotes is! int || ratingVotes < 0)) {
+      throw const FormatException(
+        'item.ratingVotes must be a non-negative integer',
+      );
+    }
     if (ratings != null && ratings is! List) {
       throw const FormatException('item.ratings must be a list');
     }
@@ -850,10 +981,16 @@ final class _CommonItemFields {
       ref: MediaRef.fromJson(ref.cast<String, Object?>()),
       title: title,
       subtitle: subtitle as String?,
+      overview: overview as String?,
+      originalTitle: originalTitle as String?,
+      originalLanguage: originalLanguage as String?,
+      genres: parsedGenres,
+      countries: parsedCountries,
       tags: parsedTags,
       releaseYear: releaseYear as int?,
       releaseDate: parsedReleaseDate,
       rating: (rating as num?)?.toDouble(),
+      ratingVotes: ratingVotes as int?,
       ratings: [
         for (final entry in (ratings as List?) ?? const [])
           MediaRating.fromJson((entry as Map).cast<String, Object?>()),
@@ -868,13 +1005,32 @@ final class _CommonItemFields {
   final MediaRef ref;
   final String title;
   final String? subtitle;
+  final String? overview;
+  final String? originalTitle;
+  final String? originalLanguage;
+  final List<String> genres;
+  final List<String> countries;
   final List<String> tags;
   final int? releaseYear;
   final DateTime? releaseDate;
   final double? rating;
+  final int? ratingVotes;
   final List<MediaRating> ratings;
   final String? imdbId;
   final Artwork? artwork;
+}
+
+List<String> _stringListFromJson(Object? value, String path) {
+  if (value == null) return const [];
+  if (value is! List) throw FormatException('$path must be a list');
+  final result = <String>[];
+  for (final entry in value) {
+    if (entry is! String || entry.trim().isEmpty) {
+      throw FormatException('$path[] must be a non-empty string');
+    }
+    result.add(entry.trim());
+  }
+  return result;
 }
 
 ImageRef? _imageFromJson(Object? value, String path) {
