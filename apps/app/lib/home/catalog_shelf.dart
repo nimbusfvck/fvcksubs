@@ -202,6 +202,14 @@ class _CatalogShelfState extends State<CatalogShelf> {
           if (section.items.isNotEmpty) section,
       ];
       final groups = groupHomeSections(sections);
+      final showSportEventOutlines = widget.category.toLowerCase() == 'sport';
+      String? subCategoryForSection(CatalogSectionV2 section) {
+        if (section.title != null) {
+          final id = idsByName[section.title];
+          if (id != null) return id;
+        }
+        return widget.category == 'sport' ? section.id : null;
+      }
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,13 +222,12 @@ class _CatalogShelfState extends State<CatalogShelf> {
                 ),
                 group: group,
                 display: widget.binding.catalog.display,
+                showSportEventOutlines: showSportEventOutlines,
                 idsByName: idsByName,
                 onTap: _open,
                 onTapWithHero: _openWithHero,
                 onSeeMore: (section) => _openCatalog(
-                  subCategory: section.title == null
-                      ? null
-                      : idsByName[section.title],
+                  subCategory: subCategoryForSection(section),
                   title: section.title,
                 ),
               )
@@ -228,11 +235,12 @@ class _CatalogShelfState extends State<CatalogShelf> {
               _Section(
                 section: group.options.single.section,
                 display: widget.binding.catalog.display,
+                showSportEventOutlines: showSportEventOutlines,
                 fallbackTitle: widget.binding.catalog.name,
                 showCatalogHeader: widget.showCatalogHeader,
-                subCategoryId: group.options.single.section.title == null
-                    ? null
-                    : idsByName[group.options.single.section.title],
+                subCategoryId: subCategoryForSection(
+                  group.options.single.section,
+                ),
                 onTap: _open,
                 onTapWithHero: _openWithHero,
                 onSeeMore: (subCategory) => _openCatalog(
@@ -260,6 +268,7 @@ class _Section extends StatelessWidget {
   const _Section({
     required this.section,
     required this.display,
+    required this.showSportEventOutlines,
     required this.fallbackTitle,
     required this.showCatalogHeader,
     this.showHeader = true,
@@ -271,6 +280,7 @@ class _Section extends StatelessWidget {
 
   final CatalogSectionV2 section;
   final CatalogDisplay display;
+  final bool showSportEventOutlines;
 
   final String fallbackTitle;
   final bool showCatalogHeader;
@@ -300,6 +310,7 @@ class _Section extends StatelessWidget {
         switch (display) {
           CatalogDisplay.row => _Carousel(
             items: preview,
+            showSportEventOutlines: showSportEventOutlines,
             onTap: onTap,
             onTapWithHero: onTapWithHero,
           ),
@@ -334,6 +345,7 @@ class _SectionGroup extends StatefulWidget {
     super.key,
     required this.group,
     required this.display,
+    required this.showSportEventOutlines,
     required this.idsByName,
     required this.onTap,
     required this.onTapWithHero,
@@ -342,6 +354,7 @@ class _SectionGroup extends StatefulWidget {
 
   final HomeSectionGroup group;
   final CatalogDisplay display;
+  final bool showSportEventOutlines;
   final Map<String, String> idsByName;
   final ValueChanged<VersionedMediaItem> onTap;
   final void Function(VersionedMediaItem, Object) onTapWithHero;
@@ -378,6 +391,7 @@ class _SectionGroupState extends State<_SectionGroup> {
         _Section(
           section: CatalogSectionV2(id: section.id, items: preview),
           display: widget.display,
+          showSportEventOutlines: widget.showSportEventOutlines,
           fallbackTitle: widget.group.title,
           showCatalogHeader: false,
           showHeader: false,
@@ -434,11 +448,13 @@ class _Header extends StatelessWidget {
 class _Carousel extends StatelessWidget {
   const _Carousel({
     required this.items,
+    required this.showSportEventOutlines,
     required this.onTap,
     required this.onTapWithHero,
   });
 
   final List<VersionedMediaItem> items;
+  final bool showSportEventOutlines;
   final ValueChanged<VersionedMediaItem> onTap;
   final void Function(VersionedMediaItem, Object) onTapWithHero;
 
@@ -466,6 +482,8 @@ class _Carousel extends StatelessWidget {
               child: MediaCardV2(
                 item: item.item,
                 heroTag: heroTag,
+                compactEventFooter: item.item is EventItemV2,
+                showOutline: showSportEventOutlines && item.item is EventItemV2,
                 onTap: () => onTapWithHero(item, heroTag),
                 onLongPress: () => showMediaCardActions(
                   context,

@@ -171,7 +171,7 @@ class _RecommendedShelfState extends State<RecommendedShelf> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Recommended For You',
+                          'For You',
                           style: AppTypography.titleMd.copyWith(
                             color: AppColors.onDark,
                           ),

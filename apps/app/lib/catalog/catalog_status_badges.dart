@@ -21,6 +21,17 @@ class UpcomingBadge extends StatelessWidget {
       const _StatusPill(text: 'UPCOMING', color: AppColors.brandAccent);
 }
 
+class EndedBadge extends StatelessWidget {
+  const EndedBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) => const _StatusPill(
+    text: 'ENDED',
+    color: AppColors.surfaceDarkElevated,
+    foregroundColor: AppColors.onDarkSoft,
+  );
+}
+
 class _StatusPill extends StatelessWidget {
   const _StatusPill({
     required this.text,

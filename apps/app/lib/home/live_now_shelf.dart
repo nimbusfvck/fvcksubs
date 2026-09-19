@@ -13,33 +13,65 @@ import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/clickable.dart';
 
-/// Returns whether an event occupies the current local-clock window.
-bool isEventLiveNow(EventItemV2 event, DateTime now) {
+/// Returns whether an event starts on [now]'s local calendar day.
+bool isEventToday(EventItemV2 event, DateTime now) {
   final startsAt = event.schedule.startsAt.toLocal();
-  if (now.isBefore(startsAt)) return false;
-  final endsAt = event.schedule.endsAt?.toLocal();
-  if (endsAt != null) return now.isBefore(endsAt);
-  return event.schedule.state == ScheduleState.live;
+  final localNow = now.toLocal();
+  return startsAt.year == localNow.year &&
+      startsAt.month == localNow.month &&
+      startsAt.day == localNow.day;
 }
 
-/// App-owned Home projection of events that are live at the current time.
-class LiveNowShelf extends StatefulWidget {
-  const LiveNowShelf({
+/// Uses an extension-provided editorial rating as the popularity signal.
+bool isPopularSportEvent(EventItemV2 event) {
+  return event.rating != null;
+}
+
+/// Returns at most ten rated events that start on [now]'s local day.
+List<EventItemV2> popularSportEventsForToday(
+  Iterable<EventItemV2> events,
+  DateTime now,
+) => [
+  for (final event in events)
+    if (isEventToday(event, now) && isPopularSportEvent(event)) event,
+].take(10).toList(growable: false);
+
+/// Resolves an event's visible status from its schedule and the local clock.
+ScheduleState eventScheduleStateAt(EventItemV2 event, DateTime now) {
+  final schedule = event.schedule;
+  if (schedule.state == ScheduleState.ended) return ScheduleState.ended;
+
+  final localNow = now.toLocal();
+  final endsAt = schedule.endsAt?.toLocal();
+  if (endsAt != null && !localNow.isBefore(endsAt)) {
+    return ScheduleState.ended;
+  }
+  if (!localNow.isBefore(schedule.startsAt.toLocal())) {
+    return ScheduleState.live;
+  }
+  return ScheduleState.scheduled;
+}
+
+/// App-owned Home projection of sport events scheduled for today.
+class TodaysMatchesShelf extends StatefulWidget {
+  const TodaysMatchesShelf({
     super.key,
     required this.catalogCache,
     required this.registry,
+    required this.onSeeMore,
     this.refreshToken = 0,
   });
 
   final CatalogCache catalogCache;
   final ExtensionRegistry registry;
+  final VoidCallback onSeeMore;
   final int refreshToken;
 
   @override
-  State<LiveNowShelf> createState() => _LiveNowShelfState();
+  State<TodaysMatchesShelf> createState() => _TodaysMatchesShelfState();
 }
 
-class _LiveNowShelfState extends State<LiveNowShelf> {
+class _TodaysMatchesShelfState extends State<TodaysMatchesShelf> {
   late final CatalogTimelineCubit _cubit;
   Timer? _clock;
   String? _bindingSignature;
@@ -59,7 +91,7 @@ class _LiveNowShelfState extends State<LiveNowShelf> {
   }
 
   @override
-  void didUpdateWidget(covariant LiveNowShelf oldWidget) {
+  void didUpdateWidget(covariant TodaysMatchesShelf oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
       unawaited(_load(refresh: true));
@@ -73,27 +105,31 @@ class _LiveNowShelfState extends State<LiveNowShelf> {
     super.dispose();
   }
 
-  String? _liveCategory() {
+  String? _sportCategory() {
     for (final category in widget.registry.categories) {
-      if (category.toLowerCase() == 'live') return category;
+      if (category.toLowerCase() == 'sport') return category;
     }
     return null;
   }
 
   List<CatalogBinding> _bindings() {
-    final category = _liveCategory();
+    final category = _sportCategory();
     if (category == null) return const [];
-    return [
-      for (final binding in widget.registry.catalogsFor(category))
-        if (binding.catalog.display == CatalogDisplay.timeline) binding,
-    ];
+    // This shelf is a Home projection of sport events, not a timeline layout.
+    // Sport catalogs may declare `row` (as the current Sports catalog does)
+    // while still returning EventItemV2 records with kickoff times.
+    return widget.registry.catalogsFor(category);
   }
 
   Future<void> _load({bool refresh = false}) async {
-    final category = _liveCategory();
+    final category = _sportCategory();
     final bindings = _bindings();
     _bindingSignature = _signature(bindings);
-    await _cubit.load(bindings, category: category ?? 'live', refresh: refresh);
+    await _cubit.load(
+      bindings,
+      category: category ?? 'sport',
+      refresh: refresh,
+    );
   }
 
   @override
@@ -108,12 +144,14 @@ class _LiveNowShelfState extends State<LiveNowShelf> {
     return BlocBuilder<CatalogTimelineCubit, CatalogTimelineState>(
       bloc: _cubit,
       builder: (context, state) {
-        final events = [
-          for (final event in state.events)
-            if (isEventLiveNow(event, DateTime.now())) event,
-        ];
+        final now = DateTime.now();
+        final events = popularSportEventsForToday(state.events, now);
         if (events.isEmpty) return const SizedBox.shrink();
-        return _LiveNowContent(events: events);
+        return _TodaysMatchesContent(
+          events: events,
+          now: now,
+          onSeeMore: widget.onSeeMore,
+        );
       },
     );
   }
@@ -125,11 +163,16 @@ class _LiveNowShelfState extends State<LiveNowShelf> {
   ].join('|');
 }
 
-class _LiveNowContent extends StatelessWidget {
-  const _LiveNowContent({required this.events})
-    : super(key: const Key('home-live-now-shelf'));
+class _TodaysMatchesContent extends StatelessWidget {
+  const _TodaysMatchesContent({
+    required this.events,
+    required this.now,
+    required this.onSeeMore,
+  }) : super(key: const Key('home-todays-matches-shelf'));
 
   final List<EventItemV2> events;
+  final DateTime now;
+  final VoidCallback onSeeMore;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -142,9 +185,31 @@ class _LiveNowContent extends StatelessWidget {
           AppSpacing.md,
           AppSpacing.xs,
         ),
-        child: Text(
-          'Live Now',
-          style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Today\'s Sporting Events',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
+              ),
+            ),
+            TextButton(
+              key: const Key('home-todays-matches-see-more'),
+              onPressed: onSeeMore,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              ),
+              child: Text(
+                'See more',
+                style: AppTypography.titleSm.copyWith(
+                  color: AppColors.brandAccent,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       SizedBox(
@@ -164,15 +229,21 @@ class _LiveNowContent extends StatelessWidget {
               child: SizedBox(
                 width: 280,
                 child: Container(
+                  key: const Key('home-todays-event-card'),
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: AppColors.surfaceDarkContainer,
-                    border: Border.all(color: AppColors.outlineDark),
+                    border: Border.all(
+                      color: AppColors.outlineDark,
+                      width: 0.6,
+                    ),
                     borderRadius: AppRadius.lg,
                   ),
                   child: MediaCardV2(
                     item: item,
                     heroTag: heroTag,
+                    compactEventFooter: true,
+                    scheduleStateOverride: eventScheduleStateAt(item, now),
                     onTap: () => openVersionedItem(
                       context,
                       VersionedMediaItem(item: item),

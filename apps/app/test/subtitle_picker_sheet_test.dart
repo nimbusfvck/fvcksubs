@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/data/online_subtitle_service.dart';
+import 'package:fvcksubs_app/player/data/subtitle_translate_service.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
 import 'package:fvcksubs_app/player/sheets/subtitle_picker_sheet.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
@@ -229,6 +232,91 @@ void main() {
 
     expect(find.textContaining('Translate'), findsNothing);
   });
+
+  testWidgets('shows a spinner while translating a selected subtitle', (
+    tester,
+  ) async {
+    final preference = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+      initial: 'id',
+    );
+    final translation = Completer<SubtitleTrack>();
+    final service = _BlockingSubtitleTranslateService(translation.future);
+    const english = SubtitleTrack(
+      language: 'en',
+      url: 'https://subs.example/en.srt',
+      label: 'English Full',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        subtitlePreferenceController: preference,
+        child: Scaffold(
+          body: PlayerSubtitlePickerSheet(
+            media: const PlaybackMedia(
+              VideoItemV2(
+                ref: MediaRef(
+                  extensionId: 'test',
+                  providerId: 'test.provider',
+                  id: 'movie-1',
+                ),
+                title: 'Movie',
+              ),
+            ),
+            tracks: const [],
+            translationSourceTracks: const [english],
+            current: null,
+            filterTracks: (tracks) => tracks,
+            subtitleTranslateService: service,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.textContaining('Translate'));
+    await tester.pump();
+    await tester.tap(find.text('English Full'));
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    final sourceTile = tester.widget<ListTile>(
+      find.ancestor(
+        of: find.text('English Full'),
+        matching: find.byType(ListTile),
+      ),
+    );
+    expect(sourceTile.enabled, isFalse);
+
+    translation.complete(
+      const SubtitleTrack(
+        language: 'id',
+        url: '/tmp/translated.srt',
+        label: 'Translated English Full',
+      ),
+    );
+    await tester.pump();
+  });
+}
+
+class _BlockingSubtitleTranslateService implements SubtitleTranslateService {
+  _BlockingSubtitleTranslateService(this.translation);
+
+  final Future<SubtitleTrack> translation;
+
+  @override
+  Future<String> translate(
+    String content,
+    String targetIso, {
+    String? sourceIso,
+    void Function(double)? onProgress,
+  }) async => content;
+
+  @override
+  Future<SubtitleTrack> translateTrack(
+    SubtitleTrack source, {
+    required String targetIso,
+  }) => translation;
 }
 
 class _ExternalSubtitleExtension extends ContentExtension {

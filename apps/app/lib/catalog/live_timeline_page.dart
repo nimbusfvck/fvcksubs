@@ -1655,6 +1655,7 @@ class _TimelineEventCard extends StatelessWidget {
 String _categoryLabel(String category) {
   if (category.toLowerCase() == 'tv') return 'Shows';
   if (category.toLowerCase() == 'movie') return 'Movies';
+  if (category.toLowerCase() == 'sport') return 'Sports';
   return category.isEmpty
       ? category
       : '${category[0].toUpperCase()}${category.substring(1)}';

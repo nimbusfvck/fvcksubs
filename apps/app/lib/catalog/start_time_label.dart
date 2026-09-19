@@ -35,6 +35,24 @@ String? eventStartLabel(DateTime? startsAt, {DateTime? now}) {
   return '${local.day} ${_months[local.month - 1]} - $time';
 }
 
+/// Formats a compact event start for cards, without the end time.
+String? eventCardStartLabel(DateTime? startsAt, {DateTime? now}) {
+  if (startsAt == null) return null;
+
+  final local = startsAt.toLocal();
+  final today = (now ?? DateTime.now()).toLocal();
+  final time =
+      '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
+  final todayDate = DateTime(today.year, today.month, today.day);
+  final eventDate = DateTime(local.year, local.month, local.day);
+  final tomorrowDate = DateTime(today.year, today.month, today.day + 1);
+
+  if (eventDate == todayDate) return 'Today $time';
+  if (eventDate == tomorrowDate) return 'Tomorrow $time';
+  return '${local.day} ${_months[local.month - 1]} $time';
+}
+
 String? eventTimeRangeLabel(
   DateTime? startsAt,
   DateTime? endsAt, {

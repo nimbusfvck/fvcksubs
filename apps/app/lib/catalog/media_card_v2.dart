@@ -40,6 +40,9 @@ class MediaCardV2 extends StatelessWidget {
     this.heroTag,
     this.enableHero = true,
     this.rank,
+    this.compactEventFooter = false,
+    this.scheduleStateOverride,
+    this.showOutline = false,
   });
 
   final MediaItemV2 item;
@@ -57,18 +60,56 @@ class MediaCardV2 extends StatelessWidget {
   /// Optional rank badge used by the app-owned Top 10 shelf.
   final int? rank;
 
+  /// Uses a one-line title and start-only schedule for horizontal event cards.
+  final bool compactEventFooter;
+
+  /// Optional schedule state derived by a time-aware parent surface.
+  final ScheduleState? scheduleStateOverride;
+
+  /// Draws an inset outline without clipping the card's focus ring.
+  final bool showOutline;
+
   @override
-  Widget build(BuildContext context) => Clickable(
-    onTap: onTap,
-    onLongPress: onLongPress,
-    color: Colors.transparent,
-    child: _content(),
-  );
+  Widget build(BuildContext context) {
+    final content = showOutline
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              _content(),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    key: const Key('media-card-outline'),
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadius.lg,
+                      border: Border.all(
+                        color: AppColors.outlineDark,
+                        width: 0.6,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : _content();
+    return Clickable(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      color: Colors.transparent,
+      child: content,
+    );
+  }
 
   Widget _content() {
     final value = item;
     if (value is EventItemV2 && value.participants.length == 2) {
-      return _Match(item: value, showSubtitle: showSubtitle);
+      return _Match(
+        item: value,
+        showSubtitle: showSubtitle,
+        compactFooter: compactEventFooter,
+        scheduleStateOverride: scheduleStateOverride,
+      );
     }
     final portrait = value.artwork?.portrait;
     if (portrait != null && value is! EventItemV2) {
@@ -81,10 +122,20 @@ class MediaCardV2 extends StatelessWidget {
     }
     if (value is EventItemV2) {
       if (_hasEventArtwork(value)) {
-        return _SingleEvent(item: value, showSubtitle: showSubtitle);
+        return _SingleEvent(
+          item: value,
+          showSubtitle: showSubtitle,
+          compactFooter: compactEventFooter,
+          scheduleStateOverride: scheduleStateOverride,
+        );
       }
     }
-    return _Summary(item: value, showSubtitle: showSubtitle);
+    return _Summary(
+      item: value,
+      showSubtitle: showSubtitle,
+      compactEventFooter: compactEventFooter,
+      scheduleStateOverride: scheduleStateOverride,
+    );
   }
 }
 
@@ -425,10 +476,17 @@ class _PosterRankBadge extends StatelessWidget {
 }
 
 class _Match extends StatefulWidget {
-  const _Match({required this.item, required this.showSubtitle});
+  const _Match({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactFooter,
+    required this.scheduleStateOverride,
+  });
 
   final EventItemV2 item;
   final bool showSubtitle;
+  final bool compactFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   State<_Match> createState() => _MatchState();
@@ -473,23 +531,40 @@ class _MatchState extends State<_Match> {
           branding: widget.item.branding,
         ),
       ),
-      _CardFooter(item: widget.item, showSubtitle: widget.showSubtitle),
+      _CardFooter(
+        item: widget.item,
+        showSubtitle: widget.showSubtitle,
+        compactEventFooter: widget.compactFooter,
+        scheduleStateOverride: widget.scheduleStateOverride,
+      ),
     ],
   );
 }
 
 class _SingleEvent extends StatelessWidget {
-  const _SingleEvent({required this.item, required this.showSubtitle});
+  const _SingleEvent({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactFooter,
+    required this.scheduleStateOverride,
+  });
 
   final EventItemV2 item;
   final bool showSubtitle;
+  final bool compactFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(child: _SingleEventArtwork(item: item)),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
+      _CardFooter(
+        item: item,
+        showSubtitle: showSubtitle,
+        compactEventFooter: compactFooter,
+        scheduleStateOverride: scheduleStateOverride,
+      ),
     ],
   );
 }
@@ -576,10 +651,17 @@ String _eventArtworkSeed(EventItemV2 item) {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.item, required this.showSubtitle});
+  const _Summary({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactEventFooter,
+    required this.scheduleStateOverride,
+  });
 
   final MediaItemV2 item;
   final bool showSubtitle;
+  final bool compactEventFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +680,12 @@ class _Summary extends StatelessWidget {
             ],
           ),
         ),
-        _CardFooter(item: item, showSubtitle: showSubtitle),
+        _CardFooter(
+          item: item,
+          showSubtitle: showSubtitle,
+          compactEventFooter: compactEventFooter,
+          scheduleStateOverride: scheduleStateOverride,
+        ),
       ],
     );
   }
@@ -631,16 +718,23 @@ class _ReleaseDateBadge extends StatelessWidget {
 }
 
 class _CardFooter extends StatelessWidget {
-  const _CardFooter({required this.item, required this.showSubtitle});
+  const _CardFooter({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactEventFooter,
+    required this.scheduleStateOverride,
+  });
 
   final MediaItemV2 item;
   final bool showSubtitle;
+  final bool compactEventFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) {
     final event = item is EventItemV2 ? item as EventItemV2 : null;
     final detail = event != null
-        ? _eventMeta(event)
+        ? _eventMeta(event, compact: compactEventFooter)
         : showSubtitle
         ? mediaItemSecondaryText(item)
         : null;
@@ -650,12 +744,16 @@ class _CardFooter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (event != null) ...[
-            _ScheduleStatus(schedule: event.schedule, showLabel: false),
+            _ScheduleStatus(
+              schedule: event.schedule,
+              stateOverride: scheduleStateOverride,
+              showLabel: false,
+            ),
             const SizedBox(height: AppSpacing.xxs),
           ],
           Text(
             item.title,
-            maxLines: 2,
+            maxLines: event != null && compactEventFooter ? 1 : 2,
             overflow: TextOverflow.ellipsis,
             style:
                 (event != null ? AppTypography.bodySm : AppTypography.titleSm)
@@ -689,37 +787,49 @@ class _CardFooter extends StatelessWidget {
 }
 
 class _ScheduleStatus extends StatelessWidget {
-  const _ScheduleStatus({required this.schedule, this.showLabel = true});
+  const _ScheduleStatus({
+    required this.schedule,
+    this.stateOverride,
+    this.showLabel = true,
+  });
 
   final Schedule schedule;
+  final ScheduleState? stateOverride;
   final bool showLabel;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      if (schedule.state == ScheduleState.live)
-        const LiveBadge()
-      else if (schedule.state == ScheduleState.scheduled)
-        const UpcomingBadge(),
-      if (showLabel && _label != null) ...[
-        const SizedBox(width: AppSpacing.xs),
-        Flexible(
-          child: Text(
-            _label!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+  Widget build(BuildContext context) {
+    final state = stateOverride ?? schedule.state;
+    return Row(
+      children: [
+        if (state == ScheduleState.live)
+          const LiveBadge()
+        else if (state == ScheduleState.scheduled)
+          const UpcomingBadge(),
+        if (state == ScheduleState.ended) const EndedBadge(),
+        if (showLabel && _label != null) ...[
+          const SizedBox(width: AppSpacing.xs),
+          Flexible(
+            child: Text(
+              _label!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.onDarkSoft,
+              ),
+            ),
           ),
-        ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 
   String? get _label =>
       schedule.label ?? eventTimeRangeLabel(schedule.startsAt, schedule.endsAt);
 }
 
-String? _eventMeta(EventItemV2 item) {
+String? _eventMeta(EventItemV2 item, {required bool compact}) {
+  if (compact) return eventCardStartLabel(item.schedule.startsAt);
   if (item.schedule.state == ScheduleState.live &&
       item.schedule.label == null) {
     return null;

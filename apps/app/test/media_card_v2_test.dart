@@ -261,9 +261,82 @@ void main() {
 
     expect(find.text('Main event'), findsOneWidget);
     final title = tester.widget<Text>(find.text('Main event'));
+    expect(title.maxLines, 2);
     expect(title.style?.fontSize, AppTypography.bodySm.fontSize);
     expect(find.text('In progress'), findsOneWidget);
     expect(find.text('LIVE'), findsOneWidget);
+  });
+
+  testWidgets('event title respects the horizontal card line limit', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 280,
+            height: 174,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'A very long international sports event title',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                participants: const [
+                  Participant(name: 'Side A'),
+                  Participant(name: 'Side B'),
+                ],
+              ),
+              compactEventFooter: true,
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final title = tester.widget<Text>(
+      find.text('A very long international sports event title'),
+    );
+    expect(title.maxLines, 1);
+    expect(title.overflow, TextOverflow.ellipsis);
+  });
+
+  testWidgets('horizontal event metadata omits its end time and label', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day + 1, 12);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 280,
+            height: 174,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Tomorrow match',
+                schedule: Schedule(
+                  startsAt: start,
+                  endsAt: start.add(const Duration(hours: 2)),
+                  state: ScheduleState.scheduled,
+                  label: 'Provider time range',
+                ),
+                participants: const [
+                  Participant(name: 'Side A'),
+                  Participant(name: 'Side B'),
+                ],
+              ),
+              compactEventFooter: true,
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tomorrow 12:00'), findsOneWidget);
+    expect(find.text('Provider time range'), findsNothing);
   });
 
   testWidgets('live event hides the derived end time', (tester) async {

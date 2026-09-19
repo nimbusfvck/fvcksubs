@@ -46,6 +46,26 @@ void main() {
     expect(eventStartLabel(local(2026, 8, 17, 20, 5), now: now), '20:05');
   });
 
+  test('event card labels today and tomorrow explicitly', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(
+      eventCardStartLabel(local(2026, 8, 17, 0, 0), now: now),
+      'Today 00:00',
+    );
+    expect(
+      eventCardStartLabel(local(2026, 8, 18, 12, 0), now: now),
+      'Tomorrow 12:00',
+    );
+  });
+
+  test('event card labels other dates with a short date and start time', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(
+      eventCardStartLabel(local(2026, 9, 18, 0, 0), now: now),
+      '18 Sep 00:00',
+    );
+  });
+
   test('same day-of-month in a different month is not "today"', () {
     final now = local(2026, 8, 17, 9, 0);
     expect(startTimeLabel(local(2026, 7, 17, 12, 0), now: now), '17 Jul 12:00');

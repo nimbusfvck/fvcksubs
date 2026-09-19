@@ -100,6 +100,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _openSportCategory(List<String> categories) {
+    for (final category in categories) {
+      if (category.toLowerCase() == 'sport') {
+        _openCategory(category);
+        return;
+      }
+    }
+  }
+
   void _handleScroll() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
@@ -332,8 +341,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     if (selected.toLowerCase() == 'all')
                       SliverToBoxAdapter(
-                        child: RecommendedShelf(
-                          controller: scope.libraryController,
+                        child: TopTenShelf(
                           registry: registry,
                           catalogCache: scope.catalogCache,
                           refreshToken: _generation,
@@ -341,7 +349,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     if (selected.toLowerCase() == 'all')
                       SliverToBoxAdapter(
-                        child: TopTenShelf(
+                        child: RecommendedShelf(
+                          controller: scope.libraryController,
                           registry: registry,
                           catalogCache: scope.catalogCache,
                           refreshToken: _generation,
@@ -358,9 +367,10 @@ class _HomePageState extends State<HomePage> {
                     if (selected.toLowerCase() == 'all')
                       SliverToBoxAdapter(
                         child: CenteredContent(
-                          child: LiveNowShelf(
+                          child: TodaysMatchesShelf(
                             catalogCache: scope.catalogCache,
                             registry: registry,
+                            onSeeMore: () => _openSportCategory(categories),
                             refreshToken: _generation,
                           ),
                         ),

@@ -79,8 +79,12 @@ with its own app bar, scroll position, catalog cache, and pagination. A catalog 
 local-clock timeline and a single-column list grouped by the event's subtitle or tags (for
 example, a league or sport). The extension decides which category slice contains live items,
 upcoming items, or both, while the app draws the NOW line without knowing the provider or sport.
-Home also derives its `Live Now` shelf from the live timeline's schedule window, so an extension
-does not need to publish a separate all-category shelf for currently live events.
+Home also derives its `Today's Sporting Events` shelf from catalogs in the `sport` category,
+regardless of their browse layout. It shows up to ten rated events whose start time falls on the
+viewer’s local day, and its `See more` action opens the `sport` category. Its popularity signal is
+the extension-supplied rating, so unrated sports are omitted. Event status changes from upcoming to
+live at kickoff, and an elapsed end time or authoritative ended state keeps finished events from
+appearing live.
 Returning to Home always returns to `all`; the category itself is not a persisted Home selection.
 
 Whichever destination is showing is rebuilt when settings or the library change, so

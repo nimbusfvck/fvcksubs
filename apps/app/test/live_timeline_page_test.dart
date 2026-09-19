@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/catalog/category_page.dart';
 import 'package:fvcksubs_app/catalog/live_timeline_page.dart';
 import 'package:fvcksubs_app/home/live_now_shelf.dart';
 import 'package:fvcksubs_app/catalog/participant_avatar.dart';
@@ -11,9 +12,22 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
 
+EventItemV2 sportEvent({
+  required String id,
+  required String title,
+  required DateTime startsAt,
+  required double? rating,
+  ScheduleState state = ScheduleState.scheduled,
+}) => EventItemV2(
+  ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: id),
+  title: title,
+  rating: rating,
+  schedule: Schedule(startsAt: startsAt, state: state),
+);
+
 void main() {
-  test('Live Now uses the event schedule window', () {
-    final startsAt = DateTime.utc(2026, 9, 13, 10);
+  test('Today\'s Matches filters by local date and derives event status', () {
+    final startsAt = DateTime(2026, 9, 19, 10);
     final event = EventItemV2(
       ref: const MediaRef(
         extensionId: 'fake',
@@ -24,33 +38,106 @@ void main() {
       schedule: Schedule(
         startsAt: startsAt,
         endsAt: startsAt.add(const Duration(hours: 2)),
+        state: ScheduleState.scheduled,
       ),
     );
 
+    expect(isEventToday(event, DateTime(2026, 9, 19, 9)), isTrue);
+    expect(isEventToday(event, DateTime(2026, 9, 20, 0)), isFalse);
+    expect(isPopularSportEvent(event), isFalse);
     expect(
-      isEventLiveNow(event, startsAt.add(const Duration(minutes: 1))),
+      isPopularSportEvent(
+        EventItemV2(
+          ref: event.ref,
+          title: event.title,
+          rating: 0.1,
+          schedule: event.schedule,
+        ),
+      ),
       isTrue,
     );
+    expect(eventScheduleStateAt(event, startsAt), ScheduleState.live);
     expect(
-      isEventLiveNow(event, startsAt.subtract(const Duration(minutes: 1))),
-      isFalse,
+      eventScheduleStateAt(
+        event,
+        startsAt.subtract(const Duration(minutes: 1)),
+      ),
+      ScheduleState.scheduled,
     );
     expect(
-      isEventLiveNow(event, startsAt.add(const Duration(hours: 2))),
-      isFalse,
+      eventScheduleStateAt(event, startsAt.add(const Duration(hours: 2))),
+      ScheduleState.ended,
+    );
+
+    final ended = EventItemV2(
+      ref: event.ref,
+      title: event.title,
+      schedule: Schedule(startsAt: startsAt, state: ScheduleState.ended),
+    );
+    expect(
+      eventScheduleStateAt(ended, startsAt.subtract(const Duration(days: 1))),
+      ScheduleState.ended,
     );
   });
 
-  testWidgets('Home derives Live Now from the live schedule', (tester) async {
+  test(
+    'Today\'s Sporting Events keeps rated events and caps the preview at 10',
+    () {
+      final today = DateTime(2026, 9, 19);
+      final candidates = [
+        for (final index in List<int>.generate(11, (i) => i + 1))
+          sportEvent(
+            id: 'rated-$index',
+            title: 'Rated Event $index',
+            startsAt: today.add(Duration(minutes: index)),
+            rating: 0.1,
+          ),
+        sportEvent(
+          id: 'unrated',
+          title: 'Unrated Event',
+          startsAt: today,
+          rating: null,
+        ),
+        sportEvent(
+          id: 'tomorrow',
+          title: 'Tomorrow Event',
+          startsAt: today.add(const Duration(days: 1)),
+          rating: 1,
+        ),
+      ];
+
+      final visible = popularSportEventsForToday(candidates, today);
+
+      expect(visible, hasLength(10));
+      expect(visible.map((event) => event.title), contains('Rated Event 10'));
+      expect(
+        visible.map((event) => event.title),
+        isNot(contains('Rated Event 11')),
+      );
+      expect(
+        visible.map((event) => event.title),
+        isNot(contains('Unrated Event')),
+      );
+      expect(
+        visible.map((event) => event.title),
+        isNot(contains('Tomorrow Event')),
+      );
+    },
+  );
+
+  testWidgets('Home shows only today\'s sport matches and updates status', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final now = DateTime.now().toUtc();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     await tester.pumpWidget(
       wrapApp(
         child: const HomePage(),
         registry: ExtensionRegistry([
           FakeExtension(
-            categories: ['all', 'live'],
+            categories: ['all', 'sport'],
             catalogs: [
               const FakeCatalog(
                 id: 'home',
@@ -59,19 +146,51 @@ void main() {
                 items: [],
               ),
               FakeCatalog(
-                id: 'sports-schedule',
-                name: 'Sports Schedule',
-                categories: const ['live'],
+                id: 'sports',
+                name: 'Sports',
+                categories: const ['sport'],
                 items: [
-                  fakeItem(
-                    id: 'arsenal-chelsea',
-                    title: 'Arsenal vs Chelsea',
-                    subtitle: 'Premier League',
-                    startsAt: now.subtract(const Duration(minutes: 10)),
-                    status: ScheduleState.live,
+                  sportEvent(
+                    id: 'started-today',
+                    title: 'Started Today',
+                    startsAt: today,
+                    rating: 1,
+                  ),
+                  sportEvent(
+                    id: 'ended-today',
+                    title: 'Ended Today',
+                    startsAt: today.add(const Duration(minutes: 1)),
+                    rating: 2,
+                    state: ScheduleState.ended,
+                  ),
+                  for (final index in List<int>.generate(9, (i) => i + 3))
+                    sportEvent(
+                      id: 'rated-$index',
+                      title: 'Rated Event $index',
+                      startsAt: today.add(Duration(minutes: index)),
+                      rating: 1,
+                    ),
+                  sportEvent(
+                    id: 'unrated-today',
+                    title: 'Unrated Non-Football Event',
+                    startsAt: today.add(const Duration(minutes: 20)),
+                    rating: null,
+                  ),
+                  sportEvent(
+                    id: 'tomorrow',
+                    title: 'Tomorrow Match',
+                    startsAt: today.add(const Duration(days: 1)),
+                    rating: 10,
+                  ),
+                  sportEvent(
+                    id: 'yesterday',
+                    title: 'Yesterday Match',
+                    startsAt: today.subtract(const Duration(days: 1)),
+                    rating: 10,
+                    state: ScheduleState.ended,
                   ),
                 ],
-                display: CatalogDisplay.timeline,
+                display: CatalogDisplay.row,
               ),
             ],
           ),
@@ -81,13 +200,66 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('Live Now'), findsOneWidget);
+    expect(find.text('Today\'s Sporting Events'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(const Key('home-live-now-shelf')),
-        matching: find.text('Arsenal vs Chelsea'),
+        of: find.byKey(const Key('home-todays-matches-shelf')),
+        matching: find.text('Started Today'),
       ),
+      findsAtLeastNWidgets(1),
+    );
+    final todaysMatches = find.byKey(const Key('home-todays-matches-shelf'));
+    final todayCardDecoration =
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(
+                        of: todaysMatches,
+                        matching: find.byKey(
+                          const Key('home-todays-event-card'),
+                        ),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(todayCardDecoration.border?.top.width, 0.6);
+    expect(
+      find.descendant(of: todaysMatches, matching: find.text('Tomorrow Match')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: todaysMatches,
+        matching: find.text('Yesterday Match'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: todaysMatches, matching: find.text('LIVE')),
       findsOneWidget,
+    );
+    expect(
+      find.descendant(of: todaysMatches, matching: find.text('ENDED')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: todaysMatches,
+        matching: find.text('Unrated Non-Football Event'),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const Key('home-todays-matches-see-more')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final sportCategoryPage = tester.widget<CategoryPage>(
+      find.byType(CategoryPage),
+    );
+    expect(sportCategoryPage.category, 'sport');
+    expect(
+      find.byKey(const Key('media-card-outline')),
+      findsAtLeastNWidgets(1),
     );
   });
 
