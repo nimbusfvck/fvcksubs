@@ -19,6 +19,7 @@ import 'models/playback_start_position.dart';
 import 'models/resolved_source.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
+import 'state/persisted_resolved_source_recovery.dart';
 import 'state/picture_in_picture_session.dart';
 import 'state/player_orientation_coordinator.dart';
 import 'state/source_fallback_policy.dart';
@@ -143,6 +144,7 @@ class PlayerPage extends StatefulWidget {
     super.key,
     required MediaItemV2 item,
     required this.resolvedSources,
+    this.persistedSourceId,
     this.episodeGuide,
     this.pendingSources,
     this.pendingSegments,
@@ -152,6 +154,7 @@ class PlayerPage extends StatefulWidget {
 
   final PlaybackMedia media;
   final List<ResolvedSource> resolvedSources;
+  final String? persistedSourceId;
   final EpisodeGuide? episodeGuide;
   final Stream<ResolvedSource>? pendingSources;
   final Future<List<PlaybackSegment>>? pendingSegments;
@@ -206,6 +209,9 @@ class _PlayerPageState extends State<PlayerPage> {
   int _sourceRevision = 0;
   int _playbackAttempt = 0;
   final Set<String> _failedSourceIds = <String>{};
+  final PersistedResolvedSourceRecovery _persistedResolvedSourceRecovery =
+      PersistedResolvedSourceRecovery();
+  String? _persistedSourceId;
   bool _pendingSourcesSettled = true;
   final ValueNotifier<bool> _backgroundSourceLoading = ValueNotifier<bool>(
     false,
@@ -240,6 +246,7 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    _persistedSourceId = widget.persistedSourceId;
     _currentIndex = 0;
     _resolvedSources = widget.resolvedSources;
     _resolvedSourcesListenable = ValueNotifier<List<ResolvedSource>>(
@@ -301,7 +308,6 @@ class _PlayerPageState extends State<PlayerPage> {
           source,
         ], preserveSourceId: playingId);
         final cache = AppScope.of(context).sourceCache;
-        cache.store(widget.media.ref, merged);
         cache.promote(widget.media.ref, playingId);
         // Late discovery only appends alternatives. Keep the player subtree
         // out of this update: rebuilding the controls while a source sheet is
@@ -330,7 +336,6 @@ class _PlayerPageState extends State<PlayerPage> {
             preserveSourceId: playingId,
             refreshedDescriptors: refreshedDescriptors,
           );
-          cache.store(widget.media.ref, reconciled);
           _resolvedSources = reconciled;
           _currentIndex = reconciled.indexWhere(
             (source) => source.source.id == playingId,
@@ -371,7 +376,6 @@ class _PlayerPageState extends State<PlayerPage> {
       preserveSourceId: playingId,
       refreshedDescriptors: scope.sourceCache.peekSourceList(widget.media.ref),
     );
-    scope.sourceCache.store(widget.media.ref, merged);
     scope.sourceCache.promote(widget.media.ref, playingId);
     // The open source remains unchanged by a refresh. Publish the new list
     // to the sheet without rebuilding the native player or its controls.
@@ -437,6 +441,7 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     if (!_sourceStarted && value.initialized && value.isPlaying) {
       _sourceStarted = true;
+      _saveLastResolvedSource(_current);
       _fallbackWaitTimer?.cancel();
       _fallbackWaitTimer = null;
       _pendingFallbackSourceId = null;
@@ -579,6 +584,19 @@ class _PlayerPageState extends State<PlayerPage> {
           'error=${redactPlaybackLogText(message)}',
         );
       }
+      final sourceId = _current.source.id;
+      final sourceCache = AppScope.of(context).sourceCache;
+      if (_persistedResolvedSourceRecovery.shouldRefreshAfterStartupFailure(
+        isPersistedSource: _persistedSourceId == sourceId,
+        cache: sourceCache,
+        ref: widget.media.ref,
+        sourceId: sourceId,
+      )) {
+        // A saved URL may have expired while the app was closed. Resolve this
+        // same descriptor once before falling back to another source.
+        unawaited(_retryPlayback());
+        return;
+      }
       _failedSourceIds.add(_current.source.id);
       _fallBackBeforePlaybackStarts(message);
     });
@@ -670,6 +688,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _retryPlayback() async {
     if (_controller == null || _retrying) return;
     final attempt = ++_playbackAttempt;
+    final sourceId = _current.source.id;
+    final scope = AppScope.of(context);
     _fallbackWaitTimer?.cancel();
     _fallbackWaitTimer = null;
     _pendingFallbackSourceId = null;
@@ -690,10 +710,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _fallbackWaitTimer?.cancel();
     _fallbackWaitTimer = Timer(_fallbackWaitDuration, _finishRetryWait);
     try {
-      final scope = AppScope.of(context);
       final stream = await scope.registry.resolveSource(
         widget.media.ref,
-        _current.source.id,
+        sourceId,
       );
       if (!PlaybackTarget.detect().canPlay(stream)) {
         throw StateError(
@@ -712,9 +731,11 @@ class _PlayerPageState extends State<PlayerPage> {
         _sourceRevision++;
         _controller = null;
       });
-      scope.sourceCache.store(widget.media.ref, _resolvedSources);
+      _saveLastResolvedSource(_resolvedSources[_currentIndex]);
+      scope.sourceCache.promote(widget.media.ref, sourceId);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
+      scope.sourceCache.removeLastResolved(widget.media.ref, sourceId);
       _fallbackWaitTimer?.cancel();
       _fallbackWaitTimer = null;
       setState(() {
@@ -898,9 +919,11 @@ class _PlayerPageState extends State<PlayerPage> {
         'renew_state_committed elapsed=${stopwatch.elapsedMilliseconds}ms '
         'revision=$_sourceRevision',
       );
-      scope.sourceCache.store(widget.media.ref, _resolvedSources);
+      _saveLastResolvedSource(_resolvedSources[_currentIndex]);
+      scope.sourceCache.promote(widget.media.ref, sourceId);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
+      scope.sourceCache.removeLastResolved(widget.media.ref, sourceId);
       _fallBackAfterFailedRenewal(sourceId);
     } finally {
       _logRecovery('renew_done elapsed=${stopwatch.elapsedMilliseconds}ms');
@@ -973,6 +996,7 @@ class _PlayerPageState extends State<PlayerPage> {
         next.item,
         episodeGuide: widget.episodeGuide,
         replaceCurrent: true,
+        preferredSource: _current.source,
       ),
     );
   }
@@ -988,6 +1012,7 @@ class _PlayerPageState extends State<PlayerPage> {
         episodeItemFrom(current, entry.group, entry.index),
         episodeGuide: widget.episodeGuide,
         replaceCurrent: true,
+        preferredSource: _current.source,
       ),
     );
   }
@@ -1254,9 +1279,17 @@ class _PlayerPageState extends State<PlayerPage> {
       isPlaying: false,
       isBuffering: true,
     );
+    final sourceCache = AppScope.of(context).sourceCache;
+    sourceCache.promote(widget.media.ref, picked.source.id);
+    _saveLastResolvedSource(picked);
+  }
+
+  void _saveLastResolvedSource(ResolvedSource resolved) {
+    if (_isLive) return;
     AppScope.of(
       context,
-    ).sourceCache.promote(widget.media.ref, picked.source.id);
+    ).sourceCache.saveLastResolved(widget.media.ref, resolved);
+    _persistedSourceId = resolved.source.id;
   }
 
   void _finishFallbackWait() {

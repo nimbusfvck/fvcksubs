@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
+import '../app_scope.dart';
 import '../catalog/catalog_cache.dart';
 import '../catalog/live_timeline_cubit.dart';
 import '../catalog/media_card_actions.dart';
@@ -125,10 +126,19 @@ class _TodaysMatchesShelfState extends State<TodaysMatchesShelf> {
     final category = _sportCategory();
     final bindings = _bindings();
     _bindingSignature = _signature(bindings);
+    final selectedPluginId = category == null
+        ? null
+        : AppScope.of(context).pluginController.resolve([
+            for (final plugin in widget.registry.pluginsFor(category))
+              plugin.id,
+          ]);
     await _cubit.load(
       bindings,
       category: category ?? 'sport',
       refresh: refresh,
+      shouldRefreshBinding: refresh
+          ? (binding) => binding.extensionId != selectedPluginId
+          : null,
     );
   }
 

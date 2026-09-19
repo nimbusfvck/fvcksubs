@@ -251,32 +251,31 @@ class _HomePageState extends State<HomePage> {
         if (binding.extensionId == pluginId) binding,
     ];
     final groups = groupHomeCatalogs(bindings);
-    return BlocBuilder<FeaturedController, FeaturedState>(
-      bloc: _featuredController,
-      builder: (context, featured) {
-        final showFeatured = featured.items.isNotEmpty || featured.isLoading;
-        final viewport = MediaQuery.sizeOf(context);
-        final featuredHeight = !showFeatured
-            ? null
-            : MediaHeroLayout.snapToDevicePixel(
-                context,
-                MediaHeroLayout.heightForViewport(viewport) -
-                    MediaQuery.paddingOf(context).top,
-              );
-        return Scaffold(
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              RefreshIndicator(
-                onRefresh: _refresh,
-                child: CustomScrollView(
-                  key: bindings.isEmpty
-                      ? null
-                      : const Key('home-catalog-content'),
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverAppBar(
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: CustomScrollView(
+              key: bindings.isEmpty ? null : const Key('home-catalog-content'),
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                BlocBuilder<FeaturedController, FeaturedState>(
+                  bloc: _featuredController,
+                  builder: (context, featured) {
+                    final showFeatured =
+                        featured.items.isNotEmpty || featured.isLoading;
+                    final viewport = MediaQuery.sizeOf(context);
+                    final featuredHeight = !showFeatured
+                        ? null
+                        : MediaHeroLayout.snapToDevicePixel(
+                            context,
+                            MediaHeroLayout.heightForViewport(viewport) -
+                                MediaQuery.paddingOf(context).top,
+                          );
+                    return SliverAppBar(
                       expandedHeight: featuredHeight,
                       pinned: true,
                       floating: false,
@@ -329,106 +328,106 @@ class _HomePageState extends State<HomePage> {
                             onSelected: (id) => _selectPlugin(scope, id),
                           ),
                       ],
-                    ),
-                    if (selected.toLowerCase() == 'all')
-                      SliverToBoxAdapter(
-                        child: CenteredContent(
-                          child: ContinueWatchingShelf(
-                            controller: scope.libraryController,
-                            registry: registry,
-                          ),
-                        ),
-                      ),
-                    if (selected.toLowerCase() == 'all')
-                      SliverToBoxAdapter(
-                        child: TopTenShelf(
-                          registry: registry,
-                          catalogCache: scope.catalogCache,
-                          refreshToken: _generation,
-                        ),
-                      ),
-                    if (selected.toLowerCase() == 'all')
-                      SliverToBoxAdapter(
-                        child: RecommendedShelf(
-                          controller: scope.libraryController,
-                          registry: registry,
-                          catalogCache: scope.catalogCache,
-                          refreshToken: _generation,
-                        ),
-                      ),
-                    if (selected.toLowerCase() == 'all')
-                      SliverToBoxAdapter(
-                        child: SurpriseMeBanner(
-                          registry: registry,
-                          catalogCache: scope.catalogCache,
-                          refreshToken: _generation,
-                        ),
-                      ),
-                    if (selected.toLowerCase() == 'all')
-                      SliverToBoxAdapter(
-                        child: CenteredContent(
-                          child: TodaysMatchesShelf(
-                            catalogCache: scope.catalogCache,
-                            registry: registry,
-                            onSeeMore: () => _openSportCategory(categories),
-                            refreshToken: _generation,
-                          ),
-                        ),
-                      ),
-                    if (bindings.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _EmptyCategory(category: selected),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                        sliver: SliverMainAxisGroup(
-                          slivers: [
-                            for (final group in groups)
-                              _catalogGroupSliver(group, selected),
-                          ],
-                        ),
-                      ),
-                  ],
+                    );
+                  },
                 ),
-              ),
-              if (categoryChoices.isNotEmpty && !useRail)
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + kToolbarHeight,
-                  left: 0,
-                  right: 0,
-                  child: ClipRect(
-                    child: AnimatedSlide(
-                      key: const Key('home-category-header-animation'),
-                      offset: _showCategoryHeader
-                          ? Offset.zero
-                          : const Offset(0, -1),
-                      duration: _categoryHeaderAnimationDuration,
-                      curve: Curves.easeInOutCubic,
-                      child: AnimatedOpacity(
-                        opacity: _showCategoryHeader ? 1 : 0,
-                        duration: _categoryHeaderAnimationDuration,
-                        curve: Curves.easeInOutCubic,
-                        child: IgnorePointer(
-                          ignoring: !_showCategoryHeader,
-                          child: Material(
-                            key: const Key('home-category-header'),
-                            color: Colors.transparent,
-                            child: SizedBox(
-                              height: 48,
-                              child: CenteredContent(
-                                child: CategoryChips(
-                                  categories: categoryChoices,
-                                  // Home is the implicit `all` destination, so
-                                  // no visible category chip is selected.
-                                  selected: hasAllCategory ? '' : selected,
-                                  onSelected: _openCategory,
-                                  backgroundColor: AppColors.surfaceDarkElevated
-                                      .withValues(alpha: 0.62),
-                                  selectedColor: AppColors.onDark,
-                                ),
-                              ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: CenteredContent(
+                      child: ContinueWatchingShelf(
+                        controller: scope.libraryController,
+                        registry: registry,
+                      ),
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: TopTenShelf(
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: CenteredContent(
+                      child: TodaysMatchesShelf(
+                        catalogCache: scope.catalogCache,
+                        registry: registry,
+                        onSeeMore: () => _openSportCategory(categories),
+                        refreshToken: _generation,
+                      ),
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: RecommendedShelf(
+                      controller: scope.libraryController,
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: SurpriseMeBanner(
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
+                    ),
+                  ),
+                if (bindings.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyCategory(category: selected),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    sliver: SliverMainAxisGroup(
+                      slivers: [
+                        for (final group in groups)
+                          _catalogGroupSliver(group, selected),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (categoryChoices.isNotEmpty && !useRail)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: AnimatedSlide(
+                  key: const Key('home-category-header-animation'),
+                  offset: _showCategoryHeader
+                      ? Offset.zero
+                      : const Offset(0, -1),
+                  duration: _categoryHeaderAnimationDuration,
+                  curve: Curves.easeInOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _showCategoryHeader ? 1 : 0,
+                    duration: _categoryHeaderAnimationDuration,
+                    curve: Curves.easeInOutCubic,
+                    child: IgnorePointer(
+                      ignoring: !_showCategoryHeader,
+                      child: Material(
+                        key: const Key('home-category-header'),
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          height: 48,
+                          child: CenteredContent(
+                            child: CategoryChips(
+                              categories: categoryChoices,
+                              // Home is the implicit `all` destination, so
+                              // no visible category chip is selected.
+                              selected: hasAllCategory ? '' : selected,
+                              onSelected: _openCategory,
+                              backgroundColor: AppColors.surfaceDarkElevated
+                                  .withValues(alpha: 0.62),
+                              selectedColor: AppColors.onDark,
                             ),
                           ),
                         ),
@@ -436,10 +435,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-            ],
-          ),
-        );
-      },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

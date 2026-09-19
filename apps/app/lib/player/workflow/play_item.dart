@@ -26,6 +26,7 @@ Future<void> playItemV2(
   ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
+  StreamSource? preferredSource,
 }) async {
   final navigator = Navigator.of(context);
   if (!_activePlayNavigators.add(navigator)) return;
@@ -37,6 +38,7 @@ Future<void> playItemV2(
       contentRating: contentRating,
       replaceCurrent: replaceCurrent,
       returnToDetail: returnToDetail,
+      preferredSource: preferredSource,
     );
   } finally {
     _activePlayNavigators.remove(navigator);
@@ -50,6 +52,7 @@ Future<void> _playMedia(
   ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
+  StreamSource? preferredSource,
 }) async {
   final scope = AppScope.of(context);
   final navigator = Navigator.of(context);
@@ -65,27 +68,22 @@ Future<void> _playMedia(
   // resolved live stream after an extension update can hand the native player an old
   // URL even though source discovery itself is still valid.
   final canUseCache = canUseCachedPlaybackSources(item);
-  final cached = canUseCache ? scope.sourceCache.peek(item.ref) : null;
-  final enabledCached = cached
-      ?.where(
-        (source) =>
-            source.hasAbsoluteHttpUrl &&
-            scope.registry.isSourceEnabled(source.source),
-      )
-      .toList();
-  if (enabledCached != null && enabledCached.isNotEmpty) {
-    final pendingSources = scope.sourceCache.isStale(item.ref)
-        ? _revalidate(scope, item).stream
-        : null;
+  final lastPlayed = canUseCache
+      ? await scope.sourceCache.loadLastResolved(item.ref)
+      : null;
+  final lastResolved = lastPlayed?.resolved;
+  if (lastResolved != null &&
+      lastResolved.hasAbsoluteHttpUrl &&
+      scope.registry.isSourceEnabled(lastResolved.source) &&
+      PlaybackTarget.detect().canPlay(lastResolved.stream)) {
     await _openPlayer(
       navigator,
       scope,
       item,
-      enabledCached,
+      [lastResolved],
       replaceCurrent,
       contentRating: contentRating,
       episodeGuide: episodeGuide,
-      pendingSources: pendingSources,
       externalSubtitles: externalSubtitles,
       playbackSegments: playbackSegments,
       returnToDetail: returnToDetail,
@@ -100,8 +98,10 @@ Future<void> _playMedia(
       ?.where(scope.registry.isSourceEnabled)
       .toList();
   if (enabledCachedList != null && enabledCachedList.isNotEmpty) {
-    final orderedCachedList = scope.sourcePriorityController.order(
+    final orderedCachedList = _orderSourcesForPlayback(
       enabledCachedList,
+      scope.sourcePriorityController,
+      preferredSource,
     );
     _ResolvedSourceBatch? cachedBatch;
     final fast = await _resolveWithOverlay(
@@ -112,6 +112,7 @@ Future<void> _playMedia(
           item,
           orderedCachedList,
           progress,
+          preferredSource: preferredSource,
         );
         cachedBatch = batch;
         final first = await batch.first;
@@ -119,10 +120,10 @@ Future<void> _playMedia(
       },
       onResolved: (resolved, loadingRoute) async {
         if (resolved.isEmpty) return false;
-        scope.sourceCache.store(item.ref, resolved);
         final refresh = _revalidate(
           scope,
           item,
+          preferredSource: preferredSource,
           excludeSourceKeys: {
             for (final source in orderedCachedList) sourceDescriptorKey(source),
           },
@@ -151,25 +152,15 @@ Future<void> _playMedia(
 
   final result = await _resolveWithOverlay(
     navigator,
-    (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
+    (progress) => _resolveFirstPlayableWithRetry(
+      scope,
+      item,
+      progress,
+      preferredSource: preferredSource,
+    ),
     onResolved: (resolved, loadingRoute) async {
       final first = resolved.first;
       if (first == null) return false;
-      // Store the source handed to the player before background revalidation
-      // starts. Revalidation may intentionally skip this descriptor to avoid
-      // opening a duplicate WebView request, so it must merge new sources
-      // into this cache entry later.
-      final refreshedBeforeHandoff = scope.sourceCache.peek(item.ref);
-      scope.sourceCache.store(
-        item.ref,
-        refreshedBeforeHandoff == null
-            ? [first]
-            : mergeResolvedSources(
-                [first],
-                refreshedBeforeHandoff,
-                preserveSourceId: first.source.id,
-              ),
-      );
       await _openPlayer(
         navigator,
         scope,
@@ -284,6 +275,7 @@ class _ResolvedSourceBatch {
 _ResolvedSourceBatch _revalidate(
   AppScope scope,
   PlaybackMedia item, {
+  StreamSource? preferredSource,
   Set<String> excludeSourceKeys = const {},
 }) {
   final controller = StreamController<ResolvedSource>();
@@ -315,22 +307,12 @@ _ResolvedSourceBatch _revalidate(
         item,
         sourcesToResolve,
         progress,
+        preferredSource: preferredSource,
       );
       final resolved = <ResolvedSource>[];
       await for (final source in batch.stream) {
         resolved.add(source);
         controller.add(source);
-      }
-      if (resolved.isNotEmpty) {
-        if (excludeSourceKeys.isEmpty) {
-          scope.sourceCache.store(item.ref, resolved);
-        } else {
-          final current = scope.sourceCache.peek(item.ref) ?? const [];
-          scope.sourceCache.store(
-            item.ref,
-            mergeResolvedSources(current, resolved),
-          );
-        }
       }
       done.complete(List<ResolvedSource>.unmodifiable(resolved));
     } catch (_) {
@@ -407,6 +389,9 @@ Future<void> _openPlayer(
     'selected=${_sourceLogName(resolved.first.source)}',
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
+  if (canUseCachedPlaybackSources(item)) {
+    scope.sourceCache.saveLastResolved(item.ref, resolved.first);
+  }
   final savedRating = scope.libraryController
       .recordFor(item.ref)
       ?.contentRating;
@@ -423,6 +408,9 @@ Future<void> _openPlayer(
     key: GlobalKey(),
     item: item.item,
     resolvedSources: resolved,
+    persistedSourceId: canUseCachedPlaybackSources(item)
+        ? resolved.first.source.id
+        : null,
     pendingSources: pendingSources,
     pendingSegments: playbackSegments,
     episodeGuide: episodeGuide,
@@ -495,12 +483,23 @@ Future<
 _resolveFirstPlayableWithRetry(
   AppScope scope,
   PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
-  final firstAttempt = await _resolveFirstPlayable(scope, item, progress);
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) async {
+  final firstAttempt = await _resolveFirstPlayable(
+    scope,
+    item,
+    progress,
+    preferredSource: preferredSource,
+  );
   if (firstAttempt.first != null || !item.isLive) return firstAttempt;
   await Future<void>.delayed(_sourceRetryDelay);
-  return _resolveFirstPlayable(scope, item, progress);
+  return _resolveFirstPlayable(
+    scope,
+    item,
+    progress,
+    preferredSource: preferredSource,
+  );
 }
 
 Future<
@@ -513,8 +512,9 @@ Future<
 _resolveFirstPlayable(
   AppScope scope,
   PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) async {
   // A fast discovery may return only the first provider with sources. That is
   // fine when there is no source preference, but it can hide the user's
   // preferred locale/provider entirely. Fetch the complete list first whenever
@@ -522,12 +522,13 @@ _resolveFirstPlayable(
   final sourcePriority = scope.sourcePriorityController.state;
   final fastInitialDiscovery =
       !item.isLive &&
+      preferredSource == null &&
       sourcePriority.orderedProviderIds.isEmpty &&
       sourcePriority.sourceLocale.isAuto;
   final sources = await _loadSources(scope, item, fast: fastInitialDiscovery);
   if (sources.isEmpty) {
     final retry = canUseCachedPlaybackSources(item)
-        ? _revalidate(scope, item)
+        ? _revalidate(scope, item, preferredSource: preferredSource)
         : null;
     final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
@@ -544,7 +545,11 @@ _resolveFirstPlayable(
     );
   }
 
-  final ordered = scope.sourcePriorityController.order(sources);
+  final ordered = _orderSourcesForPlayback(
+    sources,
+    scope.sourcePriorityController,
+    preferredSource,
+  );
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [
@@ -563,6 +568,7 @@ _resolveFirstPlayable(
       ? _revalidate(
           scope,
           item,
+          preferredSource: preferredSource,
           excludeSourceKeys: {
             for (final source in sources) sourceDescriptorKey(source),
           },
@@ -576,7 +582,7 @@ _resolveFirstPlayable(
       return (first: first, second: all, refresh: startRefresh());
     }
     final retry = canUseCachedPlaybackSources(item)
-        ? _revalidate(scope, item)
+        ? _revalidate(scope, item, preferredSource: preferredSource)
         : null;
     final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
@@ -826,12 +832,42 @@ Stream<ResolvedSource> _resolvedAsTheySettle(
   return controller.stream;
 }
 
+List<StreamSource> _orderSourcesForPlayback(
+  List<StreamSource> sources,
+  SourcePriorityController sourcePriority,
+  StreamSource? preferredSource,
+) {
+  final ordered = sourcePriority.order(sources);
+  if (preferredSource == null) return ordered;
+
+  final preferredProvider = sourceProviderKey(preferredSource);
+  if (preferredProvider.isEmpty) return ordered;
+  final preferredLabel = preferredSource.label.trim().toLowerCase();
+  var preferredIndex = ordered.indexWhere(
+    (source) =>
+        sourceProviderKey(source) == preferredProvider &&
+        source.label.trim().toLowerCase() == preferredLabel,
+  );
+  if (preferredIndex < 0) {
+    preferredIndex = ordered.indexWhere(
+      (source) => sourceProviderKey(source) == preferredProvider,
+    );
+  }
+  if (preferredIndex <= 0) return ordered;
+  return [
+    ordered[preferredIndex],
+    ...ordered.take(preferredIndex),
+    ...ordered.skip(preferredIndex + 1),
+  ];
+}
+
 _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
   AppScope scope,
   PlaybackMedia item,
   List<StreamSource> sources,
-  _ResolveProgress progress,
-) {
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) {
   final filtered = [
     for (final source in sources)
       if (scope.registry.isSourceEnabled(source)) source,
@@ -844,7 +880,11 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
     );
   }
 
-  final ordered = scope.sourcePriorityController.order(filtered);
+  final ordered = _orderSourcesForPlayback(
+    filtered,
+    scope.sourcePriorityController,
+    preferredSource,
+  );
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [

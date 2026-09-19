@@ -4,6 +4,10 @@ import 'package:html/parser.dart' as html_parser;
 
 import 'player_subtitle_style.dart';
 
+final RegExp _subtitleNoiseCharacters = RegExp(
+  r'[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B\u2060\uFEFF]',
+);
+
 /// Renders the safe inline HTML formatting commonly found in subtitle cues.
 ///
 /// Captions are untrusted upstream text. This deliberately supports text
@@ -65,26 +69,44 @@ List<InlineSpan> subtitleHtmlSpans(String source, TextStyle baseStyle) {
       baseStyle,
     );
   } catch (_) {
-    return [TextSpan(text: normalized)];
+    return [TextSpan(text: _cleanSubtitleText(normalized))];
   }
 }
 
-/// Removes ASS/SSA control blocks before the text is passed to the HTML
-/// parser. Position and style overrides are intentionally ignored for now;
-/// the player owns one fixed subtitle overlay, so rendering those controls as
-/// text would be more confusing than keeping the current placement.
+/// Removes ASS/SSA control blocks and stray non-rendering characters before
+/// the text is passed to the HTML parser. Directional and grapheme joiner
+/// characters are preserved. Position and style overrides are intentionally
+/// ignored because the player owns one fixed subtitle overlay.
 @visibleForTesting
-String normalizeSubtitleMarkup(String source) => source
+String normalizeSubtitleMarkup(String source) => _repairSubtitleMojibake(source)
     .replaceAll(RegExp(r'\{\\[^{}\r\n]*\}'), '')
     .replaceAll(RegExp(r'\\[Nn]'), '\n')
-    .replaceAll(r'\h', '\u00a0');
+    .replaceAll(r'\h', '\u00a0')
+    .replaceAll(_subtitleNoiseCharacters, '')
+    .replaceAll('\uFFFD', ' ');
+
+String _repairSubtitleMojibake(String source) => source
+    .replaceAll('â€¦', '…')
+    .replaceAll('â€“', '–')
+    .replaceAll('â€”', '—')
+    .replaceAll('â€˜', '‘')
+    .replaceAll('â€™', '’')
+    .replaceAll('â€œ', '“')
+    .replaceAll('â€\u009d', '”')
+    .replaceAll('â€�', '”');
+
+String _cleanSubtitleText(String source) => _repairSubtitleMojibake(
+  source,
+).replaceAll(_subtitleNoiseCharacters, '').replaceAll('\uFFFD', ' ');
 
 List<InlineSpan> _spansForNodes(List<html.Node> nodes, TextStyle style) => [
   for (final node in nodes) ..._spansForNode(node, style),
 ];
 
 List<InlineSpan> _spansForNode(html.Node node, TextStyle style) {
-  if (node is html.Text) return [TextSpan(text: node.data)];
+  if (node is html.Text) {
+    return [TextSpan(text: _cleanSubtitleText(node.data))];
+  }
   if (node is! html.Element) return const [];
 
   final tag = node.localName?.toLowerCase() ?? '';

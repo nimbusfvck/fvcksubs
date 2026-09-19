@@ -233,17 +233,18 @@ Playback follows this sequence:
 
 ```mermaid
 flowchart TD
-    START(["User presses Play"]) --> C1{"Already resolved<br/>this session?"}
+    START(["User presses Play or Continue"]) --> C1{"Saved VOD stream<br/>available?"}
 
-    C1 -->|yes| OPEN1["Open the player immediately — no wait at all"]
-    OPEN1 --> ST{"refresh required?"}
-    ST -->|yes| REV["Quietly re-discover in the background,<br/>while the user is already watching"]
-    ST -->|no| D1([done])
-    REV --> D1
+    C1 -->|yes| OPEN1["Try the securely cached source immediately"]
+    OPEN1 --> F1{"started?"}
+    F1 -->|yes| D1([done])
+    F1 -->|no| R1["Resolve that same source once"]
+    R1 -->|works| D1
+    R1 -->|fails| ERR["Show the source error and offer retry or source switch"]
 
     C1 -->|no| C2{"Do we know which sources<br/>exist, from an earlier run?"}
 
-    C2 -->|yes| FAST["Resolve the first source"]
+    C2 -->|yes| FAST["Resolve known sources"]
     FAST --> F2{"worked?"}
     F2 -->|yes| OPEN2["Start playing on it,<br/>fill in the rest in the background"]
     F2 -->|no| FULL
@@ -279,14 +280,17 @@ nearest corner on release.
 
 ```mermaid
 flowchart LR
-    A["All sources resolved up front"] --> B["Switching source inside the player is instant —<br/>the picker moved <i>into</i> the player"]
-    A --> C["'Nothing playable' is discovered while the user<br/>is still somewhere that can say so"]
-    A --> D["Play stays one action"]
-    A -.->|the cost| E["A slow source delays a fast one"]
+    A["Cache miss: discover and resolve sources"] --> B["Open the first ready source;<br/>add late results to the picker"]
+    A --> C["If no source resolves, show the error<br/>in the player route"]
+    A --> D["Continue first tries the saved VOD source"]
+    A -.->|the cost| E["A cache miss waits for a playable result"]
 ```
 
-The trade is accepted knowingly: with a handful of sources per item it buys more than it
-costs.
+On a warm resume, the one locally saved last-used VOD stream is tried before any provider
+request. If it fails to start, the app resolves that same source once. Other resolved streams
+live only for the active player session; the source picker can fetch alternatives when the
+viewer asks to change source. On a cache miss, a quick source can start playback while the
+remaining providers continue to populate the active source picker.
 
 ### Honest capability handling
 

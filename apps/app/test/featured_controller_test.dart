@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/catalog_cache.dart';
 import 'package:fvcksubs_app/home/featured_controller.dart';
@@ -254,6 +256,48 @@ void main() {
       await controller.close();
     },
   );
+
+  test('keeps the current hero stable while a refresh is running', () async {
+    final priority = FakeExtension(
+      id: 'priority',
+      categories: const ['priority'],
+      items: [_video('priority-item', 'Priority item', rating: 8).item],
+    );
+    final slow = FakeExtension(
+      id: 'slow',
+      categories: const ['background'],
+      catalogDelay: const Duration(milliseconds: 100),
+      items: [_video('background-item', 'Background item', rating: 8).item],
+    );
+    final controller = FeaturedController(
+      registry: ExtensionRegistry([priority, slow]),
+      catalogCache: CatalogCache(),
+      pluginController: PluginController(store: FakePluginSelectionStore()),
+    );
+    addTearDown(controller.close);
+
+    await controller.load(priorityCategory: 'priority');
+    expect(controller.state.items, hasLength(2));
+
+    final refreshStates = <FeaturedState>[];
+    final refreshCompleted = Completer<void>();
+    final subscription = controller.stream.listen((state) {
+      refreshStates.add(state);
+      if (state.status == FeaturedStatus.success &&
+          !refreshCompleted.isCompleted) {
+        refreshCompleted.complete();
+      }
+    });
+    addTearDown(subscription.cancel);
+
+    await controller.load(refresh: true, priorityCategory: 'priority');
+    await refreshCompleted.future.timeout(const Duration(seconds: 1));
+
+    expect(refreshStates, hasLength(1));
+    expect(refreshStates.single.status, FeaturedStatus.success);
+    expect(refreshStates.single.items, hasLength(2));
+    expect(controller.state.items, hasLength(2));
+  });
 }
 
 const _artwork = Artwork(

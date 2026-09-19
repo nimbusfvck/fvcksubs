@@ -18,6 +18,7 @@ import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'player/state/source_cache.dart';
+import 'player/state/resolved_playback_cache_store.dart';
 import 'player/state/picture_in_picture_session.dart';
 import 'player/state/picture_in_picture_preference_controller.dart';
 import 'player/state/source_priority_controller.dart';
@@ -26,14 +27,16 @@ import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
 import 'platform/cloudflare_killer.dart';
 import 'platform/web_view_resolver.dart';
+import 'platform/webkit_lifecycle_coordinator.dart';
 import 'settings/nsfw_controller.dart';
 import 'settings/preview_autoplay_preference_controller.dart';
 import 'settings/febbox_cookie_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cloudflareKiller = CloudflareKiller();
-  final webViewResolver = WebViewResolver();
+  final webKitLifecycle = WebKitLifecycleCoordinator();
+  final cloudflareKiller = CloudflareKiller(webKitLifecycle: webKitLifecycle);
+  final webViewResolver = WebViewResolver(webKitLifecycle: webKitLifecycle);
 
   // These reads do not depend on one another. Starting them together keeps
   // the first frame from paying each storage/platform round-trip in series.
@@ -89,6 +92,7 @@ Future<void> main() async {
     load: sourceListStore.load,
     fallback: const <String, CachedSourceList>{},
   );
+  final resolvedPlaybackStore = SecureResolvedPlaybackCacheStore();
 
   final catalogCacheFuture = _loadPersistedOrDefault(
     name: 'catalog cache',
@@ -219,6 +223,7 @@ Future<void> main() async {
 
   sourceCache = SourceCache(
     sourceListStore: sourceListStore,
+    resolvedPlaybackStore: resolvedPlaybackStore,
     initial: await sourceCacheFuture,
   );
   final catalogCache = await catalogCacheFuture;

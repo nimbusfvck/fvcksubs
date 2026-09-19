@@ -96,8 +96,9 @@ Diagnostics must remain local unless the user explicitly exports them.
 - Distinguish retrying the current media URL from resolving a fresh URL.
 - Show which source failed and offer another source without switching silently.
 - Use separate timeouts for source discovery, resolution, and player startup.
-- Remember the last successful source preference without persisting resolved
-  stream URLs.
+- Keep exactly one last-used VOD source and resolved stream in platform secure
+  storage; refresh that source once if playback cannot start, and keep resolved
+  alternatives scoped to the active player session.
 
 Playback errors must never trigger an invisible source change.
 

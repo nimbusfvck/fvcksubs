@@ -4,42 +4,71 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import '../models/resolved_source.dart';
+import 'resolved_playback_cache_store.dart';
 
 class SourceCache {
   SourceCache({
     SourceListStore? sourceListStore,
+    ResolvedPlaybackCacheStore? resolvedPlaybackStore,
     Map<String, CachedSourceList> initial = const {},
-    this.revalidateAfter = const Duration(minutes: 3),
     this.maxPersistedEntries = 100,
     DateTime Function() now = DateTime.now,
   }) : sourceListStore = sourceListStore ?? _NoopSourceListStore(),
+       resolvedPlaybackStore =
+           resolvedPlaybackStore ?? const NoopResolvedPlaybackCacheStore(),
        _persisted = Map.of(initial),
        _now = now;
 
   final SourceListStore sourceListStore;
-
-  final Duration revalidateAfter;
+  final ResolvedPlaybackCacheStore resolvedPlaybackStore;
 
   final int maxPersistedEntries;
 
   final DateTime Function() _now;
 
-  final Map<MediaRef, List<ResolvedSource>> _resolved = {};
-  final Map<MediaRef, DateTime> _resolvedAt = {};
   final Map<String, CachedSourceList> _persisted;
   final Map<String, Future<List<StreamSource>>> _sourceListLoads = {};
+  Future<void> _resolvedSaveQueue = Future<void>.value();
 
-  List<ResolvedSource>? peek(MediaRef ref) => _resolved[ref];
-
-  bool isStale(MediaRef ref) {
-    final resolvedAt = _resolvedAt[ref];
-    if (resolvedAt == null) return false;
-    return _now().difference(resolvedAt) > revalidateAfter;
+  Future<ResolvedPlaybackCacheRecord?> loadLastResolved(MediaRef ref) async {
+    await _resolvedSaveQueue;
+    try {
+      final record = await resolvedPlaybackStore.load();
+      return record?.ref == ref ? record : null;
+    } on Object {
+      // Secure-cache failure must not block playback or source discovery.
+      return null;
+    }
   }
 
-  void store(MediaRef ref, List<ResolvedSource> sources) {
-    _resolved[ref] = sources;
-    _resolvedAt[ref] = _now();
+  void saveLastResolved(MediaRef ref, ResolvedSource resolved) {
+    if (!resolved.hasAbsoluteHttpUrl) return;
+    final record = ResolvedPlaybackCacheRecord(ref: ref, resolved: resolved);
+    _queueResolvedWrite(() => resolvedPlaybackStore.save(record));
+  }
+
+  void removeLastResolved(MediaRef ref, String sourceId) {
+    _queueResolvedWrite(() async {
+      final record = await resolvedPlaybackStore.load();
+      if (record?.ref == ref && record?.resolved.source.id == sourceId) {
+        await resolvedPlaybackStore.save(null);
+      }
+    });
+  }
+
+  void clearLastResolved() {
+    _queueResolvedWrite(() => resolvedPlaybackStore.save(null));
+  }
+
+  void _queueResolvedWrite(Future<void> Function() write) {
+    _resolvedSaveQueue = _resolvedSaveQueue.then((_) async {
+      try {
+        await write();
+      } on Object {
+        // Secure-cache failure must not block playback or source discovery.
+      }
+    });
+    unawaited(_resolvedSaveQueue);
   }
 
   List<StreamSource>? peekSourceList(MediaRef ref) =>
@@ -145,18 +174,6 @@ class SourceCache {
   }
 
   void promote(MediaRef ref, String sourceId) {
-    final resolved = _resolved[ref];
-    if (resolved != null) {
-      final index = resolved.indexWhere((s) => s.source.id == sourceId);
-      if (index > 0) {
-        _resolved[ref] = [
-          resolved[index],
-          ...resolved.take(index),
-          ...resolved.skip(index + 1),
-        ];
-      }
-    }
-
     final key = CachedSourceList.keyFor(ref);
     final cached = _persisted[key];
     if (cached != null) {
@@ -177,15 +194,10 @@ class SourceCache {
     }
   }
 
-  void clear() {
-    _resolved.clear();
-    _resolvedAt.clear();
-  }
-
   void clearAll() {
-    clear();
     _persisted.clear();
     _persist();
+    clearLastResolved();
   }
 }
 

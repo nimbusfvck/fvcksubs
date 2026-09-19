@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
-import 'package:fvcksubs_app/player/models/resolved_source.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/player/workflow/play_item.dart';
@@ -238,7 +237,7 @@ void main() {
   );
 
   testWidgets(
-    'stale cached playback publishes refreshed sources to the picker',
+    'resolved alternatives are available in the active source picker',
     (tester) async {
       const staleItem = PlaybackMedia(
         VideoItemV2(
@@ -250,19 +249,13 @@ void main() {
           title: 'Movie',
         ),
       );
-      var now = DateTime(2026);
-      final sourceCache = SourceCache(now: () => now);
+      final sourceCache = SourceCache();
       const cachedSource = StreamSource(id: 'hydrax', label: 'HYDRAX');
       const refreshedSource = StreamSource(id: 'cast', label: 'CAST');
       const stream = PlayableStream(
         url: 'https://stream.example/movie.m3u8',
         format: StreamFormat.hls,
       );
-      sourceCache.store(staleItem.ref, const [
-        ResolvedSource(source: cachedSource, stream: stream),
-      ]);
-      now = now.add(const Duration(minutes: 4));
-
       final extension = FakeExtension(
         sourceList: const [cachedSource, refreshedSource],
         resolved: stream,
@@ -304,19 +297,7 @@ void main() {
       ),
       title: 'Movie',
     );
-    var now = DateTime(2026);
-    final sourceCache = SourceCache(now: () => now);
-    final stream = const PlayableStream(
-      url: 'https://stream.example/movie.m3u8',
-      format: StreamFormat.hls,
-    );
-    sourceCache.store(item.ref, [
-      ResolvedSource(
-        source: const StreamSource(id: 'hydrax', label: 'Source hydrax'),
-        stream: stream,
-      ),
-    ]);
-    now = now.add(const Duration(minutes: 4));
+    final sourceCache = SourceCache();
 
     final extension = SubtitleFakeExtension(
       subtitlesBySourceId: const {'hydrax': [], 'cast': []},

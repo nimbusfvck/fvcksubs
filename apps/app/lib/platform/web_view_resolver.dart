@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'cloudflare_killer.dart';
+import 'webkit_lifecycle_coordinator.dart';
 
 /// Loads a provider page in a headless WebView and returns the first resource
 /// matching the pattern supplied by the extension.
@@ -15,9 +17,13 @@ import 'cloudflare_killer.dart';
 /// extension's intercept pattern, while WebView lifecycle and cleanup stay
 /// here.
 class WebViewResolver {
-  WebViewResolver({this.timeout = const Duration(seconds: 45)});
+  WebViewResolver({
+    this.timeout = const Duration(seconds: 45),
+    WebKitLifecycleCoordinator? webKitLifecycle,
+  }) : _webKitLifecycle = webKitLifecycle ?? WebKitLifecycleCoordinator();
 
   final Duration timeout;
+  final WebKitLifecycleCoordinator _webKitLifecycle;
   final Map<String, Future<String?>> _inFlight = {};
 
   Future<String?> resolveMedia(
@@ -53,6 +59,31 @@ class WebViewResolver {
     String? referer,
     String? interceptPattern,
     String? clickUrl,
+  }) {
+    if (Platform.isMacOS) {
+      return _webKitLifecycle.run(
+        'media_resolution',
+        () => _resolveInWebView(
+          url,
+          referer: referer,
+          interceptPattern: interceptPattern,
+          clickUrl: clickUrl,
+        ),
+      );
+    }
+    return _resolveInWebView(
+      url,
+      referer: referer,
+      interceptPattern: interceptPattern,
+      clickUrl: clickUrl,
+    );
+  }
+
+  Future<String?> _resolveInWebView(
+    String url, {
+    String? referer,
+    String? interceptPattern,
+    String? clickUrl,
   }) async {
     final matcher = RegExp(
       interceptPattern == null || interceptPattern.isEmpty
@@ -62,7 +93,6 @@ class WebViewResolver {
     );
     final result = Completer<String?>();
     late final HeadlessInAppWebView view;
-    var running = false;
     var playerSelectionApplied = false;
     final cookieManager = CookieManager.instance();
     final browserCookies = await cookieManager.getCookies(url: WebUri(url));
@@ -92,7 +122,6 @@ class WebViewResolver {
       final normalized = candidate.replaceAll(r'\/', '/');
       _log('intercepted host=${Uri.tryParse(url)?.host}');
       result.complete(normalized);
-      if (running) unawaited(view.dispose());
     }
 
     void considerResource(LoadedResource resource) {
@@ -214,7 +243,6 @@ class WebViewResolver {
 
     try {
       await view.run();
-      running = true;
       final deadline = DateTime.now().add(timeout);
       while (!result.isCompleted && DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -225,7 +253,6 @@ class WebViewResolver {
       }
       return await result.future;
     } finally {
-      running = false;
       await view.dispose();
     }
   }

@@ -52,7 +52,9 @@ class FeaturedController extends Cubit<FeaturedState> {
 
   Future<void> load({bool refresh = false, String? priorityCategory}) async {
     final request = ++_request;
-    emit(state.copyWith(status: FeaturedStatus.loading, clearError: true));
+    if (!refresh || state.items.isEmpty) {
+      emit(state.copyWith(status: FeaturedStatus.loading, clearError: true));
+    }
 
     final categories = registry.categories;
     final requests = <_FeaturedLoadRequest>[];
@@ -98,6 +100,9 @@ class FeaturedController extends Cubit<FeaturedState> {
         hasPersistentCache = hasPersistentCache || result.fromPersistentCache;
 
         if (isClosed || request != _request || result.page == null) continue;
+        // Keep an existing hero stable during refresh; publish the new
+        // selection once all pages have settled below.
+        if (refresh) continue;
 
         // Publish the first usable pages immediately. The list stays in
         // catalog order, even though requests finish in different orders, so
@@ -363,15 +368,18 @@ abstract final class FeaturedAlgorithm {
       int Function(_FeaturedCandidate first, _FeaturedCandidate second) compare,
     ) {
       if (selected.length >= maxItems) return;
-      final matches = [
-        for (final candidate in candidates)
-          if (!selectedRefs.contains(candidate.entry.item.ref) &&
-              accepts(candidate) &&
-              _underKindLimit(candidate, kindCounts))
-            candidate,
-      ]..sort(compare);
-      if (matches.isEmpty) return;
-      final chosen = matches.first;
+      _FeaturedCandidate? chosen;
+      for (final candidate in candidates) {
+        if (selectedRefs.contains(candidate.entry.item.ref) ||
+            !accepts(candidate) ||
+            !_underKindLimit(candidate, kindCounts)) {
+          continue;
+        }
+        if (chosen == null || compare(candidate, chosen) < 0) {
+          chosen = candidate;
+        }
+      }
+      if (chosen == null) return;
       selected.add(chosen);
       selectedRefs.add(chosen.entry.item.ref);
       final kind = chosen.entry.item.kind;

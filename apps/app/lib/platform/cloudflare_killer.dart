@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -5,17 +6,32 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:fvcksubs_js_runtime/fvcksubs_js_runtime.dart';
 
+import 'webkit_lifecycle_coordinator.dart';
+
 /// WebView-backed Cloudflare solver for extension HTTP fetches.
 ///
 /// The browser is used only to obtain the challenge cookie and matching user
 /// agent. The extension HTTP client performs the retried request, so cookies
 /// never enter source ids or the player protocol.
-class _CloudflareBrowser extends InAppBrowser {}
+class _CloudflareBrowser extends InAppBrowser {
+  final Completer<void> _exited = Completer<void>();
+
+  Future<void> waitForExit() => _exited.future;
+
+  @override
+  void onExit() {
+    if (!_exited.isCompleted) _exited.complete();
+  }
+}
 
 class CloudflareKiller {
-  CloudflareKiller({this.timeout = const Duration(seconds: 25)});
+  CloudflareKiller({
+    this.timeout = const Duration(seconds: 25),
+    WebKitLifecycleCoordinator? webKitLifecycle,
+  }) : _webKitLifecycle = webKitLifecycle ?? WebKitLifecycleCoordinator();
 
   final Duration timeout;
+  final WebKitLifecycleCoordinator _webKitLifecycle;
   final Map<String, Future<JsCloudflareChallenge?>> _inFlight = {};
   static final Map<String, String> _userAgentsByHost = {};
 
@@ -64,7 +80,21 @@ class CloudflareKiller {
     return '$scope::$host';
   }
 
-  Future<JsCloudflareChallenge?> _solve(String url, {String? referer}) async {
+  Future<JsCloudflareChallenge?> _solve(String url, {String? referer}) {
+    if (Platform.isMacOS) {
+      return _webKitLifecycle.run(
+        'cloudflare_challenge',
+        () => _solveInWebView(url, referer: referer, visibleBrowser: true),
+      );
+    }
+    return _solveInWebView(url, referer: referer, visibleBrowser: false);
+  }
+
+  Future<JsCloudflareChallenge?> _solveInWebView(
+    String url, {
+    String? referer,
+    required bool visibleBrowser,
+  }) async {
     final uri = WebUri(url);
     final manager = CookieManager.instance();
     final existing = _cookieMap(await manager.getCookies(url: uri));
@@ -78,7 +108,7 @@ class CloudflareKiller {
     }
     _log('challenge_start host=${uri.host}');
 
-    if (Platform.isMacOS) {
+    if (visibleBrowser) {
       return _solveWithVisibleBrowser(uri, manager, referer: referer);
     }
 
@@ -173,7 +203,10 @@ class CloudflareKiller {
       _log('visible_challenge_timeout host=${uri.host}');
       return null;
     } finally {
-      await browser.close();
+      if (browser.isOpened()) {
+        await browser.close();
+        await browser.waitForExit();
+      }
     }
   }
 

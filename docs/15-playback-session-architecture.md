@@ -64,9 +64,12 @@ promoted through the cache API, not through shared mutable lists.
 It must not know about Flutter widgets, routes, overlays, snackbars, mini-player
 mode, PiP presentation, or `BuildContext`.
 
-Discovery and resolution remain separate operations. A descriptor may be persisted;
-a resolved URL, request token, DRM session detail, or signed stream must not be
-persisted as durable source data.
+Discovery and resolution remain separate operations. Source descriptors are
+persisted as before. The app keeps exactly one last-used on-demand resolved
+stream in platform secure storage; it must never enter the plain-text
+source-list store. This cache is an optimization, not a durable source record:
+try it once on resume, then resolve that same descriptor after a pre-start
+playback failure. Live stream results remain memory-only.
 
 The resolver provides candidates and fresh streams. It does not decide the
 user-facing playback policy for a native playback error. That policy belongs to
@@ -151,7 +154,8 @@ Each value has one owner:
 
 | State | Owner | Consumers |
 |---|---|---|
-| Cached descriptors and reusable resolved results | SourceCache | Resolver, session through cache API |
+| Persisted source descriptors | SourceCache | Resolver and source picker |
+| Single last-used resolved VOD record | Secure store through SourceCache | Play workflow loads it for resume and overwrites it with the active source |
 | In-flight discovery/resolution operation | Source resolver | Pending request or session holds a consumer subscription |
 | Accepted source candidates for this playback | Playback session | Picker, recovery policy |
 | Active source and recovery policy | Playback session | Controls, diagnostics, surface |
@@ -221,12 +225,17 @@ record bounded remaining work separately from ignored results.
 ### Cache lifetime is not playback lifetime
 
 A playback session represents one active media playback. An app session is the
-running application process. `SourceCache` can retain resolved VOD results in
-memory across playback close/reopen during that app session, under the existing
-staleness/provider filtering policy. Descriptor records can survive app restart.
-Resolved URLs never persist to disk. Closing playback releases active work and
-native resources, not every reusable in-memory cache entry. Preserve the current
-live cache bypass and explicit fresh resolution for signed/tokenized retries.
+running application process. Resolved alternatives belong to the active player
+session and are not retained in `SourceCache` RAM across playback close/reopen.
+The secure resume cache stores exactly one last-used VOD source and stream
+across app restarts. On resume, try that result without a source fetch; if
+playback fails before it starts, resolve the same descriptor once and replace
+the cached result. The source picker can fetch alternatives when the viewer
+asks to change source. Active VOD stalls and post-start errors renew the current
+source. The cache stores the complete `PlayableStream` alongside its descriptor
+so required headers, DRM, subtitles, audio URLs, and variants are not lost. Live
+results remain memory-only. Closing playback releases active work and native
+resources while leaving the one local resume entry available.
 
 ## 15.5 Invariants
 
@@ -237,8 +246,9 @@ live cache bypass and explicit fresh resolution for signed/tokenized retries.
 4. A stale resolver result cannot overwrite a newer session or source request.
 5. A late source appends to the session's source list; it cannot replace the
    currently playing source.
-6. Resolved stream caches remain app-session-only; playback-session disposal does
-   not silently change the cache retention policy.
+6. At most one resolved VOD result is persisted in secure storage; live results
+   are never persisted, and resolved alternatives are not kept in `SourceCache`
+   RAM.
 7. Native PiP must outlive route disposal until the native handoff or close event
    has completed.
 8. Closing the player explicitly disposes the session and releases the native

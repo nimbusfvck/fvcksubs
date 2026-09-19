@@ -56,8 +56,9 @@ Scope:
   bounded waits, and partial-result streaming behind a service contract;
 - keep `playItemV2` as a thin orchestration entry point temporarily;
 - keep `_PlayerLaunchPage` and route handoff behavior unchanged;
-- preserve descriptor persistence and app-session-only resolved caching, including
-  reuse across playback sessions, live bypass, and enabled-provider filtering;
+- preserve descriptor persistence and the single secure last-used VOD resume
+  record; keep resolved alternatives in the active player only, with live bypass
+  and enabled-provider filtering;
 - add request identity/cancellation guards so an old resolution cannot publish to
   a newer playback attempt.
 

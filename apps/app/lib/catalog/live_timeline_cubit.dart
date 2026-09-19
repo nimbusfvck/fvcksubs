@@ -39,6 +39,7 @@ class CatalogTimelineCubit extends Cubit<CatalogTimelineState> {
     List<CatalogBinding> bindings, {
     required String category,
     bool refresh = false,
+    bool Function(CatalogBinding binding)? shouldRefreshBinding,
   }) async {
     if (isClosed) return;
     final generation = ++_loadGeneration;
@@ -46,7 +47,11 @@ class CatalogTimelineCubit extends Cubit<CatalogTimelineState> {
 
     final pages = await Future.wait([
       for (final binding in bindings)
-        _loadBinding(binding, category: category, refresh: refresh),
+        _loadBinding(
+          binding,
+          category: category,
+          refresh: shouldRefreshBinding?.call(binding) ?? refresh,
+        ),
     ]);
     if (isClosed || generation != _loadGeneration) return;
 
