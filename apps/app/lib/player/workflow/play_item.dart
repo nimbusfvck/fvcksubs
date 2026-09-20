@@ -68,7 +68,10 @@ Future<void> _playMedia(
   // resolved live stream after an extension update can hand the native player an old
   // URL even though source discovery itself is still valid.
   final canUseCache = canUseCachedPlaybackSources(item);
-  final lastPlayed = canUseCache
+  // Episode transitions must resolve a fresh URL. The persisted stream is
+  // for resume/Continue Watching and may be stale or belong to another
+  // source variant than the one carried forward from the current episode.
+  final lastPlayed = canUseCache && preferredSource == null
       ? await scope.sourceCache.loadLastResolved(item.ref)
       : null;
   final lastResolved = lastPlayed?.resolved;
@@ -333,6 +336,10 @@ _ResolvedSourceBatch _revalidate(
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
 const _preferredSourceGrace = Duration(milliseconds: 750);
+// Browser-backed providers can spend longer than the normal handoff grace on
+// a challenge. Keep the selected episode source consistent when it is listed,
+// then fall back if it cannot produce a fresh URL in this budget.
+const _preferredEpisodeSourceTimeout = Duration(seconds: 30);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
 // Cloudflare-backed providers may need to finish a visible macOS challenge
@@ -563,7 +570,9 @@ _resolveFirstPlayable(
   // provider bypass both whenever no manual order was configured.
   final first = item.isLive
       ? await _firstMatching(futures, (_) => true)
-      : await _firstByPriority(futures);
+      : preferredSource == null
+      ? await _firstByPriority(futures)
+      : await _firstPreferredEpisodeSource(futures, ordered, preferredSource);
   _ResolvedSourceBatch? startRefresh() => canUseCachedPlaybackSources(item)
       ? _revalidate(
           scope,
@@ -919,8 +928,58 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
   return _ResolvedSourceBatch(
     stream: controller.stream,
     done: done.future,
-    first: _firstByPriority(futures),
+    first: preferredSource == null
+        ? _firstByPriority(futures)
+        : _firstPreferredEpisodeSource(futures, ordered, preferredSource),
   );
+}
+
+Future<ResolvedSource?> _firstPreferredEpisodeSource(
+  List<Future<ResolvedSource?>> futures,
+  List<StreamSource> ordered,
+  StreamSource preferredSource,
+) async {
+  final preferredIndex = ordered.indexWhere(
+    (source) => _sameSourceVariant(source, preferredSource),
+  );
+  if (preferredIndex < 0) return _firstByPriority(futures);
+
+  _debugSourceLog(
+    'preferred_source_wait source=${_sourceLogName(ordered[preferredIndex])} '
+    'timeout_s=${_preferredEpisodeSourceTimeout.inSeconds}',
+  );
+  ResolvedSource? preferred;
+  try {
+    preferred = await futures[preferredIndex].timeout(
+      _preferredEpisodeSourceTimeout,
+    );
+  } on TimeoutException {
+    preferred = null;
+  }
+  if (preferred != null) {
+    _debugSourceLog(
+      'preferred_source_ready source=${_sourceLogName(preferred.source)}',
+    );
+    return preferred;
+  }
+
+  _debugSourceLog(
+    'preferred_source_fallback source=${_sourceLogName(preferredSource)}',
+  );
+
+  final fallback = [
+    for (var index = 0; index < futures.length; index++)
+      if (index != preferredIndex) futures[index],
+  ];
+  return _firstByPriority(fallback);
+}
+
+bool _sameSourceVariant(StreamSource source, StreamSource preferred) {
+  final provider = sourceProviderKey(preferred);
+  if (provider.isEmpty || sourceProviderKey(source) != provider) return false;
+  final preferredLabel = preferred.label.trim().toLowerCase();
+  return preferredLabel.isEmpty ||
+      source.label.trim().toLowerCase() == preferredLabel;
 }
 
 /// Merges the fast result and background refresh so each source is forwarded

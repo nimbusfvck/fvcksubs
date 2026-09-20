@@ -183,6 +183,7 @@ class _PlayerPageState extends State<PlayerPage> {
   List<PlaybackSegment> _playbackSegments = const [];
   bool _upNextPaused = false;
   bool _advancing = false;
+  bool _episodeTransitioning = false;
   LibraryController? _library;
   Timer? _progressTimer;
   Timer? _stallTimer;
@@ -989,32 +990,55 @@ class _PlayerPageState extends State<PlayerPage> {
   void _playNextEpisode() {
     final next = _nextEpisode;
     if (_advancing || next == null) return;
-    _advancing = true;
-    unawaited(
-      playItemV2(
-        context,
-        next.item,
-        episodeGuide: widget.episodeGuide,
-        replaceCurrent: true,
-        preferredSource: _current.source,
-      ),
-    );
+    _beginEpisodeTransition(next.item);
   }
 
   void _playEpisode(PlayerEpisodeEntry entry) {
     if (_advancing) return;
     final current = widget.media.item;
     if (current is! EpisodeItemV2) return;
+    _beginEpisodeTransition(episodeItemFrom(current, entry.group, entry.index));
+  }
+
+  void _beginEpisodeTransition(MediaItemV2 item) {
     _advancing = true;
-    unawaited(
-      playItemV2(
-        context,
-        episodeItemFrom(current, entry.group, entry.index),
-        episodeGuide: widget.episodeGuide,
-        replaceCurrent: true,
-        preferredSource: _current.source,
-      ),
-    );
+    final preferredSource = _current.source;
+    if (mounted) {
+      setState(() => _episodeTransitioning = true);
+    }
+    unawaited(() async {
+      // The loading route is deliberately pushed while source discovery is in
+      // flight. Pause the old native controller first so the previous episode
+      // cannot keep playing underneath that route or through the handoff.
+      final controller = _controller;
+      if (controller?.value.value.isPlaying == true) {
+        try {
+          await controller!.pause();
+        } catch (_) {
+          // A controller can be disposed by PiP/route teardown during the
+          // handoff; source playback should still proceed.
+        }
+      }
+      if (!mounted) return;
+      try {
+        await playItemV2(
+          context,
+          item,
+          episodeGuide: widget.episodeGuide,
+          replaceCurrent: true,
+          preferredSource: preferredSource,
+        );
+      } finally {
+        // On success this page is removed. On failure, make the old page
+        // usable again without leaving the rail permanently locked.
+        if (mounted) {
+          setState(() {
+            _advancing = false;
+            _episodeTransitioning = false;
+          });
+        }
+      }
+    }());
   }
 
   void _popRoute() {
@@ -1533,7 +1557,9 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Widget _buildInteractivePlayer(BuildContext context) {
     final showSourceLoading =
-        _waitingForFallback || (_retrying && !_sourceStarted);
+        _episodeTransitioning ||
+        _waitingForFallback ||
+        (_retrying && !_sourceStarted);
     final showPlaybackError =
         _playbackError != null &&
         !(_pictureInPictureSession?.isMinimized ?? false);
@@ -1574,6 +1600,8 @@ class _PlayerPageState extends State<PlayerPage> {
                       onBack: _handleBack,
                       message: _retrying
                           ? 'Refreshing stream…'
+                          : _episodeTransitioning
+                          ? 'Opening episode…'
                           : 'Finding another source…',
                     ),
                   ),
@@ -1583,9 +1611,11 @@ class _PlayerPageState extends State<PlayerPage> {
                       message: _playbackError!,
                       retrying: _retrying,
                       onRetry: _retryPlayback,
-                      onChangeSource: _resolvedSources.length > 1
-                          ? _changeSource
-                          : null,
+                      // Continue Watching can start with one cached resolved
+                      // source. If that URL expires, the picker still needs
+                      // to be reachable so its refresh action can discover
+                      // other providers.
+                      onChangeSource: _changeSource,
                       onBack: _handleBack,
                       onHide: () => setState(() => _playbackError = null),
                     ),

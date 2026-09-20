@@ -129,7 +129,16 @@ class VideoPlayerStartup {
               'target_ms=${target.inMilliseconds} '
               'timeout_s=${initialSeekTimeout.inMilliseconds / 1000}',
         );
-        rethrow;
+        // Some native backends expose the first decoded frame and a small
+        // buffer before completing a long resume seek. Treat that as usable
+        // playback instead of tearing down the controller and showing a
+        // refresh overlay; the pending native seek may still finish later.
+        final value = player.value;
+        if (!value.isInitialized || value.buffered.isEmpty) rethrow;
+        log(
+          'initial_seek_timeout_continue',
+          details: 'buffered_ranges=${value.buffered.length}',
+        );
       }
       if (!isCurrent()) return false;
       log('initial_seek_done');
