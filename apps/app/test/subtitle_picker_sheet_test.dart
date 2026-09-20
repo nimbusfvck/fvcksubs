@@ -297,6 +297,54 @@ void main() {
     );
     await tester.pump();
   });
+
+  testWidgets('checks the translated current subtitle when reopened', (
+    tester,
+  ) async {
+    final preference = SubtitlePreferenceController(
+      store: FakeSubtitlePreferenceStore(),
+      initial: 'id',
+    );
+    const translated = SubtitleTrack(
+      language: 'id',
+      url: '/tmp/translated.srt',
+      label: 'Translated English Full',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        registry: ExtensionRegistry([]),
+        subtitlePreferenceController: preference,
+        child: Scaffold(
+          body: PlayerSubtitlePickerSheet(
+            media: const PlaybackMedia(
+              VideoItemV2(
+                ref: MediaRef(
+                  extensionId: 'test',
+                  providerId: 'test.provider',
+                  id: 'movie-1',
+                ),
+                title: 'Movie',
+              ),
+            ),
+            tracks: const [],
+            current: translated,
+            filterTracks: (tracks) => tracks,
+          ),
+        ),
+      ),
+    );
+
+    final translatedTile = find.ancestor(
+      of: find.text('🇮🇩 Indonesia'),
+      matching: find.byType(ListTile),
+    );
+    expect(translatedTile, findsOneWidget);
+    expect(
+      find.descendant(of: translatedTile, matching: find.byIcon(Icons.check)),
+      findsOneWidget,
+    );
+  });
 }
 
 class _BlockingSubtitleTranslateService implements SubtitleTranslateService {

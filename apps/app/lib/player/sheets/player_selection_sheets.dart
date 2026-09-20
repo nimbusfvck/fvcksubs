@@ -321,11 +321,8 @@ class PlayerQualityPickerSheet extends StatefulWidget {
   /// The rendition the viewer pinned, or `null` while the choice is Auto.
   final AppQualityTrack? current;
 
-  /// The rendition actually playing, whoever chose it.
-  ///
-  /// Auto says what the player will do, not what it did — so on its own it
-  /// leaves the viewer guessing whether the picture they are unhappy with is
-  /// 480p or 1080p. Naming it turns the row into an answer.
+  /// The rendition actually playing, retained for callers that want to expose
+  /// that detail separately from the Auto choice.
   final AppQualityTrack? playing;
 
   /// Applies a choice without closing the sheet until the native player
@@ -343,15 +340,7 @@ class _PlayerQualityPickerSheetState extends State<PlayerQualityPickerSheet> {
 
   bool get _autoSelected => widget.current == null;
 
-  String get _autoLabel {
-    final rung = widget.playing == null
-        ? null
-        : qualityRungLabel(
-            width: widget.playing!.width,
-            height: widget.playing!.height,
-          );
-    return rung == null ? 'Auto' : 'Auto ($rung)';
-  }
+  String get _autoLabel => 'Auto';
 
   Future<void> _select(AppQualityTrack track) async {
     if (_pendingId != null) return;

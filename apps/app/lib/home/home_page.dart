@@ -129,42 +129,37 @@ class _HomePageState extends State<HomePage> {
     unawaited(
       _featuredController.load(
         refresh: true,
-        priorityCategory: _homeCategory(scope.registry.categories),
+        homeCategory: _homeCategory(scope.registry.categories),
       ),
     );
   }
 
   void _ensureFeaturedLoaded(AppScope scope, List<String> categories) {
-    final priorityCategory = _homeCategory(categories);
+    final homeCategory = _homeCategory(categories);
+    final plugins = scope.registry.pluginsFor(homeCategory);
+    final pluginId = scope.pluginController.resolve([
+      for (final plugin in plugins) plugin.id,
+    ]);
     final signature = [
-      'priority:$priorityCategory',
-      for (final category in categories) ...[
-        category,
-        for (final binding in scope.registry.catalogsFor(category))
+      'home:$homeCategory',
+      'selected:$pluginId',
+      for (final binding in scope.registry.catalogsFor(homeCategory))
+        if (binding.extensionId == pluginId)
           '${binding.extensionId}:${binding.extension.manifest.version}:'
               '${binding.catalog.id}',
-        'selected:${scope.pluginController.resolve([for (final plugin in scope.registry.pluginsFor(category)) plugin.id])}',
-      ],
     ].join('|');
     if (signature == _featuredSignature) return;
     _featuredSignature = signature;
-    unawaited(_featuredController.load(priorityCategory: priorityCategory));
+    unawaited(_featuredController.load(homeCategory: homeCategory));
   }
 
   Future<void> _refresh() async {
-    // Force-refreshes every category's catalogs, not just Home's one —
-    // the Featured hero draws live/upcoming events from all of them, so a
-    // category the viewer isn't looking at (e.g. "live") would otherwise keep
-    // serving a stale session cache indefinitely and never surface a newly
-    // live event. Home's shelves are covered by the same pass, so `_generation`
-    // can bump straight off this cache once it lands.
+    // The Home Hero is scoped to the selected provider's `all` catalogs. Other
+    // category pages own and load their catalogs when the viewer opens them.
     final categories = AppScope.of(context).registry.categories;
-    final priorityCategory = categories.isEmpty
-        ? null
-        : _homeCategory(categories);
     await _featuredController.load(
       refresh: true,
-      priorityCategory: priorityCategory,
+      homeCategory: categories.isEmpty ? null : _homeCategory(categories),
     );
     if (!mounted) return;
     setState(() => _generation++);

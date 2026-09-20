@@ -33,6 +33,9 @@ class SubtitleTranslateService {
   // Keyed by source/target ISO codes and cue text.
   final Map<String, String> _cache = {};
 
+  static const _batchCueLimit = 10;
+  static const _batchCharacterLimit = 1200;
+
   /// Translates [content] to [targetIso] (ISO-639-1, for example `id`).
   /// Reports progress from 0 to 1 and throws when cues cannot be translated.
   Future<String> translate(
@@ -93,27 +96,30 @@ class SubtitleTranslateService {
 
     final result = <String, String>{};
     var done = 0;
+    final batches = _makeBatches(unique);
     var next = 0;
     var translatedCount = 0;
 
     Future<void> worker() async {
       while (true) {
         final index = next++;
-        if (index >= unique.length) break;
-        final text = unique[index];
-        final translated = await _translateLine(
-          text,
+        if (index >= batches.length) break;
+        final batch = batches[index];
+        final translated = await _translateBatch(
+          batch,
           targetIso,
           sourceIso: sourceIso,
         );
-        result[text] = translated.text;
-        if (translated.wasTranslated) translatedCount++;
-        done++;
+        for (final entry in translated.entries) {
+          result[entry.key] = entry.value.text;
+          if (entry.value.wasTranslated) translatedCount++;
+        }
+        done += batch.length;
         onProgress?.call(done / unique.length);
       }
     }
 
-    const concurrency = 6;
+    const concurrency = 3;
     await Future.wait(List.generate(concurrency, (_) => worker()));
     if (translatedCount == 0) {
       throw StateError('Translation service returned no translations');
@@ -135,6 +141,89 @@ class SubtitleTranslateService {
         ..writeln();
     }
     return output.toString();
+  }
+
+  List<List<String>> _makeBatches(List<String> texts) {
+    final batches = <List<String>>[];
+    var current = <String>[];
+    var characters = 0;
+    for (final text in texts) {
+      final contribution = text.length + 32;
+      final wouldExceed =
+          current.isNotEmpty &&
+          (current.length >= _batchCueLimit ||
+              characters + contribution > _batchCharacterLimit);
+      if (wouldExceed) {
+        batches.add(current);
+        current = <String>[];
+        characters = 0;
+      }
+      current.add(text);
+      characters += contribution;
+    }
+    if (current.isNotEmpty) batches.add(current);
+    return batches;
+  }
+
+  Future<Map<String, _TranslatedLine>> _translateBatch(
+    List<String> texts,
+    String target, {
+    required String? sourceIso,
+  }) async {
+    final translated = <String, _TranslatedLine>{};
+    final pending = <String>[];
+    for (final text in texts) {
+      final trimmed = text.trim();
+      if (trimmed.isEmpty) {
+        translated[text] = _TranslatedLine(text, false);
+        continue;
+      }
+      final key = '${sourceIso ?? 'auto'}\u0000$target\u0000$trimmed';
+      final cached = _cache[key];
+      if (cached != null) {
+        translated[text] = _TranslatedLine(cached, true);
+      } else {
+        pending.add(text);
+      }
+    }
+
+    if (pending.isEmpty) return translated;
+
+    try {
+      final joined = [
+        for (var i = 0; i < pending.length; i++)
+          '${batchMarker(i)}\n${pending[i].trim()}',
+      ].join('\n');
+      final uri = Uri.parse(
+        '$_lingvaBaseUrl/api/v1/auto/$target/${Uri.encodeComponent(joined)}',
+      );
+      final response = await _dio.get<String>(uri.toString());
+      final body = parseLingvaBody(response.data);
+      final parts = body == null
+          ? null
+          : splitBatchTranslation(body, pending.length);
+      if (parts != null) {
+        for (var i = 0; i < pending.length; i++) {
+          final text = pending[i];
+          final trimmed = text.trim();
+          final key = '${sourceIso ?? 'auto'}\u0000$target\u0000$trimmed';
+          _cache[key] = parts[i];
+          translated[text] = _TranslatedLine(parts[i], true);
+        }
+        return translated;
+      }
+    } catch (_) {
+      // Fall back to individual requests below.
+    }
+
+    for (final text in pending) {
+      translated[text] = await _translateLine(
+        text,
+        target,
+        sourceIso: sourceIso,
+      );
+    }
+    return translated;
   }
 
   Future<String> _readContent(String url) async {
@@ -195,6 +284,30 @@ class SubtitleTranslateService {
       // Preserve the original cue when both services fail.
     }
     return _TranslatedLine(text, false);
+  }
+
+  @visibleForTesting
+  static String batchMarker(int index) => '[[FVCKSUBS_CUE_$index]]';
+
+  @visibleForTesting
+  static List<String>? splitBatchTranslation(String translation, int count) {
+    final parts = <String>[];
+    var cursor = 0;
+    for (var i = 0; i < count; i++) {
+      final marker = batchMarker(i);
+      final markerIndex = translation.indexOf(marker, cursor);
+      if (markerIndex < 0) return null;
+      final start = markerIndex + marker.length;
+      final nextMarker = i + 1 < count
+          ? translation.indexOf(batchMarker(i + 1), start)
+          : -1;
+      final end = nextMarker < 0 ? translation.length : nextMarker;
+      final part = translation.substring(start, end).trim();
+      if (part.isEmpty) return null;
+      parts.add(part);
+      cursor = end;
+    }
+    return parts.length == count ? parts : null;
   }
 
   /// Extracts the translation from Lingva's REST response, or null for its

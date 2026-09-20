@@ -139,8 +139,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   AppPlayerController? _qualityController;
 
   /// Whether a rendition was chosen, here or in Settings, rather than left to
-  /// the player. Only a viewer's own pick puts the tick on a height; Auto
-  /// keeps it, and names what is playing beside it.
+  /// the player. Only a viewer's own pick puts the tick on a height; Auto keeps
+  /// the control label as Auto even while the native player reports a concrete
+  /// rendition such as 720p.
   bool? _qualityPinned;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
@@ -216,6 +217,18 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_qualityPinned != null) return;
+    _qualityPinned =
+        AppScope.of(context).qualityPreferenceController.maxHeight != null;
+    if (_qualityController != null) {
+      _activeQualityLabel = _displayQualityLabel(widget.controller);
+      _publishControlState();
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant PlayerPlaybackControls oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncVideoValue();
@@ -252,7 +265,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (controllerChanged) {
       _qualityRequestGeneration++;
       _qualitySwitching = false;
-      _activeQualityLabel = _qualityLabel(widget.controller?.activeQuality);
+      _activeQualityLabel = _displayQualityLabel(widget.controller);
     }
     _publishControlState();
   }
@@ -311,7 +324,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     } else {
       _syncActiveSubtitleLabel();
       if (!_qualitySwitching) {
-        _activeQualityLabel = _qualityLabel(widget.controller?.activeQuality);
+        _activeQualityLabel = _displayQualityLabel(widget.controller);
       }
     }
 
@@ -361,6 +374,13 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
     if (track == null || track.height <= 0) return null;
     return qualityRungLabel(width: track.width, height: track.height) ??
         '${track.height}p';
+  }
+
+  String? _displayQualityLabel(AppPlayerController? controller) {
+    final active = _qualityLabel(controller?.activeQuality);
+    if (active == null) return null;
+    if (!(_qualityPinned ?? false)) return 'Auto';
+    return active;
   }
 
   String _requestedQualityLabel(AppQualityTrack track) {
@@ -705,7 +725,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       }
       _qualityPinned = picked.id == 'auto' ? false : picked.height > 0;
       _qualitySwitching = false;
-      _activeQualityLabel = _qualityLabel(controller.activeQuality);
+      _activeQualityLabel = _displayQualityLabel(controller);
       _publishControlState();
       return true;
     } catch (error) {

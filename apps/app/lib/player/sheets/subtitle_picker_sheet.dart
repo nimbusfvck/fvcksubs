@@ -82,7 +82,14 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   }
 
   List<_SubtitleGroup> get _groups {
-    final merged = subtitlesForPicker([...widget.tracks, ..._externalTracks]);
+    final merged = subtitlesForPicker([
+      ...widget.tracks,
+      ..._externalTracks,
+      if (widget.current != null &&
+          !widget.tracks.any((track) => track.url == widget.current!.url) &&
+          !_externalTracks.any((track) => track.url == widget.current!.url))
+        widget.current!,
+    ]);
     final byLabel = <String, List<SubtitleTrack>>{};
     for (final track in merged) {
       (byLabel[subtitleLanguageLabel(track.language)] ??= []).add(track);

@@ -1305,7 +1305,10 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     final sourceCache = AppScope.of(context).sourceCache;
     sourceCache.promote(widget.media.ref, picked.source.id);
-    _saveLastResolvedSource(picked);
+    // Do not persist a manually selected URL until the replacement controller
+    // has actually started. If startup fails, treating this unplayed URL as a
+    // Continue Watching cache hit would route the error into "Refreshing
+    // stream…" instead of the normal source fallback/error path.
   }
 
   void _saveLastResolvedSource(ResolvedSource resolved) {

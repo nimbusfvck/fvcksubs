@@ -105,7 +105,10 @@ class _CategoryPageState extends State<CategoryPage> {
     }
     if (!mounted || signature != _featuredSignature) return;
     setState(() {
-      _featuredItems = FeaturedAlgorithm.selectPages(pages);
+      _featuredItems = FeaturedAlgorithm.selectPages(
+        pages,
+        allowMultipleEvents: widget.category.toLowerCase() == 'sport',
+      );
     });
   }
 

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
@@ -786,12 +785,6 @@ class _FeaturedPosterLayer extends StatelessWidget {
                 ),
               ),
             ),
-          _FeaturedEdgeBlur(
-            key: const Key('featured-edge-blur'),
-            page: page,
-            selectedPage: selectedPage,
-            viewportWidth: viewportWidth,
-          ),
         ],
       );
     },
@@ -819,57 +812,6 @@ class _FeaturedExtendedSlide extends StatelessWidget {
       child: _FeaturedSlide(item: item, artworkAlignment: artworkAlignment),
     ),
   );
-}
-
-class _FeaturedEdgeBlur extends StatelessWidget {
-  const _FeaturedEdgeBlur({
-    super.key,
-    required this.page,
-    required this.selectedPage,
-    required this.viewportWidth,
-  });
-
-  final double page;
-  final int selectedPage;
-  final double viewportWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final direction = page.compareTo(selectedPage.toDouble());
-    if (direction == 0) return const SizedBox.shrink();
-    final progress = (page - selectedPage).abs().clamp(0.0, 1.0).toDouble();
-    // Match the blur edge to the user's swipe: a left swipe blurs the left
-    // edge, while a right swipe blurs the right edge.
-    final fromRight = direction > 0;
-    final blurWidth = viewportWidth * (0.38 + progress * 0.16);
-    final overlap = viewportWidth * 0.22;
-    final totalWidth = blurWidth + overlap;
-    final sigmaX = 26 + progress * 30;
-    final sigmaY = 5 + progress * 7;
-    final blurStart = overlap / totalWidth;
-    return Align(
-      alignment: fromRight ? Alignment.centerRight : Alignment.centerLeft,
-      child: SizedBox(
-        width: totalWidth,
-        height: double.infinity,
-        child: ClipRect(
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (bounds) => LinearGradient(
-              begin: fromRight ? Alignment.centerLeft : Alignment.centerRight,
-              end: fromRight ? Alignment.centerRight : Alignment.centerLeft,
-              colors: const [Colors.transparent, Colors.white, Colors.white],
-              stops: [0, blurStart, 1],
-            ).createShader(bounds),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-              child: const ColoredBox(color: Colors.transparent),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _FeaturedPreview extends StatefulWidget {

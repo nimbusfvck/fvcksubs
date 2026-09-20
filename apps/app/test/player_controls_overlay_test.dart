@@ -295,7 +295,7 @@ void main() {
     expect(find.byIcon(Icons.check), findsOneWidget);
   });
 
-  testWidgets('Auto names the rendition it settled on', (tester) async {
+  testWidgets('Auto stays the selected quality label', (tester) async {
     const tracks = [
       AppQualityTrack(id: '1', height: 1080, bitrate: 4000000),
       AppQualityTrack(id: '2', height: 720, bitrate: 1500000),
@@ -313,14 +313,14 @@ void main() {
       ),
     );
 
-    // Auto is what the viewer chose, and the tick stays on it — but it no
-    // longer leaves them guessing what they are watching.
-    expect(find.text('Auto (720p)'), findsOneWidget);
+    // The native rendition is an implementation detail; the selected mode is
+    // still Auto.
+    expect(find.text('Auto'), findsOneWidget);
     expect(
       tester
           .widget<ListTile>(
             find.ancestor(
-              of: find.text('Auto (720p)'),
+              of: find.text('Auto'),
               matching: find.byType(ListTile),
             ),
           )

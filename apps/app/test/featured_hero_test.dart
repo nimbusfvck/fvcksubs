@@ -589,7 +589,7 @@ void main() {
     );
     expect(parallaxTarget.transform.getTranslation().x, greaterThan(0));
     expect(parallaxCurrent.transform.getTranslation().x, lessThan(0));
-    expect(find.byKey(const Key('featured-edge-blur')), findsOneWidget);
+    expect(find.byKey(const Key('featured-edge-blur')), findsNothing);
 
     await gesture.moveBy(const Offset(-180, 0));
     await gesture.up();

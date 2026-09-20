@@ -44,4 +44,22 @@ void main() {
       isNull,
     );
   });
+
+  test('splits a translated batch by stable cue markers', () {
+    final body = [
+      '${SubtitleTranslateService.batchMarker(0)} Halo dunia',
+      '${SubtitleTranslateService.batchMarker(1)} Tunggu aku',
+    ].join('\n');
+
+    expect(SubtitleTranslateService.splitBatchTranslation(body, 2), [
+      'Halo dunia',
+      'Tunggu aku',
+    ]);
+  });
+
+  test('rejects a batch when a cue marker is missing', () {
+    final body = '${SubtitleTranslateService.batchMarker(0)} Halo dunia';
+
+    expect(SubtitleTranslateService.splitBatchTranslation(body, 2), isNull);
+  });
 }

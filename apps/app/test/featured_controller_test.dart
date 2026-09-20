@@ -12,7 +12,7 @@ import 'support/harness.dart';
 void main() {
   final now = DateTime.utc(2026, 8, 20, 12);
 
-  test('fills featured slots with live, editorial, new, and top items', () {
+  test('keeps editorial items ahead of one top-rated event from today', () {
     final items = [
       _video('editorial-video', 'Editorial video', rating: 6),
       _series('editorial-series', 'Editorial series', rating: 6),
@@ -23,22 +23,23 @@ void main() {
         'Upcoming',
         ScheduleState.scheduled,
         startsAt: now.add(const Duration(hours: 2)),
+        rating: 8,
       ),
       _event(
         'live',
         'Live now',
         ScheduleState.live,
         startsAt: now.subtract(const Duration(minutes: 10)),
+        rating: 10,
       ),
     ];
 
     final featured = FeaturedAlgorithm.select(items, maxItems: 6, now: now);
 
     expect(featured.map((item) => item.item.title), <String>[
-      'Live now',
       'Editorial video',
       'Editorial series',
-      'Upcoming',
+      'Live now',
       'New video',
       'Top series',
     ]);
@@ -80,37 +81,42 @@ void main() {
     expect(featured.single.item.title, 'Primary');
   });
 
-  test('selects the nearest event within the upcoming window', () {
-    final featured = FeaturedAlgorithm.select(
-      [
-        _event(
-          'later',
-          'Later',
-          ScheduleState.scheduled,
-          startsAt: now.add(const Duration(hours: 20)),
-        ),
-        _event(
-          'next',
-          'Next',
-          ScheduleState.scheduled,
-          startsAt: now.add(const Duration(hours: 1)),
-        ),
-      ],
-      maxItems: 1,
-      now: now,
-    );
+  test(
+    'selects the highest-rated event from today, whether live or scheduled',
+    () {
+      final featured = FeaturedAlgorithm.select(
+        [
+          _event(
+            'tomorrow',
+            'Tomorrow',
+            ScheduleState.scheduled,
+            startsAt: now.add(const Duration(days: 1)),
+            rating: 10,
+          ),
+          _event(
+            'today',
+            'Today',
+            ScheduleState.scheduled,
+            startsAt: now.add(const Duration(hours: 1)),
+            rating: 8,
+          ),
+        ],
+        maxItems: 1,
+        now: now,
+      );
 
-    expect(featured.single.item.title, 'Next');
-  });
+      expect(featured.single.item.title, 'Today');
+    },
+  );
 
-  test('top-rated live event outranks an unrated live event', () {
+  test('top-rated live event outranks an unrated event from today', () {
     final featured = FeaturedAlgorithm.select(
       [
         _event(
           'ordinary-live',
           'Ordinary live',
-          ScheduleState.live,
-          startsAt: now.subtract(const Duration(minutes: 5)),
+          ScheduleState.scheduled,
+          startsAt: now.add(const Duration(hours: 1)),
         ),
         _event(
           'top-live',
@@ -140,7 +146,7 @@ void main() {
           'top-upcoming',
           'Top club upcoming',
           ScheduleState.scheduled,
-          startsAt: now.add(const Duration(hours: 5)),
+          startsAt: now.add(const Duration(hours: 2)),
           rating: 10,
         ),
       ],
@@ -149,6 +155,39 @@ void main() {
     );
 
     expect(featured.single.item.title, 'Top club upcoming');
+  });
+
+  test('category surfaces can feature multiple events from today', () {
+    final featured = FeaturedAlgorithm.select(
+      [
+        _event(
+          'first',
+          'First match',
+          ScheduleState.scheduled,
+          startsAt: now.add(const Duration(hours: 1)),
+          rating: 8,
+        ),
+        _event(
+          'second',
+          'Second match',
+          ScheduleState.live,
+          startsAt: now.subtract(const Duration(minutes: 10)),
+          rating: 10,
+        ),
+        _event(
+          'third',
+          'Third match',
+          ScheduleState.scheduled,
+          startsAt: now.add(const Duration(hours: 2)),
+          rating: 7,
+        ),
+      ],
+      maxItems: 3,
+      now: now,
+      allowMultipleEvents: true,
+    );
+
+    expect(featured, hasLength(3));
   });
 
   test('excludes ended events and items without usable hero artwork', () {
@@ -166,7 +205,7 @@ void main() {
     expect(featured.map((item) => item.item.title), ['Eligible']);
   });
 
-  test('keeps live events that can use generated artwork', () {
+  test('keeps today events that can use generated artwork', () {
     final featured = FeaturedAlgorithm.select([
       _event(
         'live-no-artwork',
@@ -222,62 +261,63 @@ void main() {
   });
 
   test(
-    'publishes a priority category before slow background catalogs settle',
+    'loads only Home all catalogs and waits before publishing the Hero',
     () async {
-      final priority = FakeExtension(
-        id: 'priority',
-        categories: const ['priority'],
-        items: [_video('priority-item', 'Priority item', rating: 8).item],
+      final home = FakeExtension(
+        id: 'home',
+        categories: const ['all'],
+        catalogDelay: const Duration(milliseconds: 40),
+        items: [_video('home-item', 'Home item', rating: 8).item],
       );
-      final slow = FakeExtension(
-        id: 'slow',
-        categories: const ['background'],
-        catalogDelay: const Duration(milliseconds: 100),
-        items: [_video('background-item', 'Background item', rating: 8).item],
+      final movies = FakeExtension(
+        id: 'movies',
+        categories: const ['movie'],
+        items: [_video('movie-item', 'Movie item', rating: 8).item],
       );
       final controller = FeaturedController(
-        registry: ExtensionRegistry([priority, slow]),
+        registry: ExtensionRegistry([home, movies]),
         catalogCache: CatalogCache(),
         pluginController: PluginController(store: FakePluginSelectionStore()),
       );
 
-      final firstUsable = controller.stream.firstWhere(
-        (state) => state.items.isNotEmpty,
+      final loading = controller.stream.firstWhere(
+        (state) => state.status == FeaturedStatus.loading,
       );
-      final load = controller.load(priorityCategory: 'priority');
-
-      final state = await firstUsable.timeout(const Duration(seconds: 1));
-      expect(state.isLoading, isTrue);
-      expect(state.items.single.item.title, 'Priority item');
+      final load = controller.load(homeCategory: 'all');
+      await loading;
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(controller.state.items, isEmpty);
+      expect(controller.state.status, FeaturedStatus.loading);
 
       await load;
       expect(controller.state.status, FeaturedStatus.success);
-      expect(controller.state.items, hasLength(2));
+      expect(controller.state.items, hasLength(1));
+      expect(home.catalogCalls, 1);
+      expect(movies.catalogCalls, 0);
+
+      await controller.load(refresh: true, homeCategory: 'all');
+      expect(home.catalogCalls, 2);
+      expect(movies.catalogCalls, 0);
       await controller.close();
     },
   );
 
   test('keeps the current hero stable while a refresh is running', () async {
-    final priority = FakeExtension(
-      id: 'priority',
-      categories: const ['priority'],
-      items: [_video('priority-item', 'Priority item', rating: 8).item],
-    );
-    final slow = FakeExtension(
-      id: 'slow',
-      categories: const ['background'],
+    final home = FakeExtension(
+      id: 'home',
+      categories: const ['all'],
       catalogDelay: const Duration(milliseconds: 100),
-      items: [_video('background-item', 'Background item', rating: 8).item],
+      items: [_video('home-item', 'Home item', rating: 8).item],
     );
     final controller = FeaturedController(
-      registry: ExtensionRegistry([priority, slow]),
+      registry: ExtensionRegistry([home]),
       catalogCache: CatalogCache(),
       pluginController: PluginController(store: FakePluginSelectionStore()),
     );
     addTearDown(controller.close);
 
-    await controller.load(priorityCategory: 'priority');
-    expect(controller.state.items, hasLength(2));
+    await controller.load(homeCategory: 'all');
+    expect(controller.state.items, hasLength(1));
 
     final refreshStates = <FeaturedState>[];
     final refreshCompleted = Completer<void>();
@@ -290,13 +330,48 @@ void main() {
     });
     addTearDown(subscription.cancel);
 
-    await controller.load(refresh: true, priorityCategory: 'priority');
+    await controller.load(refresh: true, homeCategory: 'all');
     await refreshCompleted.future.timeout(const Duration(seconds: 1));
 
     expect(refreshStates, hasLength(1));
     expect(refreshStates.single.status, FeaturedStatus.success);
-    expect(refreshStates.single.items, hasLength(2));
-    expect(controller.state.items, hasLength(2));
+    expect(refreshStates.single.items, hasLength(1));
+    expect(controller.state.items, hasLength(1));
+  });
+
+  test('queues a refresh instead of overlapping an active load', () async {
+    final extension = FakeExtension(
+      id: 'slow',
+      categories: const ['all'],
+      catalogDelay: const Duration(milliseconds: 40),
+      items: [_video('item', 'Item', rating: 8).item],
+    );
+    final controller = FeaturedController(
+      registry: ExtensionRegistry([extension]),
+      catalogCache: CatalogCache(),
+      pluginController: PluginController(store: FakePluginSelectionStore()),
+    );
+    addTearDown(controller.close);
+
+    final secondSuccess = Completer<void>();
+    var successCount = 0;
+    final subscription = controller.stream.listen((state) {
+      if (state.status != FeaturedStatus.success) return;
+      successCount++;
+      if (successCount == 2 && !secondSuccess.isCompleted) {
+        secondSuccess.complete();
+      }
+    });
+    addTearDown(subscription.cancel);
+
+    final initial = controller.load(homeCategory: 'all');
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    final refresh = controller.load(refresh: true, homeCategory: 'all');
+
+    await Future.wait([initial, refresh]);
+    await secondSuccess.future.timeout(const Duration(seconds: 1));
+
+    expect(extension.catalogCalls, 2);
   });
 }
 
