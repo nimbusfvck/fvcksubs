@@ -528,13 +528,12 @@ _resolveFirstPlayable(
   // the preference can affect the initial handoff; resolution remains parallel.
   final sourcePriority = scope.sourcePriorityController.state;
   final fastInitialDiscovery =
-      !item.isLive &&
       preferredSource == null &&
       sourcePriority.orderedProviderIds.isEmpty &&
       sourcePriority.sourceLocale.isAuto;
   final sources = await _loadSources(scope, item, fast: fastInitialDiscovery);
   if (sources.isEmpty) {
-    final retry = canUseCachedPlaybackSources(item)
+    final retry = (fastInitialDiscovery || canUseCachedPlaybackSources(item))
         ? _revalidate(scope, item, preferredSource: preferredSource)
         : null;
     final complete = retry == null ? null : await retry.done;
@@ -564,16 +563,11 @@ _resolveFirstPlayable(
       _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
-  // Resolution remains parallel, but the initial handoff must still honor
-  // the ordered source list. That list includes manual provider order and
-  // preferred source locale; using _firstMatching here would let the fastest
-  // provider bypass both whenever no manual order was configured.
-  final first = item.isLive
-      ? await _firstMatching(futures, (_) => true)
-      : preferredSource == null
-      ? await _firstByPriority(futures)
-      : await _firstPreferredEpisodeSource(futures, ordered, preferredSource);
-  _ResolvedSourceBatch? startRefresh() => canUseCachedPlaybackSources(item)
+  // For live playback the fast discovery call returns the first provider
+  // that has candidates. Keep the complete provider fan-out running in the
+  // background so slower providers can join the picker without delaying the
+  // initial handoff.
+  final backgroundRefresh = item.isLive && fastInitialDiscovery
       ? _revalidate(
           scope,
           item,
@@ -583,6 +577,26 @@ _resolveFirstPlayable(
           },
         )
       : null;
+  // Resolution remains parallel, but the initial handoff must still honor
+  // the ordered source list. That list includes manual provider order and
+  // preferred source locale; using _firstMatching here would let the fastest
+  // provider bypass both whenever no manual order was configured.
+  final first = item.isLive
+      ? await _firstMatching(futures, (_) => true)
+      : preferredSource == null
+      ? await _firstByPriority(futures)
+      : await _firstPreferredEpisodeSource(futures, ordered, preferredSource);
+  _ResolvedSourceBatch? startRefresh() => backgroundRefresh ??
+      (canUseCachedPlaybackSources(item)
+          ? _revalidate(
+              scope,
+              item,
+              preferredSource: preferredSource,
+              excludeSourceKeys: {
+                for (final source in sources) sourceDescriptorKey(source),
+              },
+            )
+          : null);
   final preferred = scope.subtitlePreferenceController;
   if (first == null ||
       preferred.languageCode == null ||
