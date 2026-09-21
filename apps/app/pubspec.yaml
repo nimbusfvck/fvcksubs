@@ -44,6 +44,7 @@ dependencies:
   flutter_bloc: ^9.1.1
   path_provider: ^2.1.5
   sembast: ^3.8.5+1
+  flutter_secure_storage: ^11.1.1
   url_launcher: ^6.3.2
   # Resolves a YouTube video id into short-lived media streams for the Shorts
   # preview feature. Pinned to an unmerged fork commit (not the mutable
@@ -76,6 +77,8 @@ flutter:
 
   assets:
     - assets/logo/logo_text.png
+    - assets/logo/imdb.webp
+    - assets/logo/rotten.webp
 
   # Inter is bundled rather than fetched at runtime by google_fonts. With the
   # runtime fetch, the first frame laid out against a narrower fallback font

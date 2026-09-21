@@ -21,6 +21,7 @@ class CatalogGridSection extends StatefulWidget {
     required this.scrollController,
     this.showCatalogTitle = true,
     this.sliver = false,
+    this.eagerLoad = false,
   });
 
   final CatalogBinding binding;
@@ -33,6 +34,12 @@ class CatalogGridSection extends StatefulWidget {
 
   /// Renders directly into the caller's [CustomScrollView] when true.
   final bool sliver;
+
+  /// Starts loading immediately even when this is rendered as a sliver.
+  ///
+  /// Home keeps sliver loading lazy so off-screen catalogs do not fetch early;
+  /// a standalone category page has no reason to defer its first catalog.
+  final bool eagerLoad;
 
   @override
   State<CatalogGridSection> createState() => _CatalogGridSectionState();
@@ -56,7 +63,7 @@ class _CatalogGridSectionState extends State<CatalogGridSection> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_started || widget.sliver) return;
+    if (_started || (widget.sliver && !widget.eagerLoad)) return;
     _startLoading();
   }
 

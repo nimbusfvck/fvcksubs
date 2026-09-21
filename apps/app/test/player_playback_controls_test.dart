@@ -314,7 +314,7 @@ void main() {
         initialized: true,
         isPlaying: true,
         position: Duration(seconds: 60),
-        duration: Duration(minutes: 2),
+        duration: Duration(minutes: 11),
       ),
     );
 
@@ -339,7 +339,7 @@ void main() {
         initialized: true,
         isPlaying: true,
         position: Duration(seconds: 90),
-        duration: Duration(minutes: 2),
+        duration: Duration(minutes: 11),
       ),
     );
     await tester.pump();
@@ -371,8 +371,8 @@ void main() {
       const AppPlayerValue(
         initialized: true,
         isPlaying: true,
-        position: Duration(seconds: 59),
-        duration: Duration(minutes: 2),
+        position: Duration(minutes: 9, seconds: 59),
+        duration: Duration(minutes: 11),
       ),
     );
 
@@ -389,11 +389,66 @@ void main() {
       const AppPlayerValue(
         initialized: true,
         isPlaying: true,
-        position: Duration(seconds: 60),
-        duration: Duration(minutes: 2),
+        position: Duration(minutes: 10),
+        duration: Duration(minutes: 11),
       ),
     );
     await tester.pump();
+    expect(nearEndCalls, 1);
+  });
+
+  testWidgets('short episodes still trigger up-next', (tester) async {
+    const episode = EpisodeItemV2(
+      ref: MediaRef(
+        extensionId: 'test',
+        providerId: 'test.provider',
+        id: 'episode-short',
+      ),
+      title: 'Short episode',
+      episode: EpisodeIdentity(
+        parentRef: MediaRef(
+          extensionId: 'test',
+          providerId: 'test.provider',
+          id: 'series-1',
+        ),
+        groupId: 'season:1',
+        position: 1,
+      ),
+    );
+    var nearEndCalls = 0;
+    final controller = _RecoveryController(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 4, seconds: 30),
+        duration: Duration(minutes: 10),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _controls(
+        controller,
+        media: const PlaybackMedia(episode),
+        playbackSegments: const [
+          PlaybackSegment(
+            type: PlaybackSegmentType.outro,
+            startMs: 30000,
+            endMs: 60000,
+          ),
+        ],
+        onNearEnd: () => nearEndCalls++,
+      ),
+    );
+    controller.update(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        position: Duration(minutes: 4, seconds: 31),
+        duration: Duration(minutes: 10),
+      ),
+    );
+    await tester.pump();
+
     expect(nearEndCalls, 1);
   });
 
@@ -722,6 +777,37 @@ void main() {
 
     expect(controller.playCalls, 0);
   });
+
+  testWidgets('failed quality switch restores the active quality label', (
+    tester,
+  ) async {
+    final controller = _QualityController(
+      requested: const AppQualityTrack(id: '1080', height: 1080),
+      active: const AppQualityTrack(id: '720', height: 720),
+      fail: true,
+    );
+    await tester.pumpWidget(_controls(controller));
+
+    expect(find.text('720p'), findsOneWidget);
+    await tester.tap(find.text('720p'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('1080p'));
+    await tester.pump();
+    expect(find.text('1080p…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNWidgets(2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('1080p…'), findsNothing);
+    expect(find.text('720p'), findsOneWidget);
+    expect(
+      find.text(
+        'Variant belum aktif. Video tetap memakai kualitas sebelumnya.',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _controls(
@@ -761,7 +847,7 @@ Widget _controls(
     ],
     currentIndex: 0,
     onChangeSource: () {},
-    onBack: () {},
+    onMinimize: () {},
     isLive: false,
     episodeGuide: episodeGuide,
     playbackSegments: playbackSegments,
@@ -831,4 +917,29 @@ class _RecoveryController implements AppPlayerController {
   Future<bool> startPictureInPicture() async => false;
   @override
   Future<void> stopPictureInPicture() async {}
+}
+
+class _QualityController extends _RecoveryController {
+  _QualityController({
+    required this.requested,
+    required this.active,
+    required this.fail,
+  });
+
+  final AppQualityTrack requested;
+  AppQualityTrack? active;
+  final bool fail;
+
+  @override
+  List<AppQualityTrack> get qualityTracks => [requested];
+
+  @override
+  AppQualityTrack? get activeQuality => active;
+
+  @override
+  Future<void> setQuality(AppQualityTrack? track) async {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (fail) throw StateError('quality switch failed');
+    active = track;
+  }
 }

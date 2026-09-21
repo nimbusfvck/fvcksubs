@@ -100,11 +100,25 @@ ThemeData buildDarkTheme() {
         borderSide: const BorderSide(color: AppColors.error),
       ),
     ),
-    navigationBarTheme: const NavigationBarThemeData(
+    navigationBarTheme: NavigationBarThemeData(
       backgroundColor: AppColors.surfaceDarkContainer,
-      indicatorColor: AppColors.surfaceDarkElevated,
-      iconTheme: WidgetStatePropertyAll(
-        IconThemeData(color: AppColors.onDarkSoft),
+      indicatorColor: AppColors.surfaceDarkHighest,
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? AppColors.brandAccent
+              : AppColors.onDarkSoft,
+        ),
+      ),
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => AppTypography.caption.copyWith(
+          color: states.contains(WidgetState.selected)
+              ? AppColors.brandAccent
+              : AppColors.onDarkSoft,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w700
+              : FontWeight.w500,
+        ),
       ),
     ),
     navigationRailTheme: const NavigationRailThemeData(

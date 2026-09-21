@@ -13,22 +13,25 @@ import '../platform/playback_capability.dart';
 import '../theme/tokens.dart';
 import 'controls/player_playback_controls.dart';
 import 'controls/player_controls_overlay.dart';
-import 'models/playback_media.dart';
 import 'models/app_player_controller.dart';
+import 'models/playback_media.dart';
+import 'models/playback_start_position.dart';
 import 'models/resolved_source.dart';
+import 'multi_view_page.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
+import 'state/persisted_resolved_source_recovery.dart';
 import 'state/picture_in_picture_session.dart';
+import 'state/player_orientation_coordinator.dart';
 import 'state/source_fallback_policy.dart';
 import 'state/stream_expiry.dart';
 import 'widgets/player_overlays.dart';
+import 'widgets/video_player_view.dart';
 import 'workflow/play_item.dart';
 import 'workflow/primary_episode_target.dart';
 
 export 'models/resolved_source.dart' show ResolvedSource, mergeResolvedSources;
 
-const Duration _minResumeProgress = Duration(seconds: 5);
-const Duration _resumeEndGuard = Duration(seconds: 30);
 const Duration _progressInterval = Duration(seconds: 10);
 
 /// How often playback is sampled for a stall.
@@ -38,10 +41,15 @@ const Duration _progressInterval = Duration(seconds: 10);
 const Duration _stallSampleInterval = Duration(seconds: 2);
 
 /// A live player may leave its buffering flag set while its forward window is
-/// still healthy. Only a sustained empty forward window is strong enough to
-/// discard the native player and resolve a fresh stream.
+/// still healthy. A sustained empty window, frozen position, or backward jump
+/// is strong enough to discard the native player and resolve a fresh stream.
 const Duration _liveBufferingRecoveryThreshold = Duration(seconds: 8);
 const Duration _liveForwardBufferThreshold = Duration(seconds: 1);
+const Duration _livePositionProgressTolerance = Duration(milliseconds: 250);
+const Duration _renewalStabilityThreshold = Duration(seconds: 20);
+const Duration _orientationReleaseDelay = Duration(milliseconds: 260);
+const Duration _fallbackWaitTimeout = Duration(seconds: 10);
+const Duration _livePlaybackWaitTimeout = Duration(seconds: 20);
 
 /// How many failures in a row are answered by re-resolving the same source
 /// before playback gives up on it and moves to another.
@@ -64,6 +72,15 @@ Duration? sourceSwitchSeekPosition({
   return previousPosition > duration ? duration : previousPosition;
 }
 
+/// Progressive VOD origins can keep a replacement controller buffering after
+/// a stall. Re-resolving the same MP4 source then drops the working controller
+/// into a renewal loop, so a different already-resolved source is safer.
+@visibleForTesting
+bool shouldFallbackAfterVODStall({
+  required bool isLive,
+  required StreamFormat format,
+}) => !isLive && format == StreamFormat.mp4;
+
 /// Returns the media buffered ahead of the current live playback position.
 @visibleForTesting
 Duration liveForwardBuffer({
@@ -74,24 +91,61 @@ Duration liveForwardBuffer({
   return bufferedPosition - position;
 }
 
+/// Returns only the buffer that is contiguous with the current live position.
+@visibleForTesting
+Duration liveContiguousForwardBuffer({
+  required Duration position,
+  required Duration bufferedPosition,
+  List<AppPlayerTimeRange>? bufferedRanges,
+}) {
+  final ranges = bufferedRanges;
+  if (ranges == null || ranges.isEmpty) {
+    return liveForwardBuffer(
+      position: position,
+      bufferedPosition: bufferedPosition,
+    );
+  }
+  return liveForwardBuffer(
+    position: position,
+    bufferedPosition: bufferedEndAtPosition(position: position, ranges: ranges),
+  );
+}
+
 /// Reports whether a live player is buffering with no usable forward cushion.
 @visibleForTesting
 bool liveBufferingNeedsRecovery({
   required Duration position,
   required Duration bufferedPosition,
+  List<AppPlayerTimeRange>? bufferedRanges,
+  Duration? previousPosition,
   required bool isPlaying,
   required bool isBuffering,
-}) =>
-    isPlaying &&
-    isBuffering &&
-    liveForwardBuffer(position: position, bufferedPosition: bufferedPosition) <=
-        _liveForwardBufferThreshold;
+}) {
+  if (!isPlaying || !isBuffering) return false;
+  final forwardBuffer = liveContiguousForwardBuffer(
+    position: position,
+    bufferedPosition: bufferedPosition,
+    bufferedRanges: bufferedRanges,
+  );
+  if (forwardBuffer <= _liveForwardBufferThreshold) return true;
+  if (previousPosition == null) return false;
+  return position <= previousPosition + _livePositionProgressTolerance;
+}
+
+@visibleForTesting
+bool playbackIsStableForRenewalReset({
+  required bool isLive,
+  required Duration position,
+  required bool isPlaying,
+  required bool isBuffering,
+}) => isPlaying && !isBuffering && (!isLive || position > Duration.zero);
 
 class PlayerPage extends StatefulWidget {
   PlayerPage({
     super.key,
     required MediaItemV2 item,
     required this.resolvedSources,
+    this.persistedSourceId,
     this.episodeGuide,
     this.pendingSources,
     this.pendingSegments,
@@ -101,6 +155,7 @@ class PlayerPage extends StatefulWidget {
 
   final PlaybackMedia media;
   final List<ResolvedSource> resolvedSources;
+  final String? persistedSourceId;
   final EpisodeGuide? episodeGuide;
   final Stream<ResolvedSource>? pendingSources;
   final Future<List<PlaybackSegment>>? pendingSegments;
@@ -129,14 +184,18 @@ class _PlayerPageState extends State<PlayerPage> {
   List<PlaybackSegment> _playbackSegments = const [];
   bool _upNextPaused = false;
   bool _advancing = false;
+  bool _episodeTransitioning = false;
   LibraryController? _library;
   Timer? _progressTimer;
   Timer? _stallTimer;
   Timer? _renewalTimer;
+  Timer? _fallbackWaitTimer;
   final PlaybackStallDetector _stallDetector = PlaybackStallDetector();
   DateTime? _liveBufferingSince;
+  Duration? _lastLivePosition;
   bool _renewing = false;
   DateTime? _lastRenewalAt;
+  DateTime? _renewalStableSince;
   int _consecutiveRenewals = 0;
   ValueListenable<AppPlayerValue>? _videoValue;
   AppPlayerController? _trackedPositionController;
@@ -152,6 +211,9 @@ class _PlayerPageState extends State<PlayerPage> {
   int _sourceRevision = 0;
   int _playbackAttempt = 0;
   final Set<String> _failedSourceIds = <String>{};
+  final PersistedResolvedSourceRecovery _persistedResolvedSourceRecovery =
+      PersistedResolvedSourceRecovery();
+  String? _persistedSourceId;
   bool _pendingSourcesSettled = true;
   final ValueNotifier<bool> _backgroundSourceLoading = ValueNotifier<bool>(
     false,
@@ -164,23 +226,29 @@ class _PlayerPageState extends State<PlayerPage> {
   double? _appliedViewportAspectRatio;
   bool? _systemUiImmersive;
   bool? _landscape;
+  final PlayerOrientationCoordinator _orientationCoordinator =
+      PlayerOrientationCoordinator();
   bool _allowPop = false;
   bool _backInFlight = false;
   bool _pipBackground = false;
   bool _resumeAfterPictureInPicture = false;
   bool _restorePlayPending = false;
+  MiniPlayerMode? _presentationBeforePictureInPicture;
   PictureInPictureSession? _pictureInPictureSession;
   AppPlayerController? _controller;
   StreamSubscription<AppPlayerEvent>? _eventSubscription;
   void Function(bool visibility)? _onVisibilityChanged;
 
   bool get _isLive => widget.media.isLive;
+  Duration get _fallbackWaitDuration =>
+      _isLive ? _livePlaybackWaitTimeout : _fallbackWaitTimeout;
   bool get _supportsFullScreen => defaultTargetPlatform == TargetPlatform.macOS;
   ResolvedSource get _current => _resolvedSources[_currentIndex];
 
   @override
   void initState() {
     super.initState();
+    _persistedSourceId = widget.persistedSourceId;
     _currentIndex = 0;
     _resolvedSources = widget.resolvedSources;
     _resolvedSourcesListenable = ValueNotifier<List<ResolvedSource>>(
@@ -242,7 +310,6 @@ class _PlayerPageState extends State<PlayerPage> {
           source,
         ], preserveSourceId: playingId);
         final cache = AppScope.of(context).sourceCache;
-        cache.store(widget.media.ref, merged);
         cache.promote(widget.media.ref, playingId);
         // Late discovery only appends alternatives. Keep the player subtree
         // out of this update: rebuilding the controls while a source sheet is
@@ -261,6 +328,23 @@ class _PlayerPageState extends State<PlayerPage> {
       // playing remains usable even when the remaining fan-out fails.
     } finally {
       if (mounted) {
+        final cache = AppScope.of(context).sourceCache;
+        final refreshedDescriptors = cache.peekSourceList(widget.media.ref);
+        if (refreshedDescriptors != null) {
+          final playingId = _current.source.id;
+          final reconciled = mergeResolvedSources(
+            _resolvedSources,
+            const [],
+            preserveSourceId: playingId,
+            refreshedDescriptors: refreshedDescriptors,
+          );
+          _resolvedSources = reconciled;
+          _currentIndex = reconciled.indexWhere(
+            (source) => source.source.id == playingId,
+          );
+          if (_currentIndex < 0) _currentIndex = 0;
+          _resolvedSourcesListenable.value = reconciled;
+        }
         _pendingSourcesSettled = true;
         _backgroundSourceLoading.value = false;
         _continuePendingFallback();
@@ -284,15 +368,16 @@ class _PlayerPageState extends State<PlayerPage> {
     final found = await refetchPlayableSources(scope, widget.media);
     if (!mounted || found.isEmpty) return _resolvedSources;
 
-    // Merge, never replace: the source being watched keeps playing and keeps
-    // its place, exactly as it does for sources that settle late.
+    // Replace stale descriptors only for providers represented in this full
+    // refresh. Providers that failed discovery remain available as fallbacks,
+    // and the source being watched keeps playing.
     final playingId = _current.source.id;
     final merged = mergeResolvedSources(
       _resolvedSources,
       found,
       preserveSourceId: playingId,
+      refreshedDescriptors: scope.sourceCache.peekSourceList(widget.media.ref),
     );
-    scope.sourceCache.store(widget.media.ref, merged);
     scope.sourceCache.promote(widget.media.ref, playingId);
     // The open source remains unchanged by a refresh. Publish the new list
     // to the sheet without rebuilding the native player or its controls.
@@ -313,6 +398,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _progressTimer?.cancel();
     _stallTimer?.cancel();
     _renewalTimer?.cancel();
+    _fallbackWaitTimer?.cancel();
     _detachPositionListener();
     unawaited(_eventSubscription?.cancel());
     _backgroundSourceLoading.dispose();
@@ -324,6 +410,7 @@ class _PlayerPageState extends State<PlayerPage> {
         landscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       ),
     );
+    _orientationCoordinator.reset();
     super.dispose();
   }
 
@@ -354,11 +441,14 @@ class _PlayerPageState extends State<PlayerPage> {
       isPlaying: value.isPlaying,
       isBuffering: value.isBuffering,
     );
-    if (!_sourceStarted) {
+    if (!_sourceStarted && value.initialized && value.isPlaying) {
       _sourceStarted = true;
+      _saveLastResolvedSource(_current);
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
-      if (_waitingForFallback) {
+      if (_waitingForFallback || _retrying) {
         setState(() {
           _waitingForFallback = false;
           _retrying = false;
@@ -369,21 +459,30 @@ class _PlayerPageState extends State<PlayerPage> {
       _armRenewalTimer();
     }
     if (_pipBackground) _resumeAfterPictureInPicture = value.isPlaying;
+    _updateRenewalStability(value);
     _lastPosition = value.position;
     _lastDuration = value.duration;
-    final position = sourceSwitchSeekPosition(
+  }
+
+  void _updateRenewalStability(AppPlayerValue value) {
+    if (_consecutiveRenewals == 0) return;
+    final stable = playbackIsStableForRenewalReset(
       isLive: _isLive,
-      previousPosition: _pendingSwitchPosition,
-      duration: value.duration,
+      position: value.position,
+      isPlaying: value.isPlaying,
+      isBuffering: value.isBuffering,
     );
-    if (position != null) {
-      _pendingSwitchPosition = null;
-      _lastPosition = position;
-      unawaited(controller.seekTo(position));
+    if (!stable) {
+      _renewalStableSince = null;
+      return;
     }
-    if (!_hasResumed) {
-      _hasResumed = true;
-      _resumeSavedPosition(value.duration);
+    final since = _renewalStableSince ??= DateTime.now();
+    if (DateTime.now().difference(since) < _renewalStabilityThreshold) return;
+    _consecutiveRenewals = 0;
+    _lastRenewalAt = null;
+    _renewalStableSince = null;
+    if (kDebugMode) {
+      debugPrint('[PlaybackSources] renewal_counter_reset stable_playback');
     }
   }
 
@@ -406,16 +505,22 @@ class _PlayerPageState extends State<PlayerPage> {
   ) {
     if (attempt != _playbackAttempt) return;
     if (event.type == AppPlayerEventType.pictureInPictureStarted) {
+      final session = _pictureInPictureSession;
+      _presentationBeforePictureInPicture = session?.isMinimized == true
+          ? MiniPlayerMode.minimized
+          : MiniPlayerMode.fullScreen;
       _resumeAfterPictureInPicture = controller.value.value.isPlaying;
-      _pictureInPictureSession?.setInteractionEnabled(false);
+      session?.setInteractionEnabled(false);
       if (mounted && !_pipBackground) {
         setState(() => _pipBackground = true);
+        _syncRequestedLandscapeOrientation();
       }
       return;
     }
     if (event.type == AppPlayerEventType.pictureInPictureClosed) {
       _resumeAfterPictureInPicture = false;
       _restorePlayPending = false;
+      _presentationBeforePictureInPicture = null;
       if (!mounted) return;
       final session = _pictureInPictureSession;
       if (session != null && identical(session.player, widget)) {
@@ -434,7 +539,11 @@ class _PlayerPageState extends State<PlayerPage> {
         if (mounted &&
             attempt == _playbackAttempt &&
             identical(controller, _controller)) {
-          _showNextEpisode();
+          if (!_upNextDismissed && !_upNextPaused && _nextEpisode != null) {
+            _playNextEpisode();
+          } else {
+            _showNextEpisode();
+          }
         }
       });
       return;
@@ -477,6 +586,19 @@ class _PlayerPageState extends State<PlayerPage> {
           'error=${redactPlaybackLogText(message)}',
         );
       }
+      final sourceId = _current.source.id;
+      final sourceCache = AppScope.of(context).sourceCache;
+      if (_persistedResolvedSourceRecovery.shouldRefreshAfterStartupFailure(
+        isPersistedSource: _persistedSourceId == sourceId,
+        cache: sourceCache,
+        ref: widget.media.ref,
+        sourceId: sourceId,
+      )) {
+        // A saved URL may have expired while the app was closed. Resolve this
+        // same descriptor once before falling back to another source.
+        unawaited(_retryPlayback());
+        return;
+      }
       _failedSourceIds.add(_current.source.id);
       _fallBackBeforePlaybackStarts(message);
     });
@@ -499,10 +621,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!_pendingSourcesSettled) {
       _pendingFallbackSourceId = _current.source.id;
       _pendingFallbackError = message;
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = Timer(_fallbackWaitDuration, _finishFallbackWait);
       setState(() {
         _waitingForFallback = true;
         _playbackError = null;
-        _retrying = true;
+        _retrying = false;
       });
       return;
     }
@@ -522,12 +646,16 @@ class _PlayerPageState extends State<PlayerPage> {
       failedSourceIds: _failedSourceIds,
     );
     if (nextIndex != null) {
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
       _logAndSwitchToFallback(nextIndex);
       return;
     }
     if (_pendingSourcesSettled) {
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       final message = _pendingFallbackError;
       _pendingFallbackSourceId = null;
       _pendingFallbackError = null;
@@ -548,6 +676,8 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _showInitialPlaybackError(String? message) {
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
     setState(() {
       _waitingForFallback = false;
       _playbackError = (message == null || message.isEmpty)
@@ -560,22 +690,31 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _retryPlayback() async {
     if (_controller == null || _retrying) return;
     final attempt = ++_playbackAttempt;
+    final sourceId = _current.source.id;
+    final scope = AppScope.of(context);
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
+    _pendingFallbackSourceId = null;
+    _pendingFallbackError = null;
     _failedSourceIds.remove(_current.source.id);
     _renewalTimer?.cancel();
     _renewalTimer = null;
     _stallDetector.reset();
     _consecutiveRenewals = 0;
+    _renewalStableSince = null;
     _sourceStarted = false;
+    _lastLivePosition = null;
     setState(() {
       _waitingForFallback = false;
       _retrying = true;
       _playbackError = null;
     });
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = Timer(_fallbackWaitDuration, _finishRetryWait);
     try {
-      final scope = AppScope.of(context);
       final stream = await scope.registry.resolveSource(
         widget.media.ref,
-        _current.source.id,
+        sourceId,
       );
       if (!PlaybackTarget.detect().canPlay(stream)) {
         throw StateError(
@@ -593,11 +732,14 @@ class _PlayerPageState extends State<PlayerPage> {
         );
         _sourceRevision++;
         _controller = null;
-        _retrying = false;
       });
-      scope.sourceCache.store(widget.media.ref, _resolvedSources);
+      _saveLastResolvedSource(_resolvedSources[_currentIndex]);
+      scope.sourceCache.promote(widget.media.ref, sourceId);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
+      scope.sourceCache.removeLastResolved(widget.media.ref, sourceId);
+      _fallbackWaitTimer?.cancel();
+      _fallbackWaitTimer = null;
       setState(() {
         _retrying = false;
         _playbackError =
@@ -620,7 +762,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (remaining == null) return;
     _renewalTimer = Timer(
       renewalDelayFor(remaining),
-      () => unawaited(_renewCurrentSource()),
+      () => unawaited(_renewCurrentSource(reason: 'scheduled')),
     );
   }
 
@@ -633,6 +775,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _sampleLiveBuffering(value);
       return;
     }
+    _lastLivePosition = null;
     final stalled = _stallDetector.sample(
       position: value.position,
       bufferedPosition: value.bufferedPosition,
@@ -648,9 +791,12 @@ class _PlayerPageState extends State<PlayerPage> {
     final stalled = liveBufferingNeedsRecovery(
       position: value.position,
       bufferedPosition: value.bufferedPosition,
+      bufferedRanges: value.bufferedRanges,
+      previousPosition: _lastLivePosition,
       isPlaying: value.isPlaying,
       isBuffering: value.isBuffering,
     );
+    _lastLivePosition = value.position;
     if (!stalled) {
       _liveBufferingSince = null;
       return;
@@ -663,6 +809,7 @@ class _PlayerPageState extends State<PlayerPage> {
       debugPrint(
         '[PlaybackSources] live_buffering_recovery '
         'buffered_ms=${value.bufferedPosition.inMilliseconds} '
+        'contiguous_buffered_ms=${liveContiguousForwardBuffer(position: value.position, bufferedPosition: value.bufferedPosition, bufferedRanges: value.bufferedRanges).inMilliseconds} '
         'is_buffering=${value.isBuffering} '
         'elapsed_ms=${elapsed.inMilliseconds}',
       );
@@ -687,6 +834,21 @@ class _PlayerPageState extends State<PlayerPage> {
     // A failing player reports the same error many times a second. One
     // recovery is in flight at a time; the rest are the same news twice.
     if (_renewing) return;
+    if (shouldFallbackAfterVODStall(
+      isLive: _isLive,
+      format: _current.stream.format,
+    )) {
+      _consecutiveRenewals = 0;
+      _stallDetector.reset();
+      if (kDebugMode) {
+        debugPrint(
+          '[PlaybackSources] vod_mp4_stall_fallback '
+          'source=${_current.source.providerId}/${_current.source.label}',
+        );
+      }
+      _fallBackAfterFailedRenewal(_current.source.id);
+      return;
+    }
     final since = _lastRenewalAt;
     final now = DateTime.now();
     _consecutiveRenewals =
@@ -700,7 +862,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _fallBackAfterFailedRenewal(_current.source.id);
       return;
     }
-    unawaited(_renewCurrentSource());
+    unawaited(_renewCurrentSource(reason: 'buffering'));
   }
 
   /// Re-resolves the source being watched and swaps the result in silently.
@@ -709,8 +871,9 @@ class _PlayerPageState extends State<PlayerPage> {
   /// remedy is the same: the URL in hand no longer works and only the
   /// extension can mint another. A source that cannot be re-resolved is
   /// handed to [_fallBackAfterFailedRenewal] rather than left frozen.
-  Future<void> _renewCurrentSource() async {
+  Future<void> _renewCurrentSource({required String reason}) async {
     if (_renewing || _controller == null || !mounted) return;
+    final stopwatch = Stopwatch()..start();
     _renewing = true;
     _liveBufferingSince = null;
     _renewalTimer?.cancel();
@@ -718,10 +881,18 @@ class _PlayerPageState extends State<PlayerPage> {
     final attempt = ++_playbackAttempt;
     final scope = AppScope.of(context);
     final sourceId = _current.source.id;
+    _logRecovery(
+      'renew_start reason=$reason '
+      'source=${_current.source.providerId}/${_current.source.label}',
+    );
     try {
       final stream = await scope.registry.resolveSource(
         widget.media.ref,
         sourceId,
+      );
+      _logRecovery(
+        'renew_resolve_done elapsed=${stopwatch.elapsedMilliseconds}ms '
+        'url=${safePlaybackUrlForLog(stream.url)}',
       );
       if (!PlaybackTarget.detect().canPlay(stream)) {
         throw StateError('The renewed source is not playable on this device.');
@@ -729,8 +900,13 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!mounted || attempt != _playbackAttempt) return;
       final position = _isLive ? null : _positionForSourceSwitch();
       _detachPositionListener();
+      _logRecovery(
+        'renew_detach_controller elapsed=${stopwatch.elapsedMilliseconds}ms',
+      );
       _stallDetector.reset();
       _sourceStarted = false;
+      _renewalStableSince = null;
+      _lastLivePosition = null;
       setState(() {
         _pendingSwitchPosition = position;
         _resolvedSources[_currentIndex] = ResolvedSource(
@@ -741,13 +917,25 @@ class _PlayerPageState extends State<PlayerPage> {
         _playbackError = null;
         _controller = null;
       });
-      scope.sourceCache.store(widget.media.ref, _resolvedSources);
+      _logRecovery(
+        'renew_state_committed elapsed=${stopwatch.elapsedMilliseconds}ms '
+        'revision=$_sourceRevision',
+      );
+      _saveLastResolvedSource(_resolvedSources[_currentIndex]);
+      scope.sourceCache.promote(widget.media.ref, sourceId);
     } catch (_) {
       if (!mounted || attempt != _playbackAttempt) return;
+      scope.sourceCache.removeLastResolved(widget.media.ref, sourceId);
       _fallBackAfterFailedRenewal(sourceId);
     } finally {
+      _logRecovery('renew_done elapsed=${stopwatch.elapsedMilliseconds}ms');
       _renewing = false;
     }
+  }
+
+  void _logRecovery(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[PlaybackSources] $message');
   }
 
   /// Moves to the next source that has not failed, or surfaces the error.
@@ -773,12 +961,14 @@ class _PlayerPageState extends State<PlayerPage> {
     });
   }
 
-  void _resumeSavedPosition(Duration? duration) {
-    if (_isLive || _controller == null) return;
+  PlaybackStartPosition? get _startPosition {
+    if (_isLive) return null;
+    final pending = _pendingSwitchPosition;
+    if (pending != null) return PlaybackStartPosition.exact(pending);
     final progress = _library?.recordFor(widget.media.ref)?.progress;
-    if (progress == null || progress < _minResumeProgress) return;
-    if (duration != null && duration - progress < _resumeEndGuard) return;
-    unawaited(_controller!.seekTo(progress));
+    return !_hasResumed && progress != null
+        ? PlaybackStartPosition.resume(progress)
+        : null;
   }
 
   void _reportProgress() {
@@ -801,30 +991,55 @@ class _PlayerPageState extends State<PlayerPage> {
   void _playNextEpisode() {
     final next = _nextEpisode;
     if (_advancing || next == null) return;
-    _advancing = true;
-    unawaited(
-      playItemV2(
-        context,
-        next.item,
-        episodeGuide: widget.episodeGuide,
-        replaceCurrent: true,
-      ),
-    );
+    _beginEpisodeTransition(next.item);
   }
 
   void _playEpisode(PlayerEpisodeEntry entry) {
     if (_advancing) return;
     final current = widget.media.item;
     if (current is! EpisodeItemV2) return;
+    _beginEpisodeTransition(episodeItemFrom(current, entry.group, entry.index));
+  }
+
+  void _beginEpisodeTransition(MediaItemV2 item) {
     _advancing = true;
-    unawaited(
-      playItemV2(
-        context,
-        episodeItemFrom(current, entry.group, entry.index),
-        episodeGuide: widget.episodeGuide,
-        replaceCurrent: true,
-      ),
-    );
+    final preferredSource = _current.source;
+    if (mounted) {
+      setState(() => _episodeTransitioning = true);
+    }
+    unawaited(() async {
+      // The loading route is deliberately pushed while source discovery is in
+      // flight. Pause the old native controller first so the previous episode
+      // cannot keep playing underneath that route or through the handoff.
+      final controller = _controller;
+      if (controller?.value.value.isPlaying == true) {
+        try {
+          await controller!.pause();
+        } catch (_) {
+          // A controller can be disposed by PiP/route teardown during the
+          // handoff; source playback should still proceed.
+        }
+      }
+      if (!mounted) return;
+      try {
+        await playItemV2(
+          context,
+          item,
+          episodeGuide: widget.episodeGuide,
+          replaceCurrent: true,
+          preferredSource: preferredSource,
+        );
+      } finally {
+        // On success this page is removed. On failure, make the old page
+        // usable again without leaving the rail permanently locked.
+        if (mounted) {
+          setState(() {
+            _advancing = false;
+            _episodeTransitioning = false;
+          });
+        }
+      }
+    }());
   }
 
   void _popRoute() {
@@ -848,10 +1063,11 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_backInFlight) return;
     _backInFlight = true;
     final controller = _controller;
-    final initialized = controller?.value.value.initialized == true;
+    final started = _sourceStarted;
     if (kDebugMode) {
       debugPrint(
-        '[PlayerPiP] back_request initialized=$initialized mode=${_pictureInPictureSession?.mode.name}',
+        '[PlayerPiP] back_request started=$started '
+        'mode=${_pictureInPictureSession?.mode.name}',
       );
     }
     if (controller?.isFullScreen == true) {
@@ -861,7 +1077,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _backInFlight = false;
       return;
     }
-    if (!initialized) {
+    if (!started) {
       _backInFlight = false;
       _popRoute();
       return;
@@ -870,14 +1086,47 @@ class _PlayerPageState extends State<PlayerPage> {
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = false;
     _pictureInPictureSession?.minimize();
-    // Back is an in-app presentation change, not a native PiP request. Turn
-    // off automatic PiP before returning so closing the app from mini-player
-    // cannot promote this session into a floating native window.
+    _syncRequestedLandscapeOrientation();
+    // Back is an in-app presentation change, not a native PiP request. Keep
+    // automatic PiP eligible so backgrounding from the mini-player can still
+    // promote the active full-video session into a floating native window.
     await _syncNativePictureInPictureAllowed();
     _backInFlight = false;
   }
 
+  void _minimizePlayer() {
+    if (!mounted) return;
+    if (!_sourceStarted) {
+      unawaited(_handleBack());
+      return;
+    }
+    _pictureInPictureSession?.minimize();
+    _syncRequestedLandscapeOrientation();
+    unawaited(_syncNativePictureInPictureAllowed());
+  }
+
+  void _toggleLandscapeOrientation() {
+    _orientationCoordinator.toggle(
+      activeFullPlayer: _isActiveFullPlayer,
+      pipBackground: _pipBackground,
+    );
+    if (mounted) setState(() {});
+  }
+
+  bool get _isActiveFullPlayer =>
+      _pictureInPictureSession?.isFullScreen ?? true;
+
+  void _syncRequestedLandscapeOrientation() {
+    final activeFullPlayer = _isActiveFullPlayer;
+    _orientationCoordinator.sync(
+      activeFullPlayer: activeFullPlayer,
+      pipBackground: _pipBackground,
+      releaseDelay: activeFullPlayer ? Duration.zero : _orientationReleaseDelay,
+    );
+  }
+
   void _onPictureInPicturePresentationChanged() {
+    _syncRequestedLandscapeOrientation();
     unawaited(_syncNativePictureInPictureAllowed());
   }
 
@@ -892,9 +1141,7 @@ class _PlayerPageState extends State<PlayerPage> {
       context,
     ).pictureInPicturePreferenceController;
     try {
-      await policy.setPictureInPictureAllowed(
-        (_pictureInPictureSession?.isFullScreen ?? true) && preference.enabled,
-      );
+      await policy.setPictureInPictureAllowed(preference.enabled);
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[PlayerPiP] eligibility_update_error=$error');
@@ -904,18 +1151,27 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _restorePictureInPicturePlayer() {
     if (!mounted) return;
+    final previousPresentation = _presentationBeforePictureInPicture;
+    _presentationBeforePictureInPicture = null;
     final shouldResume =
         _resumeAfterPictureInPicture ||
         _controller?.value.value.isPlaying == true;
     _resumeAfterPictureInPicture = false;
     _restorePlayPending = shouldResume;
-    _pictureInPictureSession?.setInteractionEnabled(true);
+    final session = _pictureInPictureSession;
+    if (previousPresentation == MiniPlayerMode.minimized) {
+      session?.minimize();
+    } else if (previousPresentation == MiniPlayerMode.fullScreen) {
+      session?.restore();
+    }
+    session?.setInteractionEnabled(true);
     setState(() => _pipBackground = false);
     // Keep the player in its original route for the whole PiP lifecycle.
     // Reparenting a UiKitView can preserve AVPlayer audio while losing the
     // native video surface on iOS.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _pipBackground) return;
+      _syncRequestedLandscapeOrientation();
       final controller = _controller;
       final restorer = controller is AppPlayerPictureInPictureRestorer
           ? controller as AppPlayerPictureInPictureRestorer
@@ -954,6 +1210,51 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!_supportsFullScreen) return;
     final controller = _controller;
     if (controller != null) unawaited(controller.toggleFullScreen());
+  }
+
+  void _openMultiView() {
+    final event = widget.media.item;
+    if (event is! EventItemV2 || !_isLive) return;
+    final navigator = Navigator.of(context);
+    final scope = AppScope.of(context);
+    void restoreSinglePlayer(
+      EventItemV2 selectedEvent,
+      ResolvedSource selectedSource, {
+      required bool minimize,
+    }) {
+      final player = PlayerPage(
+        key: GlobalKey(),
+        item: selectedEvent,
+        resolvedSources: [selectedSource],
+        persistedSourceId: selectedSource.source.id,
+      );
+      scope.pictureInPictureSession.attach(player);
+      if (minimize) scope.pictureInPictureSession.minimize();
+      if (navigator.canPop()) navigator.pop();
+    }
+
+    // PlayerPage is hosted by the persistent mini-player overlay rather than
+    // being a normal route. Release that surface before pushing the actual
+    // multi-view route, otherwise the old native player remains above it.
+    _pictureInPictureSession?.detach(widget);
+    navigator.push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'multi-view'),
+        builder: (_) => MultiViewPage(
+          initialEvent: event,
+          initialSource: _current,
+          onOpenSinglePlayer: (selectedEvent, selectedSource) {
+            restoreSinglePlayer(selectedEvent, selectedSource, minimize: false);
+          },
+          onExitToMiniPlayer: (selectedEvent, selectedSource) =>
+              restoreSinglePlayer(
+                selectedEvent,
+                selectedSource,
+                minimize: true,
+              ),
+        ),
+      ),
+    );
   }
 
   void _toggleFit() {
@@ -1020,7 +1321,11 @@ class _PlayerPageState extends State<PlayerPage> {
     _renewalTimer = null;
     _stallDetector.reset();
     _liveBufferingSince = null;
+    _lastLivePosition = null;
+    _fallbackWaitTimer?.cancel();
+    _fallbackWaitTimer = null;
     _consecutiveRenewals = 0;
+    _renewalStableSince = null;
     _failedSourceIds.remove(picked.source.id);
     _pendingFallbackSourceId = null;
     _pendingFallbackError = null;
@@ -1044,9 +1349,52 @@ class _PlayerPageState extends State<PlayerPage> {
       isPlaying: false,
       isBuffering: true,
     );
+    final sourceCache = AppScope.of(context).sourceCache;
+    sourceCache.promote(widget.media.ref, picked.source.id);
+    // Do not persist a manually selected URL until the replacement controller
+    // has actually started. If startup fails, treating this unplayed URL as a
+    // Continue Watching cache hit would route the error into "Refreshing
+    // stream…" instead of the normal source fallback/error path.
+  }
+
+  void _saveLastResolvedSource(ResolvedSource resolved) {
+    if (_isLive) return;
     AppScope.of(
       context,
-    ).sourceCache.promote(widget.media.ref, picked.source.id);
+    ).sourceCache.saveLastResolved(widget.media.ref, resolved);
+    _persistedSourceId = resolved.source.id;
+  }
+
+  void _finishFallbackWait() {
+    _fallbackWaitTimer = null;
+    if (!mounted || !_waitingForFallback || _sourceStarted) return;
+    if (kDebugMode) {
+      debugPrint(
+        '[PlaybackSources] fallback_wait_timeout '
+        'timeout_s=${_fallbackWaitDuration.inSeconds}',
+      );
+    }
+    final message = _pendingFallbackError;
+    _pendingFallbackSourceId = null;
+    _pendingFallbackError = null;
+    _showInitialPlaybackError(message);
+  }
+
+  void _finishRetryWait() {
+    _fallbackWaitTimer = null;
+    if (!mounted || !_retrying || _sourceStarted) return;
+    _playbackAttempt++;
+    if (kDebugMode) {
+      debugPrint(
+        '[PlaybackSources] retry_timeout '
+        'timeout_s=${_fallbackWaitDuration.inSeconds}',
+      );
+    }
+    setState(() {
+      _retrying = false;
+      _playbackError =
+          'Source is unavailable. Try another source or retry later.';
+    });
   }
 
   Duration? _positionForSourceSwitch() {
@@ -1102,9 +1450,11 @@ class _PlayerPageState extends State<PlayerPage> {
         resolvedSources: _resolvedSources,
         currentIndex: _currentIndex,
         onChangeSource: _changeSource,
-        onBack: _handleBack,
+        onMinimize: _minimizePlayer,
         fitMode: _fitMode,
         onToggleFit: _toggleFit,
+        landscapeLocked: _orientationCoordinator.landscapeRequested,
+        onToggleLandscape: _toggleLandscapeOrientation,
         isLive: _isLive,
         playbackSegments: _playbackSegments,
         episodeGuide: widget.episodeGuide,
@@ -1113,6 +1463,9 @@ class _PlayerPageState extends State<PlayerPage> {
         onNearEnd: _showNextEpisode,
         onPlayEpisode: _playEpisode,
         onPlayNext: _playNextEpisode,
+        onOpenMultiView: _isLive && widget.media.item is EventItemV2
+            ? _openMultiView
+            : null,
         onSettling: (grace) => _stallDetector.defer(grace, now: DateTime.now()),
         onPauseUpNext: () => setState(() => _upNextPaused = true),
         onCancelUpNext: () => setState(() {
@@ -1160,6 +1513,7 @@ class _PlayerPageState extends State<PlayerPage> {
         preferredSubtitleLanguage: AppScope.of(
           context,
         ).subtitlePreferenceController.languageCode,
+        startPosition: _startPosition,
         preferredQualityMaxHeight: AppScope.of(
           context,
         ).qualityPreferenceController.maxHeight,
@@ -1188,7 +1542,11 @@ class _PlayerPageState extends State<PlayerPage> {
         },
         onPlaybackReady: (value) {
           final controller = value as AppPlayerController?;
-          if (controller != null) _trackPosition(controller);
+          if (controller != null) {
+            _hasResumed = true;
+            _pendingSwitchPosition = null;
+            _trackPosition(controller);
+          }
         },
         customControlsBuilder: (context, value, onVisibilityChanged) {
           final controller = value as AppPlayerController?;
@@ -1207,10 +1565,6 @@ class _PlayerPageState extends State<PlayerPage> {
         final maxHeight = constraints.maxHeight;
         final cover = _fitMode == PlayerFitMode.cover;
         final viewportRatio = maxHeight > 0 ? maxWidth / maxHeight : 16 / 9;
-        final containWidth = maxHeight > 0 && viewportRatio > 16 / 9
-            ? maxHeight * (16 / 9)
-            : maxWidth;
-        final containHeight = containWidth / (16 / 9);
         final ratio = cover ? viewportRatio : 16 / 9;
         final controller = _controller;
         if (controller != null &&
@@ -1221,13 +1575,18 @@ class _PlayerPageState extends State<PlayerPage> {
           unawaited(controller.setViewportAspectRatio(ratio));
         }
         final player = _buildPlayer(context);
-        return Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: cover ? maxWidth : containWidth,
-            height: cover ? maxHeight : containHeight,
-            child: player,
-          ),
+        final playerWithSubtitleVisibility =
+            ValueListenableBuilder<MiniPlayerPresentationState>(
+              valueListenable: _pictureInPictureSession!.presentation,
+              builder: (context, state, _) => PlayerSubtitleVisibility(
+                showSubtitles: state.mode == MiniPlayerMode.fullScreen,
+                child: player,
+              ),
+            );
+        return SizedBox(
+          width: maxWidth,
+          height: maxHeight,
+          child: playerWithSubtitleVisibility,
         );
       },
     );
@@ -1249,6 +1608,13 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _buildInteractivePlayer(BuildContext context) {
+    final showSourceLoading =
+        _episodeTransitioning ||
+        _waitingForFallback ||
+        (_retrying && !_sourceStarted);
+    final showPlaybackError =
+        _playbackError != null &&
+        !(_pictureInPictureSession?.isMinimized ?? false);
     return PopScope<void>(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -1278,21 +1644,30 @@ class _PlayerPageState extends State<PlayerPage> {
               children: [
                 Positioned.fill(child: _playerBackground()),
                 _playerViewport(context),
-                if (!_waitingForFallback)
+                if (!showSourceLoading)
                   Positioned.fill(child: _fullScreenControls()),
-                if (_waitingForFallback)
+                if (showSourceLoading)
                   Positioned.fill(
-                    child: PlayerFallbackLoadingOverlay(onBack: _handleBack),
+                    child: PlayerFallbackLoadingOverlay(
+                      onBack: _handleBack,
+                      message: _retrying
+                          ? 'Refreshing stream…'
+                          : _episodeTransitioning
+                          ? 'Opening episode…'
+                          : 'Finding another source…',
+                    ),
                   ),
-                if (_playbackError != null)
+                if (showPlaybackError)
                   Positioned.fill(
                     child: PlayerPlaybackErrorOverlay(
                       message: _playbackError!,
                       retrying: _retrying,
                       onRetry: _retryPlayback,
-                      onChangeSource: _resolvedSources.length > 1
-                          ? _changeSource
-                          : null,
+                      // Continue Watching can start with one cached resolved
+                      // source. If that URL expires, the picker still needs
+                      // to be reachable so its refresh action can discover
+                      // other providers.
+                      onChangeSource: _changeSource,
                       onBack: _handleBack,
                       onHide: () => setState(() => _playbackError = null),
                     ),

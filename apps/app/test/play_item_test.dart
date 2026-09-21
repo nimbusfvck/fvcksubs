@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/player/models/playback_media.dart';
-import 'package:fvcksubs_app/player/models/resolved_source.dart';
 import 'package:fvcksubs_app/player/state/source_cache.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/player/workflow/play_item.dart';
@@ -99,6 +98,48 @@ void main() {
     expect(player.played, isNotNull);
   });
 
+  testWidgets('finding sources can be abandoned with Back', (tester) async {
+    const item = PlaybackMedia(
+      VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie-1'),
+        title: 'Movie',
+      ),
+    );
+    final player = RecordingPlayer();
+    final extension = FakeExtension(
+      sourceList: const [StreamSource(id: 'source', label: 'Source')],
+      sourcesDelay: const Duration(seconds: 2),
+      resolved: const PlayableStream(
+        url: 'https://stream.example/source.m3u8',
+        format: StreamFormat.hls,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => unawaited(playItemV2(context, item.item)),
+            child: const Text('Play'),
+          ),
+        ),
+        registry: ExtensionRegistry([extension]),
+        player: player,
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump(const Duration(seconds: 21));
+
+    expect(player.played, isNull);
+    expect(find.text('Finding sources…'), findsNothing);
+  });
+
   testWidgets('live playback keeps full discovery but uses fastest source', (
     tester,
   ) async {
@@ -146,7 +187,57 @@ void main() {
   });
 
   testWidgets(
-    'stale cached playback publishes refreshed sources to the picker',
+    'a stalled preferred cached descriptor does not block a ready fallback',
+    (tester) async {
+      const item = VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'subs',
+          providerId: 'subs.p',
+          id: 'movie-cached-descriptors',
+        ),
+        title: 'Movie',
+      );
+      const preferred = StreamSource(
+        id: 'preferred',
+        label: 'Source preferred',
+      );
+      const fallback = StreamSource(id: 'fallback', label: 'Source fallback');
+      final sourceCache = SourceCache()
+        ..recordSourceList(item.ref, const [preferred, fallback]);
+      final extension = SubtitleFakeExtension(
+        subtitlesBySourceId: const {'preferred': [], 'fallback': []},
+        resolveDelayBySourceId: const {
+          'preferred': Duration(seconds: 2),
+          'fallback': Duration.zero,
+        },
+      );
+      final player = RecordingPlayer();
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => unawaited(playItemV2(context, item)),
+              child: const Text('Play'),
+            ),
+          ),
+          registry: ExtensionRegistry([extension]),
+          player: player,
+          sourceCache: sourceCache,
+        ),
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump();
+
+      expect(player.played?.url, 'https://edge/fallback.m3u8');
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets(
+    'resolved alternatives are available in the active source picker',
     (tester) async {
       const staleItem = PlaybackMedia(
         VideoItemV2(
@@ -158,19 +249,13 @@ void main() {
           title: 'Movie',
         ),
       );
-      var now = DateTime(2026);
-      final sourceCache = SourceCache(now: () => now);
+      final sourceCache = SourceCache();
       const cachedSource = StreamSource(id: 'hydrax', label: 'HYDRAX');
       const refreshedSource = StreamSource(id: 'cast', label: 'CAST');
       const stream = PlayableStream(
         url: 'https://stream.example/movie.m3u8',
         format: StreamFormat.hls,
       );
-      sourceCache.store(staleItem.ref, const [
-        ResolvedSource(source: cachedSource, stream: stream),
-      ]);
-      now = now.add(const Duration(minutes: 4));
-
       final extension = FakeExtension(
         sourceList: const [cachedSource, refreshedSource],
         resolved: stream,
@@ -212,25 +297,11 @@ void main() {
       ),
       title: 'Movie',
     );
-    var now = DateTime(2026);
-    final sourceCache = SourceCache(now: () => now);
-    final stream = const PlayableStream(
-      url: 'https://stream.example/movie.m3u8',
-      format: StreamFormat.hls,
-    );
-    sourceCache.store(item.ref, [
-      ResolvedSource(
-        source: const StreamSource(id: 'hydrax', label: 'Source hydrax'),
-        stream: stream,
-      ),
-    ]);
-    now = now.add(const Duration(minutes: 4));
+    final sourceCache = SourceCache();
 
     final extension = SubtitleFakeExtension(
       subtitlesBySourceId: const {'hydrax': [], 'cast': []},
-      resolveDelayBySourceId: const {
-        'cast': Duration(milliseconds: 400),
-      },
+      resolveDelayBySourceId: const {'cast': Duration(milliseconds: 400)},
     );
 
     await tester.pumpWidget(

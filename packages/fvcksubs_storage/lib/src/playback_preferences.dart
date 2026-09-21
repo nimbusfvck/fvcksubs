@@ -349,6 +349,36 @@ class SharedPreferencesPictureInPicturePreferenceStore
   }
 }
 
+/// Persists whether decorative trailer previews may autoplay.
+abstract class PreviewAutoplayPreferenceStore {
+  /// Loads the preference. Missing values keep previews enabled.
+  Future<bool> load();
+
+  /// Persists whether preview autoplay is enabled.
+  Future<void> save(bool enabled);
+}
+
+/// [PreviewAutoplayPreferenceStore] backed by `shared_preferences`.
+class SharedPreferencesPreviewAutoplayPreferenceStore
+    implements PreviewAutoplayPreferenceStore {
+  /// Creates the shared-preferences-backed preview autoplay store.
+  const SharedPreferencesPreviewAutoplayPreferenceStore();
+
+  static const String _key = 'playback.previewAutoplayEnabled';
+
+  @override
+  Future<bool> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_key) ?? true;
+  }
+
+  @override
+  Future<void> save(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, enabled);
+  }
+}
+
 /// Persists the preferred order of stable stream-provider ids.
 abstract class SourcePriorityStore {
   /// Loads provider ids from highest to lowest priority.

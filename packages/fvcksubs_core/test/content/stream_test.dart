@@ -104,6 +104,7 @@ void main() {
       language: 'en',
       url: 'https://subtitles.shegu.st/sub/abc',
       label: 'English (13958798)',
+      headers: {'Referer': 'https://player.example/'},
     );
     expectRoundTrips(
       track,

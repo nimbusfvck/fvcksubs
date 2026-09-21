@@ -9,6 +9,7 @@ import '../../theme/tokens.dart';
 import '../models/app_player_controller.dart';
 import '../state/player_controls_cubit.dart';
 import '../widgets/player_fit_button.dart';
+import '../widgets/player_orientation_button.dart';
 import '../widgets/player_overlays.dart';
 import 'live_timeline.dart';
 
@@ -19,6 +20,7 @@ typedef PlayerEpisodeEntry = ({
 });
 
 void _noFitToggle() {}
+void _noLandscapeToggle() {}
 void _noOpenSettings() {}
 void _noEpisodeListVisibilityChanged(bool visible) {}
 
@@ -41,10 +43,13 @@ class PlayerControlsOverlayView extends StatelessWidget {
     required this.atLiveEdge,
     required this.dragValueMs,
     required this.onBackgroundTap,
-    required this.onBack,
+    required this.onMinimize,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
+    this.landscapeLocked = false,
+    this.onToggleLandscape = _noLandscapeToggle,
     this.onOpenSettings = _noOpenSettings,
+    this.onOpenMultiView,
     this.onEpisodeListVisibilityChanged = _noEpisodeListVisibilityChanged,
     required this.onSkip,
     this.skipIntroLabel,
@@ -114,7 +119,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
   final VoidCallback onBackgroundTap;
 
   /// Handles leaving the player screen.
-  final VoidCallback onBack;
+  final VoidCallback onMinimize;
 
   /// Current video viewport mode.
   final PlayerFitMode fitMode;
@@ -122,8 +127,16 @@ class PlayerControlsOverlayView extends StatelessWidget {
   /// Toggles between preserving the source ratio and filling the viewport.
   final VoidCallback onToggleFit;
 
+  /// Whether the player has requested a landscape presentation for this
+  /// playback session.
+  final bool landscapeLocked;
+
+  /// Toggles the player orientation request.
+  final VoidCallback onToggleLandscape;
+
   /// Opens the player settings sheet.
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenMultiView;
 
   /// Announces episode rail visibility so the player can pause auto-hide while
   /// the viewer is choosing an episode.
@@ -191,10 +204,13 @@ class PlayerControlsOverlayView extends StatelessWidget {
           title: title,
           subtitle: subtitle,
           visible: controlsVisible,
-          onBack: onBack,
+          onMinimize: onMinimize,
           fitMode: fitMode,
           onToggleFit: onToggleFit,
+          landscapeLocked: landscapeLocked,
+          onToggleLandscape: onToggleLandscape,
           onOpenSettings: onOpenSettings,
+          onOpenMultiView: onOpenMultiView,
         ),
         transport: _PlayerTransportControls(
           visible: controlsVisible,
@@ -241,10 +257,13 @@ class PlayerControlsOverlayView extends StatelessWidget {
           title: title,
           subtitle: subtitle,
           visible: visible,
-          onBack: onBack,
+          onMinimize: onMinimize,
           fitMode: fitMode,
           onToggleFit: onToggleFit,
+          landscapeLocked: landscapeLocked,
+          onToggleLandscape: onToggleLandscape,
           onOpenSettings: onOpenSettings,
+          onOpenMultiView: onOpenMultiView,
         ),
       ),
       transport:
@@ -319,7 +338,8 @@ class PlayerControlsOverlayView extends StatelessWidget {
                   >(
                     bloc: cubit,
                     selector: (state) => (
-                      position: state.value.position,
+                      position:
+                          state.pendingSeekPosition ?? state.value.position,
                       duration: state.value.duration,
                       timelineExtent: isLive
                           ? (state.liveEdge > state.value.seekablePosition
@@ -417,19 +437,25 @@ class _PlayerTopControls extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.visible,
-    required this.onBack,
+    required this.onMinimize,
     required this.fitMode,
     required this.onToggleFit,
+    required this.landscapeLocked,
+    required this.onToggleLandscape,
     required this.onOpenSettings,
+    this.onOpenMultiView,
   });
 
   final String title;
   final String? subtitle;
   final bool visible;
-  final VoidCallback onBack;
+  final VoidCallback onMinimize;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
+  final bool landscapeLocked;
+  final VoidCallback onToggleLandscape;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenMultiView;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -462,11 +488,11 @@ class _PlayerTopControls extends StatelessWidget {
                   Transform.translate(
                     offset: const Offset(-AppSpacing.xs, 0),
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       color: Colors.white,
                       iconSize: 22,
-                      tooltip: 'Back',
-                      onPressed: onBack,
+                      tooltip: 'Minimize player',
+                      onPressed: onMinimize,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
@@ -510,6 +536,17 @@ class _PlayerTopControls extends StatelessWidget {
                     ),
                   ),
                   PlayerFitButton(mode: fitMode, onToggle: onToggleFit),
+                  if (onOpenMultiView != null)
+                    IconButton(
+                      onPressed: onOpenMultiView,
+                      icon: const Icon(Icons.grid_view_rounded),
+                      color: Colors.white,
+                      tooltip: 'Multi-view',
+                    ),
+                  PlayerOrientationButton(
+                    landscapeLocked: landscapeLocked,
+                    onToggle: onToggleLandscape,
+                  ),
                   IconButton(
                     onPressed: onOpenSettings,
                     icon: const Icon(Icons.settings_outlined),

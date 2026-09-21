@@ -59,6 +59,7 @@ Duration playerSettleGrace({required bool isLive, required bool trackSwitch}) =>
     : _seekSettleGrace;
 
 void _noFitToggle() {}
+void _noLandscapeToggle() {}
 
 void _noSettling(Duration grace) {}
 
@@ -71,9 +72,11 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.resolvedSources,
     required this.currentIndex,
     required this.onChangeSource,
-    required this.onBack,
+    required this.onMinimize,
     this.fitMode = PlayerFitMode.contain,
     this.onToggleFit = _noFitToggle,
+    this.landscapeLocked = false,
+    this.onToggleLandscape = _noLandscapeToggle,
     required this.isLive,
     this.episodeGuide,
     this.playbackSegments = const [],
@@ -84,6 +87,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.onPlayNext,
     required this.onPauseUpNext,
     required this.onCancelUpNext,
+    this.onOpenMultiView,
     this.onSettling = _noSettling,
   });
 
@@ -93,9 +97,11 @@ class PlayerPlaybackControls extends StatefulWidget {
   final List<ResolvedSource> resolvedSources;
   final int currentIndex;
   final VoidCallback onChangeSource;
-  final VoidCallback onBack;
+  final VoidCallback onMinimize;
   final PlayerFitMode fitMode;
   final VoidCallback onToggleFit;
+  final bool landscapeLocked;
+  final VoidCallback onToggleLandscape;
   final bool isLive;
   final EpisodeGuide? episodeGuide;
   final List<PlaybackSegment> playbackSegments;
@@ -106,6 +112,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final VoidCallback onPlayNext;
   final VoidCallback onPauseUpNext;
   final VoidCallback onCancelUpNext;
+  final VoidCallback? onOpenMultiView;
 
   /// Announces a deliberate interruption — a seek, or a track swap — so the
   /// page can stop its stall watchdog from reading the refill that follows as
@@ -129,10 +136,14 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   double _playbackSpeed = 1.0;
   String? _activeSubtitleLabel;
   String? _activeQualityLabel;
+  int _qualityRequestGeneration = 0;
+  bool _qualitySwitching = false;
+  AppPlayerController? _qualityController;
 
   /// Whether a rendition was chosen, here or in Settings, rather than left to
-  /// the player. Only a viewer's own pick puts the tick on a height; Auto
-  /// keeps it, and names what is playing beside it.
+  /// the player. Only a viewer's own pick puts the tick on a height; Auto keeps
+  /// the control label as Auto even while the native player reports a concrete
+  /// rendition such as 720p.
   bool? _qualityPinned;
   Timer? _bufferingIndicatorTimer;
   Timer? _liveEdgeRefreshTimer;
@@ -208,6 +219,18 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_qualityPinned != null) return;
+    _qualityPinned =
+        AppScope.of(context).qualityPreferenceController.maxHeight != null;
+    if (_qualityController != null) {
+      _activeQualityLabel = _displayQualityLabel(widget.controller);
+      _publishControlState();
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant PlayerPlaybackControls oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncVideoValue();
@@ -229,12 +252,23 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   void _syncVideoValue() {
     final ValueListenable<AppPlayerValue>? next = widget.controller?.value;
-    if (identical(next, _videoValue)) return;
+    if (identical(next, _videoValue) &&
+        identical(_qualityController, widget.controller)) {
+      return;
+    }
+    final controllerChanged = !identical(_qualityController, widget.controller);
+    _qualityController = widget.controller;
+    _controlsCubit.cancelSeek();
     _videoValue?.removeListener(_onValueChanged);
     _stopPausedLiveEdgeTracking();
     _liveEdge = Duration.zero;
     _liveEdgeLead = Duration.zero;
     _videoValue = next?..addListener(_onValueChanged);
+    if (controllerChanged) {
+      _qualityRequestGeneration++;
+      _qualitySwitching = false;
+      _activeQualityLabel = _displayQualityLabel(widget.controller);
+    }
     _publishControlState();
   }
 
@@ -291,6 +325,9 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       }
     } else {
       _syncActiveSubtitleLabel();
+      if (!_qualitySwitching) {
+        _activeQualityLabel = _displayQualityLabel(widget.controller);
+      }
     }
 
     if (_wasBuffering && !isBuffering && isPlaying) _restartHideTimer();
@@ -333,6 +370,24 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   void _syncActiveSubtitleLabel() {
     final label = widget.controller?.activeSubtitle?.label;
     _activeSubtitleLabel = label == null ? null : subtitleIndicatorLabel(label);
+  }
+
+  String? _qualityLabel(AppQualityTrack? track) {
+    if (track == null || track.height <= 0) return null;
+    return qualityRungLabel(width: track.width, height: track.height) ??
+        '${track.height}p';
+  }
+
+  String? _displayQualityLabel(AppPlayerController? controller) {
+    final active = _qualityLabel(controller?.activeQuality);
+    if (active == null) return null;
+    if (!(_qualityPinned ?? false)) return 'Auto';
+    return active;
+  }
+
+  String _requestedQualityLabel(AppQualityTrack track) {
+    if (track.id == 'auto' || track.height <= 0) return 'Auto';
+    return _qualityLabel(track) ?? '${track.height}p';
   }
 
   void _restartHideTimer() {
@@ -520,7 +575,8 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
 
   void _seekTo(Duration target) {
     widget.onSettling(_settlingGrace(trackSwitch: false));
-    unawaited(widget.controller?.seekTo(target));
+    final controller = widget.controller;
+    if (controller != null) unawaited(_controlsCubit.seek(controller, target));
   }
 
   void _setPlaybackSpeed(double speed) {
@@ -615,13 +671,24 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
   }
 
   Future<void> _openQualityPicker() async {
+    if (_qualitySwitching) {
+      _revealControls();
+      return;
+    }
     _hideTimer?.cancel();
+    final trackRefresher = widget.controller is AppPlayerTrackRefresher
+        ? widget.controller! as AppPlayerTrackRefresher
+        : null;
+    if (trackRefresher != null) {
+      await trackRefresher.refreshTracks();
+      if (!mounted) return;
+    }
     final tracks = widget.controller?.qualityTracks ?? const [];
     final active = widget.controller?.activeQuality;
     final pinned =
         _qualityPinned ??
         (AppScope.of(context).qualityPreferenceController.maxHeight != null);
-    final picked = await showModalBottomSheet<AppQualityTrack>(
+    await showModalBottomSheet<void>(
       context: _modalContext,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceDark,
@@ -632,20 +699,52 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
         tracks: tracks,
         current: pinned ? active : null,
         playing: active,
+        onSelect: _requestQuality,
       ),
     );
     if (!mounted) return;
-    if (picked != null) {
-      widget.onSettling(_settlingGrace(trackSwitch: true));
-      unawaited(widget.controller?.setQuality(picked));
-      final height = picked.height;
-      _qualityPinned = height > 0;
-      _activeQualityLabel = height > 0
-          ? qualityRungLabel(width: picked.width, height: height)
-          : null;
-      _publishControlState();
-    }
     _revealControls();
+  }
+
+  Future<bool> _requestQuality(AppQualityTrack picked) async {
+    if (!mounted) return false;
+    widget.onSettling(_settlingGrace(trackSwitch: true));
+    final controller = widget.controller;
+    if (controller == null) return false;
+    final requestGeneration = ++_qualityRequestGeneration;
+    final previousLabel =
+        _activeQualityLabel ?? _qualityLabel(controller.activeQuality);
+    final previousPinned = _qualityPinned;
+    _qualitySwitching = true;
+    _activeQualityLabel = '${_requestedQualityLabel(picked)}…';
+    _publishControlState();
+    try {
+      await controller.setQuality(picked);
+      if (!mounted ||
+          requestGeneration != _qualityRequestGeneration ||
+          !identical(controller, widget.controller)) {
+        return false;
+      }
+      _qualityPinned = picked.id == 'auto' ? false : picked.height > 0;
+      _qualitySwitching = false;
+      _activeQualityLabel = _displayQualityLabel(controller);
+      _publishControlState();
+      return true;
+    } catch (error) {
+      if (!mounted ||
+          requestGeneration != _qualityRequestGeneration ||
+          !identical(controller, widget.controller)) {
+        return false;
+      }
+      _qualityPinned = previousPinned;
+      _qualitySwitching = false;
+      _activeQualityLabel = previousLabel;
+      if (kDebugMode) {
+        debugPrint('[Player] quality_switch_rejected ${error.runtimeType}');
+      }
+      _publishControlState();
+      return false;
+    }
   }
 
   Future<void> _openAudioPicker() async {
@@ -721,9 +820,11 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       atLiveEdge: isAtLiveEdge(position, timelineExtent),
       dragValueMs: _dragValueMs,
       onBackgroundTap: _handleBackgroundTap,
-      onBack: widget.onBack,
+      onMinimize: widget.onMinimize,
       fitMode: widget.fitMode,
       onToggleFit: widget.onToggleFit,
+      landscapeLocked: widget.landscapeLocked,
+      onToggleLandscape: widget.onToggleLandscape,
       onOpenSettings: _openSettings,
       onEpisodeListVisibilityChanged: _onEpisodeListVisibilityChanged,
       onSkip: _skip,
@@ -739,6 +840,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onPlayEpisode: widget.onPlayEpisode,
       onOpenSubtitlePicker: _openSubtitlePicker,
       onOpenAudioPicker: audioTracks.length > 1 ? _openAudioPicker : null,
+      onOpenMultiView: widget.onOpenMultiView,
       onOpenQualityPicker: _openQualityPicker,
       onTimelineChangeStart: (value) {
         _hideTimer?.cancel();

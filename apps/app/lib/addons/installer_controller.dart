@@ -119,7 +119,7 @@ class InstallerController extends Cubit<InstallerState> {
   List<RepoListing> get listings => state.listings;
   List<RepoListing> get installableListings => [
     for (final listing in state.listings)
-      if (!listing.isInstalled) listing,
+      if (!listing.isInstalled || listing.isUpdate) listing,
   ];
   bool get busy => state.busy;
   String? get error => state.error;
@@ -270,6 +270,30 @@ class InstallerController extends Cubit<InstallerState> {
       if (loaded is JsExtension) loaded.dispose();
       emit(state.copyWith(busy: false));
     }
+  }
+
+  /// Refreshes the repository before installing an already-installed
+  /// extension. Update metadata can be older than the repository artifact
+  /// while a CDN is catching up, so the action must resolve the current entry
+  /// instead of downloading the entry that rendered an earlier button label.
+  Future<bool> update(String extensionId) async {
+    if (state.repoUrl == null) {
+      emit(state.copyWith(error: 'Set a repo URL first.'));
+      return false;
+    }
+
+    await refresh();
+    if (state.error != null) return false;
+    final listing = listingFor(extensionId);
+    if (listing == null || !listing.isUpdate) {
+      emit(
+        state.copyWith(
+          error: 'No newer version of this extension is available.',
+        ),
+      );
+      return false;
+    }
+    return install(listing.entry);
   }
 
   Future<void> uninstall(String id) async {

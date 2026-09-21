@@ -141,8 +141,11 @@ class JsExtension extends ContentExtension {
   }
 
   @override
-  Future<MediaDetailV2> meta(MediaRef ref) async {
-    final decoded = await _call('meta', {'ref': ref.toJson()});
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) async {
+    final decoded = await _call('meta', {
+      'ref': ref.toJson(),
+      if (groupId != null) 'groupId': groupId,
+    });
     return MediaDetailV2.fromJson(decoded);
   }
 

@@ -1,3 +1,4 @@
+import 'package:fvcksubs_app/player/models/playback_start_position.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,8 @@ import 'package:fvcksubs_app/player/widgets/app_preview_player.dart';
 import 'package:fvcksubs_app/player/state/source_priority_controller.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
+import 'package:fvcksubs_app/settings/preview_autoplay_preference_controller.dart';
+import 'package:fvcksubs_app/settings/febbox_cookie_controller.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -44,6 +47,7 @@ class FakeExtension extends ContentExtension {
     this.resolved,
     this.resolveFailsFor = const {},
     this.metaDetail,
+    this.metaForGroup,
     this.previewFor = const {},
     this.searchable = false,
     this.searchResults = const [],
@@ -275,10 +279,13 @@ class FakeExtension extends ContentExtension {
   /// What [meta] returns; `null` leaves it throwing, matching the protocol
   /// default for extensions that don't implement the role.
   MediaDetailV2? metaDetail;
+  final MediaDetailV2? Function(String? groupId)? metaForGroup;
 
   @override
-  Future<MediaDetailV2> meta(MediaRef ref) async =>
-      metaDetail ?? (throw UnsupportedError('$id does not provide meta'));
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) async =>
+      metaForGroup?.call(groupId) ??
+      metaDetail ??
+      (throw UnsupportedError('$id does not provide meta'));
 
   /// What [preview] returns per item id; an id with no entry leaves it
   /// throwing, matching the protocol default for extensions that don't
@@ -428,6 +435,7 @@ MediaItemV2 fakeItem({
   String? statusLabel,
   DateTime? startsAt,
   List<Participant> participants = const [],
+  EventBranding? branding,
   ImageRef? poster,
   String? group,
 }) {
@@ -454,6 +462,7 @@ MediaItemV2 fakeItem({
       label: statusLabel,
     ),
     participants: participants,
+    branding: branding,
   );
 }
 
@@ -482,6 +491,7 @@ class RecordingPlayer {
   /// lets a test assert an external track only stands in for a source that
   /// carries nothing in the preferred language.
   SubtitleTrack? playedPreferredExternalSubtitle;
+  PlaybackStartPosition? playedStartPosition;
 
   // [key] is accepted (real callers, `PlayerPage` in particular, rely on it
   // to recreate the native player on a source switch)
@@ -502,10 +512,16 @@ class RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
+    playedStartPosition = startPosition;
     played = stream;
     playedIsLive = isLive;
     playedPreferredSubtitleLanguage = preferredSubtitleLanguage;
@@ -821,21 +837,6 @@ class FakePictureInPicturePreferenceStore
   Future<void> save(bool enabled) async => saved = enabled;
 }
 
-/// In-memory [CategorySelectionStore].
-class FakeCategorySelectionStore implements CategorySelectionStore {
-  /// Seeds the store as if [initial] had already been saved — for tests that
-  /// check a screen restores the category it was left on.
-  FakeCategorySelectionStore({String? initial}) : saved = initial;
-
-  String? saved;
-
-  @override
-  Future<String?> load() async => saved;
-
-  @override
-  Future<void> save(String? category) async => saved = category;
-}
-
 /// In-memory [PluginSelectionStore].
 class FakePluginSelectionStore implements PluginSelectionStore {
   /// Seeds the store as if [initial] had already been saved.
@@ -884,11 +885,12 @@ Widget wrapApp({
   QualityPreferenceController? qualityPreferenceController,
   SubtitlePreferenceController? subtitlePreferenceController,
   SourcePriorityController? sourcePriorityController,
-  CategorySelectionStore? homeCategoryStore,
   SourceCache? sourceCache,
   NsfwController? nsfwController,
   PictureInPictureSession? pictureInPictureSession,
   PictureInPicturePreferenceController? pictureInPicturePreferenceController,
+  PreviewAutoplayPreferenceController? previewAutoplayPreferenceController,
+  FebboxCookieController? febboxCookieController,
 }) => AppScope(
   navigatorKey: _testNavigatorKey,
   registry: registry,
@@ -923,13 +925,17 @@ Widget wrapApp({
         registry: registry,
         store: FakeSourcePriorityStore(),
       ),
-  homeCategoryStore: homeCategoryStore ?? FakeCategorySelectionStore(),
   sourceCache: sourceCache ?? SourceCache(),
   pictureInPictureSession: pictureInPictureSession ?? PictureInPictureSession(),
   pictureInPicturePreferenceController:
       pictureInPicturePreferenceController ??
       PictureInPicturePreferenceController(
         store: FakePictureInPicturePreferenceStore(),
+      ),
+  previewAutoplayPreferenceController:
+      previewAutoplayPreferenceController ??
+      PreviewAutoplayPreferenceController(
+        store: FakePreviewAutoplayPreferenceStore(),
       ),
   nsfwController:
       nsfwController ??
@@ -938,6 +944,7 @@ Widget wrapApp({
         store: FakeNsfwSettingsStore(),
         showNsfw: registry.showNsfw,
       ),
+  febboxCookieController: febboxCookieController,
   child: MaterialApp(
     navigatorKey: _testNavigatorKey,
     builder: (context, routeChild) => Stack(
@@ -960,6 +967,17 @@ Widget wrapApp({
     home: Scaffold(body: child),
   ),
 );
+
+class FakePreviewAutoplayPreferenceStore
+    implements PreviewAutoplayPreferenceStore {
+  bool saved = true;
+
+  @override
+  Future<bool> load() async => saved;
+
+  @override
+  Future<void> save(bool enabled) async => saved = enabled;
+}
 
 final _testNavigatorKey = GlobalKey<NavigatorState>();
 

@@ -13,15 +13,88 @@ void main() {
       ref: ref,
       title: 'Standalone video',
       subtitle: 'Drama',
+      overview: 'A short synopsis.',
+      originalTitle: 'Original title',
+      originalLanguage: 'en',
+      genres: ['Drama', 'Thriller'],
+      countries: ['US'],
+      tags: ['dracin', 'dramaverse'],
       releaseYear: 2026,
       rating: 8.7,
+      ratingVotes: 1234,
+      imdbId: 'tt1234567',
+      ratings: [
+        const MediaRating(
+          source: 'imdb',
+          score: 8.7,
+          scale: 10,
+          votes: 1234,
+          icon: ImageRef('https://cdn.example/imdb.svg'),
+        ),
+      ],
       artwork: Artwork(
         portrait: ImageRef('https://cdn.example/poster.jpg'),
         landscape: ImageRef('https://cdn.example/backdrop.jpg'),
+        backdrops: [
+          ImageRef('https://cdn.example/backdrop-2.jpg'),
+          ImageRef('https://cdn.example/backdrop-3.jpg'),
+        ],
       ),
     );
 
     expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('rating contract validates score, scale, votes, and icon', () {
+    final rating = MediaRating.fromJson({
+      'source': 'rottenTomatoes',
+      'score': 86,
+      'scale': 100,
+      'kind': 'critic',
+      'icon': {'url': 'https://cdn.example/rt.svg'},
+    });
+
+    expect(rating.score, 86);
+    expect(rating.scale, 100);
+    expect(rating.kind, 'critic');
+    expect(rating.icon, const ImageRef('https://cdn.example/rt.svg'));
+    expect(
+      () => MediaRating.fromJson({'source': 'imdb', 'score': 11, 'scale': 10}),
+      throwsFormatException,
+    );
+  });
+
+  test('IMDb identity rejects malformed identifiers', () {
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid IMDb id',
+        'imdbId': 'movie-1',
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('item tags require non-empty strings', () {
+    final item = MediaItemV2.fromJson({
+      'ref': ref.toJson(),
+      'kind': 'video',
+      'title': 'Tagged video',
+      'tags': [' dracin ', 'storyreel'],
+    });
+
+    expect(item.tags, ['dracin', 'storyreel']);
+    expect(item.toJson()['tags'], ['dracin', 'storyreel']);
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'video',
+        'title': 'Invalid tags',
+        'tags': [''],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('common display metadata rejects invalid values', () {
@@ -60,6 +133,39 @@ void main() {
     expect(item, isA<EventItemV2>());
     expect((item as EventItemV2).participants, hasLength(2));
     expect(item.schedule.startsAt, DateTime.utc(2026, 8, 19, 12, 30));
+  });
+
+  test('event schedule round-trips an endsAt timestamp', () {
+    final item =
+        MediaItemV2.fromJson({
+              'ref': ref.toJson(),
+              'kind': 'event',
+              'title': 'Timed event',
+              'schedule': {
+                'startsAt': '2026-08-19T12:30:00Z',
+                'endsAt': '2026-08-19T14:45:00Z',
+                'state': 'scheduled',
+              },
+            })
+            as EventItemV2;
+
+    expect(item.schedule.endsAt, DateTime.utc(2026, 8, 19, 14, 45));
+    expect(MediaItemV2.fromJson(item.toJson()), item);
+  });
+
+  test('event schedule rejects an end that is not after its start', () {
+    expect(
+      () => MediaItemV2.fromJson({
+        'ref': ref.toJson(),
+        'kind': 'event',
+        'title': 'Invalid timed event',
+        'schedule': {
+          'startsAt': '2026-08-19T12:30:00Z',
+          'endsAt': '2026-08-19T12:30:00Z',
+        },
+      }),
+      throwsFormatException,
+    );
   });
 
   test('event branding round-trips with a logo and competition colors', () {
@@ -140,6 +246,7 @@ void main() {
         parentRef: ref,
         groupId: 'volume-a',
         position: 4,
+        absoluteEpisode: 62,
       ),
     );
 

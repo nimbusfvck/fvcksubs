@@ -310,7 +310,8 @@ class JsEngine {
       );
       _logFetch(
         'done id=$requestId status=${result.status} '
-        'target=${_logUrl(result.url)} body_bytes=${result.body.length}',
+        'target=${_logUrl(result.url)} '
+        'body_bytes=${result.bodyByteLength ?? result.body.length}',
       );
       _resolveFetch(
         requestId,
@@ -483,11 +484,30 @@ class JsEngine {
         for (final entry in response.headers.map.entries)
           entry.key: entry.value.join(', '),
       };
+      final responseBytes = response.data ?? const <int>[];
+      String responseBody;
+      try {
+        // Preserve the existing text response contract whenever possible.
+        // Binary protobuf responses must travel through the string-only FFI
+        // bridge losslessly, so carry them as base64 and mark the encoding in
+        // the response headers for extension code to decode explicitly.
+        final decoded = utf8.decode(responseBytes, allowMalformed: false);
+        if (decoded.codeUnits.any(
+          (unit) => unit < 0x20 && unit != 0x09 && unit != 0x0a && unit != 0x0d,
+        )) {
+          throw const FormatException('binary response');
+        }
+        responseBody = decoded;
+      } on FormatException {
+        responseBody = base64Encode(responseBytes);
+        responseHeaders['x-qjsr-body-encoding'] = 'base64';
+      }
       return _FetchResult(
         status: status,
         headers: responseHeaders,
         url: currentUrl,
-        body: utf8.decode(response.data ?? const [], allowMalformed: true),
+        body: responseBody,
+        bodyByteLength: responseBytes.length,
       );
     }
     throw StateError('too many redirects');
@@ -723,10 +743,12 @@ class _FetchResult {
     required this.headers,
     required this.url,
     required this.body,
+    this.bodyByteLength,
   });
 
   final int status;
   final Map<String, String> headers;
   final String url;
   final String body;
+  final int? bodyByteLength;
 }

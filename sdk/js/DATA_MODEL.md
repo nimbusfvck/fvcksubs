@@ -70,6 +70,11 @@ The host supplies `providerId` and `catalogId`. `category`, `subCategory`, and
 `filters` contain the user's current selection. `page` is the opaque cursor
 previously returned by the extension.
 
+Top-level category IDs come from the manifest. `all` is the reserved Home
+entry; it is implicit on Home rather than rendered as a Home chip. Other
+category IDs open a separate catalog screen. Keep these IDs stable and opaque;
+the host returns the selected value unchanged in `category`.
+
 Return entries inside explicit `sections`. Every section requires a stable
 opaque `id`, may have a displayed `title`, and contains ordered `items`.
 Return `nextPage` only when another page is available; the app sends the value

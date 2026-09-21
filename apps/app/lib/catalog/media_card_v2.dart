@@ -17,6 +17,19 @@ import 'start_time_label.dart';
 bool isMatchBannerItem(MediaItemV2 item) =>
     item is EventItemV2 && item.participants.length == 2;
 
+bool isPosterMediaItem(MediaItemV2 item) =>
+    item.artwork?.portrait != null && item is! EventItemV2;
+
+const double _posterTitleHeight = 34;
+
+double mediaCardPosterHeight(double width) =>
+    width * 1.5 + AppSpacing.xs + _posterTitleHeight;
+
+const double recommendationCardFooterHeight = 48;
+
+double mediaRecommendationCardHeight(double width) =>
+    width * 9 / 16 + AppSpacing.xs + recommendationCardFooterHeight;
+
 class MediaCardV2 extends StatelessWidget {
   const MediaCardV2({
     super.key,
@@ -25,6 +38,11 @@ class MediaCardV2 extends StatelessWidget {
     this.onLongPress,
     this.showSubtitle = true,
     this.heroTag,
+    this.enableHero = true,
+    this.rank,
+    this.compactEventFooter = false,
+    this.scheduleStateOverride,
+    this.showOutline = false,
   });
 
   final MediaItemV2 item;
@@ -35,30 +53,222 @@ class MediaCardV2 extends StatelessWidget {
   /// Optional route-specific tag used when the same item appears more than once.
   final Object? heroTag;
 
+  /// Disables the shared artwork flight when a page renders many copies of
+  /// the same Home cards at once.
+  final bool enableHero;
+
+  /// Optional rank badge used by the app-owned Top 10 shelf.
+  final int? rank;
+
+  /// Uses a one-line title and start-only schedule for horizontal event cards.
+  final bool compactEventFooter;
+
+  /// Optional schedule state derived by a time-aware parent surface.
+  final ScheduleState? scheduleStateOverride;
+
+  /// Draws an inset outline without clipping the card's focus ring.
+  final bool showOutline;
+
   @override
-  Widget build(BuildContext context) =>
-      Clickable(onTap: onTap, onLongPress: onLongPress, child: _content());
+  Widget build(BuildContext context) {
+    final content = showOutline
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              _content(),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    key: const Key('media-card-outline'),
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadius.lg,
+                      border: Border.all(
+                        color: AppColors.outlineDark,
+                        width: 0.6,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : _content();
+    return Clickable(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      color: Colors.transparent,
+      child: content,
+    );
+  }
 
   Widget _content() {
     final value = item;
     if (value is EventItemV2 && value.participants.length == 2) {
-      return _Match(item: value, showSubtitle: showSubtitle);
+      return _Match(
+        item: value,
+        showSubtitle: showSubtitle,
+        compactFooter: compactEventFooter,
+        scheduleStateOverride: scheduleStateOverride,
+      );
     }
     final portrait = value.artwork?.portrait;
-    if (portrait != null) {
+    if (portrait != null && value is! EventItemV2) {
       return _Poster(
         item: value,
         image: portrait,
-        heroTag: heroTag ?? mediaArtworkHeroTag(value.ref),
-        showSubtitle: showSubtitle,
+        heroTag: enableHero ? heroTag ?? mediaArtworkHeroTag(value.ref) : null,
+        rank: rank,
       );
     }
     if (value is EventItemV2) {
       if (_hasEventArtwork(value)) {
-        return _SingleEvent(item: value, showSubtitle: showSubtitle);
+        return _SingleEvent(
+          item: value,
+          showSubtitle: showSubtitle,
+          compactFooter: compactEventFooter,
+          scheduleStateOverride: scheduleStateOverride,
+        );
       }
     }
-    return _Summary(item: value, showSubtitle: showSubtitle);
+    return _Summary(
+      item: value,
+      showSubtitle: showSubtitle,
+      compactEventFooter: compactEventFooter,
+      scheduleStateOverride: scheduleStateOverride,
+    );
+  }
+}
+
+/// A wider, landscape card for detail-page recommendations.
+class MediaRecommendationCard extends StatelessWidget {
+  const MediaRecommendationCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.onLongPress,
+    this.heroTag,
+  });
+
+  final MediaItemV2 item;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final Object? heroTag;
+
+  @override
+  Widget build(BuildContext context) {
+    const width = 216.0;
+    final image =
+        item.artwork?.landscape ??
+        item.artwork?.backdrops.firstOrNull ??
+        item.artwork?.portrait;
+    final tag = heroTag ?? mediaArtworkHeroTag(item.ref);
+    final metadata = [
+      if (item.releaseYear case final year?) year.toString(),
+      if (item.genres.isNotEmpty) item.genres.take(2).join(' · '),
+    ].join(' • ');
+
+    return SizedBox(
+      width: width,
+      height: mediaRecommendationCardHeight(width),
+      child: Clickable(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: width * 9 / 16,
+              width: width,
+              child: ClipRRect(
+                borderRadius: AppRadius.lg,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (image == null)
+                      ArtworkPlaceholder(title: item.title)
+                    else
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final artwork = CachedNetworkImage(
+                            imageUrl: image.url,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fadeInDuration: Duration.zero,
+                            useOldImageOnUrlChange: true,
+                            memCacheWidth: artworkCacheDimension(
+                              context,
+                              constraints.maxWidth,
+                            ),
+                            placeholder: (_, _) =>
+                                ArtworkPlaceholder(title: item.title),
+                            errorWidget: (_, _, _) =>
+                                ArtworkPlaceholder(title: item.title),
+                          );
+                          return Hero(
+                            tag: tag,
+                            transitionOnUserGestures: true,
+                            flightShuttleBuilder:
+                                mediaArtworkFlightShuttleBuilder,
+                            child: artwork,
+                          );
+                        },
+                      ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Color(0xD9000000)],
+                        ),
+                      ),
+                    ),
+                    if (item.artwork?.logo case final logo?)
+                      Positioned(
+                        left: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        bottom: AppSpacing.sm,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: CachedNetworkImage(
+                            imageUrl: logo.url,
+                            height: 30,
+                            width: width * 0.62,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                    if (item.rating case final rating?)
+                      _PosterRatingBadge(rating: rating),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            ),
+            if (metadata.isNotEmpty)
+              Text.rich(
+                TextSpan(
+                  text: metadata,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -72,56 +282,241 @@ class _Poster extends StatelessWidget {
     required this.item,
     required this.image,
     required this.heroTag,
-    required this.showSubtitle,
+    this.rank,
   });
 
   final MediaItemV2 item;
   final ImageRef image;
-  final Object heroTag;
-  final bool showSubtitle;
+  final Object? heroTag;
+  final int? rank;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Hero(
-              tag: heroTag,
-              child: LayoutBuilder(
-                builder: (context, constraints) => CachedNetworkImage(
-                  imageUrl: image.url,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  fadeInDuration: Duration.zero,
-                  memCacheWidth: artworkCacheDimension(
-                    context,
-                    constraints.maxWidth,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(borderRadius: AppRadius.lg),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _PosterImage(item: item, image: image, heroTag: heroTag),
+              if (item.rating case final rating?)
+                _PosterRatingBadge(rating: rating),
+              if (rank case final value?) _PosterRankBadge(rank: value),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadius.lg,
+                      border: Border.all(
+                        color: AppColors.outlineDark,
+                        width: 0.6,
+                      ),
+                    ),
                   ),
-                  placeholder: (_, _) =>
-                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
-                  errorWidget: (_, _, _) =>
-                      ArtworkPlaceholder(icon: _placeholderIcon(item)),
                 ),
               ),
-            ),
-            if (item.releaseDate case final releaseDate? when item.isUpcoming)
-              _ReleaseDateBadge(releaseDate: releaseDate),
-          ],
+            ],
+          ),
         ),
       ),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
+      const SizedBox(height: AppSpacing.xs),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        child: SizedBox(
+          height: _posterTitleHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+              ),
+              if (item.releaseYear case final year?)
+                Text(
+                  year.toString(),
+                  maxLines: 1,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     ],
   );
 }
 
-class _Match extends StatelessWidget {
-  const _Match({required this.item, required this.showSubtitle});
+class _PosterImage extends StatelessWidget {
+  const _PosterImage({
+    required this.item,
+    required this.image,
+    required this.heroTag,
+  });
+
+  final MediaItemV2 item;
+  final ImageRef image;
+  final Object? heroTag;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final imageWidget = CachedNetworkImage(
+        imageUrl: image.url,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        fadeInDuration: const Duration(milliseconds: 220),
+        fadeOutDuration: const Duration(milliseconds: 100),
+        fadeInCurve: Curves.easeOut,
+        useOldImageOnUrlChange: true,
+        memCacheWidth: artworkCacheDimension(context, constraints.maxWidth),
+        placeholder: (_, _) => ArtworkPlaceholder(title: item.title),
+        errorWidget: (_, _, _) => ArtworkPlaceholder(title: item.title),
+      );
+      final tag = heroTag;
+      return tag == null
+          ? imageWidget
+          : Hero(
+              tag: tag,
+              transitionOnUserGestures: true,
+              flightShuttleBuilder: mediaArtworkFlightShuttleBuilder,
+              child: imageWidget,
+            );
+    },
+  );
+}
+
+class _PosterRatingBadge extends StatelessWidget {
+  const _PosterRatingBadge({required this.rating});
+
+  final double rating;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: AppSpacing.xs,
+    right: AppSpacing.xs,
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark.withValues(alpha: 0.7),
+        borderRadius: AppRadius.sm,
+      ),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '★',
+              style: AppTypography.liveBadge.copyWith(
+                color: AppColors.ratingAccent,
+              ),
+            ),
+            TextSpan(
+              text: ' ${rating.toStringAsFixed(1)}',
+              style: AppTypography.liveBadge.copyWith(color: AppColors.onDark),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _PosterRankBadge extends StatelessWidget {
+  const _PosterRankBadge({required this.rank});
+
+  final int rank;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: 0,
+    left: 0,
+    child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: 2,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.liveAccent,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(AppRadius.lgValue),
+          bottomRight: Radius.circular(AppRadius.smValue),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'TOP',
+            style: AppTypography.liveBadge.copyWith(
+              color: AppColors.onDark,
+              fontSize: 8,
+              height: 1,
+            ),
+          ),
+          Text(
+            rank.toString(),
+            style: AppTypography.liveBadge.copyWith(
+              color: AppColors.onDark,
+              fontSize: 12,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _Match extends StatefulWidget {
+  const _Match({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactFooter,
+    required this.scheduleStateOverride,
+  });
 
   final EventItemV2 item;
   final bool showSubtitle;
+  final bool compactFooter;
+  final ScheduleState? scheduleStateOverride;
+
+  @override
+  State<_Match> createState() => _MatchState();
+}
+
+class _MatchState extends State<_Match> {
+  final Set<int> _failedParticipantLogos = {};
+
+  bool get _hasAllParticipantLogoUrls => widget.item.participants.every(
+    (participant) => participant.logo?.url.trim().isNotEmpty ?? false,
+  );
+
+  bool get _showLeaguePlaceholder =>
+      !_hasAllParticipantLogoUrls || _failedParticipantLogos.isNotEmpty;
+
+  void _onParticipantLogoStateChanged(int index, bool loaded) {
+    if (!mounted) return;
+    final changed = loaded
+        ? _failedParticipantLogos.remove(index)
+        : _failedParticipantLogos.add(index);
+    if (changed) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _Match oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.ref != widget.item.ref) {
+      _failedParticipantLogos.clear();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -129,28 +524,47 @@ class _Match extends StatelessWidget {
     children: [
       Expanded(
         child: GeneratedBanner(
-          participants: item.participants,
-          eventName: item.subtitle ?? '',
-          branding: item.branding,
+          participants: widget.item.participants,
+          eventName: _eventContextLabel(widget.item) ?? '',
+          forceLeaguePlaceholder: _showLeaguePlaceholder,
+          onParticipantLogoStateChanged: _onParticipantLogoStateChanged,
+          branding: widget.item.branding,
         ),
       ),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
+      _CardFooter(
+        item: widget.item,
+        showSubtitle: widget.showSubtitle,
+        compactEventFooter: widget.compactFooter,
+        scheduleStateOverride: widget.scheduleStateOverride,
+      ),
     ],
   );
 }
 
 class _SingleEvent extends StatelessWidget {
-  const _SingleEvent({required this.item, required this.showSubtitle});
+  const _SingleEvent({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactFooter,
+    required this.scheduleStateOverride,
+  });
 
   final EventItemV2 item;
   final bool showSubtitle;
+  final bool compactFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(child: _SingleEventArtwork(item: item)),
-      _CardFooter(item: item, showSubtitle: showSubtitle),
+      _CardFooter(
+        item: item,
+        showSubtitle: showSubtitle,
+        compactEventFooter: compactFooter,
+        scheduleStateOverride: scheduleStateOverride,
+      ),
     ],
   );
 }
@@ -180,8 +594,10 @@ class _SingleEventArtwork extends StatelessWidget {
                 context,
                 constraints.maxWidth,
               ),
-              placeholder: (_, _) => const _EventArtworkFallback(),
-              errorWidget: (_, _, _) => const _EventArtworkFallback(),
+              placeholder: (_, _) =>
+                  _EventArtworkFallback(label: _eventPlaceholderLabel(item)),
+              errorWidget: (_, _, _) =>
+                  _EventArtworkFallback(label: _eventPlaceholderLabel(item)),
             ),
           );
 
@@ -208,15 +624,25 @@ class _SingleEventArtwork extends StatelessWidget {
 }
 
 class _EventArtworkFallback extends StatelessWidget {
-  const _EventArtworkFallback();
+  const _EventArtworkFallback({required this.label});
+
+  final String label;
 
   @override
-  Widget build(BuildContext context) => const ColoredBox(
-    color: AppColors.surfaceDarkElevated,
-    child: Center(
-      child: Icon(Icons.live_tv_outlined, color: AppColors.onDarkSoft),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      ArtworkPlaceholder(icon: Icons.live_tv_outlined, title: label);
+}
+
+String _eventPlaceholderLabel(EventItemV2 item) {
+  return _eventContextLabel(item) ?? item.title;
+}
+
+String? _eventContextLabel(EventItemV2 item) {
+  final label = item.subtitle?.trim();
+  if (label == null || label.isEmpty || label.toLowerCase() == 'other') {
+    return null;
+  }
+  return label;
 }
 
 String _eventArtworkSeed(EventItemV2 item) {
@@ -225,29 +651,41 @@ String _eventArtworkSeed(EventItemV2 item) {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.item, required this.showSubtitle});
+  const _Summary({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactEventFooter,
+    required this.scheduleStateOverride,
+  });
 
   final MediaItemV2 item;
   final bool showSubtitle;
+  final bool compactEventFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) {
-    final icon = item is EventItemV2
-        ? Icons.live_tv_outlined
-        : Icons.movie_outlined;
+    final placeholderTitle = item is EventItemV2
+        ? _eventPlaceholderLabel(item as EventItemV2)
+        : item.title;
     return Column(
       children: [
         Expanded(
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ArtworkPlaceholder(icon: icon),
+              ArtworkPlaceholder(title: placeholderTitle),
               if (item.releaseDate case final releaseDate? when item.isUpcoming)
                 _ReleaseDateBadge(releaseDate: releaseDate),
             ],
           ),
         ),
-        _CardFooter(item: item, showSubtitle: showSubtitle),
+        _CardFooter(
+          item: item,
+          showSubtitle: showSubtitle,
+          compactEventFooter: compactEventFooter,
+          scheduleStateOverride: scheduleStateOverride,
+        ),
       ],
     );
   }
@@ -280,16 +718,23 @@ class _ReleaseDateBadge extends StatelessWidget {
 }
 
 class _CardFooter extends StatelessWidget {
-  const _CardFooter({required this.item, required this.showSubtitle});
+  const _CardFooter({
+    required this.item,
+    required this.showSubtitle,
+    required this.compactEventFooter,
+    required this.scheduleStateOverride,
+  });
 
   final MediaItemV2 item;
   final bool showSubtitle;
+  final bool compactEventFooter;
+  final ScheduleState? scheduleStateOverride;
 
   @override
   Widget build(BuildContext context) {
     final event = item is EventItemV2 ? item as EventItemV2 : null;
     final detail = event != null
-        ? _eventMeta(event)
+        ? _eventMeta(event, compact: compactEventFooter)
         : showSubtitle
         ? mediaItemSecondaryText(item)
         : null;
@@ -299,14 +744,20 @@ class _CardFooter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (event != null) ...[
-            _ScheduleStatus(schedule: event.schedule, showLabel: false),
+            _ScheduleStatus(
+              schedule: event.schedule,
+              stateOverride: scheduleStateOverride,
+              showLabel: false,
+            ),
             const SizedBox(height: AppSpacing.xxs),
           ],
           Text(
             item.title,
-            maxLines: 2,
+            maxLines: event != null && compactEventFooter ? 1 : 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.titleSm.copyWith(color: AppColors.onDark),
+            style:
+                (event != null ? AppTypography.bodySm : AppTypography.titleSm)
+                    .copyWith(color: AppColors.onDark),
           ),
           if (detail != null)
             event != null
@@ -335,39 +786,54 @@ class _CardFooter extends StatelessWidget {
   }
 }
 
-IconData _placeholderIcon(MediaItemV2 item) =>
-    item is EventItemV2 ? Icons.live_tv_outlined : Icons.movie_outlined;
-
 class _ScheduleStatus extends StatelessWidget {
-  const _ScheduleStatus({required this.schedule, this.showLabel = true});
+  const _ScheduleStatus({
+    required this.schedule,
+    this.stateOverride,
+    this.showLabel = true,
+  });
 
   final Schedule schedule;
+  final ScheduleState? stateOverride;
   final bool showLabel;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      if (schedule.state == ScheduleState.live)
-        const LiveBadge()
-      else if (schedule.state == ScheduleState.scheduled)
-        const UpcomingBadge(),
-      if (showLabel && _label != null) ...[
-        const SizedBox(width: AppSpacing.xs),
-        Flexible(
-          child: Text(
-            _label!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.caption.copyWith(color: AppColors.onDarkSoft),
+  Widget build(BuildContext context) {
+    final state = stateOverride ?? schedule.state;
+    return Row(
+      children: [
+        if (state == ScheduleState.live)
+          const LiveBadge()
+        else if (state == ScheduleState.scheduled)
+          const UpcomingBadge(),
+        if (state == ScheduleState.ended) const EndedBadge(),
+        if (showLabel && _label != null) ...[
+          const SizedBox(width: AppSpacing.xs),
+          Flexible(
+            child: Text(
+              _label!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.onDarkSoft,
+              ),
+            ),
           ),
-        ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 
-  String? get _label => schedule.label ?? startTimeLabel(schedule.startsAt);
+  String? get _label =>
+      schedule.label ?? eventTimeRangeLabel(schedule.startsAt, schedule.endsAt);
 }
 
-String? _eventMeta(EventItemV2 item) {
-  return item.schedule.label ?? startTimeLabel(item.schedule.startsAt);
+String? _eventMeta(EventItemV2 item, {required bool compact}) {
+  if (compact) return eventCardStartLabel(item.schedule.startsAt);
+  if (item.schedule.state == ScheduleState.live &&
+      item.schedule.label == null) {
+    return null;
+  }
+  return item.schedule.label ??
+      eventTimeRangeLabel(item.schedule.startsAt, item.schedule.endsAt);
 }

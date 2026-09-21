@@ -5,12 +5,41 @@ import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controll
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
 import 'package:fvcksubs_app/settings/settings_page.dart';
 import 'package:fvcksubs_app/settings/nsfw_controller.dart';
+import 'package:fvcksubs_app/settings/preview_autoplay_preference_controller.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
 void main() {
+  testWidgets('preview autoplay toggle changes and persists the preference', (
+    tester,
+  ) async {
+    final store = FakePreviewAutoplayPreferenceStore();
+    final controller = PreviewAutoplayPreferenceController(store: store);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SettingsPage(),
+        registry: ExtensionRegistry([]),
+        previewAutoplayPreferenceController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tile = find.widgetWithText(SwitchListTile, 'Autoplay previews');
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+
+    await tester.tap(tile);
+    await tester.pump();
+
+    expect(controller.enabled, isFalse);
+    expect(store.saved, isFalse);
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+  });
+
   testWidgets('Picture in Picture toggle changes and persists the preference', (
     tester,
   ) async {
@@ -101,12 +130,12 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, 'Blue'));
     await tester.drag(find.byType(ListView).first, const Offset(0, -300));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Text outline'));
     await tester.pump();
 
     expect(controller.appearance.fontSize, 36);
     expect(controller.appearance.textColor, const Color(0xffffeb3b));
-    expect(controller.appearance.backgroundColor, const Color(0xdd10243d));
+    expect(controller.appearance.backgroundColor, const Color(0xbb10243d));
     expect(controller.appearance.outline, isTrue);
     expect(store.appearanceSaved.fontSize, 36);
     expect(store.appearanceSaved.outline, isTrue);
@@ -182,7 +211,7 @@ void main() {
 
     await tester.drag(find.byType(ListView).first, const Offset(0, -600));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Show NSFW content'));
     await tester.pump();
     final enableButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Enable'),
@@ -219,7 +248,7 @@ void main() {
 
     await tester.drag(find.byType(ListView).first, const Offset(0, -600));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Show NSFW content'));
     await tester.pumpAndSettle();
     expect(find.text('Show NSFW content?'), findsOneWidget);
 

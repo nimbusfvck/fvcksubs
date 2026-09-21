@@ -75,6 +75,8 @@ class GeneratedBanner extends StatelessWidget {
     this.participantLogoSize = 24,
     this.showMatchup = true,
     this.showBrand = true,
+    this.forceLeaguePlaceholder = false,
+    this.onParticipantLogoStateChanged,
     this.branding,
   });
 
@@ -97,6 +99,12 @@ class GeneratedBanner extends StatelessWidget {
 
   /// Whether to render the competition brand in the artwork.
   final bool showBrand;
+
+  /// Forces the league fallback after the owning card observes a logo error.
+  final bool forceLeaguePlaceholder;
+
+  /// Reports whether a participant logo actually loaded.
+  final void Function(int index, bool loaded)? onParticipantLogoStateChanged;
 
   final EventBranding? branding;
 
@@ -137,6 +145,13 @@ class GeneratedBanner extends StatelessWidget {
 
     final crestSize = participantLogoSize;
     final brandHeight = brandAboveParticipants ? 24.0 : crestSize * 0.9;
+    final hasParticipantLogo = participants.any(
+      (participant) => participant.logo?.url.trim().isNotEmpty ?? false,
+    );
+    final showLeaguePlaceholder =
+        eventName.trim().isNotEmpty &&
+        (forceLeaguePlaceholder || !hasParticipantLogo);
+    final hasEventName = eventName.trim().isNotEmpty;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -168,24 +183,41 @@ class GeneratedBanner extends StatelessWidget {
                             : CrossAxisAlignment.start,
                         children: [
                           if (brandAboveParticipants && showBrand) ...[
-                            Center(child: _bannerBrand(brandHeight, accent)),
+                            Center(
+                              child: _bannerBrand(
+                                brandHeight,
+                                accent,
+                                showLeaguePlaceholder,
+                              ),
+                            ),
                             const SizedBox(height: AppSpacing.xs),
                           ],
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _BannerTeam(
-                                participant: participants[0],
-                                size: crestSize,
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              _BannerTeam(
-                                participant: participants[1],
-                                size: crestSize,
-                              ),
-                            ],
-                          ),
-                          if (showMatchup) ...[
+                          if (showLeaguePlaceholder)
+                            _BannerLeaguePlaceholder(label: eventName)
+                          else
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _BannerTeam(
+                                  participant: participants[0],
+                                  size: crestSize,
+                                  index: 0,
+                                  showFallback: !hasEventName,
+                                  onImageStateChanged:
+                                      onParticipantLogoStateChanged,
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                _BannerTeam(
+                                  participant: participants[1],
+                                  size: crestSize,
+                                  index: 1,
+                                  showFallback: !hasEventName,
+                                  onImageStateChanged:
+                                      onParticipantLogoStateChanged,
+                                ),
+                              ],
+                            ),
+                          if (showMatchup && !showLeaguePlaceholder) ...[
                             const SizedBox(height: AppSpacing.xs),
                             MatchupText(
                               home: participants[0].name,
@@ -210,13 +242,10 @@ class GeneratedBanner extends StatelessWidget {
               child: _BrandLogo(
                 imageUrl: logo.url,
                 height: crestSize * 0.9,
-                fallback: _BrandMark(
-                  label: _eventBrand(eventName),
-                  color: accent,
-                ),
+                fallback: _brandFallback(accent, showLeaguePlaceholder),
               ),
             ),
-          if (branding?.logo == null)
+          if (branding?.logo == null && hasEventName && hasParticipantLogo)
             Positioned(
               top: AppSpacing.xs,
               right: AppSpacing.xs,
@@ -236,17 +265,22 @@ class GeneratedBanner extends StatelessWidget {
     return _accentFor(homeColor, branding);
   }
 
-  Widget _bannerBrand(double height, Color accent) {
+  Widget _bannerBrand(double height, Color accent, bool showLeaguePlaceholder) {
     final logo = branding?.logo;
     if (logo != null) {
       return _BrandLogo(
         imageUrl: logo.url,
         height: height,
-        fallback: _BrandMark(label: _eventBrand(eventName), color: accent),
+        fallback: _brandFallback(accent, showLeaguePlaceholder),
       );
     }
-    return _BrandMark(label: _eventBrand(eventName), color: accent);
+    return _brandFallback(accent, showLeaguePlaceholder);
   }
+
+  Widget _brandFallback(Color accent, bool showLeaguePlaceholder) =>
+      showLeaguePlaceholder
+      ? _BannerLeaguePlaceholder(label: eventName)
+      : _BrandMark(label: _eventBrand(eventName), color: accent);
 }
 
 Color _accentFor(Color homeColor, EventBranding? branding) {
@@ -284,14 +318,49 @@ Color _complementaryAccent(Color color) {
 }
 
 class _BannerTeam extends StatelessWidget {
-  const _BannerTeam({required this.participant, required this.size});
+  const _BannerTeam({
+    required this.participant,
+    required this.size,
+    required this.index,
+    required this.showFallback,
+    this.onImageStateChanged,
+  });
 
   final Participant participant;
   final double size;
+  final int index;
+  final bool showFallback;
+  final void Function(int index, bool loaded)? onImageStateChanged;
 
   @override
-  Widget build(BuildContext context) =>
-      _Crest(imageUrl: participant.logo?.url, size: size, showFallback: false);
+  Widget build(BuildContext context) => _Crest(
+    imageUrl: participant.logo?.url,
+    size: size,
+    showFallback: showFallback,
+    onImageStateChanged: onImageStateChanged == null
+        ? null
+        : (loaded) => onImageStateChanged!(index, loaded),
+  );
+}
+
+class _BannerLeaguePlaceholder extends StatelessWidget {
+  const _BannerLeaguePlaceholder({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(
+      label,
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      style: AppTypography.bodySm.copyWith(
+        color: AppColors.onDark,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
 
 class MatchupText extends StatelessWidget {
@@ -301,7 +370,9 @@ class MatchupText extends StatelessWidget {
     required this.away,
     required this.accent,
     this.singleLine = false,
+    this.wrapLong = false,
     this.uppercase = true,
+    this.textAlign = TextAlign.center,
     this.textKey,
   });
 
@@ -309,7 +380,9 @@ class MatchupText extends StatelessWidget {
   final String away;
   final Color accent;
   final bool singleLine;
+  final bool wrapLong;
   final bool uppercase;
+  final TextAlign textAlign;
   final Key? textKey;
 
   @override
@@ -323,21 +396,40 @@ class MatchupText extends StatelessWidget {
         fontWeight: FontWeight.w800,
         letterSpacing: -0.7,
       );
-      return Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: homeText, style: nameStyle),
-            TextSpan(
-              text: ' VS ',
-              style: style.copyWith(color: accent, fontWeight: FontWeight.w400),
-            ),
-            TextSpan(text: awayText, style: nameStyle),
-          ],
-        ),
-        key: textKey,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final separatorStyle = style.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w400,
+          );
+          final singleLineSpan = TextSpan(
+            children: [
+              TextSpan(text: homeText, style: nameStyle),
+              TextSpan(text: ' VS ', style: separatorStyle),
+              TextSpan(text: awayText, style: nameStyle),
+            ],
+          );
+          final painter = TextPainter(
+            text: singleLineSpan,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            maxLines: 1,
+          )..layout(maxWidth: constraints.maxWidth);
+          final children = painter.didExceedMaxLines && wrapLong
+              ? [
+                  TextSpan(text: '$homeText\n', style: nameStyle),
+                  TextSpan(text: 'VS ', style: separatorStyle),
+                  TextSpan(text: awayText, style: nameStyle),
+                ]
+              : singleLineSpan.children!;
+          return Text.rich(
+            TextSpan(children: children),
+            key: textKey,
+            maxLines: wrapLong ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: textAlign,
+          );
+        },
       );
     }
     return Column(
@@ -703,6 +795,7 @@ class _Crest extends StatelessWidget {
     this.fallbackIconScale = 0.8,
     this.showFallbackWhileLoading = false,
     this.showFallback = true,
+    this.onImageStateChanged,
   });
 
   final String? imageUrl;
@@ -711,6 +804,7 @@ class _Crest extends StatelessWidget {
   final double fallbackIconScale;
   final bool showFallbackWhileLoading;
   final bool showFallback;
+  final ValueChanged<bool>? onImageStateChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -730,6 +824,14 @@ class _Crest extends StatelessWidget {
             filterQuality: FilterQuality.high,
             fadeInDuration: Duration.zero,
             memCacheWidth: artworkCacheDimension(context, size),
+            imageBuilder: (context, imageProvider) {
+              _notifyImageState(true);
+              return Image(
+                image: imageProvider,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              );
+            },
             placeholder: (context, url) => showFallbackWhileLoading
                 ? _CrestFallback(
                     size: size,
@@ -737,15 +839,24 @@ class _Crest extends StatelessWidget {
                     iconScale: fallbackIconScale,
                   )
                 : const SizedBox.shrink(),
-            errorWidget: (context, url, error) => showFallback
-                ? _CrestFallback(
-                    size: size,
-                    icon: fallbackIcon,
-                    iconScale: fallbackIconScale,
-                  )
-                : const SizedBox.shrink(),
+            errorWidget: (context, url, error) {
+              _notifyImageState(false);
+              return showFallback
+                  ? _CrestFallback(
+                      size: size,
+                      icon: fallbackIcon,
+                      iconScale: fallbackIconScale,
+                    )
+                  : const SizedBox.shrink();
+            },
           ),
   );
+
+  void _notifyImageState(bool loaded) {
+    final callback = onImageStateChanged;
+    if (callback == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => callback(loaded));
+  }
 }
 
 class _BrandLogo extends StatelessWidget {

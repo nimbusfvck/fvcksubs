@@ -19,34 +19,6 @@ import '../state/subtitle_preference_controller.dart';
 /// player route on top of the first workflow.
 final Set<NavigatorState> _activePlayNavigators = <NavigatorState>{};
 
-/// Warms the cheap, opaque source descriptors while a detail page is open.
-///
-/// This intentionally does not resolve signed playback URLs. Resolution stays
-/// just-in-time, while a later Play tap can reuse the discovery already in
-/// flight (or the persisted descriptor list).
-Future<void> prefetchPlaybackSources(AppScope scope, PlaybackMedia item) async {
-  if (!canUseCachedPlaybackSources(item)) return;
-  if (scope.sourceCache.peekSourceList(item.ref)?.isNotEmpty ?? false) return;
-  final stopwatch = Stopwatch()..start();
-  _debugSourceLog('detail_source_prefetch_start ref=${item.ref.id}');
-  try {
-    final sources = await _loadSources(scope, item);
-    if (sources.isNotEmpty) {
-      scope.sourceCache.recordSourceList(item.ref, sources);
-    }
-    _debugSourceLog(
-      'detail_source_prefetch_done count=${sources.length} '
-      'elapsed=${stopwatch.elapsedMilliseconds}ms',
-    );
-  } catch (_) {
-    // Detail prefetch is opportunistic; Play will try discovery again if it
-    // failed or timed out here.
-    _debugSourceLog(
-      'detail_source_prefetch_failed elapsed=${stopwatch.elapsedMilliseconds}ms',
-    );
-  }
-}
-
 Future<void> playItemV2(
   BuildContext context,
   MediaItemV2 item, {
@@ -54,6 +26,7 @@ Future<void> playItemV2(
   ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
+  StreamSource? preferredSource,
 }) async {
   final navigator = Navigator.of(context);
   if (!_activePlayNavigators.add(navigator)) return;
@@ -65,6 +38,7 @@ Future<void> playItemV2(
       contentRating: contentRating,
       replaceCurrent: replaceCurrent,
       returnToDetail: returnToDetail,
+      preferredSource: preferredSource,
     );
   } finally {
     _activePlayNavigators.remove(navigator);
@@ -78,6 +52,7 @@ Future<void> _playMedia(
   ContentRating contentRating = ContentRating.unknown,
   bool replaceCurrent = false,
   bool returnToDetail = false,
+  StreamSource? preferredSource,
 }) async {
   final scope = AppScope.of(context);
   final navigator = Navigator.of(context);
@@ -93,27 +68,25 @@ Future<void> _playMedia(
   // resolved live stream after an extension update can hand the native player an old
   // URL even though source discovery itself is still valid.
   final canUseCache = canUseCachedPlaybackSources(item);
-  final cached = canUseCache ? scope.sourceCache.peek(item.ref) : null;
-  final enabledCached = cached
-      ?.where(
-        (source) =>
-            source.hasAbsoluteHttpUrl &&
-            scope.registry.isSourceEnabled(source.source),
-      )
-      .toList();
-  if (enabledCached != null && enabledCached.isNotEmpty) {
-    final pendingSources = scope.sourceCache.isStale(item.ref)
-        ? _revalidate(scope, item).stream
-        : null;
+  // Episode transitions must resolve a fresh URL. The persisted stream is
+  // for resume/Continue Watching and may be stale or belong to another
+  // source variant than the one carried forward from the current episode.
+  final lastPlayed = canUseCache && preferredSource == null
+      ? await scope.sourceCache.loadLastResolved(item.ref)
+      : null;
+  final lastResolved = lastPlayed?.resolved;
+  if (lastResolved != null &&
+      lastResolved.hasAbsoluteHttpUrl &&
+      scope.registry.isSourceEnabled(lastResolved.source) &&
+      PlaybackTarget.detect().canPlay(lastResolved.stream)) {
     await _openPlayer(
       navigator,
       scope,
       item,
-      enabledCached,
+      [lastResolved],
       replaceCurrent,
       contentRating: contentRating,
       episodeGuide: episodeGuide,
-      pendingSources: pendingSources,
       externalSubtitles: externalSubtitles,
       playbackSegments: playbackSegments,
       returnToDetail: returnToDetail,
@@ -128,24 +101,36 @@ Future<void> _playMedia(
       ?.where(scope.registry.isSourceEnabled)
       .toList();
   if (enabledCachedList != null && enabledCachedList.isNotEmpty) {
-    final orderedCachedList = scope.sourcePriorityController.order(
+    final orderedCachedList = _orderSourcesForPlayback(
       enabledCachedList,
+      scope.sourcePriorityController,
+      preferredSource,
     );
+    _ResolvedSourceBatch? cachedBatch;
     final fast = await _resolveWithOverlay(
       navigator,
-      (progress) => _resolveKnownSources(scope, item, [
-        orderedCachedList.first,
-      ], progress),
-      onResolved: (resolved, loadingRoute) async {
-        if (resolved.isEmpty) return false;
-        scope.sourceCache.store(item.ref, resolved);
-        final pendingSources = _revalidate(
+      (progress) async {
+        final batch = _resolveKnownSourcesAsTheySettle(
           scope,
           item,
+          orderedCachedList,
+          progress,
+          preferredSource: preferredSource,
+        );
+        cachedBatch = batch;
+        final first = await batch.first;
+        return first == null ? const <ResolvedSource>[] : [first];
+      },
+      onResolved: (resolved, loadingRoute) async {
+        if (resolved.isEmpty) return false;
+        final refresh = _revalidate(
+          scope,
+          item,
+          preferredSource: preferredSource,
           excludeSourceKeys: {
-            for (final source in resolved) sourceDescriptorKey(source.source),
+            for (final source in orderedCachedList) sourceDescriptorKey(source),
           },
-        ).stream;
+        );
         await _openPlayer(
           navigator,
           scope,
@@ -156,7 +141,7 @@ Future<void> _playMedia(
           routeToReplace: routeToReplace,
           contentRating: contentRating,
           episodeGuide: episodeGuide,
-          pendingSources: pendingSources,
+          pendingSources: _appendResolvedSources(cachedBatch!.stream, refresh),
           externalSubtitles: externalSubtitles,
           playbackSegments: playbackSegments,
           returnToDetail: returnToDetail,
@@ -170,25 +155,15 @@ Future<void> _playMedia(
 
   final result = await _resolveWithOverlay(
     navigator,
-    (progress) => _resolveFirstPlayableWithRetry(scope, item, progress),
+    (progress) => _resolveFirstPlayableWithRetry(
+      scope,
+      item,
+      progress,
+      preferredSource: preferredSource,
+    ),
     onResolved: (resolved, loadingRoute) async {
       final first = resolved.first;
       if (first == null) return false;
-      // Store the source handed to the player before background revalidation
-      // starts. Revalidation may intentionally skip this descriptor to avoid
-      // opening a duplicate WebView request, so it must merge new sources
-      // into this cache entry later.
-      final refreshedBeforeHandoff = scope.sourceCache.peek(item.ref);
-      scope.sourceCache.store(
-        item.ref,
-        refreshedBeforeHandoff == null
-            ? [first]
-            : mergeResolvedSources(
-                [first],
-                refreshedBeforeHandoff,
-                preserveSourceId: first.source.id,
-              ),
-      );
       await _openPlayer(
         navigator,
         scope,
@@ -224,6 +199,29 @@ Future<void> _playMedia(
 /// lived, so live playback must begin from a fresh resolution.
 bool canUseCachedPlaybackSources(PlaybackMedia item) => !item.isLive;
 
+/// Resolves one live event without opening the normal full-player route.
+///
+/// Multi-view owns its own presentation, but it must use the same source
+/// discovery, capability checks, provider filtering, and live retry policy as
+/// ordinary playback.
+Future<ResolvedSource?> resolveLiveEventForMultiView(
+  BuildContext context,
+  EventItemV2 event,
+) async {
+  final scope = AppScope.of(context);
+  final progress = _ResolveProgress();
+  try {
+    final result = await _resolveFirstPlayableWithRetry(
+      scope,
+      PlaybackMedia(event),
+      progress,
+    );
+    return result.first;
+  } finally {
+    progress.dispose();
+  }
+}
+
 /// Runs discovery and resolution again for [item], for the source picker's
 /// refresh control.
 ///
@@ -246,18 +244,25 @@ Future<T?> _resolveWithOverlay<T>(
   final progress = _ResolveProgress();
   final loadingReady = Completer<void>();
   final launchKey = GlobalKey<_PlayerLaunchPageState>();
-  final overlay = PageRouteBuilder<void>(
+  var abandoned = false;
+  late final PageRouteBuilder<void> overlay;
+  void abandon() {
+    abandoned = true;
+    if (overlay.isActive) navigator.removeRoute(overlay);
+  }
+
+  overlay = PageRouteBuilder<void>(
     opaque: false,
     pageBuilder: (_, _, _) => _PlayerLaunchPage(
       key: launchKey,
       progress: progress,
+      onBack: abandon,
       onMounted: () {
         if (!loadingReady.isCompleted) loadingReady.complete();
       },
     ),
   );
 
-  var abandoned = false;
   unawaited(overlay.popped.whenComplete(() => abandoned = true));
   _debugSourceLog('player_route_loading');
   unawaited(navigator.push(overlay));
@@ -282,15 +287,21 @@ Future<T?> _resolveWithOverlay<T>(
 }
 
 class _ResolvedSourceBatch {
-  const _ResolvedSourceBatch({required this.stream, required this.done});
+  const _ResolvedSourceBatch({
+    required this.stream,
+    required this.done,
+    required this.first,
+  });
 
   final Stream<ResolvedSource> stream;
   final Future<List<ResolvedSource>> done;
+  final Future<ResolvedSource?> first;
 }
 
 _ResolvedSourceBatch _revalidate(
   AppScope scope,
   PlaybackMedia item, {
+  StreamSource? preferredSource,
   Set<String> excludeSourceKeys = const {},
 }) {
   final controller = StreamController<ResolvedSource>();
@@ -322,22 +333,12 @@ _ResolvedSourceBatch _revalidate(
         item,
         sourcesToResolve,
         progress,
+        preferredSource: preferredSource,
       );
       final resolved = <ResolvedSource>[];
       await for (final source in batch.stream) {
         resolved.add(source);
         controller.add(source);
-      }
-      if (resolved.isNotEmpty) {
-        if (excludeSourceKeys.isEmpty) {
-          scope.sourceCache.store(item.ref, resolved);
-        } else {
-          final current = scope.sourceCache.peek(item.ref) ?? const [];
-          scope.sourceCache.store(
-            item.ref,
-            mergeResolvedSources(current, resolved),
-          );
-        }
       }
       done.complete(List<ResolvedSource>.unmodifiable(resolved));
     } catch (_) {
@@ -349,14 +350,26 @@ _ResolvedSourceBatch _revalidate(
       await controller.close();
     }
   }());
-  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
+  return _ResolvedSourceBatch(
+    stream: controller.stream,
+    done: done.future,
+    first: done.future.then((sources) => sources.firstOrNull),
+  );
 }
 
 const _sourceRetryDelay = Duration(milliseconds: 250);
 const _preferredSourceGrace = Duration(milliseconds: 750);
+// Browser-backed providers can spend longer than the normal handoff grace on
+// a challenge. Keep the selected episode source consistent when it is listed,
+// then fall back if it cannot produce a fresh URL in this budget.
+const _preferredEpisodeSourceTimeout = Duration(seconds: 30);
 const _subtitleSourceGrace = Duration(milliseconds: 300);
 const _externalSubtitleGrace = Duration(seconds: 1);
-const _sourceDiscoveryTimeout = Duration(seconds: 20);
+// Cloudflare-backed providers may need to finish a visible macOS challenge
+// before the extension can retry its API request. Keep this budget longer than
+// CloudflareKiller's 25-second solver window so a valid source is not discarded
+// while that browser context is still being established.
+const _sourceDiscoveryTimeout = Duration(seconds: 30);
 // Browser-backed providers can need more than one nested iframe/request before
 // the JS resolver reaches the final media URL. Resolution runs in parallel and
 // the first fast source still opens the player immediately, so this only keeps
@@ -406,6 +419,9 @@ Future<void> _openPlayer(
     'selected=${_sourceLogName(resolved.first.source)}',
   );
   scope.sourceCache.promote(item.ref, resolved.first.source.id);
+  if (canUseCachedPlaybackSources(item)) {
+    scope.sourceCache.saveLastResolved(item.ref, resolved.first);
+  }
   final savedRating = scope.libraryController
       .recordFor(item.ref)
       ?.contentRating;
@@ -422,6 +438,9 @@ Future<void> _openPlayer(
     key: GlobalKey(),
     item: item.item,
     resolvedSources: resolved,
+    persistedSourceId: canUseCachedPlaybackSources(item)
+        ? resolved.first.source.id
+        : null,
     pendingSources: pendingSources,
     pendingSegments: playbackSegments,
     episodeGuide: episodeGuide,
@@ -494,12 +513,23 @@ Future<
 _resolveFirstPlayableWithRetry(
   AppScope scope,
   PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
-  final firstAttempt = await _resolveFirstPlayable(scope, item, progress);
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) async {
+  final firstAttempt = await _resolveFirstPlayable(
+    scope,
+    item,
+    progress,
+    preferredSource: preferredSource,
+  );
   if (firstAttempt.first != null || !item.isLive) return firstAttempt;
   await Future<void>.delayed(_sourceRetryDelay);
-  return _resolveFirstPlayable(scope, item, progress);
+  return _resolveFirstPlayable(
+    scope,
+    item,
+    progress,
+    preferredSource: preferredSource,
+  );
 }
 
 Future<
@@ -512,21 +542,22 @@ Future<
 _resolveFirstPlayable(
   AppScope scope,
   PlaybackMedia item,
-  _ResolveProgress progress,
-) async {
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) async {
   // A fast discovery may return only the first provider with sources. That is
   // fine when there is no source preference, but it can hide the user's
   // preferred locale/provider entirely. Fetch the complete list first whenever
   // the preference can affect the initial handoff; resolution remains parallel.
   final sourcePriority = scope.sourcePriorityController.state;
   final fastInitialDiscovery =
-      !item.isLive &&
+      preferredSource == null &&
       sourcePriority.orderedProviderIds.isEmpty &&
       sourcePriority.sourceLocale.isAuto;
   final sources = await _loadSources(scope, item, fast: fastInitialDiscovery);
   if (sources.isEmpty) {
-    final retry = canUseCachedPlaybackSources(item)
-        ? _revalidate(scope, item)
+    final retry = (fastInitialDiscovery || canUseCachedPlaybackSources(item))
+        ? _revalidate(scope, item, preferredSource: preferredSource)
         : null;
     final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
@@ -543,7 +574,11 @@ _resolveFirstPlayable(
     );
   }
 
-  final ordered = scope.sourcePriorityController.order(sources);
+  final ordered = _orderSourcesForPlayback(
+    sources,
+    scope.sourcePriorityController,
+    preferredSource,
+  );
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [
@@ -551,22 +586,41 @@ _resolveFirstPlayable(
       _resolveOne(scope, item, source, target, progress),
   ];
   final all = _resolvedAsTheySettle(futures);
+  // For live playback the fast discovery call returns the first provider
+  // that has candidates. Keep the complete provider fan-out running in the
+  // background so slower providers can join the picker without delaying the
+  // initial handoff.
+  final backgroundRefresh = item.isLive && fastInitialDiscovery
+      ? _revalidate(
+          scope,
+          item,
+          preferredSource: preferredSource,
+          excludeSourceKeys: {
+            for (final source in sources) sourceDescriptorKey(source),
+          },
+        )
+      : null;
   // Resolution remains parallel, but the initial handoff must still honor
   // the ordered source list. That list includes manual provider order and
   // preferred source locale; using _firstMatching here would let the fastest
   // provider bypass both whenever no manual order was configured.
   final first = item.isLive
       ? await _firstMatching(futures, (_) => true)
-      : await _firstByPriority(futures);
-  _ResolvedSourceBatch? startRefresh() => canUseCachedPlaybackSources(item)
-      ? _revalidate(
-          scope,
-          item,
-          excludeSourceKeys: {
-            for (final source in sources) sourceDescriptorKey(source),
-          },
-        )
-      : null;
+      : preferredSource == null
+      ? await _firstByPriority(futures)
+      : await _firstPreferredEpisodeSource(futures, ordered, preferredSource);
+  _ResolvedSourceBatch? startRefresh() =>
+      backgroundRefresh ??
+      (canUseCachedPlaybackSources(item)
+          ? _revalidate(
+              scope,
+              item,
+              preferredSource: preferredSource,
+              excludeSourceKeys: {
+                for (final source in sources) sourceDescriptorKey(source),
+              },
+            )
+          : null);
   final preferred = scope.subtitlePreferenceController;
   if (first == null ||
       preferred.languageCode == null ||
@@ -575,7 +629,7 @@ _resolveFirstPlayable(
       return (first: first, second: all, refresh: startRefresh());
     }
     final retry = canUseCachedPlaybackSources(item)
-        ? _revalidate(scope, item)
+        ? _revalidate(scope, item, preferredSource: preferredSource)
         : null;
     final complete = retry == null ? null : await retry.done;
     if (complete != null && complete.isNotEmpty) {
@@ -698,15 +752,30 @@ Future<List<StreamSource>> _loadSources(
       'discovery_timeout mode=${fast ? 'fast' : 'full'} '
       'after=${stopwatch.elapsedMilliseconds}ms',
     );
-    return const [];
+    return _staleSourceList(scope, item, fast: fast);
   } catch (error) {
     _debugSourceLog(
       'discovery_error mode=${fast ? 'fast' : 'full'} '
       'error=${redactPlaybackLogText(error)} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
-    return const [];
+    return _staleSourceList(scope, item, fast: fast);
   }
+}
+
+List<StreamSource> _staleSourceList(
+  AppScope scope,
+  PlaybackMedia item, {
+  required bool fast,
+}) {
+  final cached = scope.sourceCache.peekSourceList(item.ref);
+  if (cached == null || cached.isEmpty) return const [];
+  final sources = scope.sourcePriorityController.order(cached);
+  _debugSourceLog(
+    'discovery_stale_ok count=${sources.length} '
+    'mode=${fast ? 'fast' : 'full'}',
+  );
+  return sources;
 }
 
 /// Chooses the highest-priority source that resolves successfully, while
@@ -810,12 +879,42 @@ Stream<ResolvedSource> _resolvedAsTheySettle(
   return controller.stream;
 }
 
+List<StreamSource> _orderSourcesForPlayback(
+  List<StreamSource> sources,
+  SourcePriorityController sourcePriority,
+  StreamSource? preferredSource,
+) {
+  final ordered = sourcePriority.order(sources);
+  if (preferredSource == null) return ordered;
+
+  final preferredProvider = sourceProviderKey(preferredSource);
+  if (preferredProvider.isEmpty) return ordered;
+  final preferredLabel = preferredSource.label.trim().toLowerCase();
+  var preferredIndex = ordered.indexWhere(
+    (source) =>
+        sourceProviderKey(source) == preferredProvider &&
+        source.label.trim().toLowerCase() == preferredLabel,
+  );
+  if (preferredIndex < 0) {
+    preferredIndex = ordered.indexWhere(
+      (source) => sourceProviderKey(source) == preferredProvider,
+    );
+  }
+  if (preferredIndex <= 0) return ordered;
+  return [
+    ordered[preferredIndex],
+    ...ordered.take(preferredIndex),
+    ...ordered.skip(preferredIndex + 1),
+  ];
+}
+
 _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
   AppScope scope,
   PlaybackMedia item,
   List<StreamSource> sources,
-  _ResolveProgress progress,
-) {
+  _ResolveProgress progress, {
+  StreamSource? preferredSource,
+}) {
   final filtered = [
     for (final source in sources)
       if (scope.registry.isSourceEnabled(source)) source,
@@ -824,10 +923,15 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
     return _ResolvedSourceBatch(
       stream: const Stream<ResolvedSource>.empty(),
       done: Future<List<ResolvedSource>>.value(const []),
+      first: Future<ResolvedSource?>.value(null),
     );
   }
 
-  final ordered = scope.sourcePriorityController.order(filtered);
+  final ordered = _orderSourcesForPlayback(
+    filtered,
+    scope.sourcePriorityController,
+    preferredSource,
+  );
   progress.begin([for (final source in ordered) source.label]);
   final target = PlaybackTarget.detect();
   final futures = [
@@ -859,7 +963,61 @@ _ResolvedSourceBatch _resolveKnownSourcesAsTheySettle(
           .whenComplete(settle),
     );
   }
-  return _ResolvedSourceBatch(stream: controller.stream, done: done.future);
+  return _ResolvedSourceBatch(
+    stream: controller.stream,
+    done: done.future,
+    first: preferredSource == null
+        ? _firstByPriority(futures)
+        : _firstPreferredEpisodeSource(futures, ordered, preferredSource),
+  );
+}
+
+Future<ResolvedSource?> _firstPreferredEpisodeSource(
+  List<Future<ResolvedSource?>> futures,
+  List<StreamSource> ordered,
+  StreamSource preferredSource,
+) async {
+  final preferredIndex = ordered.indexWhere(
+    (source) => _sameSourceVariant(source, preferredSource),
+  );
+  if (preferredIndex < 0) return _firstByPriority(futures);
+
+  _debugSourceLog(
+    'preferred_source_wait source=${_sourceLogName(ordered[preferredIndex])} '
+    'timeout_s=${_preferredEpisodeSourceTimeout.inSeconds}',
+  );
+  ResolvedSource? preferred;
+  try {
+    preferred = await futures[preferredIndex].timeout(
+      _preferredEpisodeSourceTimeout,
+    );
+  } on TimeoutException {
+    preferred = null;
+  }
+  if (preferred != null) {
+    _debugSourceLog(
+      'preferred_source_ready source=${_sourceLogName(preferred.source)}',
+    );
+    return preferred;
+  }
+
+  _debugSourceLog(
+    'preferred_source_fallback source=${_sourceLogName(preferredSource)}',
+  );
+
+  final fallback = [
+    for (var index = 0; index < futures.length; index++)
+      if (index != preferredIndex) futures[index],
+  ];
+  return _firstByPriority(fallback);
+}
+
+bool _sameSourceVariant(StreamSource source, StreamSource preferred) {
+  final provider = sourceProviderKey(preferred);
+  if (provider.isEmpty || sourceProviderKey(source) != provider) return false;
+  final preferredLabel = preferred.label.trim().toLowerCase();
+  return preferredLabel.isEmpty ||
+      source.label.trim().toLowerCase() == preferredLabel;
 }
 
 /// Merges the fast result and background refresh so each source is forwarded
@@ -952,27 +1110,6 @@ Future<ResolvedSource?> _resolveOne(
   }
 }
 
-Future<List<ResolvedSource>> _resolveKnownSources(
-  AppScope scope,
-  PlaybackMedia item,
-  List<StreamSource> sources,
-  _ResolveProgress progress,
-) async {
-  sources = [
-    for (final source in sources)
-      if (scope.registry.isSourceEnabled(source)) source,
-  ];
-  if (sources.isEmpty) return const [];
-  sources = scope.sourcePriorityController.order(sources);
-  progress.begin([for (final source in sources) source.label]);
-
-  final target = PlaybackTarget.detect();
-  final resolved = await Future.wait(
-    sources.map((source) => _resolveOne(scope, item, source, target, progress)),
-  );
-  return resolved.whereType<ResolvedSource>().toList();
-}
-
 String _sourceLogName(StreamSource source) {
   final provider = source.providerId.isNotEmpty
       ? source.providerId
@@ -1026,10 +1163,12 @@ class _PlayerLaunchPage extends StatefulWidget {
   const _PlayerLaunchPage({
     super.key,
     required this.progress,
+    required this.onBack,
     required this.onMounted,
   });
 
   final _ResolveProgress progress;
+  final VoidCallback onBack;
   final VoidCallback onMounted;
 
   @override
@@ -1070,72 +1209,89 @@ class _PlayerLaunchPageState extends State<_PlayerLaunchPage> {
   Widget _sourceFindingView() => ColoredBox(
     color: AppColors.surfaceDark,
     child: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: constraints.maxWidth,
-              minHeight: constraints.maxHeight,
-            ),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: ListenableBuilder(
-                  listenable: widget.progress,
-                  builder: (context, _) {
-                    final outstanding = widget.progress.outstanding;
-                    final total = widget.progress.total;
-                    final line = outstanding.isEmpty
-                        ? 'Finding sources…'
-                        : 'Checking ${outstanding[_cursor % outstanding.length]}…';
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: constraints.maxWidth,
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: ListenableBuilder(
+                        listenable: widget.progress,
+                        builder: (context, _) {
+                          final outstanding = widget.progress.outstanding;
+                          final total = widget.progress.total;
+                          final line = outstanding.isEmpty
+                              ? 'Finding sources…'
+                              : 'Checking ${outstanding[_cursor % outstanding.length]}…';
 
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: Stack(
-                            alignment: Alignment.center,
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
+                              const SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                    Icon(
+                                      Icons.travel_explore,
+                                      color: AppColors.onDark,
+                                      size: 22,
+                                    ),
+                                  ],
+                                ),
                               ),
-                              Icon(
-                                Icons.travel_explore,
-                                color: AppColors.onDark,
-                                size: 22,
+                              const SizedBox(height: AppSpacing.lg),
+                              Text(
+                                line,
+                                textAlign: TextAlign.center,
+                                style: AppTypography.titleSm.copyWith(
+                                  color: AppColors.onDark,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
+                              if (total > 0) ...[
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  '${widget.progress.settledCount} of $total ready',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.onDarkSoft,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          line,
-                          textAlign: TextAlign.center,
-                          style: AppTypography.titleSm.copyWith(
-                            color: AppColors.onDark,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        if (total > 0) ...[
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            '${widget.progress.settledCount} of $total ready',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            top: AppSpacing.xxs,
+            left: AppSpacing.xs,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              color: AppColors.onDark,
+              iconSize: 22,
+              tooltip: 'Back',
+              onPressed: widget.onBack,
+            ),
+          ),
+        ],
       ),
     ),
   );

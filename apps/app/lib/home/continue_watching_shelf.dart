@@ -112,6 +112,25 @@ class _ContinueCard extends StatelessWidget {
     return progress.inMilliseconds / duration.inMilliseconds;
   }
 
+  Duration? get _remaining {
+    final duration = record.duration;
+    final progress = record.progress;
+    if (duration == null || progress == null || duration <= Duration.zero) {
+      return null;
+    }
+    final remaining = duration - progress;
+    return remaining > Duration.zero ? remaining : null;
+  }
+
+  String _remainingLabel(Duration remaining) {
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes.remainder(60);
+    if (hours > 0) {
+      return minutes == 0 ? '${hours}h left' : '${hours}h ${minutes}m left';
+    }
+    return '${remaining.inMinutes == 0 ? 1 : remaining.inMinutes}m left';
+  }
+
   String get _title => switch (record.item) {
     EpisodeItemV2(:final subtitle?) => subtitle,
     _ => record.item.title,
@@ -142,6 +161,7 @@ class _ContinueCard extends StatelessWidget {
     final item = record.item;
     final image = item.artwork?.landscape ?? item.artwork?.portrait;
     final progress = _progress;
+    final remaining = _remaining;
     final contextLabel = _context;
     return Clickable(
       onTap: () => _open(context),
@@ -178,21 +198,48 @@ class _ContinueCard extends StatelessWidget {
           Positioned(
             top: AppSpacing.xs,
             right: AppSpacing.xs,
-            child: Material(
-              color: Colors.black54,
-              shape: const CircleBorder(),
-              child: IconButton(
-                tooltip: 'Mark as watched',
-                onPressed: onMarkAsWatched,
-                icon: const Icon(Icons.check_rounded),
-                color: Colors.white,
-                iconSize: 20,
-                constraints: const BoxConstraints.tightFor(
-                  width: 44,
-                  height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (remaining case final remaining?)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.xs),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceDark.withValues(alpha: 0.86),
+                        borderRadius: AppRadius.pill,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical: AppSpacing.xxs,
+                        ),
+                        child: Text(
+                          _remainingLabel(remaining),
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.onDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Material(
+                  color: AppColors.surfaceDark.withValues(alpha: 0.86),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: 'Mark as watched',
+                    onPressed: onMarkAsWatched,
+                    icon: const Icon(Icons.check_rounded),
+                    color: AppColors.onDark,
+                    iconSize: 16,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 36,
+                      height: 36,
+                    ),
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
-                padding: EdgeInsets.zero,
-              ),
+              ],
             ),
           ),
           Positioned(
@@ -217,21 +264,24 @@ class _ContinueCard extends StatelessWidget {
                       color: AppColors.onDarkSoft,
                     ),
                   ),
-                if (progress != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  ClipRRect(
-                    borderRadius: AppRadius.pill,
-                    child: LinearProgressIndicator(
-                      value: progress.clamp(0, 1),
-                      minHeight: 4,
-                      color: AppColors.brandAccent,
-                      backgroundColor: Colors.white24,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
+          if (progress != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ClipRRect(
+                borderRadius: AppRadius.pill,
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0, 1),
+                  minHeight: 4,
+                  color: AppColors.brandAccent,
+                  backgroundColor: Colors.white24,
+                ),
+              ),
+            ),
         ],
       ),
     );

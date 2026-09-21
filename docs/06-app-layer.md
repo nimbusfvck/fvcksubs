@@ -32,8 +32,9 @@ Two entries provide test seams:
 - the **extension loader** used by the installer, so the whole install flow is exercisable
   without a real engine.
 
-Persisted state is loaded before the UI so the first frame uses the saved category,
-extension, and preferences.
+Persisted state is loaded before the UI so the first frame uses the saved extension
+and preferences. Home always opens on the `all` category; category screens own their
+route-local scroll state.
 
 **Extension storage** is read in that same startup pass, and for a stricter reason than the
 rest: it backs `host.storage`, whose functions are synchronous, so every value an extension
@@ -58,8 +59,10 @@ flowchart TB
     end
 
     B -->|search field| S["Search"]
+    B -->|category other than all| CP["Category screen"]
+    CP -->|timeline display hint| LT["Timeline"]
     B -->|see more| CV["Full catalog"]
-    B & S & CV & L -->|tap an item| RT{"has detail<br/>worth reading?"}
+    B & CP & S & CV & L -->|tap an item| RT{"has detail<br/>worth reading?"}
     RT -->|yes| D["Detail"]
     RT -->|no| P["Player"]
     D -->|Play| P
@@ -70,9 +73,27 @@ Search is **not** a navigation destination. It spans every extension and no cate
 opens from a field on the browse screen onto its own surface rather than contradicting the
 category chips above it.
 
+Home is always the `all` category, which is implicit rather than a visible Home chip. Other declared categories open a separate category screen
+with its own app bar, scroll position, catalog cache, and pagination. A catalog may declare the
+`timeline` display hint to request the app-owned event surface: the toolbar can switch between a
+local-clock timeline and a single-column list grouped by the event's subtitle or tags (for
+example, a league or sport). The extension decides which category slice contains live items,
+upcoming items, or both, while the app draws the NOW line without knowing the provider or sport.
+Home also derives its `Today's Sporting Events` shelf from catalogs in the `sport` category,
+regardless of their browse layout. It shows up to ten rated events whose start time falls on the
+viewer’s local day, plus known schedules that start before midnight and end after it, and its `See more` action opens the `sport` category. Its popularity signal is
+the extension-supplied rating, so unrated sports are omitted. Event status changes from upcoming to
+live at kickoff, and an elapsed end time or authoritative ended state keeps finished events from
+appearing live.
+Returning to Home always returns to `all`; the category itself is not a persisted Home selection.
+
 Whichever destination is showing is rebuilt when settings or the library change, so
 toggling an extension or favouriting an item takes effect immediately without either screen
 knowing about the other.
+
+On rail layouts, the navigation rail remains mounted as the left panel while Home, category,
+and detail routes use a nested navigator in the right content panel. Navigating within that
+panel therefore does not cover or recreate the rail.
 
 Primary destinations use the shared app bar component. It owns the title spacing, dark surface,
 and action placement so Home, Library, Addons, and Settings keep the same top-level treatment.
@@ -95,11 +116,28 @@ flowchart LR
 | Library | its own record map | Recording a watch must never wipe a saved resume position. |
 | Selection | its own chosen extension id | Falls back to the first available without overwriting the stored preference, so an uninstalled or disabled choice takes effect again the moment it returns. |
 | Subtitle preference | its language code and appearance | Native subtitle tracks declared by the video backend remain under native-player control. When there is no remembered external selection, a source-provided track matching the preferred language is auto-applied. If the preferred language is absent but another source subtitle exists, the picker asks the viewer to choose the source track before translating it into a temporary SRT while preserving cue timing; translation is best-effort and session-only. The complete result of an explicit external-subtitle fetch is cached per media item, and the selected external track is remembered for later auto-apply. The persisted external-track cache is bounded and restored after the shell is shown. Successful OpenSubtitles/SubSource search results are retained per media and language only while the app session remains active; the active result is checked in the picker, but its temporary file and provider metadata are not persisted. VTT/SRT cue HTML is rendered as safe inline subtitle formatting, without loading content from markup. New external-subtitle lookup remains explicit. A subtitle failure releases playback rather than blocking it. With no preference, the picker lists every fetched track; with a preference, it lists only languages supported by Settings. Text size, text color, background color, and outline are global appearance preferences shared by both player backends. |
-| Playback segments | item-level intro/recap/outro intervals | Optional segment lookup runs alongside source discovery. The player keeps the result in session state, highlights known intervals on the seekbar, offers an explicit Skip intro action only for episodes, and starts Up Next from a provider-supplied outro marker or falls back to one minute remaining when no outro is available; missing or failed metadata never blocks playback. |
+| Playback segments | item-level intro/recap/outro intervals | Optional segment lookup runs alongside source discovery. The player keeps the result in session state, highlights known intervals on the seekbar, offers an explicit Skip intro action only for episodes, and starts Up Next from a provider-supplied outro marker or falls back to one minute remaining when no outro is available; when an episode completes, the active session advances to the next available episode unless the viewer dismissed or paused Up Next, and missing or failed metadata never blocks playback. |
 | Quality preference | its maximum automatic video height | Global and persistent. Auto leaves the native backend's adaptive choice alone; a selected cap picks the highest available rendition at or below it when the stream exposes multiple video tracks. If a source has no rendition under the cap, the lowest available track is used. Manual quality switching in the player remains available. |
-| Picture in Picture preference | whether full-screen playback may enter native PiP when the app backgrounds | Global and persistent. It defaults to enabled for existing users. Back always changes the player to the in-app mini-player and disables native PiP eligibility for that presentation. |
+| Picture in Picture preference | whether active full-video playback may enter native PiP when the app backgrounds | Global and persistent. It defaults to enabled for existing users. Back changes the player to the in-app mini-player without requesting PiP; the active full-video session remains eligible if the app is subsequently backgrounded. |
+| Febbox cookie | `FebboxCookieController` over `SecureFebboxCookieStore` | The Settings entry accepts the `ui` value, stores it through `flutter_secure_storage` in the platform Keychain/Keystore, and never pre-fills the secret. Saving or clearing it clears the source cache and reloads installed extensions so the next Febbox discovery uses the new value. |
 | Install | the index listing plus the registry | Consent defaults to refusal. |
 | NSFW visibility | the registry plus a persisted app preference | **Show NSFW content** controls catalogs explicitly marked `mature`; unknown declarations remain compatible with older extensions. |
+
+### Febbox cookie bridge
+
+The app-owned integration lives in
+`apps/app/lib/settings/febbox_cookie_controller.dart`. Its public Dart names are
+`FebboxCookieStore`, `SecureFebboxCookieStore`, `FebboxCookieController`,
+`normalizeFebboxCookie`, and `febboxExtensionPrelude`. The controller stores only the
+normalized `ui` value, rejects multiline input, and keeps the existing storage key
+`showbox.febbox.ui` so an already configured cookie is not lost during the rename.
+
+`febboxExtensionPrelude` injects the runtime value only into the Nimora extension
+manifests (`nimora` and `nimora.compact`). The JS bridge variable is intentionally still
+named `globalThis.__showboxUiCookie` because it is the provider contract consumed by
+the Febbox resolver; it is not a user-facing app class or filename. The resolver forwards
+the cookie only to Febbox file-list/HLS requests, never to ShowBox search/share requests,
+source IDs, or logs.
 
 ## 6.4 Screens
 
@@ -118,16 +156,22 @@ flowchart TB
 
 When catalog data is available, Home starts with one edge-to-edge featured carousel
 inside the app bar's expanded area.
-It merges the enabled category feeds and preserves their section and item order as the
-extension's editorial signal. Selection fills distinct slots for live events, leading
-videos and series, events starting within 24 hours, recent releases, and top-rated
-content. Remaining slots use a combined editorial, freshness, rating, and artwork score.
+It combines the selected provider's catalogs from Home's `all` category only. Other
+categories load when the viewer opens their category page and do not contribute network
+work to the Home Hero. It preserves the `all` catalogs' section and item order as the
+extension's editorial signal. Selection keeps leading videos
+and series first, then may include one highest-rated event whose start date is today in the
+viewer's local timezone, whether scheduled or live. Live status does not give an event a
+priority position. The Sport category page may opt into multiple eligible events for its
+own category Hero; this does not change the single-event rule for Home. Remaining slots use
+a combined editorial, freshness, rating, and artwork score.
 Soft per-kind limits keep the carousel varied when several kinds are available without
 leaving it short when the catalog contains only one kind. Duplicate references and ended
 events are removed. Items without portrait or landscape artwork are left out because the
-hero is artwork-led, except events and channels: those receive deterministic full-bleed
-artwork from their opaque identity, participant colors, and participant logos. The same
-generator is used when a supplied live artwork URL fails. Equal candidates use a stable
+hero is artwork-led, except events: those receive deterministic full-bleed artwork from
+their opaque identity, participant colors, and participant logos. Channels remain available
+in their catalog shelves but are not selected for the Featured Hero. The same generator is
+used when a supplied live artwork URL fails. Equal candidates use a stable
 daily tie-break so their order does not change during a session. When a refresh changes the
 item occupying a hero page, the page remains at that position but the slide is keyed by the
 item's opaque reference; any previous trailer preview is disposed instead of continuing
@@ -139,17 +183,28 @@ Video and series items use `artwork.logo` as the featured title mark when suppli
 otherwise the text title is limited to one line. A failed logo request falls back to the
 text title.
 
-The featured artwork and gradient extend behind the status bar on handhelds. Category
-chips are a separate pinned sliver below the app bar. This keeps the current category
-available while the hero collapses normally.
+Catalogs marked with the `featured` surface are not used by the Home Hero; the Hero is
+derived from the same `all` catalogs rendered by Home. Catalogs marked `preview` belong
+to the Shorts surface and are likewise excluded from Home browsing.
+
+The featured artwork and gradient extend behind the status bar on handhelds. On wide screens,
+the featured and detail heroes use landscape artwork in a cinematic 2.2:1 frame, capped to the
+shell's 1400-pixel content width; narrow screens keep the taller portrait treatment. Home's category
+chips are a separate auto-hiding header below the app bar. The `all` entry is implicit because
+Home already represents it; the visible chips keep the other category choices available while
+the hero collapses normally. A category backed by a catalog with the `timeline` display hint
+opens the event surface; its toolbar can switch between timeline and list presentation. Other
+choices open their category screen.
 While the featured feed is loading, the hero keeps the same expanded height and shows a
 shimmer placeholder. An empty or failed feed removes the hero instead of leaving a blank
 surface. Featured trailer previews are inline-only and are never eligible for native Picture
 in Picture.
 
-At app startup, a persisted catalog renders first and Home silently refreshes it in the
-background; a failed refresh leaves that usable snapshot visible. Pull-to-refresh still
-explicitly refetches what is on screen while keeping it visible.
+At app startup, Home loads the selected provider's `all` catalogs and keeps the Hero shimmer
+visible until all of those requests settle; it does not publish a partial Hero. A failed
+catalog is isolated while successful `all` catalogs remain usable. Pull-to-refresh refetches
+only those same `all` catalogs. Other category pages own their catalogs and load them when
+opened. Home itself always starts at `all`.
 
 When an extension declares an `all` category, Home places the app-owned Continue Watching
 shelf above its catalogs. It shows at most ten latest unfinished items, uses the saved landscape
@@ -169,6 +224,9 @@ that name shape, keeps its declared title and existing shelf behavior.
 Home uses a pinned app bar with the featured hero in its expanded area, followed by a separate
 pinned category header. The hero collapses normally; no snap animation is used.
 When collapsed, the hero fades out completely so its artwork does not remain behind the toolbar.
+Featured auto-slide pauses once the hero is less than half visible and resumes when at least half
+of it is visible again. Its progress indicator uses the fixed maximum preview duration rather
+than reading the trailer's source duration.
 
 ### Full catalog
 
@@ -188,9 +246,8 @@ A trailer with a `video/*`
 MIME may autoplay as the header preview; other trailer URLs open in the platform
 browser view (Chrome Custom Tab on Android), with an external-app fallback. Trailer
 previews do not enter the normal source-resolution pipeline or native Picture in Picture.
-The detail screen may warm
-cheap source descriptors for the primary/resume episode in the background, but signed
-stream URLs remain **gated behind Play**.
+Source discovery and signed stream URL resolution remain **gated behind Play** on the detail
+screen.
 
 The Play button's label is computed rather than fixed, so it states what will actually
 happen: start, continue, or continue at a named episode. Episode cards show a saved playback
@@ -236,8 +293,10 @@ when supplied, then participant colours when available,
 and a deterministic fallback when it does not. Participant colours that cannot be parsed
 degrade to that fallback; malformed branding is rejected at the protocol boundary.
 
-Scores are carried in the model but **not rendered** — a product decision, reversible
-without any protocol change.
+Poster cards are image-first: they use a 2:3 frame, show the title below the frame, show the
+release year as an upper-left image overlay, and show the rating as an upper-right image overlay.
+Event and summary cards retain their compact footer metadata. These presentation choices are
+reversible without any protocol change.
 
 ## 6.6 Player
 
@@ -246,10 +305,11 @@ flowchart TB
     PRE["Pre-resolved sources, ordered by preference"] --> PP["Player screen"]
     PP --> NAT["Native playback"]
     PP --> MINI["Persistent in-app mini-player"]
+    PP --> MV["Sports live multi-view — up to two events"]
     PP --> CTL["Custom controls"]
     CTL --> Q["Quality — one entry per resolution, highest first"]
     CTL --> SUB["Subtitles — the source's own, plus any fallback lookup"]
-    CTL --> SRC["Source switch — instant, everything is already resolved"]
+    CTL --> SRC["Source switch — ready sources are instant; resume starts with the saved source"]
     CTL --> EP["Episodes — horizontal in-player rail with artwork and titles"]
     CTL --> SET["Settings — playback speed popup"]
     PP --> NEXT["Continue to the next episode at a provider outro marker"]
@@ -259,15 +319,19 @@ flowchart TB
 | Concern | Decision |
 |---|---|
 | Live versus on-demand | Derived from the item's kind and threaded into the player. Live playback keeps a seekable buffer and advances its timeline while intentionally paused, so the thumb falls behind and the LIVE indicator dims as the broadcast continues. Native live latency and buffering are configured through optional `VideoPlayerLiveOptions`, whose defaults are conservative for AVPlayer and Media3; the configuration is ignored for on-demand sources. A scrub near the right edge snaps to a safe point just behind the latest available position; an already-live scrub is a no-op so it does not flush the decoder unnecessarily. On-demand gets duration-based seeking. |
-| Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. |
-| Episode list | Episodic playback exposes the loaded guide as an app-owned horizontal rail above the timeline. The current episode is centered and highlighted; selecting another available episode replaces the current player route through the normal playback workflow. Unreleased episodes remain visible but disabled. |
+| Live manifest normalization | Clear live playback uses a session-scoped loopback `HttpServer` when the resolved stream can be routed through the app proxy. It rewrites playlist resource URLs to stable local ids while refreshing rotating signed upstream URLs, forwards playback headers and byte ranges, and is disposed with the player session. The proxy is a foreground-scoped fallback; background playback still depends on the native player and may lose the local server if the app is suspended. |
+| Quality list | Collapsed to one entry per resolution; the placeholder "default" track is dropped, because that is what "Auto" already means. The player control displays Auto until the viewer pins a resolution; the native rendition currently chosen by Auto does not change that label. When an explicit preferred height has a provider URL variant, startup opens that variant directly instead of opening the base stream and replacing the player afterwards. Manual URL-variant switching initializes the replacement while the current player keeps playing, then pauses only to align position and swap. |
+| Episode list | Episodic playback exposes the loaded guide as an app-owned horizontal rail above the timeline. The current episode is centered and highlighted; selecting another available episode pauses the current native controller immediately, shows the handoff loading state, and replaces the current player route through the normal playback workflow. Unreleased episodes remain visible but disabled. Episode changes prefer the current source's provider and server label, wait up to 30 seconds for that provider/server to produce a fresh URL when it is listed, then use normal source priority if it fails or times out. Every episode resolves its own fresh stream URL. |
 | Playback speed | The top-right Settings action opens an app-owned popup with 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x presets. The selected speed is applied through the shared player contract across native backends and remains active when the current player controller is replaced. |
-| Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. |
-| Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. Position tracking attaches after native playback is ready, so progress remains available across platforms. |
-| Picture in Picture | On iOS, full playback is eligible for native PiP only while it is the full-screen presentation and the app backgrounds; Detail and Featured Hero previews are never eligible. The player is attached to a persistent entry in the app Navigator's overlay from playback start, so Detail/Home routes remain the real caller underneath. Clear playback uses the texture backend: its invisible AVPlayerLayer is registered with AVKit for PiP while Flutter controls remain above the rendered video; protected playback may use a platform view. Full playback opts out of the video package's normal background pause observer so AVPlayer can continue through the native PiP transition. Back never requests native PiP: it changes the session to the in-app mini-player and disables native PiP eligibility, including when the app is subsequently backgrounded. Expanding the mini-player restores full-screen presentation and re-enables eligibility. Native PiP restore and close continue to use the same persistent surface; closing the PiP window pauses and disposes the hosted player. PiP renders the native video layer only; Flutter controls and subtitles are not part of the PiP surface. |
-| In-app mini-player | The shared `video_player_mini_player` host keeps the same Flutter/native player widget in one persistent overlay. A downward drag publishes progress continuously, interpolating the surface into a bottom-right-docked card; release past the threshold commits the minimized state, while a short drag springs back. Tapping the card restores full screen; the minimized card can be dragged directly and follows the pointer until release, then snaps to the nearest of the four corners. The host stays below newly pushed routes, so the caller remains usable without reparenting the native surface. |
-| Source cache | Persists source descriptors but never resolved streams. Cached descriptors are filtered against the current Addons provider switches before playback. Live events and channels bypass both cache layers because their signed URLs are short-lived. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. The selected source stays first when the complete result refreshes, while remaining sources are added to the picker individually as each resolves. |
-| Errors | If the first source fails before playback initializes, mark it failed and try the next resolved source, including one that arrives through the active background fan-out. After playback starts, never auto-advance; keep retry and source switching available. |
+| Landscape presentation | Full playback follows the device orientation by default. The top-right player control can request both landscape orientations for the active full-player presentation, which is useful when device rotation is locked; minimizing, leaving, or entering native PiP releases the request, while restoring the full player reapplies the viewer's session choice. Portrait-oriented Shorts and previews keep their own presentation policy. |
+| Continuing | Replaces the current screen rather than stacking one per episode, and the episode list is passed in once rather than refetched each time. Automatic next-episode playback carries the current provider/server preference forward while resolving a fresh URL for that episode. |
+| Resuming | A position very near the start reads as "start over"; one very near the end counts as finished. Episode identity is checked before seeking. The native player seeks to the saved position after initialization and before its first play request, then position tracking attaches when playback is ready. If a native resume seek times out after initialization has already exposed a frame and buffer, playback continues from the usable buffer instead of replacing the controller with a refresh state. |
+| Picture in Picture | On iOS, active full playback is eligible for native PiP when the app backgrounds, whether its app-owned presentation is full-screen or the in-app mini-player; Detail and Featured Hero previews are never eligible. The player is attached to a persistent entry in the app Navigator's overlay from playback start, so Detail/Home routes remain the real caller underneath. Clear playback uses the texture backend: its invisible AVPlayerLayer is registered with AVKit for PiP while Flutter controls remain above the rendered video; protected playback may use a platform view. Full playback opts out of the video package's normal background pause observer so AVPlayer can continue through the native PiP transition. Back never requests native PiP: it changes the session to the in-app mini-player, which remains eligible for automatic PiP if the app is subsequently backgrounded. Expanding PIP restores the app-owned presentation that was active when PIP started. Native PiP restore and close continue to use the same persistent surface; closing the PiP window pauses and disposes the hosted player. PiP renders the native video layer only; Flutter controls and subtitles are not part of the PiP surface. |
+| In-app mini-player | The shared `video_player_mini_player` host keeps the same Flutter/native player widget in one persistent overlay. A downward drag publishes progress continuously, interpolating the surface into a bottom-right-docked card; release past the threshold commits the minimized state, while a short drag springs back. Tapping the card restores full screen; the minimized card can be dragged directly and follows the pointer until release, then snaps to the nearest of the four corners. The host stays below newly pushed routes, so the caller remains usable without reparenting the native surface. Flutter-rendered subtitles are hidden while dragging or minimized and return when the player is full screen. |
+| Sports live multi-view | Event playback exposes a Multi-view action in the full player. It replaces the current event route with an app-owned page containing the current event and an add-event tile. The viewer can choose additional non-ended events from the `sport` catalog; each event resolves independently through the normal live source workflow. The first tile owns audio by default and the other tiles are muted; tapping the audio action changes the active tile. Each tile can retry, refresh and choose another resolved source, return that event to the normal single-player surface, or pin it as the large speaker tile. A newly added tile automatically refreshes and resolves another source after a playback error before showing failure, and only reports failure when no untried playable source remains. While loading or buffering, the tile playback control shows a spinner. Tile controls auto-hide after three seconds of uninterrupted playback and reappear on pointer/touch interaction, pause, or buffering. Only one tile can be pinned; unpinned layouts keep equal tiles, while the pinned layout gives the speaker two-thirds of the width and stacks the remaining tiles plus the add tile in a right rail. Without a pin, the grid sizes from active players plus the add-event tile, so one active player plus Add uses two equal columns, three players render as a balanced 2x2 grid, five players plus Add use 3x2, and six to eight players use four columns across two rows; Add disappears at the eight-player limit. Tile geometry is calculated from the active event count and the single add tile, fits the fixed viewport height without scrolling, and large screens do not reserve rows for unused capacity. The surface is bounded to two events on narrow screens and eight events on large screens. Closing the last remaining tile, or pressing Back, restores the pinned event, otherwise the active-audio event, as the normal single player in minimized mode. Movies, series, native PiP, and arbitrary unbounded multi-session management remain outside this surface. |
+| Source cache | Persists source descriptors in the source-list store and one last-used resolved VOD stream in platform secure storage. The saved stream includes its playback headers and protocol data; it is tried immediately on Continue Watching. If it fails before playback starts, the app resolves that same descriptor once and replaces the saved result. A manually selected source updates ordering immediately, but its resolved URL is persisted only after playback actually starts. Resolved alternatives stay with the active player session; the picker fetches alternatives when the viewer asks to change source. No resolved-source list is retained in `SourceCache` RAM. Active VOD streams refresh after a confirmed error or stall. Live events and channels bypass the resolved-stream cache. Cached descriptors are filtered against the current Addons provider switches before playback. Cached VOD descriptors resolve in parallel when no saved stream is available; the preferred descriptor gets a short grace window, then a ready fallback may open playback while slower alternatives continue toward the picker. Initial on-demand discovery asks fan-out extensions for the first non-empty provider result, then starts complete discovery and resolution in the background; a slow provider must not hide a ready fallback. Source discovery and each source resolve have bounded waits, and provider errors are dropped independently. A complete non-empty result replaces old descriptors from providers it returned while retaining cached descriptors for providers that failed or were absent. The currently playing source remains available during reconciliation; obsolete inactive entries from a refreshed provider are removed. The selected source stays first when the complete result refreshes, while remaining sources are added to the active picker individually as each resolves. |
+| macOS WebKit lifecycle | Extension media-resolution WebViews and visible Cloudflare challenge browsers share one lifecycle coordinator and run one at a time. A resolver disposes its headless WebView once, from `finally`; finding a stream only completes the result and lets that single cleanup path run. The Cloudflare browser holds the coordinator until its `onExit` callback confirms closure. |
+| Errors | If a restored VOD stream fails before playback initializes, resolve that same descriptor once; discard it if the fresh result also fails. Otherwise mark a failed source and try the next resolved source, including one that arrives through the active background fan-out. A resume or source-switch seek is bounded so a slow HLS origin cannot hold startup forever. During playback, a frozen VOD position eventually enters recovery even when the origin keeps advancing the buffered endpoint by tiny amounts. After playback starts, never auto-advance; keep retry and source switching available. |
 
 ## 6.7 Platform handling
 

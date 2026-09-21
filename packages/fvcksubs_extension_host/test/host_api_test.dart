@@ -119,6 +119,23 @@ void main() {
       );
     });
 
+    test('aesCbcEncrypt matches the AES-CBC PKCS7 vector', () {
+      final key = base64.encode(hex('2b7e151628aed2a6abf7158809cf4f3c'));
+      final iv = base64.encode(hex('000102030405060708090a0b0c0d0e0f'));
+      final plaintext = base64.encode(hex('6bc1bee22e409f96e93d7e117393172a'));
+      expect(
+        evalJson(
+          'host.crypto.aesCbcEncrypt('
+          '${jsonEncode(key)}, ${jsonEncode(iv)}, ${jsonEncode(plaintext)})',
+        ),
+        base64.encode(
+          hex(
+            '7649abac8119b246cee98e9b12e9197d8964e0b149c10b7b682e6e39aaeb731c',
+          ),
+        ),
+      );
+    });
+
     test('aesGcmDecrypt matches the NIST test-case-3 vector', () {
       // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/mac/gcmtestvectors.zip
       // Test Case 3 — no AAD, the shape Vidrock's payload uses.

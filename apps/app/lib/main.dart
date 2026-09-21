@@ -18,6 +18,7 @@ import 'catalog/catalog_page_store.dart';
 import 'catalog/plugin_controller.dart';
 import 'library/library_controller.dart';
 import 'player/state/source_cache.dart';
+import 'player/state/resolved_playback_cache_store.dart';
 import 'player/state/picture_in_picture_session.dart';
 import 'player/state/picture_in_picture_preference_controller.dart';
 import 'player/state/source_priority_controller.dart';
@@ -26,12 +27,16 @@ import 'player/state/subtitle_preference_controller.dart';
 import 'platform/device_class.dart';
 import 'platform/cloudflare_killer.dart';
 import 'platform/web_view_resolver.dart';
+import 'platform/webkit_lifecycle_coordinator.dart';
 import 'settings/nsfw_controller.dart';
+import 'settings/preview_autoplay_preference_controller.dart';
+import 'settings/febbox_cookie_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cloudflareKiller = CloudflareKiller();
-  final webViewResolver = WebViewResolver();
+  final webKitLifecycle = WebKitLifecycleCoordinator();
+  final cloudflareKiller = CloudflareKiller(webKitLifecycle: webKitLifecycle);
+  final webViewResolver = WebViewResolver(webKitLifecycle: webKitLifecycle);
 
   // These reads do not depend on one another. Starting them together keeps
   // the first frame from paying each storage/platform round-trip in series.
@@ -41,6 +46,8 @@ Future<void> main() async {
   final nsfwStore = SharedPreferencesNsfwSettingsStore();
   final settingsFuture = settingsStore.load();
   final nsfwSettingsFuture = nsfwStore.load();
+  final febboxCookieStore = SecureFebboxCookieStore();
+  final febboxCookieFuture = febboxCookieStore.read();
   final deviceClassFuture = DeviceClassResolver.resolve();
 
   final extensionStorageFuture = ExtensionStorageHub.open();
@@ -70,6 +77,9 @@ Future<void> main() async {
   const pictureInPictureStore =
       SharedPreferencesPictureInPicturePreferenceStore();
   final pictureInPictureFuture = pictureInPictureStore.load();
+  const previewAutoplayStore =
+      SharedPreferencesPreviewAutoplayPreferenceStore();
+  final previewAutoplayFuture = previewAutoplayStore.load();
 
   const sourcePriorityStore = SharedPreferencesSourcePriorityStore();
   final sourcePriorityFuture = sourcePriorityStore.load();
@@ -82,6 +92,7 @@ Future<void> main() async {
     load: sourceListStore.load,
     fallback: const <String, CachedSourceList>{},
   );
+  final resolvedPlaybackStore = SecureResolvedPlaybackCacheStore();
 
   final catalogCacheFuture = _loadPersistedOrDefault(
     name: 'catalog cache',
@@ -92,6 +103,11 @@ Future<void> main() async {
   final deviceClass = await deviceClassFuture;
   final settings = await settingsFuture;
   final nsfwSettings = await nsfwSettingsFuture;
+  final febboxCookie = await _loadPersistedOrDefault<String?>(
+    name: 'Febbox cookie',
+    load: () => febboxCookieFuture,
+    fallback: null,
+  );
   final registry = buildRegistry(
     disabledExtensionIds: settings.disabledExtensionIds,
     disabledProviderIds: settings.disabledProviderIds,
@@ -108,10 +124,32 @@ Future<void> main() async {
   );
 
   final extensionStorage = await extensionStorageFuture;
+  late final SourceCache sourceCache;
+  late final FebboxCookieController febboxCookieController;
+
+  Future<void> reloadExtensionsWithCookie(String? cookie) async {
+    sourceCache.clearAll();
+    await loadInstalledExtensions(
+      registry,
+      installedStore,
+      extensionStorage,
+      febboxCookie: cookie,
+      cloudflareSolver: cloudflareKiller.solve,
+      webViewResolver: webViewResolver.resolveMedia,
+      networkLogger: kDebugMode ? _logJsFetch : null,
+    );
+  }
+
+  febboxCookieController = FebboxCookieController(
+    store: febboxCookieStore,
+    initial: febboxCookie,
+    onChanged: reloadExtensionsWithCookie,
+  );
   await loadInstalledExtensions(
     registry,
     installedStore,
     extensionStorage,
+    febboxCookie: febboxCookie,
     cloudflareSolver: cloudflareKiller.solve,
     webViewResolver: webViewResolver.resolveMedia,
     networkLogger: kDebugMode ? _logJsFetch : null,
@@ -129,6 +167,7 @@ Future<void> main() async {
       manifest: manifest,
       source: source,
       storage: extensionStorage.forExtension(manifest.id),
+      prelude: febboxExtensionPrelude(manifest, febboxCookieController.cookie),
       cloudflareSolver: cloudflareKiller.solve,
       webViewResolver: webViewResolver.resolveMedia,
       networkLogger: kDebugMode ? _logJsFetch : null,
@@ -168,6 +207,11 @@ Future<void> main() async {
         store: pictureInPictureStore,
         initial: await pictureInPictureFuture,
       );
+  final previewAutoplayPreferenceController =
+      PreviewAutoplayPreferenceController(
+        store: previewAutoplayStore,
+        initial: await previewAutoplayFuture,
+      );
 
   final sourcePriorityController = SourcePriorityController(
     registry: registry,
@@ -177,8 +221,9 @@ Future<void> main() async {
     sourceLocale: await sourceLocaleFuture,
   );
 
-  final sourceCache = SourceCache(
+  sourceCache = SourceCache(
     sourceListStore: sourceListStore,
+    resolvedPlaybackStore: resolvedPlaybackStore,
     initial: await sourceCacheFuture,
   );
   final catalogCache = await catalogCacheFuture;
@@ -195,12 +240,13 @@ Future<void> main() async {
       qualityPreferenceController: qualityPreferenceController,
       subtitlePreferenceController: subtitlePreferenceController,
       sourcePriorityController: sourcePriorityController,
-      homeCategoryStore: const SharedPreferencesCategorySelectionStore('home'),
       sourceCache: sourceCache,
       pictureInPictureSession: PictureInPictureSession(),
       pictureInPicturePreferenceController:
           pictureInPicturePreferenceController,
+      previewAutoplayPreferenceController: previewAutoplayPreferenceController,
       nsfwController: nsfwController,
+      febboxCookieController: febboxCookieController,
       navigatorKey: navigatorKey,
     ),
   );
@@ -238,6 +284,7 @@ Future<void> loadInstalledExtensions(
   ExtensionRegistry registry,
   InstalledExtensionStore store,
   ExtensionStorageHub storage, {
+  String? febboxCookie,
   JsCloudflareSolver? cloudflareSolver,
   JsWebViewResolver? webViewResolver,
   JsRuntimeLogger? networkLogger,
@@ -260,6 +307,7 @@ Future<void> loadInstalledExtensions(
           manifest: manifest,
           source: record.bundleJs,
           storage: storage.forExtension(manifest.id),
+          prelude: febboxExtensionPrelude(manifest, febboxCookie),
           cloudflareSolver: cloudflareSolver,
           webViewResolver: webViewResolver,
           networkLogger: networkLogger,

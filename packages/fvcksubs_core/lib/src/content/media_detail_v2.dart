@@ -134,6 +134,7 @@ class EpisodeSummary extends Equatable {
     required this.ref,
     required this.title,
     required this.position,
+    this.absoluteEpisode,
     this.description,
     this.artwork,
     this.durationSeconds,
@@ -146,6 +147,7 @@ class EpisodeSummary extends Equatable {
       'ref',
       'title',
       'position',
+      'absoluteEpisode',
       'description',
       'artwork',
       'durationSeconds',
@@ -153,9 +155,18 @@ class EpisodeSummary extends Equatable {
     }, 'episode summary');
     final duration = json['durationSeconds'];
     final position = json['position'];
+    final absoluteEpisode = json['absoluteEpisode'];
     if (position is! num || position.toInt() != position || position < 1) {
       throw const FormatException(
         'episode.position must be a positive integer',
+      );
+    }
+    if (absoluteEpisode != null &&
+        (absoluteEpisode is! num ||
+            absoluteEpisode.toInt() != absoluteEpisode ||
+            absoluteEpisode < 1)) {
+      throw const FormatException(
+        'episode.absoluteEpisode must be a positive integer',
       );
     }
     if (duration != null &&
@@ -168,6 +179,7 @@ class EpisodeSummary extends Equatable {
       ref: _requiredRef(json['ref'], 'episode.ref'),
       title: _requiredString(json['title'], 'episode.title'),
       position: position.toInt(),
+      absoluteEpisode: (absoluteEpisode as num?)?.toInt(),
       description: _optionalString(json['description'], 'episode.description'),
       artwork: _optionalArtwork(json['artwork'], 'episode.artwork'),
       durationSeconds: (duration as num?)?.toInt(),
@@ -183,6 +195,13 @@ class EpisodeSummary extends Equatable {
 
   /// One-based display position inside the containing group.
   final int position;
+
+  /// Optional one-based position in the source's continuous episode run.
+  ///
+  /// TMDB groups long-running anime into seasons while some stream providers
+  /// index the same title continuously. The display position stays relative
+  /// to its group; this value carries the provider-facing absolute number.
+  final int? absoluteEpisode;
 
   /// Optional synopsis.
   final String? description;
@@ -201,6 +220,7 @@ class EpisodeSummary extends Equatable {
     'ref': ref.toJson(),
     'title': title,
     'position': position,
+    if (absoluteEpisode != null) 'absoluteEpisode': absoluteEpisode,
     if (description != null) 'description': description,
     if (artwork != null) 'artwork': artwork!.toJson(),
     if (durationSeconds != null) 'durationSeconds': durationSeconds,
@@ -213,6 +233,7 @@ class EpisodeSummary extends Equatable {
     ref,
     title,
     position,
+    absoluteEpisode,
     description,
     artwork,
     durationSeconds,
@@ -227,14 +248,24 @@ class EpisodeGroup extends Equatable {
     required this.id,
     required this.title,
     required this.episodes,
+    this.loaded = true,
   });
 
   /// Decodes and validates an episode group.
   factory EpisodeGroup.fromJson(Map<String, Object?> json) {
-    _rejectUnknown(json, const {'id', 'title', 'episodes'}, 'episode group');
+    _rejectUnknown(json, const {
+      'id',
+      'title',
+      'episodes',
+      'loaded',
+    }, 'episode group');
     final episodes = json['episodes'];
+    final loaded = json['loaded'];
     if (episodes is! List) {
       throw const FormatException('episodeGroup.episodes must be a list');
+    }
+    if (loaded != null && loaded is! bool) {
+      throw const FormatException('episodeGroup.loaded must be a boolean');
     }
     return EpisodeGroup(
       id: _requiredString(json['id'], 'episodeGroup.id'),
@@ -243,6 +274,7 @@ class EpisodeGroup extends Equatable {
         for (final entry in episodes)
           EpisodeSummary.fromJson(_object(entry, 'episodeGroup.episodes[]')),
       ],
+      loaded: loaded as bool? ?? true,
     );
   }
 
@@ -255,15 +287,20 @@ class EpisodeGroup extends Equatable {
   /// Episodes in display order.
   final List<EpisodeSummary> episodes;
 
+  /// Whether [episodes] is complete. False means the group is a lazy
+  /// placeholder and the host should request that group before playback.
+  final bool loaded;
+
   /// Encodes this episode group.
   Map<String, Object?> toJson() => {
     'id': id,
     'title': title,
     'episodes': episodes.map((episode) => episode.toJson()).toList(),
+    if (!loaded) 'loaded': false,
   };
 
   @override
-  List<Object?> get props => [id, title, episodes];
+  List<Object?> get props => [id, title, episodes, loaded];
 }
 
 /// Typed navigation data for episodic content.
@@ -335,10 +372,14 @@ class MediaCollectionV2 extends Equatable {
     final name = json['name'];
     final items = json['items'];
     if (id is! String || id.isEmpty) {
-      throw const FormatException('detail.collection.id must be a non-empty string');
+      throw const FormatException(
+        'detail.collection.id must be a non-empty string',
+      );
     }
     if (name is! String || name.isEmpty) {
-      throw const FormatException('detail.collection.name must be a non-empty string');
+      throw const FormatException(
+        'detail.collection.name must be a non-empty string',
+      );
     }
     if (items is! List) {
       throw const FormatException('detail.collection.items must be a list');
@@ -348,9 +389,7 @@ class MediaCollectionV2 extends Equatable {
       name: name,
       items: [
         for (final item in items)
-          MediaItemV2.fromJson(
-            _object(item, 'detail.collection.items[]'),
-          ),
+          MediaItemV2.fromJson(_object(item, 'detail.collection.items[]')),
       ],
     );
   }

@@ -25,6 +25,61 @@ static void *rateContext = &rateContext;
 /// https://developer.apple.com/documentation/avfoundation/avpartialasyncproperty/variants
 static NSString *const kFVPAssetVariantsKey = @"variants";
 
+static NSString *FVPTimeDescription(CMTime time) {
+  if (!CMTIME_IS_NUMERIC(time)) {
+    return @"invalid";
+  }
+  return [NSString stringWithFormat:@"%.3f", CMTimeGetSeconds(time)];
+}
+
+static NSString *FVPRangesDescription(NSArray<NSValue *> *ranges) {
+  if (ranges.count == 0) {
+    return @"[]";
+  }
+  NSMutableArray<NSString *> *descriptions = [NSMutableArray array];
+  for (NSValue *rangeValue in ranges) {
+    CMTimeRange range = [rangeValue CMTimeRangeValue];
+    CMTime end = CMTimeAdd(range.start, range.duration);
+    [descriptions addObject:[NSString stringWithFormat:@"{%@+%@=%@}",
+                                                          FVPTimeDescription(range.start),
+                                                          FVPTimeDescription(range.duration),
+                                                          FVPTimeDescription(end)]];
+  }
+  return [NSString stringWithFormat:@"[%@]", [descriptions componentsJoinedByString:@", "]];
+}
+
+static NSString *FVPTimeControlStatusDescription(AVPlayerTimeControlStatus status) {
+  switch (status) {
+    case AVPlayerTimeControlStatusPaused:
+      return @"paused";
+    case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
+      return @"waiting";
+    case AVPlayerTimeControlStatusPlaying:
+      return @"playing";
+  }
+  return @"unknown";
+}
+
+static void FVPLogBufferDiagnostics(AVPlayer *player, NSString *trigger) {
+#if DEBUG
+  AVPlayerItem *item = player.currentItem;
+  if (item == nil) {
+    NSLog(@"[FVPBuffer] trigger=%@ item=nil", trigger);
+    return;
+  }
+  NSLog(@"[FVPBuffer] trigger=%@ position_s=%@ rate=%.3f time_control=%@ "
+        @"reason=%@ likely_to_keep_up=%@ loaded=%@ seekable=%@",
+        trigger,
+        FVPTimeDescription(player.currentTime),
+        player.rate,
+        FVPTimeControlStatusDescription(player.timeControlStatus),
+        player.reasonForWaitingToPlay ?: @"none",
+        item.isPlaybackLikelyToKeepUp ? @"true" : @"false",
+        FVPRangesDescription(item.loadedTimeRanges),
+        FVPRangesDescription(item.seekableTimeRanges));
+#endif
+}
+
 #if TARGET_OS_IOS
 @interface FVPVideoPlayer () <AVPictureInPictureControllerDelegate>
 @property(nonatomic, strong, nullable) AVPictureInPictureController *pictureInPictureController;
@@ -33,6 +88,7 @@ static NSString *const kFVPAssetVariantsKey = @"variants";
 @property(nonatomic, copy, nullable) void (^pictureInPictureRestoreCompletion)(BOOL);
 @property(nonatomic) BOOL pictureInPictureStartPending;
 @property(nonatomic) BOOL pictureInPictureRestoreRequested;
+@property(nonatomic) BOOL pictureInPictureRestorePending;
 @property(nonatomic) BOOL disposeRequestedWhilePictureInPicture;
 @property(nonatomic) BOOL allowPictureInPicture;
 @end
@@ -255,6 +311,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   }
   [_pictureInPicturePlayerLayer removeFromSuperlayer];
   _pictureInPicturePlayerLayer = playerLayer;
+  if (!self.allowPictureInPicture) {
+    return;
+  }
   [self armPictureInPicture];
 }
 
@@ -265,9 +324,22 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 
 - (void)setPictureInPictureAutomaticallyFromInline:(BOOL)enabled {
   self.allowPictureInPicture = enabled;
+  if (!enabled) {
+    // A preview must not retain an AVPictureInPictureController at all.
+    // Merely setting canStartPictureInPictureAutomaticallyFromInline to NO
+    // still leaves AVKit a live PiP candidate during app backgrounding.
+    if (self.pictureInPictureController.pictureInPictureActive ||
+        self.pictureInPictureStartPending) {
+      NSLog(@"[FVPVideoPlayer] refusing to disable active PiP");
+      return;
+    }
+    self.pictureInPictureController = nil;
+    return;
+  }
   if (@available(iOS 14.2, *)) {
     self.pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = enabled;
   }
+  [self armPictureInPicture];
 }
 
 - (void)setPictureInPictureAllowed:(BOOL)allowed
@@ -276,6 +348,9 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)armPictureInPicture {
+  if (!self.allowPictureInPicture) {
+    return;
+  }
   if (![AVPictureInPictureController isPictureInPictureSupported]) {
     return;
   }
@@ -389,6 +464,18 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 }
 
 - (void)completePictureInPictureRestore:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.pictureInPictureRestorePending) {
+    self.pictureInPictureRestorePending = NO;
+    self.pictureInPicturePlayerLayer.hidden = NO;
+    if (self.pictureInPicturePlayerView != nil) {
+      self.pictureInPicturePlayerView.userInteractionEnabled = YES;
+      self.pictureInPicturePlayerLayer.opacity = 1.0f;
+    } else {
+      // Texture playback renders through Flutter; this layer is only AVKit's
+      // PiP source and must remain invisible after the restore.
+      self.pictureInPicturePlayerLayer.opacity = 0.0f;
+    }
+  }
   void (^completionHandler)(BOOL) = self.pictureInPictureRestoreCompletion;
   self.pictureInPictureRestoreCompletion = nil;
   if (completionHandler != nil) {
@@ -399,6 +486,7 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 - (void)pictureInPictureControllerDidStartPictureInPicture:
     (AVPictureInPictureController *)pictureInPictureController {
   NSLog(@"[FVPVideoPlayer] PiP did start");
+  self.pictureInPictureRestorePending = NO;
   self.pictureInPicturePlayerView.userInteractionEnabled = NO;
   self.pictureInPictureRestoreRequested = NO;
   self.pictureInPictureStartPending = NO;
@@ -460,15 +548,18 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
         .canStartPictureInPictureAutomaticallyFromInline = NO;
   }
   AVPlayerLayer *playerLayer = self.pictureInPictureController.playerLayer;
-  playerLayer.hidden = NO;
+  self.pictureInPictureRestorePending = YES;
+  // Keep the native surface hidden until Flutter has restored the persistent
+  // host to the presentation it had before PiP (full-screen or mini-player).
+  // Revealing it here lets the original full-size layer flash above the host.
+  playerLayer.hidden = YES;
   // Texture playback already renders through Flutter. Its AVPlayerLayer is
   // attached only as AVKit's PiP source and must remain invisible after
   // restore, otherwise it sits above Flutter controls and the caller route.
   // Platform-view playback owns a visible native view and needs the layer
   // revealed again.
   if (self.pictureInPicturePlayerView != nil) {
-    self.pictureInPicturePlayerView.userInteractionEnabled = YES;
-    playerLayer.opacity = 1.0f;
+    self.pictureInPicturePlayerView.userInteractionEnabled = NO;
   } else {
     playerLayer.opacity = 0.0f;
   }
@@ -509,6 +600,10 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
                                              selector:@selector(itemDidPlayToEndTime:)
                                                  name:AVPlayerItemDidPlayToEndTimeNotification
                                                object:item];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(itemPlaybackStalled:)
+                                                 name:AVPlayerItemPlaybackStalledNotification
+                                               object:item];
     _listenersRegistered = YES;
   }
 }
@@ -520,6 +615,11 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
   } else {
     [self.eventListener videoPlayerDidComplete];
   }
+}
+
+- (void)itemPlaybackStalled:(NSNotification *)notification {
+  (void)notification;
+  FVPLogBufferDiagnostics(self.player, @"playback_stalled_notification");
 }
 
 const int64_t TIME_UNSET = -9223372036854775807;
@@ -605,11 +705,15 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
       ]];
     }
     [self.eventListener videoPlayerDidUpdateSeekableTimeRanges:seekableValues];
+    FVPLogBufferDiagnostics(self.player, @"time_ranges_changed");
   } else if (context == statusContext) {
     AVPlayerItem *item = (AVPlayerItem *)object;
     [self reportStatusForPlayerItem:item];
   } else if (context == playbackLikelyToKeepUpContext) {
     [self updatePlayingState];
+    FVPLogBufferDiagnostics(
+        self.player,
+        [[_player currentItem] isPlaybackLikelyToKeepUp] ? @"likely_to_keep_up" : @"fell_behind");
     if ([[_player currentItem] isPlaybackLikelyToKeepUp]) {
       [self.eventListener videoPlayerDidEndBuffering];
     } else {
@@ -798,6 +902,14 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
                           if (status == AVKeyValueStatusLoaded) {
                             NSArray<AVAssetVariant *> *variants = urlAsset.variants;
                             double currentBitrate = MAX(currentItem.preferredPeakBitRate, 0);
+                            if (currentBitrate <= 0) {
+                              // Auto quality leaves preferredPeakBitRate at 0.
+                              // The access log reports the rendition AVPlayer
+                              // actually selected for the latest segment.
+                              AVPlayerItemAccessLogEvent *event =
+                                  currentItem.accessLog.events.lastObject;
+                              currentBitrate = MAX(event.indicatedBitrate, 0);
+                            }
 
                             NSInteger variantIndex = 0;
                             for (AVAssetVariant *variant in variants) {

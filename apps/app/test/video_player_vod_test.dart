@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 
 void main() {
+  test('warms progressive provider variants before seeking', () {
+    expect(shouldWarmVariantBeforeSeek(StreamFormat.mp4), isTrue);
+    expect(shouldWarmVariantBeforeSeek(StreamFormat.other), isTrue);
+    expect(shouldWarmVariantBeforeSeek(StreamFormat.hls), isFalse);
+    expect(shouldWarmVariantBeforeSeek(StreamFormat.dash), isFalse);
+  });
+
   test('subtitle overlay keeps the same viewport rect across resolutions', () {
     const viewport = Size(390, 219.375);
     final hd = subtitleOverlayRect(

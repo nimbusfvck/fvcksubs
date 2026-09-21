@@ -10,15 +10,24 @@ import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
-VideoItemV2 _item(String id, {String? title, Artwork? artwork}) => VideoItemV2(
+VideoItemV2 _item(
+  String id, {
+  String? title,
+  Artwork? artwork,
+  List<String> tags = const [],
+}) => VideoItemV2(
   ref: MediaRef(extensionId: 'a', providerId: 'a.p', id: id),
   title: title ?? id,
   artwork: artwork,
+  tags: tags,
 );
 
 const _directSourceResponse = PreviewResponse(
   sources: [
-    DirectPreviewSource(id: 'd1', stream: PlayableStream(url: 'https://cdn.example.com/1.mp4')),
+    DirectPreviewSource(
+      id: 'd1',
+      stream: PlayableStream(url: 'https://cdn.example.com/1.mp4'),
+    ),
   ],
 );
 
@@ -30,7 +39,13 @@ FakeExtension _extension({
 }) => FakeExtension(
   id: 'a',
   catalogs: [
-    FakeCatalog(id: 'previews', name: 'Previews', categories: const [], items: items, surface: CatalogSurface.preview),
+    FakeCatalog(
+      id: 'previews',
+      name: 'Previews',
+      categories: const [],
+      items: items,
+      surface: CatalogSurface.preview,
+    ),
   ],
   previewFor: previewFor,
   sourceList: sourceList,
@@ -38,12 +53,22 @@ FakeExtension _extension({
 );
 
 void main() {
-  testWidgets('loading, then the feed renders once items arrive', (tester) async {
+  testWidgets('loading, then the feed renders once items arrive', (
+    tester,
+  ) async {
     final registry = ExtensionRegistry([
-      _extension(items: [_item('one'), _item('two')], previewFor: {'one': _directSourceResponse, 'two': _directSourceResponse}),
+      _extension(
+        items: [_item('one'), _item('two')],
+        previewFor: {
+          'one': _directSourceResponse,
+          'two': _directSourceResponse,
+        },
+      ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     await tester.pump();
     await tester.pump();
 
@@ -53,7 +78,9 @@ void main() {
   testWidgets('an empty feed shows the empty message', (tester) async {
     final registry = ExtensionRegistry([FakeExtension(id: 'a')]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('No previews are available right now.'), findsOneWidget);
@@ -63,11 +90,16 @@ void main() {
     final registry = ExtensionRegistry([
       _extension(
         items: [_item('one'), _item('two')],
-        previewFor: {'one': _directSourceResponse, 'two': _directSourceResponse},
+        previewFor: {
+          'one': _directSourceResponse,
+          'two': _directSourceResponse,
+        },
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     await tester.pump();
     await tester.pump();
     expect(find.text('one'), findsOneWidget);
@@ -79,6 +111,65 @@ void main() {
     expect(find.text('one'), findsNothing);
   });
 
+  testWidgets('tag list filters the Shorts feed', (tester) async {
+    final registry = ExtensionRegistry([
+      _extension(
+        items: [
+          _item('drama', tags: ['dracin', 'dramaverse']),
+          _item('story', tags: ['storyreel', 'dracin']),
+        ],
+        previewFor: {
+          'drama': _directSourceResponse,
+          'story': _directSourceResponse,
+        },
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.widgetWithText(ChoiceChip, 'All'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Storyreel'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Dracin'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Dramaverse'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Storyreel'));
+    await tester.pump();
+
+    expect(find.text('drama'), findsNothing);
+    expect(find.text('story'), findsOneWidget);
+  });
+
+  testWidgets('football preview hides Watch and uses the Football kind', (
+    tester,
+  ) async {
+    final registry = ExtensionRegistry([
+      _extension(
+        items: [
+          _item(
+            'ucl-preview',
+            title: 'UCL preview',
+            tags: const ['sports', 'football', 'champions-league'],
+          ),
+        ],
+        previewFor: {'ucl-preview': _directSourceResponse},
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Football'), findsOneWidget);
+    expect(find.byTooltip('Watch'), findsNothing);
+    expect(find.byTooltip('Add to favorites'), findsOneWidget);
+  });
+
   testWidgets('an item with no supported preview is skipped automatically', (
     tester,
   ) async {
@@ -87,14 +178,18 @@ void main() {
         items: [_item('unusable'), _item('usable')],
         previewFor: {
           'unusable': const PreviewResponse(
-            sources: [EmbeddedPreviewSource(id: '1', provider: 'vimeo', mediaId: 'v1')],
+            sources: [
+              EmbeddedPreviewSource(id: '1', provider: 'vimeo', mediaId: 'v1'),
+            ],
           ),
           'usable': _directSourceResponse,
         },
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     // Enough pumps for load(), the initial ensurePreviewResolved(0), the
     // unusable result, and the post-frame-scheduled page-advance animation.
     await tester.pump();
@@ -105,45 +200,60 @@ void main() {
     expect(find.text('usable'), findsOneWidget);
   });
 
-  testWidgets('sound starts muted and a tap unmutes, persisting across a page change', (
-    tester,
-  ) async {
-    final previewPlayer = RecordingPreviewPlayer();
-    final registry = ExtensionRegistry([
-      _extension(
-        items: [_item('one'), _item('two')],
-        previewFor: {'one': _directSourceResponse, 'two': _directSourceResponse},
-      ),
-    ]);
+  testWidgets(
+    'sound starts muted and a tap unmutes, persisting across a page change',
+    (tester) async {
+      final previewPlayer = RecordingPreviewPlayer();
+      final registry = ExtensionRegistry([
+        _extension(
+          items: [_item('one'), _item('two')],
+          previewFor: {
+            'one': _directSourceResponse,
+            'two': _directSourceResponse,
+          },
+        ),
+      ]);
 
-    await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
-    );
-    await tester.pump();
-    await tester.pump();
+      await tester.pumpWidget(
+        wrapApp(
+          child: const ShortsPage(),
+          registry: registry,
+          previewPlayer: previewPlayer,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
 
-    expect(previewPlayer.playedMuted, isTrue);
+      expect(previewPlayer.playedMuted, isTrue);
 
-    await tester.tap(find.byTooltip('Unmute'));
-    await tester.pump();
-    expect(previewPlayer.playedMuted, isFalse);
+      await tester.tap(find.byTooltip('Unmute'));
+      await tester.pump();
+      expect(previewPlayer.playedMuted, isFalse);
 
-    await tester.drag(find.byType(PageView), const Offset(0, -600));
-    await tester.pumpAndSettle();
+      await tester.drag(find.byType(PageView), const Offset(0, -600));
+      await tester.pumpAndSettle();
 
-    expect(previewPlayer.playedMuted, isFalse);
-  });
+      expect(previewPlayer.playedMuted, isFalse);
+    },
+  );
 
   testWidgets('a tap away from the buttons toggles pause, then play', (
     tester,
   ) async {
     final previewPlayer = RecordingPreviewPlayer();
     final registry = ExtensionRegistry([
-      _extension(items: [_item('one')], previewFor: {'one': _directSourceResponse}),
+      _extension(
+        items: [_item('one')],
+        previewFor: {'one': _directSourceResponse},
+      ),
     ]);
 
     await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+      wrapApp(
+        child: const ShortsPage(),
+        registry: registry,
+        previewPlayer: previewPlayer,
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -165,19 +275,30 @@ void main() {
   ) async {
     final previewPlayer = RecordingPreviewPlayer();
     final registry = ExtensionRegistry([
-      _extension(items: [_item('one')], previewFor: {'one': _directSourceResponse}),
+      _extension(
+        items: [_item('one')],
+        previewFor: {'one': _directSourceResponse},
+      ),
     ]);
 
     await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+      wrapApp(
+        child: const ShortsPage(),
+        registry: registry,
+        previewPlayer: previewPlayer,
+      ),
     );
     await tester.pump();
     await tester.pump();
     expect(previewPlayer.playedPlaying, isTrue);
 
     final cardTopLeft = tester.getTopLeft(find.byType(ShortsFeedCard));
-    final gesture = await tester.startGesture(cardTopLeft + const Offset(50, 50));
-    await tester.pump(const Duration(milliseconds: 600)); // past the long-press threshold
+    final gesture = await tester.startGesture(
+      cardTopLeft + const Offset(50, 50),
+    );
+    await tester.pump(
+      const Duration(milliseconds: 600),
+    ); // past the long-press threshold
     expect(previewPlayer.playedPlaying, isFalse);
 
     await gesture.up();
@@ -186,28 +307,31 @@ void main() {
   });
 
   testWidgets('the poster backdrop blurs in gradually from the moment the '
-      'card becomes active, not in an instant snap', (
-    tester,
-  ) async {
+      'card becomes active, not in an instant snap', (tester) async {
     final registry = ExtensionRegistry([
       _extension(
         items: [
           _item(
             'one',
-            artwork: const Artwork(portrait: ImageRef('https://cdn.example.com/poster.jpg')),
+            artwork: const Artwork(
+              portrait: ImageRef('https://cdn.example.com/poster.jpg'),
+            ),
           ),
         ],
         previewFor: {'one': _directSourceResponse},
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     // Zero-duration pumps only — the card is already active by its first
     // build, but no animation time has actually elapsed yet.
     await tester.pump();
     await tester.pump();
 
-    ImageFiltered backdrop() => tester.widget<ImageFiltered>(find.byType(ImageFiltered));
+    ImageFiltered backdrop() =>
+        tester.widget<ImageFiltered>(find.byType(ImageFiltered));
     expect(backdrop().imageFilter.toString(), contains('0.0, 0.0'));
 
     await tester.pumpAndSettle();
@@ -216,19 +340,24 @@ void main() {
   });
 
   testWidgets('a finished preview advances to the next item instead of '
-      'looping', (
-    tester,
-  ) async {
+      'looping', (tester) async {
     final previewPlayer = RecordingPreviewPlayer();
     final registry = ExtensionRegistry([
       _extension(
         items: [_item('one'), _item('two')],
-        previewFor: {'one': _directSourceResponse, 'two': _directSourceResponse},
+        previewFor: {
+          'one': _directSourceResponse,
+          'two': _directSourceResponse,
+        },
       ),
     ]);
 
     await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+      wrapApp(
+        child: const ShortsPage(),
+        registry: registry,
+        previewPlayer: previewPlayer,
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -246,11 +375,18 @@ void main() {
   ) async {
     final previewPlayer = RecordingPreviewPlayer();
     final registry = ExtensionRegistry([
-      _extension(items: [_item('one')], previewFor: {'one': _directSourceResponse}),
+      _extension(
+        items: [_item('one')],
+        previewFor: {'one': _directSourceResponse},
+      ),
     ]);
 
     await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, previewPlayer: previewPlayer),
+      wrapApp(
+        child: const ShortsPage(),
+        registry: registry,
+        previewPlayer: previewPlayer,
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -277,11 +413,15 @@ void main() {
         items: [_item('one')],
         previewFor: {'one': _directSourceResponse},
         sourceList: const [StreamSource(id: 's1', label: 'HD')],
-        resolved: const PlayableStream(url: 'https://cdn.example.com/full.m3u8'),
+        resolved: const PlayableStream(
+          url: 'https://cdn.example.com/full.m3u8',
+        ),
       ),
     ]);
 
-    await tester.pumpWidget(wrapApp(child: const ShortsPage(), registry: registry));
+    await tester.pumpWidget(
+      wrapApp(child: const ShortsPage(), registry: registry),
+    );
     await tester.pump();
     await tester.pump();
 
@@ -300,12 +440,19 @@ void main() {
     tester,
   ) async {
     final registry = ExtensionRegistry([
-      _extension(items: [_item('one')], previewFor: {'one': _directSourceResponse}),
+      _extension(
+        items: [_item('one')],
+        previewFor: {'one': _directSourceResponse},
+      ),
     ]);
     final library = LibraryController(store: _MemoryLibraryStore());
 
     await tester.pumpWidget(
-      wrapApp(child: const ShortsPage(), registry: registry, libraryController: library),
+      wrapApp(
+        child: const ShortsPage(),
+        registry: registry,
+        libraryController: library,
+      ),
     );
     await tester.pump();
     await tester.pump();

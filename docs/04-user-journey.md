@@ -111,19 +111,24 @@ highlight only newly requested hosts; previously granted hosts remain visually s
 
 ```mermaid
 flowchart TB
-    U(["User opens the app"]) --> CAT["Category chips<br/><i>declared by installed extensions</i>"]
-    CAT --> PICK["Plugin selector<br/><i>whose data, when several extensions serve this category</i>"]
+    U(["User opens the app"]) --> CAT["Category choices<br/><i>declared by installed extensions</i>"]
+    CAT --> HOME["all → Home<br/><i>featured + curated shelves</i>"]
+    CAT --> PAGE["other category → category screen<br/><i>full catalog browsing</i>"]
+    HOME --> PICK["Plugin selector<br/><i>when several extensions serve Home</i>"]
+    PAGE --> PICKPAGE["Plugin selector<br/><i>when several extensions serve the category</i>"]
     PICK --> SHELF["One shelf per catalog<br/><i>each loads and fails independently</i>"]
+    PICKPAGE --> GRID["Catalog grid/list and pagination"]
     SHELF --> SEC["Sections within a shelf<br/><i>each capped on its own</i>"]
     SEC --> MORE["'See more' → the full catalog,<br/>already narrowed to that section"]
-    MORE --> CHIPS["Subcategory chips + filters + endless scroll"]
+    GRID --> CHIPS["Subcategory chips + filters + endless scroll"]
+    MORE --> CHIPS
 ```
 
 Three narrowings, and **only the first is the shell's**:
 
 | Level | Chosen by | Behaviour |
 |---|---|---|
-| Category | the user, from chips the extensions declare | There is no shell-invented "All" chip and no "featured" flag. An extension wanting a curated front page declares its own category, and it lands first. |
+| Category | the user, from choices the extensions declare | `all` is the Home entry. Other categories open their own catalog screen. The shell does not invent verticals or a "featured" flag. |
 | Subcategory | the user, from chips the extension **returned** | Ids are opaque and echoed straight back. The list arrives with every response, so the chips stay put while the user moves between them. |
 | Group | the extension | Headings inside one response. Shown on the full screen, hidden in previews where a handful of items across as many groups would be mostly headings. |
 
@@ -143,11 +148,12 @@ sequenceDiagram
     participant R as Registry
     participant X as Extension
 
-    U->>H: taps a different category
+    U->>H: taps a non-all category
+    H->>H: opens the category screen
     H->>C: already have this catalog + category?
     alt yes
         C-->>H: hand it back synchronously
-        Note over H: no spinner, no round trip, scroll position kept
+        Note over H: no spinner, route opens with cached content
     else no
         H->>C: load
         C->>R: catalog query
@@ -155,13 +161,11 @@ sequenceDiagram
         X-->>R: a page of items
         C-->>H: page
     end
-    U->>H: taps the same category again later
-    H->>C: served from cache again
-    U->>H: pulls to refresh
-    H->>C: reload — the old content stays visible until the new lands
+    U->>H: returns to Home
+    H-->>U: shows the all category
 ```
 
-Switching category never refetches. **Asking for fresh data is something the user does**, not
+Opening a category never refetches when its catalog is cached. **Asking for fresh data is something the user does**, not
 a side effect of navigating — and while a refresh runs, what is already on screen stays on
 screen instead of blanking.
 
@@ -203,10 +207,9 @@ flowchart TD
     D -->|Play| P
 ```
 
-Long-form content opens a detail screen. While that screen is visible, the shell may warm
-the cheap source descriptors for the primary/resume episode in the background; signed stream
-URLs are still resolved only after the user selects Play. Live events and channels start the
-playback flow directly.
+Long-form content opens a detail screen. Source discovery and signed stream URL resolution
+start only after the user selects Play. Live events and channels start the playback flow
+directly.
 
 ### On the detail screen
 
@@ -230,17 +233,18 @@ Playback follows this sequence:
 
 ```mermaid
 flowchart TD
-    START(["User presses Play"]) --> C1{"Already resolved<br/>this session?"}
+    START(["User presses Play or Continue"]) --> C1{"Saved VOD stream<br/>available?"}
 
-    C1 -->|yes| OPEN1["Open the player immediately — no wait at all"]
-    OPEN1 --> ST{"refresh required?"}
-    ST -->|yes| REV["Quietly re-discover in the background,<br/>while the user is already watching"]
-    ST -->|no| D1([done])
-    REV --> D1
+    C1 -->|yes| OPEN1["Try the securely cached source immediately"]
+    OPEN1 --> F1{"started?"}
+    F1 -->|yes| D1([done])
+    F1 -->|no| R1["Resolve that same source once"]
+    R1 -->|works| D1
+    R1 -->|fails| ERR["Show the source error and offer retry or source switch"]
 
     C1 -->|no| C2{"Do we know which sources<br/>exist, from an earlier run?"}
 
-    C2 -->|yes| FAST["Resolve the first source"]
+    C2 -->|yes| FAST["Resolve known sources"]
     FAST --> F2{"worked?"}
     F2 -->|yes| OPEN2["Start playing on it,<br/>fill in the rest in the background"]
     F2 -->|no| FULL
@@ -276,14 +280,17 @@ nearest corner on release.
 
 ```mermaid
 flowchart LR
-    A["All sources resolved up front"] --> B["Switching source inside the player is instant —<br/>the picker moved <i>into</i> the player"]
-    A --> C["'Nothing playable' is discovered while the user<br/>is still somewhere that can say so"]
-    A --> D["Play stays one action"]
-    A -.->|the cost| E["A slow source delays a fast one"]
+    A["Cache miss: discover and resolve sources"] --> B["Open the first ready source;<br/>add late results to the picker"]
+    A --> C["If no source resolves, show the error<br/>in the player route"]
+    A --> D["Continue first tries the saved VOD source"]
+    A -.->|the cost| E["A cache miss waits for a playable result"]
 ```
 
-The trade is accepted knowingly: with a handful of sources per item it buys more than it
-costs.
+On a warm resume, the one locally saved last-used VOD stream is tried before any provider
+request. If it fails to start, the app resolves that same source once. Other resolved streams
+live only for the active player session; the source picker can fetch alternatives when the
+viewer asks to change source. On a cache miss, a quick source can start playback while the
+remaining providers continue to populate the active source picker.
 
 ### Honest capability handling
 

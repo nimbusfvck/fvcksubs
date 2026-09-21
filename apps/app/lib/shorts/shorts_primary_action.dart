@@ -7,6 +7,17 @@ import '../library/library_controller.dart';
 import '../player/workflow/play_item.dart';
 import '../player/workflow/primary_episode_target.dart';
 
+/// Whether a Shorts item can be handed off to the full playback workflow.
+///
+/// The football feeds currently expose preview-only clips, so their catalog
+/// items intentionally do not advertise a full-video Watch action. Keep this
+/// decision tag-based: the provider owns the catalog and can add the same
+/// capability marker without coupling the app to a provider id.
+bool shortsHasFullPlayback(MediaItemV2 item) {
+  final tags = item.tags.map((tag) => tag.toLowerCase()).toSet();
+  return !tags.contains('champions-league') && !tags.contains('premier-league');
+}
+
 /// What the primary action on a Shorts card does and says.
 enum ShortsActionKind { remindMe, watch, watchLive, details }
 
@@ -31,16 +42,18 @@ ShortsPrimaryAction primaryActionFor(
   required LibraryState library,
 }) {
   if (item.isUpcoming) {
-    return const ShortsPrimaryAction(kind: ShortsActionKind.remindMe, label: 'Remind Me');
+    return const ShortsPrimaryAction(
+      kind: ShortsActionKind.remindMe,
+      label: 'Remind Me',
+    );
   }
   return switch (item) {
     EventItemV2() || ChannelItemV2() => const ShortsPrimaryAction(
       kind: ShortsActionKind.watchLive,
       label: 'Watch Live',
     ),
-    VideoItemV2() || EpisodeItemV2() => _watchOrContinue(
-      library.recordFor(item.ref)?.progress,
-    ),
+    VideoItemV2() ||
+    EpisodeItemV2() => _watchOrContinue(library.recordFor(item.ref)?.progress),
     SeriesItemV2() => _seriesAction(item, detail, library),
   };
 }
@@ -51,11 +64,17 @@ ShortsPrimaryAction _seriesAction(
   LibraryState library,
 ) {
   if (detail == null) {
-    return const ShortsPrimaryAction(kind: ShortsActionKind.details, label: 'Details');
+    return const ShortsPrimaryAction(
+      kind: ShortsActionKind.details,
+      label: 'Details',
+    );
   }
   final target = primaryEpisodeTarget(detail.episodeGuide, item.ref, library);
   if (target == null && hasEpisodes(detail.episodeGuide)) {
-    return const ShortsPrimaryAction(kind: ShortsActionKind.details, label: 'Details');
+    return const ShortsPrimaryAction(
+      kind: ShortsActionKind.details,
+      label: 'Details',
+    );
   }
   return ShortsPrimaryAction(
     kind: ShortsActionKind.watch,
@@ -95,10 +114,16 @@ Future<void> watchShortsItem(
   );
   final playable = primaryPlaybackTarget(resolvedDetail, target);
   if (playable == null) {
-    throw StateError('No playable episode is available for "${item.title}" yet.');
+    throw StateError(
+      'No playable episode is available for "${item.title}" yet.',
+    );
   }
   if (!context.mounted) return;
-  await playItemV2(context, playable, episodeGuide: resolvedDetail.episodeGuide);
+  await playItemV2(
+    context,
+    playable,
+    episodeGuide: resolvedDetail.episodeGuide,
+  );
 }
 
 Future<MediaDetailV2> _fetchDetail(

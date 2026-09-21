@@ -4,21 +4,20 @@ class _VideoPlayerControllerAdapter
     implements
         AppPlayerController,
         AppPlayerPictureInPictureRestorer,
-        AppPlayerPictureInPicturePolicy {
+        AppPlayerPictureInPicturePolicy,
+        AppPlayerTrackRefresher {
   _VideoPlayerControllerAdapter(
     this._player, {
     required this.onSetFit,
     required this.onSelectVariant,
     required String streamUrl,
     this.variants = const [],
-  }) : _activeUrl = streamUrl,
-       _baseUrl = streamUrl;
+  }) : _activeUrl = streamUrl;
 
   vp.VideoPlayerController _player;
   final void Function(PlayerFitMode mode) onSetFit;
-  final Future<void> Function(StreamVariant? variant) onSelectVariant;
+  final Future<bool> Function(StreamVariant? variant) onSelectVariant;
   final List<StreamVariant> variants;
-  final String _baseUrl;
   String _activeUrl;
   final ValueNotifier<AppPlayerValue> _value = ValueNotifier(
     const AppPlayerValue(),
@@ -30,6 +29,9 @@ class _VideoPlayerControllerAdapter
   String? _selectedAudioId;
   String? _requestedVideoId;
   String? _selectedVariantId;
+  String? _pendingVariantId;
+  bool _hasPendingVariant = false;
+  int _qualityRequestGeneration = 0;
   bool _reportedCompletion = false;
   String? _reportedError;
   bool _disposed = false;
@@ -58,10 +60,12 @@ class _VideoPlayerControllerAdapter
           bitrate: variant.bitrate,
           variant: variant,
         ),
-  ]);
+  ], preferredId: _hasPendingVariant ? _pendingVariantId : _selectedVariantId);
   @override
   AppQualityTrack? get activeQuality {
-    final variantId = _selectedVariantId;
+    final variantId = _hasPendingVariant
+        ? _pendingVariantId
+        : _selectedVariantId;
     if (variantId != null) {
       return qualityTracks.where((track) => track.id == variantId).firstOrNull;
     }
@@ -185,6 +189,10 @@ class _VideoPlayerControllerAdapter
       position: source.position,
       duration: source.duration,
       bufferedPosition: buffered,
+      bufferedRanges: [
+        for (final range in source.buffered)
+          AppPlayerTimeRange(range.start, range.end),
+      ],
       seekablePosition: seekable,
     );
   }
@@ -236,21 +244,45 @@ class _VideoPlayerControllerAdapter
   @override
   Future<void> setQuality(AppQualityTrack? track) async {
     final variant = track?.variant;
+    final requestGeneration = ++_qualityRequestGeneration;
     if (variant != null) {
+      _hasPendingVariant = true;
+      _pendingVariantId = variant.id;
+      if (!_disposed) _value.value = _value.value.copyWith();
       if (kDebugMode) {
         debugPrint('[VideoPlayerVOD] quality_request variant=${variant.label}');
       }
-      await onSelectVariant(variant);
-      if (!_disposed && _activeUrl == variant.url) {
-        _selectedVariantId = variant.id;
+      final switched = await onSelectVariant(variant);
+      if (!_disposed && requestGeneration == _qualityRequestGeneration) {
+        if (switched) _selectedVariantId = variant.id;
+        _hasPendingVariant = false;
+        _pendingVariantId = null;
+        _value.value = _value.value.copyWith();
+      }
+      if (!switched) {
+        throw StateError('Video variant switch did not complete.');
       }
       return;
     }
     if (track == null || track.id == 'auto') {
-      await onSelectVariant(null);
-      if (!_disposed && _activeUrl == _baseUrl) _selectedVariantId = null;
+      _hasPendingVariant = true;
+      _pendingVariantId = null;
+      if (!_disposed) _value.value = _value.value.copyWith();
+      final switched = await onSelectVariant(null);
+      if (!_disposed && requestGeneration == _qualityRequestGeneration) {
+        if (switched) _selectedVariantId = null;
+        _hasPendingVariant = false;
+        _pendingVariantId = null;
+        _value.value = _value.value.copyWith();
+      }
+      if (!switched) {
+        throw StateError('Automatic quality switch did not complete.');
+      }
       return;
     }
+    _hasPendingVariant = false;
+    _pendingVariantId = null;
+    if (!_disposed) _value.value = _value.value.copyWith();
     final native = track.platformTrack as vp.VideoTrack?;
     if (kDebugMode) {
       debugPrint(
@@ -312,7 +344,10 @@ class _VideoPlayerControllerAdapter
           'language=${track.language} format=$format',
         );
       }
-      final captionDownload = await _downloadCaptionFile(track.url);
+      final captionDownload = await _downloadCaptionFile(
+        track.url,
+        headers: track.headers,
+      );
       if (kDebugMode) {
         final captions = captionDownload.captionFile.captions;
         debugPrint(

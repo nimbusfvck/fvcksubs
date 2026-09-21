@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -14,16 +14,20 @@ import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
 import '../catalog/media_hero.dart';
 import '../library/library_controller.dart';
-import '../player/models/playback_media.dart';
 import '../player/widgets/trailer_preview.dart';
 import '../player/workflow/play_item.dart';
 import '../player/workflow/primary_episode_target.dart';
-import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../utils/date_formatters.dart';
 import '../widgets/centered_content.dart';
 import '../widgets/clickable.dart';
+import '../widgets/media_hero_layout.dart';
+import '../widgets/media_hero_card.dart';
+import '../widgets/media_hero_flexible_space.dart';
+import '../widgets/media_hero_summary.dart';
 import '../widgets/shimmer_placeholder.dart';
+import 'detail_controller.dart';
+import 'detail_state.dart';
 import 'open_versioned_item.dart';
 
 class DetailPageV2 extends StatefulWidget {
@@ -48,32 +52,29 @@ class _DetailPageV2State extends State<DetailPageV2> {
   /// tile is built eagerly, so the chips bound the work as well as the scroll.
   static const int _episodesPerRange = 100;
 
-  /// Cap on the Play/Remind Me + favorite action row's width once the page
-  /// is wide enough for a rail — full-bleed is a thumb-friendly mobile
-  /// pattern, but the same row stretched across a centered desktop-width
-  /// column looks like an error state. Locked to [AppBreakpoints.railWidth],
-  /// not resized as the window keeps growing past it.
-  static const double _primaryActionsMaxWidth = AppBreakpoints.railWidth;
-
-  Future<MediaDetailV2>? _detail;
+  DetailController? _detailController;
   String? _selectedGroupId;
   int? _selectedRangeIndex;
   bool _descriptionExpanded = false;
-  bool _sourcePrefetchStarted = false;
+  final ValueNotifier<double> _heroToolbarOpacity = ValueNotifier(0);
+
+  @override
+  void dispose() {
+    _detailController?.close();
+    _heroToolbarOpacity.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _detail ??= _loadDetail();
-  }
-
-  Future<MediaDetailV2> _loadDetail() async {
-    try {
-      return await AppScope.of(context).registry.meta(widget.item.ref);
-    } catch (_) {
-      // Catalogs may provide playable items without a separate metadata role.
-      // Keep the listing snapshot usable so the item's Play action still works.
-      return MediaDetailV2(item: widget.item);
+    if (_detailController == null) {
+      final controller = DetailController(
+        registry: AppScope.of(context).registry,
+        item: widget.item,
+      );
+      _detailController = controller;
+      controller.load();
     }
   }
 
@@ -83,10 +84,15 @@ class _DetailPageV2State extends State<DetailPageV2> {
     Duration? movieProgress,
   ) {
     if (target == null) {
-      if (hasEpisodes(detail.episodeGuide)) return 'Coming soon';
+      if (detail.episodeGuide != null) {
+        final loading = detail.episodeGuide!.groups.any(
+          (group) => !group.loaded,
+        );
+        return loading ? 'Loading episodes…' : 'Coming soon';
+      }
       return (movieProgress ?? Duration.zero) > Duration.zero
           ? 'Continue Watching'
-          : 'Play';
+          : 'Watch Now';
     }
     final season = RegExp(
       r'\b(?:season|s)\s*([0-9]+)\b',
@@ -97,29 +103,63 @@ class _DetailPageV2State extends State<DetailPageV2> {
     // cour is one group called "Episodes". Dropping to a bare "Continue" threw
     // away the one thing the button should say: which episode.
     final label = season == null ? 'E$position' : 'S${season}E$position';
-    return target.resuming ? 'Continue $label' : 'Play $label';
+    return target.resuming ? 'Continue $label' : 'Watch $label';
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.surfaceDark,
-    body: FutureBuilder<MediaDetailV2>(
-      future: _detail,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done &&
-            !snapshot.hasData) {
-          return _LoadingDetail(item: widget.item, heroTag: widget.heroTag);
-        }
-        if (snapshot.hasError || snapshot.data == null) {
-          return _ErrorView(onBack: () => Navigator.of(context).pop());
-        }
-        return _buildDetail(snapshot.data!);
+  Widget build(BuildContext context) {
+    final controller = _detailController;
+    if (controller == null) {
+      return const Scaffold(backgroundColor: AppColors.surfaceDark);
+    }
+    return BlocConsumer<DetailController, DetailState>(
+      bloc: controller,
+      listenWhen: (previous, current) =>
+          previous.status != current.status ||
+          previous.detail != current.detail,
+      listener: (context, state) => _ensureSelectedGroupLoaded(state),
+      builder: (context, state) {
+        final detail = state.detail ?? MediaDetailV2(item: widget.item);
+        return Scaffold(
+          backgroundColor: AppColors.surfaceDark,
+          body: _buildDetail(detail, metadataLoading: state.metadataLoading),
+        );
       },
-    ),
-  );
+    );
+  }
 
-  Widget _buildDetail(MediaDetailV2 detail) {
-    _prefetchPrimarySources(detail);
+  void _ensureSelectedGroupLoaded(DetailState state) {
+    final detail = state.detail;
+    final guide = detail?.episodeGuide;
+    if (detail == null || guide == null) return;
+    final library = AppScope.of(context).libraryController.state;
+    final group = _selectedGroup(detail, guide.groups, library);
+    if (group == null ||
+        group.loaded ||
+        state.isGroupLoading(group.id) ||
+        state.groupErrorFor(group.id) != null) {
+      return;
+    }
+    _detailController?.loadGroup(group.id);
+  }
+
+  void _requestGroupLoad(String? groupId) {
+    if (groupId == null) return;
+    final controller = _detailController;
+    final groups = controller?.state.detail?.episodeGuide?.groups;
+    if (controller == null || groups == null) return;
+    final group = groups
+        .where((candidate) => candidate.id == groupId)
+        .firstOrNull;
+    if (group == null ||
+        group.loaded ||
+        controller.state.isGroupLoading(group.id)) {
+      return;
+    }
+    controller.loadGroup(group.id);
+  }
+
+  Widget _buildDetail(MediaDetailV2 detail, {required bool metadataLoading}) {
     final item = detail.item;
     final trailers = detail.trailers
         .where((trailer) => !_isAutoplayTrailer(trailer))
@@ -127,248 +167,277 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final guide = detail.episodeGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
+    // Cover the sliver compositing edge with two physical pixels. One pixel
+    // can still expose the antialiased boundary while the hero is scrolling.
+    final contentOverlap = 2 / MediaQuery.devicePixelRatioOf(context);
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: CenteredContent(
-            child: _Header(detail: detail, heroTag: widget.heroTag),
+    return Stack(
+      children: [
+        NotificationListener<ScrollNotification>(
+          onNotification: _onDetailScrollNotification,
+          child: CustomScrollView(
+            slivers: [
+              _DetailHeroSliver(
+                detail: detail,
+                fallbackItem: widget.item,
+                heroTag: widget.heroTag,
+                descriptionExpanded: _descriptionExpanded,
+                onToggleDescription: () => setState(
+                  () => _descriptionExpanded = !_descriptionExpanded,
+                ),
+                actions: _heroActions(
+                  detail: detail,
+                  item: item,
+                  guide: guide,
+                  libraryController: libraryController,
+                  alignStart: alignStart,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Transform.translate(
+                  offset: Offset(0, -contentOverlap),
+                  child: Material(
+                    color: AppColors.surfaceDark,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.xs,
+                        AppSpacing.md,
+                        AppSpacing.md,
+                      ),
+                      child: CenteredContent(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: metadataLoading
+                              ? const [_DetailMetadataShimmer()]
+                              : [
+                                  if (trailers.isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    const _SectionTitle('Trailers'),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    SizedBox(
+                                      height: 192,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: trailers.length,
+                                        separatorBuilder: (_, _) =>
+                                            const SizedBox(
+                                              width: AppSpacing.sm,
+                                            ),
+                                        itemBuilder: (context, index) {
+                                          final trailer = trailers[index];
+                                          return _TrailerCard(
+                                            trailer: trailer,
+                                            onTap: () =>
+                                                _openTrailer(context, trailer),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                  if (detail.facts.isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    _Facts(values: detail.facts),
+                                  ],
+                                  if ((alignStart
+                                          ? detail.credits
+                                          : detail.credits
+                                                .where(
+                                                  (credit) =>
+                                                      !_isDirector(credit),
+                                                )
+                                                .toList())
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    const _SectionTitle('Credits'),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    _Credits(
+                                      values: alignStart
+                                          ? detail.credits
+                                          : detail.credits
+                                                .where(
+                                                  (credit) =>
+                                                      !_isDirector(credit),
+                                                )
+                                                .toList(),
+                                    ),
+                                  ],
+                                  _episodesSection(
+                                    detail: detail,
+                                    guide: guide,
+                                    groups: groups,
+                                    libraryController: libraryController,
+                                  ),
+                                  if (detail.collection case final collection?
+                                      when collection.items.isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    _SectionTitle(collection.name),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    SizedBox(
+                                      height:
+                                          mediaCardPosterHeight(152) +
+                                          Clickable.ringBleed * 2,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: collection.items.length,
+                                        separatorBuilder: (_, _) =>
+                                            const SizedBox(
+                                              width: AppSpacing.sm,
+                                            ),
+                                        itemBuilder: (context, index) {
+                                          final collectionItem =
+                                              collection.items[index];
+                                          final heroTag = Object();
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: Clickable.ringBleed,
+                                            ),
+                                            child: SizedBox(
+                                              width: 152,
+                                              child: MediaCardV2(
+                                                item: collectionItem,
+                                                heroTag: heroTag,
+                                                onTap: () => openVersionedItem(
+                                                  context,
+                                                  VersionedMediaItem(
+                                                    item: collectionItem,
+                                                  ),
+                                                  heroTag: heroTag,
+                                                  contentRating:
+                                                      widget.contentRating,
+                                                ),
+                                                onLongPress: () =>
+                                                    showMediaCardActions(
+                                                      context,
+                                                      collectionItem,
+                                                      onViewDetails: () =>
+                                                          openDetails(
+                                                            context,
+                                                            collectionItem,
+                                                            heroTag: heroTag,
+                                                            contentRating: widget
+                                                                .contentRating,
+                                                          ),
+                                                    ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                  if (detail.recommendations.isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xl),
+                                    const _SectionTitle('You Might Also Like'),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    SizedBox(
+                                      height:
+                                          mediaRecommendationCardHeight(216) +
+                                          Clickable.ringBleed * 2,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        clipBehavior: Clip.none,
+                                        itemCount:
+                                            detail.recommendations.length,
+                                        separatorBuilder: (_, _) =>
+                                            const SizedBox(
+                                              width: AppSpacing.sm,
+                                            ),
+                                        itemBuilder: (context, index) {
+                                          final recommendation =
+                                              detail.recommendations[index];
+                                          final heroTag = Object();
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: Clickable.ringBleed,
+                                            ),
+                                            child: MediaRecommendationCard(
+                                              item: recommendation,
+                                              heroTag: heroTag,
+                                              onTap: () => openVersionedItem(
+                                                context,
+                                                VersionedMediaItem(
+                                                  item: recommendation,
+                                                ),
+                                                heroTag: heroTag,
+                                                contentRating:
+                                                    widget.contentRating,
+                                              ),
+                                              onLongPress: () =>
+                                                  showMediaCardActions(
+                                                    context,
+                                                    recommendation,
+                                                    onViewDetails: () =>
+                                                        openDetails(
+                                                          context,
+                                                          recommendation,
+                                                          heroTag: heroTag,
+                                                          contentRating: widget
+                                                              .contentRating,
+                                                        ),
+                                                  ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.xs,
-            AppSpacing.md,
-            AppSpacing.md,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: CenteredContent(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (detail.tags.isNotEmpty) _Tags(values: detail.tags),
-                  if (detail.tags.isNotEmpty)
-                    const SizedBox(height: AppSpacing.md),
-                  _primaryActionRow(
-                    detail: detail,
-                    item: item,
-                    guide: guide,
-                    libraryController: libraryController,
-                  ),
-                  if (item.isUpcoming && item.releaseDate != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Releases ${formatReleaseDate(item.releaseDate!.toLocal())}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.onDarkSoft,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  if (detail.description case final description?) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      description,
-                      maxLines: _descriptionExpanded ? null : 4,
-                      overflow: _descriptionExpanded
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
-                      style: AppTypography.bodyMd.copyWith(
-                        color: AppColors.onDark,
-                        height: 1.5,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => setState(
-                        () => _descriptionExpanded = !_descriptionExpanded,
-                      ),
-                      child: Text(
-                        _descriptionExpanded ? 'Show less' : 'Show more',
-                      ),
-                    ),
-                  ],
-                  if (trailers.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    const _SectionTitle('Trailers'),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: 192,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: trailers.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: AppSpacing.sm),
-                        itemBuilder: (context, index) {
-                          final trailer = trailers[index];
-                          return _TrailerCard(
-                            trailer: trailer,
-                            onTap: () => _openTrailer(context, trailer),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                  if (detail.facts.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    _Facts(values: detail.facts),
-                  ],
-                  if (detail.credits.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    const _SectionTitle('Credits'),
-                    const SizedBox(height: AppSpacing.sm),
-                    _Credits(values: detail.credits),
-                  ],
-                  _episodesSection(
-                    detail: detail,
-                    guide: guide,
-                    groups: groups,
-                    libraryController: libraryController,
-                  ),
-                  if (detail.collection case final collection?
-                      when collection.items.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    _SectionTitle(collection.name),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: 248 + Clickable.ringBleed * 2,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: collection.items.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: AppSpacing.sm),
-                        itemBuilder: (context, index) {
-                          final collectionItem = collection.items[index];
-                          final heroTag = Object();
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: Clickable.ringBleed,
-                            ),
-                            child: SizedBox(
-                              width: 152,
-                              child: MediaCardV2(
-                                item: collectionItem,
-                                heroTag: heroTag,
-                                onTap: () => openVersionedItem(
-                                  context,
-                                  VersionedMediaItem(item: collectionItem),
-                                  heroTag: heroTag,
-                                  contentRating: widget.contentRating,
-                                ),
-                                onLongPress: () => showMediaCardActions(
-                                  context,
-                                  collectionItem,
-                                  onViewDetails: () => openDetails(
-                                    context,
-                                    collectionItem,
-                                    heroTag: heroTag,
-                                    contentRating: widget.contentRating,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                  if (detail.recommendations.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    const _SectionTitle('You Might Also Like'),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: 248 + Clickable.ringBleed * 2,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: detail.recommendations.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: AppSpacing.sm),
-                        itemBuilder: (context, index) {
-                          final recommendation = detail.recommendations[index];
-                          final heroTag = Object();
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: Clickable.ringBleed,
-                            ),
-                            child: SizedBox(
-                              width: 152,
-                              child: MediaCardV2(
-                                item: recommendation,
-                                heroTag: heroTag,
-                                onTap: () => openVersionedItem(
-                                  context,
-                                  VersionedMediaItem(item: recommendation),
-                                  heroTag: heroTag,
-                                  contentRating: widget.contentRating,
-                                ),
-                                onLongPress: () => showMediaCardActions(
-                                  context,
-                                  recommendation,
-                                  onViewDetails: () => openDetails(
-                                    context,
-                                    recommendation,
-                                    heroTag: heroTag,
-                                    contentRating: widget.contentRating,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+        _DetailBackToolbar(
+          opacity: _heroToolbarOpacity,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );
   }
 
-  void _prefetchPrimarySources(MediaDetailV2 detail) {
-    if (_sourcePrefetchStarted) return;
-    _sourcePrefetchStarted = true;
-    if (detail.item.isUpcoming) return;
-    final scope = AppScope.of(context);
-    final target = primaryEpisodeTarget(
-      detail.episodeGuide,
-      detail.item.ref,
-      scope.libraryController.state,
+  bool _onDetailScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    final heroHeight = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)),
     );
-    final item = primaryPlaybackTarget(detail, target);
-    if (item != null) {
-      unawaited(prefetchPlaybackSources(scope, PlaybackMedia(item)));
-    }
+    final fadeDistance = MediaHeroLayout.homeOverlayFadeDistance;
+    final fadeStart = math.max(0.0, heroHeight - fadeDistance);
+    _heroToolbarOpacity.value =
+        ((notification.metrics.pixels - fadeStart) / fadeDistance)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    return false;
   }
 
-  Widget _primaryActionRow({
+  Widget _heroActions({
     required MediaDetailV2 detail,
     required MediaItemV2 item,
     required EpisodeGuide? guide,
     required LibraryController libraryController,
+    required bool alignStart,
   }) {
-    final row = Row(
+    final primary = _primaryAction(
+      detail: detail,
+      item: item,
+      guide: guide,
+      libraryController: libraryController,
+    );
+    return Wrap(
+      alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
       children: [
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: _primaryAction(
-              detail: detail,
-              item: item,
-              guide: guide,
-              libraryController: libraryController,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
+        primary,
         _FavoriteAction(item: item),
       ],
     );
-    return AppBreakpoints.isPhone(context)
-        ? row
-        : SizedBox(width: _primaryActionsMaxWidth, child: row);
   }
 
   Widget _primaryAction({
@@ -379,12 +448,6 @@ class _DetailPageV2State extends State<DetailPageV2> {
   }) => BlocBuilder<LibraryController, LibraryState>(
     bloc: libraryController,
     builder: (context, state) {
-      if (item.isUpcoming) {
-        return _RemindMeButton(
-          active: state.isReminded(item.ref),
-          onPressed: () => libraryController.toggleReminder(item),
-        );
-      }
       final target = primaryEpisodeTarget(
         detail.episodeGuide,
         detail.item.ref,
@@ -416,6 +479,29 @@ class _DetailPageV2State extends State<DetailPageV2> {
     builder: (context, state) {
       final selectedGroup = _selectedGroup(detail, groups, state);
       if (selectedGroup == null) return const SizedBox.shrink();
+      if (!selectedGroup.loaded) {
+        final detailController = _detailController;
+        final groupError = detailController?.state.groupErrorFor(
+          selectedGroup.id,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: AppSpacing.xl),
+            _episodeGroupHeader(groups, selectedGroup),
+            const SizedBox(height: AppSpacing.md),
+            if (groupError == null)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              const Text('Could not load episodes.'),
+              TextButton(
+                onPressed: () => detailController?.loadGroup(selectedGroup.id),
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        );
+      }
       final rangeCount = (selectedGroup.episodes.length / _episodesPerRange)
           .ceil();
       final rangeIndex = _rangeIndexFor(
@@ -433,35 +519,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              const Expanded(child: _SectionTitle('Episodes')),
-              if (groups.length > 1)
-                Flexible(
-                  child: DropdownButton<String>(
-                    value: selectedGroup.id,
-                    isExpanded: true,
-                    dropdownColor: AppColors.surfaceDarkElevated,
-                    items: [
-                      for (final group in groups)
-                        DropdownMenuItem(
-                          value: group.id,
-                          child: Text(
-                            group.title,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() {
-                      _selectedGroupId = value;
-                      // Another season's ranges are its own; keeping the index
-                      // would land on an arbitrary hundred of it.
-                      _selectedRangeIndex = null;
-                    }),
-                  ),
-                ),
-            ],
-          ),
+          _episodeGroupHeader(groups, selectedGroup),
           const SizedBox(height: AppSpacing.sm),
           if (rangeCount > 1) ...[
             _EpisodeRangeChips(
@@ -511,7 +569,43 @@ class _DetailPageV2State extends State<DetailPageV2> {
     final resumed = detail.episodeGuide == null
         ? null
         : resumedEpisodeTarget(detail.episodeGuide!, detail.item.ref, library);
-    return resumed?.group ?? groups.last;
+    if (resumed != null) return resumed.group;
+
+    // Lazy groups have no episodes yet, so resumedEpisodeTarget cannot match
+    // the saved episode ref. Its EpisodeIdentity still carries the exact
+    // season, which lets the controller load the right group first.
+    final resumedGroupId = _latestWatchedGroupId(detail.item.ref, library);
+    if (resumedGroupId != null) {
+      final resumedGroup = groups
+          .where((group) => group.id == resumedGroupId)
+          .firstOrNull;
+      if (resumedGroup != null) return resumedGroup;
+    }
+    return groups.last;
+  }
+
+  String? _latestWatchedGroupId(MediaRef parentRef, LibraryState library) {
+    final watchedEpisodes =
+        library.records.values
+            .where(
+              (record) =>
+                  record.progress != null &&
+                  record.progress! > Duration.zero &&
+                  record.item is EpisodeItemV2 &&
+                  (record.item as EpisodeItemV2).episode.parentRef == parentRef,
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                  a.lastWatched ?? DateTime.fromMillisecondsSinceEpoch(0),
+                ),
+          );
+    for (final record in watchedEpisodes) {
+      final groupId = (record.item as EpisodeItemV2).episode.groupId;
+      if (groupId != null) return groupId;
+    }
+    return null;
   }
 
   /// The range the list opens on: the one holding whatever Play would start,
@@ -564,6 +658,39 @@ class _DetailPageV2State extends State<DetailPageV2> {
         .clamp(0, 1)
         .toDouble();
   }
+
+  Widget _episodeGroupHeader(
+    List<EpisodeGroup> groups,
+    EpisodeGroup selectedGroup,
+  ) => Row(
+    children: [
+      const Expanded(child: _SectionTitle('Episodes')),
+      if (groups.length > 1)
+        Flexible(
+          child: DropdownButton<String>(
+            value: selectedGroup.id,
+            isExpanded: true,
+            dropdownColor: AppColors.surfaceDarkElevated,
+            items: [
+              for (final group in groups)
+                DropdownMenuItem(
+                  value: group.id,
+                  child: Text(group.title, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedGroupId = value;
+                // Another season's ranges are its own; keeping the index would
+                // land on an arbitrary hundred of it.
+                _selectedRangeIndex = null;
+              });
+              _requestGroupLoad(value);
+            },
+          ),
+        ),
+    ],
+  );
 }
 
 class _PrimaryPlayButton extends StatelessWidget {
@@ -583,256 +710,479 @@ class _PrimaryPlayButton extends StatelessWidget {
   );
 }
 
-class _RemindMeButton extends StatelessWidget {
-  const _RemindMeButton({required this.active, required this.onPressed});
-
-  final bool active;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => FilledButton.icon(
-    onPressed: onPressed,
-    icon: Icon(
-      active
-          ? Icons.notifications_active_rounded
-          : Icons.notifications_none_rounded,
-      size: 24,
-    ),
-    label: Text(active ? 'Reminder Set' : 'Remind Me'),
-    style: FilledButton.styleFrom(
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.lg),
-    ),
-  );
-}
-
 class _Header extends StatelessWidget {
-  const _Header({required this.detail, this.heroTag});
+  const _Header({
+    required this.detail,
+    required this.fallbackItem,
+    required this.actions,
+    required this.descriptionExpanded,
+    required this.onToggleDescription,
+    this.heroTag,
+  });
 
   final MediaDetailV2 detail;
+  final MediaItemV2 fallbackItem;
+  final Widget actions;
+  final bool descriptionExpanded;
+  final VoidCallback onToggleDescription;
   final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
     final item = detail.item;
-    final image = item.artwork?.landscape ?? item.artwork?.portrait;
+    final tags = detail.tags.isNotEmpty ? detail.tags : item.genres;
+    final image = item.artwork?.portrait ?? item.artwork?.landscape;
     final preview = _autoplayTrailer(detail);
+    final ratings = _mergeRatings(item.ratings, fallbackItem.ratings);
+    final viewport = MediaQuery.sizeOf(context);
+    final alignStart = MediaHeroLayout.isLargeScreen(context);
+    final heroHeight = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(viewport),
+    );
     return SizedBox(
-      height: 360,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (image != null)
-            _HeaderArtwork(item: item, image: image, heroTag: heroTag)
-          else
-            const ArtworkPlaceholder(icon: Icons.movie_outlined),
-          if (preview != null)
-            Positioned.fill(child: TrailerPreview(trailer: preview)),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.black26, AppColors.surfaceDark],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-            ),
-          ),
-          Positioned(
-            left: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: AppSpacing.sm,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.displaySm.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (item.releaseYear != null || item.rating != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: AppSpacing.xs,
-                      children: [
-                        if (item.releaseYear case final releaseYear?)
-                          Text(
-                            releaseYear.toString(),
-                            style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        if (item.releaseYear != null && item.rating != null)
-                          Text(
-                            '-',
-                            style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onDarkSoft,
-                            ),
-                          ),
-                        if (item.rating case final rating?)
-                          Semantics(
-                            label: 'Rating ${rating.toStringAsFixed(1)}',
-                            child: ExcludeSemantics(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    size: 18,
-                                    color: Colors.amber,
-                                  ),
-                                  const SizedBox(width: AppSpacing.xxs),
-                                  Text(
-                                    rating.toStringAsFixed(1),
-                                    style: AppTypography.bodyMd.copyWith(
-                                      color: AppColors.onDark,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                if (item.subtitle case final subtitle?)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyMd.copyWith(
-                        color: AppColors.onDarkSoft,
+      key: const Key('detail-poster-header'),
+      height: heroHeight,
+      child: MediaHeroCard(
+        item: item,
+        heroTag: image == null
+            ? null
+            : heroTag ?? mediaArtworkHeroTag(item.ref),
+        fallback: const ArtworkPlaceholder(icon: Icons.movie_outlined),
+        preview: preview == null ? null : TrailerPreview(trailer: preview),
+        overlayGradient: MediaHeroCard.detailGradient,
+        rotateBackdrops: false,
+        bottomBlurSigma: 30,
+        bottomBlurHeightFactor: 0.58,
+        bottomBlurFadeStop: 0.25,
+        foreground: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned(
+              left: AppSpacing.lg,
+              right: AppSpacing.md,
+              bottom: MediaHeroLayout.summaryBottom,
+              child: MediaHeroSummary(
+                item: item,
+                alignStart: alignStart,
+                showRatings: alignStart,
+                ratingsOverride: ratings,
+                actionsBeforeMeta: !alignStart,
+                description: alignStart
+                    ? detail.description ?? item.overview
+                    : null,
+                extra: tags.isEmpty
+                    ? null
+                    : _Tags(values: tags, alignStart: alignStart),
+                actions: actions,
+                afterActions: alignStart
+                    ? null
+                    : _DetailHeroAfterActions(
+                        detail: detail,
+                        ratings: ratings,
+                        expanded: descriptionExpanded,
+                        onToggleDescription: onToggleDescription,
                       ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 2 / MediaQuery.devicePixelRatioOf(context),
+              child: const IgnorePointer(
+                child: ColoredBox(color: AppColors.surfaceDark),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _HeaderArtwork extends StatelessWidget {
-  const _HeaderArtwork({required this.item, required this.image, this.heroTag});
+class _DetailHeroAfterActions extends StatelessWidget {
+  const _DetailHeroAfterActions({
+    required this.detail,
+    required this.ratings,
+    required this.expanded,
+    required this.onToggleDescription,
+  });
+
+  final MediaDetailV2 detail;
+  final List<MediaRating> ratings;
+  final bool expanded;
+  final VoidCallback onToggleDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = detail.item;
+    final directors = detail.credits
+        .where(_isDirector)
+        .map((credit) => credit.name)
+        .toList(growable: false);
+    final directorFacts = detail.facts
+        .where((fact) => _hasFactLabel(fact, 'director'))
+        .map((fact) => fact.value)
+        .toList(growable: false);
+    final parentalFacts = detail.facts
+        .where((fact) => _hasFactLabel(fact, 'parent'))
+        .map((fact) => fact.value)
+        .toList(growable: false);
+    final heroFacts = detail.facts
+        .where(_isCompactHeroFact)
+        .toList(growable: false);
+    final description = detail.description ?? item.overview;
+    final allDirectors = [...directors, ...directorFacts].toSet().toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _DetailHeroFacts(item: item, facts: heroFacts),
+        if (allDirectors.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Director: ${allDirectors.join(', ')}',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              shadows: MediaHeroSummary.textShadows,
+            ),
+          ),
+        ],
+        if (parentalFacts.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            parentalFacts.join(' · '),
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.onDarkSoft,
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.underline,
+              decorationStyle: TextDecorationStyle.dotted,
+              shadows: MediaHeroSummary.textShadows,
+            ),
+          ),
+        ],
+        if (description case final value? when value.trim().isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final style = AppTypography.bodySm.copyWith(
+                color: AppColors.onDarkSoft,
+                height: 1.35,
+                shadows: MediaHeroSummary.textShadows,
+              );
+              final painter = TextPainter(
+                text: TextSpan(text: value.trim(), style: style),
+                maxLines: 3,
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout(maxWidth: constraints.maxWidth);
+              final truncated = painter.didExceedMaxLines;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    value.trim(),
+                    maxLines: expanded ? null : 3,
+                    overflow: expanded
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: style,
+                  ),
+                  if (truncated)
+                    TextButton(
+                      onPressed: onToggleDescription,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.onDark,
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.xxs,
+                        ),
+                      ),
+                      child: Text(expanded ? 'Hide More' : 'Read More'),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+        if (ratings.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final rating in ratings) _DetailHeroRating(rating: rating),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DetailHeroFacts extends StatelessWidget {
+  const _DetailHeroFacts({required this.item, required this.facts});
 
   final MediaItemV2 item;
-  final ImageRef image;
+  final List<MediaFact> facts;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[
+      if (item.releaseYear case final year?) _HeroFactText('$year'),
+      for (final fact in facts) _HeroFactText(fact.value, fact: fact),
+      if (item.rating case final rating?)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star, size: 17, color: Colors.amber),
+            const SizedBox(width: AppSpacing.xxs),
+            Text(
+              rating.toStringAsFixed(1),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.onDark,
+                fontWeight: FontWeight.w700,
+                shadows: MediaHeroSummary.textShadows,
+              ),
+            ),
+          ],
+        ),
+    ];
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
+    );
+  }
+}
+
+class _HeroFactText extends StatelessWidget {
+  const _HeroFactText(this.value, {this.fact});
+
+  final String value;
+  final MediaFact? fact;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = fact?.label.toLowerCase() ?? '';
+    final boxed =
+        label.contains('rating') ||
+        label.contains('quality') ||
+        label.contains('resolution') ||
+        label.contains('certification');
+    final text = Text(
+      value,
+      style: AppTypography.bodySm.copyWith(
+        color: AppColors.onDark,
+        fontWeight: FontWeight.w700,
+        shadows: MediaHeroSummary.textShadows,
+      ),
+    );
+    return Semantics(
+      label: fact == null ? value : '${fact!.label}: $value',
+      child: boxed
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.onDarkSoft),
+                borderRadius: AppRadius.sm,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxs,
+                ),
+                child: text,
+              ),
+            )
+          : text,
+    );
+  }
+}
+
+class _DetailHeroRating extends StatelessWidget {
+  const _DetailHeroRating({required this.rating});
+
+  final MediaRating rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = rating.scale == 10
+        ? '${rating.score.toStringAsFixed(1)}/10'
+        : '${rating.score.toStringAsFixed(0)}/${rating.scale.toStringAsFixed(0)}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (rating.icon case final icon?)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: CachedNetworkImage(
+              imageUrl: icon.url,
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+              errorWidget: (_, _, _) =>
+                  RatingSourceBadge(source: rating.source),
+            ),
+          )
+        else
+          RatingSourceBadge(source: rating.source),
+        const SizedBox(width: AppSpacing.xxs),
+        Text(
+          '$score',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.onDark,
+            fontWeight: FontWeight.w700,
+            shadows: MediaHeroSummary.textShadows,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+bool _isDirector(MediaCredit credit) =>
+    credit.role?.toLowerCase().contains('director') ?? false;
+
+bool _hasFactLabel(MediaFact fact, String value) =>
+    fact.label.toLowerCase().contains(value);
+
+List<MediaRating> _mergeRatings(
+  List<MediaRating> detailRatings,
+  List<MediaRating> catalogRatings,
+) {
+  final merged = <String, MediaRating>{
+    for (final rating in catalogRatings) rating.source: rating,
+  };
+  for (final rating in detailRatings) {
+    final catalogRating = merged[rating.source];
+    merged[rating.source] = catalogRating == null
+        ? rating
+        : MediaRating(
+            source: rating.source,
+            score: rating.score,
+            scale: rating.scale,
+            votes: rating.votes ?? catalogRating.votes,
+            kind: rating.kind ?? catalogRating.kind,
+            icon: rating.icon ?? catalogRating.icon,
+          );
+  }
+  return merged.values.toList(growable: false);
+}
+
+bool _isCompactHeroFact(MediaFact fact) {
+  final label = fact.label.toLowerCase();
+  return label.contains('runtime') ||
+      label.contains('duration') ||
+      label.contains('quality') ||
+      label.contains('resolution') ||
+      label.contains('certification') ||
+      label.contains('content rating') ||
+      label == 'rated' ||
+      label == 'rating';
+}
+
+class _DetailBackToolbar extends StatelessWidget {
+  const _DetailBackToolbar({required this.opacity, required this.onPressed});
+
+  final ValueListenable<double> opacity;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    child: SizedBox(
+      height: MediaQuery.paddingOf(context).top + kToolbarHeight,
+      child: ValueListenableBuilder<double>(
+        valueListenable: opacity,
+        builder: (context, value, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              child: ColoredBox(
+                key: const Key('detail-toolbar-scrim'),
+                color: AppColors.surfaceDark.withValues(alpha: value),
+              ),
+            ),
+            SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  tooltip: 'Back',
+                  onPressed: onPressed,
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _DetailHeroSliver extends StatelessWidget {
+  const _DetailHeroSliver({
+    required this.detail,
+    required this.fallbackItem,
+    required this.actions,
+    required this.descriptionExpanded,
+    required this.onToggleDescription,
+    this.heroTag,
+  });
+
+  final MediaDetailV2 detail;
+  final MediaItemV2 fallbackItem;
+  final Widget actions;
+  final bool descriptionExpanded;
+  final VoidCallback onToggleDescription;
   final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
-    final artwork = CachedNetworkImage(
-      imageUrl: image.url,
-      fit: BoxFit.cover,
-      errorWidget: (_, _, _) =>
-          const ColoredBox(color: AppColors.surfaceDarkElevated),
+    final height = MediaHeroLayout.snapToDevicePixel(
+      context,
+      MediaHeroLayout.heightForViewport(MediaQuery.sizeOf(context)),
     );
-    final portrait = item.artwork?.portrait;
-    final tag = heroTag ?? mediaArtworkHeroTag(item.ref);
-    return portrait == null ? artwork : Hero(tag: tag, child: artwork);
-  }
-}
-
-class _LoadingDetail extends StatelessWidget {
-  const _LoadingDetail({required this.item, this.heroTag});
-
-  final MediaItemV2 item;
-  final Object? heroTag;
-
-  @override
-  Widget build(BuildContext context) => CustomScrollView(
-    slivers: [
-      SliverToBoxAdapter(
+    return SliverAppBar(
+      expandedHeight: height,
+      primary: false,
+      collapsedHeight: 0,
+      toolbarHeight: 0,
+      pinned: false,
+      floating: false,
+      automaticallyImplyLeading: false,
+      backgroundColor: AppColors.surfaceDark,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      forceMaterialTransparency: true,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      flexibleSpace: MediaHeroFlexibleSpace(
+        expandedHeight: height,
         child: CenteredContent(
           child: _Header(
-            detail: MediaDetailV2(item: item),
+            detail: detail,
+            fallbackItem: fallbackItem,
+            actions: actions,
+            descriptionExpanded: descriptionExpanded,
+            onToggleDescription: onToggleDescription,
             heroTag: heroTag,
           ),
         ),
       ),
-      const SliverPadding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.xs,
-          AppSpacing.md,
-          AppSpacing.md,
-        ),
-        sliver: SliverToBoxAdapter(
-          child: CenteredContent(child: _DetailLoadingBody()),
-        ),
-      ),
-    ],
-  );
-}
-
-class _DetailLoadingBody extends StatelessWidget {
-  const _DetailLoadingBody();
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: ShimmerPlaceholder(height: 48, borderRadius: AppRadius.pill),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          ShimmerPlaceholder(
-            width: 44,
-            height: 44,
-            borderRadius: AppRadius.pill,
-          ),
-        ],
-      ),
-      const SizedBox(height: AppSpacing.md),
-      Row(
-        children: [
-          Expanded(
-            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: ShimmerPlaceholder(height: 14, borderRadius: AppRadius.sm),
-          ),
-        ],
-      ),
-      const SizedBox(height: AppSpacing.lg),
-      ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
-      const SizedBox(height: AppSpacing.sm),
-      ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
-      const SizedBox(height: AppSpacing.sm),
-      FractionallySizedBox(
-        widthFactor: 0.72,
-        alignment: Alignment.centerLeft,
-        child: ShimmerPlaceholder(height: 18, borderRadius: AppRadius.sm),
-      ),
-      const SizedBox(height: AppSpacing.lg),
-      ShimmerPlaceholder(height: 160, borderRadius: AppRadius.md),
-    ],
-  );
+    );
+  }
 }
 
 MediaTrailer? _autoplayTrailer(MediaDetailV2 detail) {
@@ -950,13 +1300,179 @@ class _TrailerImageFallback extends StatelessWidget {
   );
 }
 
+class _DetailMetadataShimmer extends StatelessWidget {
+  const _DetailMetadataShimmer();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SizedBox(height: AppSpacing.xl),
+      const _DetailShimmerHeading(width: 76),
+      const SizedBox(height: AppSpacing.sm),
+      SizedBox(
+        height: 192,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: 2,
+          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+          itemBuilder: (_, _) => const _DetailTrailerShimmer(),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      const _DetailShimmerHeading(width: 64),
+      const SizedBox(height: AppSpacing.sm),
+      for (var index = 0; index < 4; index++)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+          child: Row(
+            children: [
+              ShimmerPlaceholder(width: 92, height: 14),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: ShimmerPlaceholder(height: 14)),
+            ],
+          ),
+        ),
+      const SizedBox(height: AppSpacing.xl),
+      const _DetailShimmerHeading(width: 70),
+      const SizedBox(height: AppSpacing.sm),
+      SizedBox(
+        height: 88,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: 3,
+          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+          itemBuilder: (_, _) => const _DetailCreditShimmer(),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      const _DetailShimmerHeading(width: 72),
+      const SizedBox(height: AppSpacing.sm),
+      for (var index = 0; index < 3; index++) const _DetailEpisodeShimmer(),
+      const SizedBox(height: AppSpacing.xl),
+      const _DetailShimmerHeading(width: 150),
+      const SizedBox(height: AppSpacing.sm),
+      SizedBox(
+        height: 216,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: 3,
+          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+          itemBuilder: (_, _) => SizedBox(
+            width: 152,
+            child: ShimmerPlaceholder(height: 216, borderRadius: AppRadius.md),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _DetailShimmerHeading extends StatelessWidget {
+  const _DetailShimmerHeading({required this.width});
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => ShimmerPlaceholder(
+    width: width,
+    height: 20,
+    borderRadius: const BorderRadius.all(Radius.circular(4)),
+  );
+}
+
+class _DetailTrailerShimmer extends StatelessWidget {
+  const _DetailTrailerShimmer();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 220,
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ShimmerPlaceholder(height: 124),
+          Padding(
+            padding: EdgeInsets.all(AppSpacing.sm),
+            child: ShimmerPlaceholder(width: 132, height: 14),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DetailCreditShimmer extends StatelessWidget {
+  const _DetailCreditShimmer();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 160,
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.md,
+    ),
+    child: const Row(
+      children: [
+        ShimmerPlaceholder(
+          width: 48,
+          height: 48,
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+        SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerPlaceholder(width: 76, height: 12),
+              SizedBox(height: AppSpacing.xs),
+              ShimmerPlaceholder(width: 52, height: 10),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DetailEpisodeShimmer extends StatelessWidget {
+  const _DetailEpisodeShimmer();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    child: Row(
+      children: [
+        ShimmerPlaceholder(width: 104, height: 60, borderRadius: AppRadius.sm),
+        const SizedBox(width: AppSpacing.sm),
+        const Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerPlaceholder(width: 92, height: 14),
+              SizedBox(height: AppSpacing.xs),
+              ShimmerPlaceholder(width: 180, height: 11),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _Tags extends StatelessWidget {
-  const _Tags({required this.values});
+  const _Tags({required this.values, required this.alignStart});
 
   final List<String> values;
+  final bool alignStart;
 
   @override
   Widget build(BuildContext context) => Wrap(
+    alignment: alignStart ? WrapAlignment.start : WrapAlignment.center,
     spacing: AppSpacing.xs,
     runSpacing: AppSpacing.xs,
     children: [

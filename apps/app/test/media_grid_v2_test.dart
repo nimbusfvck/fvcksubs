@@ -40,8 +40,8 @@ void main() {
     );
 
     expect(find.text('Featured'), findsOneWidget);
-    expect(find.text('First'), findsOneWidget);
-    await tester.tap(find.text('First'));
+    expect(find.text('First'), findsNWidgets(2));
+    await tester.tap(find.byType(MediaCardV2).first);
     expect(tapped, same(first));
   });
 
@@ -84,6 +84,54 @@ void main() {
     expect(find.text('Movies'), findsNothing);
     expect(find.textContaining('2026'), findsOneWidget);
     expect(find.textContaining('8.4'), findsOneWidget);
+  });
+
+  testWidgets('poster cards show a title below the 2:3 image', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: MediaGridV2(
+              sections: [
+                const CatalogSectionV2(
+                  id: 'movies',
+                  items: [
+                    VersionedMediaItem(
+                      item: VideoItemV2(
+                        ref: MediaRef(
+                          extensionId: 'example',
+                          providerId: 'example.catalog',
+                          id: 'poster',
+                        ),
+                        title: 'Poster title',
+                        artwork: Artwork(
+                          portrait: ImageRef('https://cdn.example/poster.jpg'),
+                        ),
+                        releaseYear: 2026,
+                        rating: 8.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              onTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final card = find.byType(MediaCardV2);
+    final frame = tester.getSize(find.byType(Hero));
+    expect(frame.width / frame.height, closeTo(2 / 3, 0.001));
+    expect(tester.getSize(card).height, greaterThan(frame.height));
+    expect(find.text('Poster title'), findsNWidgets(2));
+    expect(find.text('2026'), findsOneWidget);
+    expect(find.text('★ 8.4'), findsOneWidget);
+    final yearTopLeft = tester.getTopLeft(find.text('2026'));
+    final posterBottom = tester.getBottomLeft(find.byType(Hero)).dy;
+    expect(yearTopLeft.dy, greaterThan(posterBottom));
   });
 
   testWidgets(

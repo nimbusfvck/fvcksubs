@@ -75,6 +75,33 @@ not change `id` merely to rename a provider, because that discards the user's
 enabled state and saved priority. The SDK handles `StreamSource.providerId`
 automatically; `provider` remains an optional user-facing grouping label.
 
+## Manifest categories
+
+Declare the union of the catalog categories at the extension root and repeat
+the categories each catalog serves on that catalog. For new extensions,
+include `all` when the catalog has a Home view:
+
+```json
+{
+  "categories": ["all", "movie", "tv"],
+  "providers": [{
+    "id": "demo.catalog",
+    "roles": ["catalog"],
+    "catalogs": [{
+      "id": "main",
+      "name": "Demo",
+      "categories": ["all", "movie", "tv"]
+    }]
+  }]
+}
+```
+
+`all` is the reserved Home entry and is not shown as a Home chip. Other
+category IDs become visible choices and open their own catalog screen. Keep
+category IDs stable and opaque, and do not invent a `home` category. The host
+passes the selected ID to `catalog(query).category`, so a catalog spanning
+several categories can answer with the right slice.
+
 ## Registration API
 
 - `defineCatalog({ providerId, catalogId, catalog })`: routes using both ids.

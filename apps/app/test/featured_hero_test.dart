@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
 import 'package:fvcksubs_app/home/featured_hero.dart';
+import 'package:fvcksubs_app/library/library_controller.dart';
+import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
+import 'package:fvcksubs_app/widgets/media_hero_flexible_space.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
+import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'support/harness.dart';
 
@@ -47,6 +51,7 @@ void main() {
     );
     expect(logo.imageUrl, logoUrl);
     expect(logo.fit, BoxFit.contain);
+    expect(logo.fadeInDuration, const Duration(milliseconds: 320));
     expect(tester.takeException(), isNull);
   });
 
@@ -83,8 +88,129 @@ void main() {
     );
     expect(title.maxLines, 1);
     expect(title.overflow, TextOverflow.ellipsis);
-    expect(title.style?.fontSize, 22);
+    expect(title.style?.fontSize, 26);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('featured summary shows the media overview', (tester) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'with-overview',
+        ),
+        title: 'Movie with overview',
+        overview: 'A short synopsis for the featured movie.',
+        artwork: Artwork(
+          portrait: ImageRef('https://image.example/overview-poster.jpg'),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('A short synopsis for the featured movie.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getBottomLeft(find.text('A short synopsis for the featured movie.'))
+          .dy,
+      lessThan(tester.getTopLeft(find.byKey(const Key('featured-play'))).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('large featured summary and actions align to the left', (
+    tester,
+  ) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'large-screen',
+        ),
+        title: 'Large screen movie',
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: MediaQuery(
+          data: const MediaQueryData(size: Size(1000, 560)),
+          child: const SizedBox(
+            width: 1000,
+            height: 560,
+            child: FeaturedHero(items: [item]),
+          ),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.byKey(const Key('featured-title-text'))).dx,
+      closeTo(24, 1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('featured-play'))).dx,
+      closeTo(24, 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('featured video with progress shows Continue Watching', (
+    tester,
+  ) async {
+    const item = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(
+          extensionId: 'movie',
+          providerId: 'movie.catalog',
+          id: 'in-progress',
+        ),
+        title: 'In-progress movie',
+      ),
+    );
+    final library = LibraryController(
+      store: _MemoryLibraryStore(),
+      initial: {
+        UserMediaState.keyFor(item.item.ref): UserMediaState(
+          item: item.item,
+          progress: const Duration(minutes: 3),
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+        libraryController: library,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('Watch Now'), findsNothing);
   });
 
   testWidgets('featured event uses the shared banner layout', (tester) async {
@@ -133,7 +259,7 @@ void main() {
     expect(find.byType(CachedNetworkImage), findsNWidgets(2));
     expect(
       tester.getSize(find.byType(CachedNetworkImage).first),
-      const Size(50, 50),
+      const Size(64, 64),
     );
     for (final logo in tester.widgetList<CachedNetworkImage>(
       find.byType(CachedNetworkImage),
@@ -151,6 +277,49 @@ void main() {
       isNot(AppColors.onDark),
     );
     expect(find.text('Two-logo event'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long featured event title breaks before VS', (tester) async {
+    final item = VersionedMediaItem(
+      item: EventItemV2(
+        ref: const MediaRef(
+          extensionId: 'live',
+          providerId: 'live.catalog',
+          id: 'long-matchup-title',
+        ),
+        title: 'Long matchup title',
+        schedule: Schedule(
+          startsAt: DateTime.utc(2026, 8, 20),
+          state: ScheduleState.live,
+        ),
+        participants: const [
+          Participant(name: 'Home Team With A Long Name'),
+          Participant(name: 'Away Team With A Long Name'),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 240,
+          height: 560,
+          child: FeaturedHero(items: [item]),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+
+    final title = tester.widget<Text>(
+      find.byKey(const Key('featured-title-text')),
+    );
+    expect(title.maxLines, 2);
+    expect(
+      (title.textSpan! as TextSpan).toPlainText(),
+      'HOME TEAM WITH A LONG NAME\nVS AWAY TEAM WITH A LONG NAME',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -208,6 +377,159 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('items without trailers auto-advance after twenty seconds', (
+    tester,
+  ) async {
+    const items = [
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '1'),
+          title: 'First fallback item',
+        ),
+      ),
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '2'),
+          title: 'Second fallback item',
+        ),
+      ),
+    ];
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('First fallback item'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 20));
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Second fallback item'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 20));
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('First fallback item'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pauses auto-slide once less than half of the hero is visible', (
+    tester,
+  ) async {
+    const items = [
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '1'),
+          title: 'First visibility item',
+        ),
+      ),
+      VersionedMediaItem(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'missing', providerId: 'catalog', id: '2'),
+          title: 'Second visibility item',
+        ),
+      ),
+    ];
+
+    Widget buildHero(double collapse) => wrapApp(
+      child: MediaHeroCollapseScope(
+        collapse: collapse,
+        maxCollapse: 400,
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+      ),
+      registry: ExtensionRegistry([]),
+    );
+
+    await tester.pumpWidget(buildHero(201));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 9));
+
+    expect(find.text('First visibility item'), findsOneWidget);
+    expect(find.text('Second visibility item'), findsNothing);
+
+    await tester.pumpWidget(buildHero(100));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 20));
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Second visibility item'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an attached player pauses featured auto-slide', (tester) async {
+    final items = [
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.p',
+            id: 'one',
+          ),
+          title: 'First live event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+      VersionedMediaItem(
+        item: EventItemV2(
+          ref: const MediaRef(
+            extensionId: 'live',
+            providerId: 'live.p',
+            id: 'two',
+          ),
+          title: 'Second live event',
+          schedule: Schedule(
+            startsAt: DateTime.utc(2026, 8, 20),
+            state: ScheduleState.live,
+          ),
+        ),
+      ),
+    ];
+    final session = PictureInPictureSession();
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: items),
+        ),
+        registry: ExtensionRegistry([]),
+        pictureInPictureSession: session,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('First live event'), findsOneWidget);
+
+    session.attach(const SizedBox());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 9));
+
+    expect(find.text('First live event'), findsOneWidget);
+    expect(find.text('Second live event'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('horizontal drag moves to the next featured item', (
     tester,
   ) async {
@@ -253,10 +575,119 @@ void main() {
       ),
     );
 
-    await tester.drag(find.byType(PageView), const Offset(-300, 0));
-    await tester.pumpAndSettle();
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(PageView)),
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+
+    final parallaxTarget = tester.widget<Transform>(
+      find.byKey(const Key('featured-parallax-target')),
+    );
+    final parallaxCurrent = tester.widget<Transform>(
+      find.byKey(const Key('featured-parallax-current')),
+    );
+    expect(parallaxTarget.transform.getTranslation().x, greaterThan(0));
+    expect(parallaxCurrent.transform.getTranslation().x, lessThan(0));
+    expect(find.byKey(const Key('featured-edge-blur')), findsNothing);
+
+    await gesture.moveBy(const Offset(-180, 0));
+    await gesture.up();
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.text('Second event'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('movie featured items keep the poster without autoplay preview', (
+    tester,
+  ) async {
+    const first = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'first'),
+        title: 'First movie',
+      ),
+    );
+    const second = VersionedMediaItem(
+      item: VideoItemV2(
+        ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'second'),
+        title: 'Second movie',
+      ),
+    );
+    final extension = FakeExtension(
+      metaDetail: const MediaDetailV2(
+        item: VideoItemV2(
+          ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'first'),
+          title: 'First movie',
+        ),
+        trailers: [
+          MediaTrailer(
+            title: 'Trailer',
+            url: 'https://video.example/featured.mp4',
+            mimeType: 'video/mp4',
+          ),
+        ],
+      ),
+      previewFor: {
+        'first': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-first',
+              stream: PlayableStream(
+                url: 'https://video.example/featured.mp4',
+                label: 'Featured',
+              ),
+            ),
+          ],
+        ),
+        'second': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-second',
+              stream: PlayableStream(
+                url: 'https://video.example/featured.mp4',
+                label: 'Featured',
+              ),
+            ),
+          ],
+        ),
+      },
+    );
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(
+          width: 390,
+          height: 560,
+          child: FeaturedHero(items: [first, second]),
+        ),
+        registry: ExtensionRegistry([extension]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(VideoPlayerView), findsNothing);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(PageView)),
+    );
+    await gesture.moveBy(const Offset(-240, 0));
+    await tester.pump();
+
+    expect(find.text('Second movie'), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.text('Second movie'), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(find.byType(VideoPlayerView), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -289,7 +720,10 @@ void main() {
       ),
     );
     await tester.drag(find.byType(PageView), const Offset(-300, 0));
-    await tester.pumpAndSettle();
+    // The active fallback progress animation intentionally never settles.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.text('Second update'), findsOneWidget);
 
     await tester.pumpWidget(
@@ -344,6 +778,19 @@ void main() {
           ),
         ],
       ),
+      previewFor: {
+        'movie': const PreviewResponse(
+          sources: [
+            DirectPreviewSource(
+              id: 'featured-movie',
+              stream: PlayableStream(
+                url: 'https://video.example/trailer.mp4',
+                label: 'Trailer',
+              ),
+            ),
+          ],
+        ),
+      },
     );
     final registry = ExtensionRegistry([extension]);
     final player = RecordingPlayer();
@@ -360,7 +807,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(VideoPlayerView), findsOneWidget);
+    expect(find.byType(VideoPlayerView), findsNothing);
 
     await tester.pumpWidget(
       wrapApp(
@@ -379,4 +826,12 @@ void main() {
     expect(find.byKey(const Key('featured-title-text')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+class _MemoryLibraryStore implements LibraryStore {
+  @override
+  Future<Map<String, UserMediaState>> load() async => {};
+
+  @override
+  Future<void> save(Map<String, UserMediaState> records) async {}
 }

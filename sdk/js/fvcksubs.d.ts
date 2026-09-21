@@ -50,6 +50,8 @@ interface Artwork {
 interface Schedule {
   /** ISO-8601 UTC start time, for example `2026-08-19T12:30:00Z`. */
   startsAt: string;
+  /** ISO-8601 UTC end time, estimated when the provider has no exact value. */
+  endsAt?: string;
   /** Machine-readable lifecycle state used for event indicators. */
   state?: ScheduleState;
   /** Optional short display text supplied verbatim by the extension. */
@@ -453,6 +455,7 @@ interface HostApi {
     hmacSha256(key: string, value: string): string;
     xor(a: string, b: string): string;
     aesCbcDecrypt(key: string, iv: string, data: string): string | null;
+    aesCbcEncrypt(key: string, iv: string, data: string): string;
     aesGcmDecrypt(key: string, nonce: string, data: string): string | null;
   };
   /** Candidate matching supplied by the host. */

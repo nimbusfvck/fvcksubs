@@ -170,7 +170,7 @@ class ExtensionRegistry {
   }
 
   /// Categories declared by installed, *enabled* extensions, de-duplicated,
-  /// first-seen order. These become the chips on Home.
+  /// first-seen order. These become Home's category choices.
   List<String> get categories {
     final seen = <String>{};
     final ordered = <String>[];
@@ -243,7 +243,35 @@ class ExtensionRegistry {
               providerId: provider.id,
               catalog: catalog,
             );
+            if (binding.isFeaturedSurface || binding.isPreviewSurface) {
+              continue;
+            }
             if (isCatalogAllowed(binding)) bindings.add(binding);
+          }
+        }
+      }
+    }
+    return bindings;
+  }
+
+  /// Every featured-surface catalog, across enabled extensions and providers.
+  ///
+  /// These catalogs are loaded by Home's Featured Hero but never rendered as
+  /// ordinary Home or category shelves.
+  List<CatalogBinding> featuredCatalogs() {
+    final bindings = <CatalogBinding>[];
+    for (final extension in _extensions) {
+      if (!isExtensionEnabled(extension.manifest.id)) continue;
+      for (final provider in extension.manifest.providers) {
+        if (!isProviderEnabled(provider.id)) continue;
+        for (final catalog in provider.catalogs) {
+          final binding = CatalogBinding(
+            extension: extension,
+            providerId: provider.id,
+            catalog: catalog,
+          );
+          if (binding.isFeaturedSurface && isCatalogAllowed(binding)) {
+            bindings.add(binding);
           }
         }
       }
@@ -564,8 +592,8 @@ class ExtensionRegistry {
   /// (PLAN.md §14) only needs to treat a ref as unavailable once its
   /// extension is actually gone from [installed], which callers check via
   /// [extensionById] throwing.
-  Future<MediaDetailV2> meta(MediaRef ref) =>
-      extensionById(ref.extensionId).meta(ref);
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) =>
+      extensionById(ref.extensionId).meta(ref, groupId: groupId);
 
   /// The installed extension with [id]. Throws [StateError] if none.
   ContentExtension extensionById(String id) => _extensions.firstWhere(

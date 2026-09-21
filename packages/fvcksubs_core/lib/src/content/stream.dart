@@ -110,6 +110,7 @@ class SubtitleTrack extends Equatable {
     required this.language,
     required this.url,
     this.label = '',
+    this.headers = const {},
   });
 
   /// Builds a [SubtitleTrack] from decoded JSON.
@@ -117,6 +118,7 @@ class SubtitleTrack extends Equatable {
     language: json['language'] as String,
     url: json['url'] as String,
     label: (json['label'] as String?) ?? '',
+    headers: stringMap(json['headers']),
   );
 
   /// BCP-47-ish language code, whatever the upstream sends (`"en"`, `"pt-BR"`).
@@ -129,15 +131,19 @@ class SubtitleTrack extends Equatable {
   /// fall back to [language].
   final String label;
 
+  /// HTTP headers required to download this subtitle file.
+  final Map<String, String> headers;
+
   /// Encodes to a JSON map.
   Map<String, Object?> toJson() => {
     'language': language,
     'url': url,
     if (label.isNotEmpty) 'label': label,
+    if (headers.isNotEmpty) 'headers': headers,
   };
 
   @override
-  List<Object?> get props => [language, url, label];
+  List<Object?> get props => [language, url, label, headers];
 }
 
 /// One alternate rendition of a [PlayableStream].

@@ -1,25 +1,51 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../../app_scope.dart';
 import '../../navigation/app_route_observer.dart';
+import '../models/app_player_controller.dart';
+import 'app_preview_player.dart';
 import 'platform_player_builder.dart';
 
 /// Autoplaying, muted trailer preview used by hero surfaces.
 class TrailerPreview extends StatefulWidget {
-  const TrailerPreview({super.key, required this.trailer, this.playing = true});
+  static const maxAutoplayDuration = Duration(seconds: 20);
 
-  final MediaTrailer trailer;
+  const TrailerPreview({
+    super.key,
+    this.trailer,
+    this.source,
+    this.playing = true,
+    this.onPlayingChanged,
+    this.onProgressChanged,
+    this.onCompleted,
+  }) : assert(trailer != null || source != null);
+
+  final MediaTrailer? trailer;
+  final PreviewSource? source;
   final bool playing;
+  final ValueChanged<bool>? onPlayingChanged;
+  final ValueChanged<double?>? onProgressChanged;
+  final VoidCallback? onCompleted;
 
   @override
   State<TrailerPreview> createState() => _TrailerPreviewState();
 }
 
 class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
+  static const _autoplayDelay = Duration(seconds: 1);
+
   bool _ready = false;
   ModalRoute<void>? _route;
   bool _routeVisible = true;
+  bool _playing = false;
+  bool _completed = false;
+  Timer? _autoplayTimer;
+  Timer? _maxAutoplayTimer;
+  AppPlayerController? _controller;
+  StreamSubscription<AppPlayerEvent>? _eventsSubscription;
 
   @override
   void didChangeDependencies() {
@@ -35,13 +61,75 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
   @override
   void didUpdateWidget(covariant TrailerPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.trailer.url != widget.trailer.url) {
+    final oldSourceKey = oldWidget.source?.id ?? oldWidget.trailer?.url;
+    final sourceKey = widget.source?.id ?? widget.trailer?.url;
+    if (oldSourceKey != sourceKey) {
+      _detachController();
+      _maxAutoplayTimer?.cancel();
+      _maxAutoplayTimer = null;
       _ready = false;
+      _completed = false;
+      widget.onProgressChanged?.call(null);
     }
+    _syncPlayback();
   }
 
-  void _onPlaybackReady(Object? _) {
+  void _onPlaybackReady(Object? controllerObject) {
+    final controller = controllerObject as AppPlayerController?;
+    if (controller != null && !identical(controller, _controller)) {
+      _detachController();
+      _controller = controller;
+      controller.value.addListener(_onControllerValueChanged);
+      _eventsSubscription = controller.events.listen((event) {
+        if (identical(_controller, controller)) _onControllerEvent(event);
+      });
+      _onControllerValueChanged();
+    }
     if (mounted) setState(() => _ready = true);
+  }
+
+  void _onControllerValueChanged() {
+    final controller = _controller;
+    if (controller == null) return;
+    final value = controller.value.value;
+    final duration = value.duration;
+    final progress =
+        _playing &&
+            value.isPlaying &&
+            duration > Duration.zero &&
+            value.position >= Duration.zero
+        ? (value.position.inMilliseconds / duration.inMilliseconds)
+              .clamp(0.0, 1.0)
+              .toDouble()
+        : null;
+    widget.onProgressChanged?.call(progress);
+  }
+
+  void _onControllerEvent(AppPlayerEvent event) {
+    if (event.type != AppPlayerEventType.completed || !mounted) return;
+    _completePreview();
+  }
+
+  void _completePreview() {
+    if (!mounted) return;
+    _autoplayTimer?.cancel();
+    _autoplayTimer = null;
+    _maxAutoplayTimer?.cancel();
+    _maxAutoplayTimer = null;
+    setState(() {
+      _playing = false;
+      _completed = true;
+    });
+    widget.onPlayingChanged?.call(false);
+    widget.onProgressChanged?.call(null);
+    widget.onCompleted?.call();
+  }
+
+  void _detachController() {
+    _controller?.value.removeListener(_onControllerValueChanged);
+    unawaited(_eventsSubscription?.cancel());
+    _eventsSubscription = null;
+    _controller = null;
   }
 
   @override
@@ -51,46 +139,123 @@ class _TrailerPreviewState extends State<TrailerPreview> with RouteAware {
       _routeVisible = false;
       _ready = false;
     });
+    _syncPlayback();
   }
 
   @override
   void didPopNext() {
     if (!mounted) return;
     setState(() => _routeVisible = true);
+    _syncPlayback();
   }
 
   @override
   void dispose() {
+    _autoplayTimer?.cancel();
+    _maxAutoplayTimer?.cancel();
+    _detachController();
     appRouteObserver.unsubscribe(this);
     super.dispose();
   }
 
+  bool _mayAutoplay() {
+    final scope = AppScope.of(context);
+    return scope.previewAutoplayPreferenceController.enabled &&
+        widget.playing &&
+        _routeVisible &&
+        scope.pictureInPictureSession.player == null;
+  }
+
+  void _syncPlayback() {
+    if (!mounted) return;
+    if (!_mayAutoplay() || _completed) {
+      _autoplayTimer?.cancel();
+      _autoplayTimer = null;
+      _maxAutoplayTimer?.cancel();
+      _maxAutoplayTimer = null;
+      if (_playing) {
+        setState(() => _playing = false);
+        widget.onPlayingChanged?.call(false);
+      }
+      widget.onProgressChanged?.call(null);
+      return;
+    }
+    if (_playing || _autoplayTimer != null) return;
+    _autoplayTimer = Timer(_autoplayDelay, () {
+      _autoplayTimer = null;
+      if (!mounted || !_mayAutoplay()) return;
+      setState(() => _playing = true);
+      widget.onPlayingChanged?.call(true);
+      _maxAutoplayTimer = Timer(
+        TrailerPreview.maxAutoplayDuration,
+        _onAutoplayLimitReached,
+      );
+    });
+  }
+
+  void _onAutoplayLimitReached() {
+    _maxAutoplayTimer = null;
+    if (!mounted || !_playing) return;
+    _completePreview();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final source = widget.source;
     final session = AppScope.of(context).pictureInPictureSession;
+    final preference = AppScope.of(context).previewAutoplayPreferenceController;
     return ListenableBuilder(
-      listenable: session,
+      listenable: Listenable.merge([session, preference]),
       builder: (context, _) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncPlayback());
         if (!_routeVisible) return const SizedBox.shrink();
         return IgnorePointer(
           child: AnimatedOpacity(
-            opacity: _ready ? 1 : 0,
+            opacity: _ready && !_completed ? 1 : 0,
             duration: const Duration(milliseconds: 180),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                if (source case DirectPreviewSource(:final stream)) {
+                  return platformPlayerBuilder(
+                    context,
+                    stream,
+                    key: ValueKey(source.id),
+                    isLive: false,
+                    playing: _playing,
+                    preview: true,
+                    muted: true,
+                    looping: false,
+                    fit: BoxFit.cover,
+                    wakelock: false,
+                    onPlaybackReady: _onPlaybackReady,
+                  );
+                }
+                if (source != null) {
+                  return AppPreviewPlayer(
+                    key: ValueKey(source.id),
+                    source: source,
+                    muted: true,
+                    playing: _playing,
+                    fit: BoxFit.cover,
+                    onReady: () {
+                      if (mounted) setState(() => _ready = true);
+                    },
+                    onCompleted: _completePreview,
+                  );
+                }
+                final trailer = widget.trailer;
+                if (trailer == null) return const SizedBox.shrink();
                 return platformPlayerBuilder(
                   context,
-                  PlayableStream(
-                    url: widget.trailer.url,
-                    label: widget.trailer.url,
-                  ),
+                  PlayableStream(url: trailer.url, label: trailer.url),
+                  key: ValueKey(trailer.url),
                   isLive: false,
                   // A full player attached to the session owns the only
                   // active playback session, including while it is in PiP.
-                  playing: widget.playing && session.player == null,
+                  playing: _playing,
                   preview: true,
                   muted: true,
-                  looping: true,
+                  looping: false,
                   fit: BoxFit.cover,
                   wakelock: false,
                   onPlaybackReady: _onPlaybackReady,

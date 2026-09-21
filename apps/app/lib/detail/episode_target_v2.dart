@@ -106,6 +106,7 @@ NextEpisodeV2? nextEpisodeOfV2(
         parentRef: identity.parentRef,
         groupId: nextGroup.id,
         position: episode.position,
+        absoluteEpisode: episode.absoluteEpisode,
       ),
       availableAt: episode.availableAt,
     ),

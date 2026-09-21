@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
-import 'package:fvcksubs_storage/fvcksubs_storage.dart';
 
 import 'addons/addons_controller.dart';
 import 'addons/installer_controller.dart';
@@ -17,6 +16,8 @@ import 'player/state/subtitle_preference_controller.dart';
 import 'player/widgets/app_preview_player.dart';
 import 'player/widgets/stream_player.dart';
 import 'settings/nsfw_controller.dart';
+import 'settings/preview_autoplay_preference_controller.dart';
+import 'settings/febbox_cookie_controller.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({
@@ -33,11 +34,12 @@ class AppScope extends InheritedWidget {
     required this.qualityPreferenceController,
     required this.subtitlePreferenceController,
     required this.sourcePriorityController,
-    required this.homeCategoryStore,
     required this.sourceCache,
     required this.pictureInPictureSession,
     required this.pictureInPicturePreferenceController,
+    required this.previewAutoplayPreferenceController,
     required this.nsfwController,
+    this.febboxCookieController,
     this.navigatorKey,
     required super.child,
   });
@@ -66,8 +68,6 @@ class AppScope extends InheritedWidget {
 
   final SourcePriorityController sourcePriorityController;
 
-  final CategorySelectionStore homeCategoryStore;
-
   final SourceCache sourceCache;
 
   final PictureInPictureSession pictureInPictureSession;
@@ -75,7 +75,11 @@ class AppScope extends InheritedWidget {
   final PictureInPicturePreferenceController
   pictureInPicturePreferenceController;
 
+  final PreviewAutoplayPreferenceController previewAutoplayPreferenceController;
+
   final NsfwController nsfwController;
+
+  final FebboxCookieController? febboxCookieController;
 
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -99,11 +103,13 @@ class AppScope extends InheritedWidget {
       qualityPreferenceController != oldWidget.qualityPreferenceController ||
       subtitlePreferenceController != oldWidget.subtitlePreferenceController ||
       sourcePriorityController != oldWidget.sourcePriorityController ||
-      homeCategoryStore != oldWidget.homeCategoryStore ||
       sourceCache != oldWidget.sourceCache ||
       pictureInPictureSession != oldWidget.pictureInPictureSession ||
       pictureInPicturePreferenceController !=
           oldWidget.pictureInPicturePreferenceController ||
+      previewAutoplayPreferenceController !=
+          oldWidget.previewAutoplayPreferenceController ||
       nsfwController != oldWidget.nsfwController ||
+      febboxCookieController != oldWidget.febboxCookieController ||
       navigatorKey != oldWidget.navigatorKey;
 }

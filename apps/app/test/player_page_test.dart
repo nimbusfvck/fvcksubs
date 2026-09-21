@@ -4,19 +4,36 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/detail/detail_page_v2.dart';
-import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/models/app_player_controller.dart';
+import 'package:fvcksubs_app/player/models/playback_start_position.dart';
+import 'package:fvcksubs_app/player/player_page.dart';
 import 'package:fvcksubs_app/player/state/quality_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_preference_controller.dart';
 import 'package:fvcksubs_app/player/state/picture_in_picture_session.dart';
 import 'package:fvcksubs_app/player/state/subtitle_preference_controller.dart';
+import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import 'support/harness.dart';
 
 void main() {
-  test('live buffering uses forward buffer instead of absolute buffer end', () {
+  test('VOD MP4 stalls use a different source instead of renewal', () {
+    expect(
+      shouldFallbackAfterVODStall(isLive: false, format: StreamFormat.mp4),
+      isTrue,
+    );
+    expect(
+      shouldFallbackAfterVODStall(isLive: false, format: StreamFormat.hls),
+      isFalse,
+    );
+    expect(
+      shouldFallbackAfterVODStall(isLive: true, format: StreamFormat.mp4),
+      isFalse,
+    );
+  });
+
+  test('live buffering and renewal health use playback progress', () {
     expect(
       liveForwardBuffer(
         position: const Duration(milliseconds: 107750),
@@ -25,9 +42,42 @@ void main() {
       const Duration(milliseconds: 89),
     );
     expect(
+      liveContiguousForwardBuffer(
+        position: const Duration(milliseconds: 25836),
+        bufferedPosition: const Duration(milliseconds: 33882),
+        bufferedRanges: [
+          const AppPlayerTimeRange(
+            Duration(milliseconds: 24454),
+            Duration(milliseconds: 27398),
+          ),
+          const AppPlayerTimeRange(
+            Duration(seconds: 30),
+            Duration(milliseconds: 33882),
+          ),
+        ],
+      ),
+      const Duration(milliseconds: 1562),
+    );
+    expect(
       liveBufferingNeedsRecovery(
         position: const Duration(milliseconds: 107750),
         bufferedPosition: const Duration(milliseconds: 107839),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(milliseconds: 25836),
+        bufferedPosition: const Duration(milliseconds: 33882),
+        bufferedRanges: [
+          const AppPlayerTimeRange(
+            Duration(milliseconds: 30_000),
+            Duration(milliseconds: 33_882),
+          ),
+        ],
+        previousPosition: const Duration(milliseconds: 25836),
         isPlaying: true,
         isBuffering: true,
       ),
@@ -41,6 +91,85 @@ void main() {
         isBuffering: true,
       ),
       isFalse,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(seconds: 12),
+        bufferedPosition: const Duration(milliseconds: 17802),
+        previousPosition: const Duration(milliseconds: 17943),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      liveBufferingNeedsRecovery(
+        position: const Duration(seconds: 12),
+        bufferedPosition: const Duration(milliseconds: 17802),
+        previousPosition: const Duration(seconds: 12),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isTrue,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: const Duration(seconds: 20),
+        isPlaying: true,
+        isBuffering: false,
+      ),
+      isTrue,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: Duration.zero,
+        isPlaying: true,
+        isBuffering: false,
+      ),
+      isFalse,
+    );
+    expect(
+      playbackIsStableForRenewalReset(
+        isLive: true,
+        position: const Duration(seconds: 20),
+        isPlaying: true,
+        isBuffering: true,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('portrait video receives the full player viewport', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final player = _FullViewportPlayer();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'portrait-movie',
+            ),
+            title: 'Portrait movie',
+          ),
+          resolvedSources: [_resolvedSource('portrait', 'Source')],
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getSize(find.byKey(_FullViewportPlayer.marker)),
+      const Size(390, 844),
     );
   });
 
@@ -215,7 +344,7 @@ void main() {
     player.controllers.single.emitError(StateError('source rejected'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('Finding another source…'), findsNothing);
+    expect(find.text('Finding another source…'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
       findsOneWidget,
@@ -231,6 +360,45 @@ void main() {
       find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
       findsNothing,
     );
+    await pending.close();
+  });
+
+  testWidgets('does not wait forever for a late fallback source', (
+    tester,
+  ) async {
+    final player = _FailingPlayer();
+    final first = _resolvedSource('first', 'Source A');
+    final pending = StreamController<ResolvedSource>();
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: PlayerPage(
+          item: const VideoItemV2(
+            ref: MediaRef(
+              extensionId: 'test',
+              providerId: 'test.provider',
+              id: 'fallback-timeout',
+            ),
+            title: 'Movie',
+          ),
+          resolvedSources: [first],
+          pendingSources: pending.stream,
+        ),
+        registry: ExtensionRegistry([]),
+        player: player,
+      ),
+    );
+    await tester.pump();
+
+    player.controllers.single.emitError(StateError('source rejected'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 11));
+
+    expect(
+      find.byKey(const ValueKey<String>('player-fallback-loading-indicator')),
+      findsNothing,
+    );
+    expect(find.text("Couldn't play this source"), findsOneWidget);
     await pending.close();
   });
 
@@ -377,7 +545,7 @@ void main() {
     await controller.close();
   });
 
-  testWidgets('player Back minimizes without entering native PiP', (
+  testWidgets('player Back minimizes and remains eligible for native PiP', (
     tester,
   ) async {
     final player = _PositionRecordingPlayer();
@@ -403,6 +571,14 @@ void main() {
       ),
     );
     await tester.pump();
+    expect(
+      tester
+          .widget<PlayerSubtitleVisibility>(
+            find.byType(PlayerSubtitleVisibility),
+          )
+          .showSubtitles,
+      isTrue,
+    );
 
     final controller = player.controllers.single;
     controller.emitValue(
@@ -414,12 +590,20 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(controller.pictureInPictureCalls, 0);
     expect(session.isMinimized, isTrue);
-    expect(controller.pictureInPictureAllowed, contains(false));
+    expect(
+      tester
+          .widget<PlayerSubtitleVisibility>(
+            find.byType(PlayerSubtitleVisibility),
+          )
+          .showSubtitles,
+      isFalse,
+    );
+    expect(controller.pictureInPictureAllowed, contains(true));
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(find.byType(DetailPageV2), findsNothing);
   });
@@ -458,6 +642,48 @@ void main() {
 
     expect(find.byType(PlayerPage), findsOneWidget);
     expect(controller.playCalls, 1);
+  });
+
+  testWidgets('PiP restores the mini-player presentation it started from', (
+    tester,
+  ) async {
+    final player = _PositionRecordingPlayer();
+    final session = PictureInPictureSession();
+    final playerPage = PlayerPage(
+      key: GlobalKey(),
+      item: fakeItem(id: 'mini-pip-restore'),
+      resolvedSources: [_resolvedSource('mini-pip-restore', 'Source')],
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const SizedBox(),
+        registry: ExtensionRegistry([]),
+        player: player,
+        pictureInPictureSession: session,
+      ),
+    );
+    session.attach(playerPage);
+    await tester.pump();
+    session.minimize();
+    await tester.pump();
+
+    final controller = player.controllers.single;
+    controller.emitValue(
+      const AppPlayerValue(
+        initialized: true,
+        isPlaying: true,
+        duration: Duration(minutes: 10),
+      ),
+    );
+    controller.emitPictureInPictureStarted();
+    await tester.pump();
+
+    controller.emitPictureInPictureRestore();
+    await tester.pump();
+
+    expect(session.isMinimized, isTrue);
+    expect(controller.pictureInPictureRestoreCompletions, 1);
   });
 
   testWidgets('closing PiP detaches and disposes the hosted player', (
@@ -519,7 +745,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pumpAndSettle();
 
     expect(find.byType(PlayerPage), findsOneWidget);
@@ -552,15 +778,14 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(controller.pictureInPictureCalls, 0);
     expect(controller.pauseCalls, 0);
+    expect(controller.pictureInPictureAllowed, contains(true));
   });
 
-  testWidgets('live player Back minimizes without creating a detail route', (
-    tester,
-  ) async {
+  testWidgets('live player Back closes before playback starts', (tester) async {
     final player = _PositionRecordingPlayer();
 
     await tester.pumpWidget(
@@ -577,11 +802,11 @@ void main() {
     await tester.pump();
 
     final controller = player.controllers.single;
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pumpAndSettle();
 
     expect(controller.pictureInPictureCalls, 0);
-    expect(find.byType(PlayerPage), findsOneWidget);
+    expect(find.byType(PlayerPage), findsNothing);
     expect(find.byType(DetailPageV2), findsNothing);
     expect(find.text('Playing in Picture in Picture'), findsNothing);
   });
@@ -622,7 +847,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Minimize player'));
     await tester.pump(const Duration(milliseconds: 300));
 
     // The player stays in the app-level host so iOS can restore the same
@@ -723,8 +948,13 @@ class _FailingPlayer extends RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     final widget = super.build(
@@ -736,8 +966,13 @@ class _FailingPlayer extends RecordingPlayer {
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
       preferredQualityMaxHeight: preferredQualityMaxHeight,
+      startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
+      muted: muted,
+      playing: playing,
+      wakelock: wakelock,
+      fit: fit,
       key: key,
     );
     if (controllers.isEmpty) {
@@ -747,6 +982,46 @@ class _FailingPlayer extends RecordingPlayer {
       onPlaybackReady?.call(controller);
     }
     return widget;
+  }
+}
+
+class _FullViewportPlayer extends RecordingPlayer {
+  static const marker = Key('full-viewport-player');
+  final _FakePlayerController controller = _FakePlayerController(
+    initialValue: const AppPlayerValue(initialized: true),
+  );
+  bool _reportedController = false;
+
+  @override
+  Widget build(
+    BuildContext context,
+    PlayableStream stream, {
+    required bool isLive,
+    void Function(Object? controller)? onControllerCreated,
+    void Function(Object? controller)? onPlaybackReady,
+    Widget Function(
+      BuildContext context,
+      Object? controller,
+      void Function(bool visibility) onVisibilityChanged,
+    )?
+    customControlsBuilder,
+    String? preferredSubtitleLanguage,
+    int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
+    SubtitleTrack? preferredExternalSubtitle,
+    SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
+    Key? key,
+  }) {
+    if (!_reportedController) {
+      _reportedController = true;
+      onControllerCreated?.call(controller);
+      onPlaybackReady?.call(controller);
+    }
+    return const SizedBox.expand(key: marker);
   }
 }
 
@@ -769,8 +1044,13 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     customControlsBuilder,
     String? preferredSubtitleLanguage,
     int? preferredQualityMaxHeight,
+    PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     final widget = super.build(
@@ -782,8 +1062,13 @@ class _PositionRecordingPlayer extends RecordingPlayer {
       customControlsBuilder: customControlsBuilder,
       preferredSubtitleLanguage: preferredSubtitleLanguage,
       preferredQualityMaxHeight: preferredQualityMaxHeight,
+      startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
+      muted: muted,
+      playing: playing,
+      wakelock: wakelock,
+      fit: fit,
       key: key,
     );
     if (_lastUrl == stream.url) return widget;
@@ -802,6 +1087,14 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     );
     controllers.add(controller);
     onControllerCreated?.call(controller);
+    final target = startPosition?.target(
+      controller.value.value.duration,
+      isLive: isLive,
+    );
+    if (target != null) {
+      controller.lastSeekPosition = target;
+      controller.emitValue(controller.value.value.copyWith(position: target));
+    }
     onPlaybackReady?.call(controller);
     return widget;
   }

@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "runtime": "js",
   "entry": "bundle.js",
-  "categories": ["featured"],
+  "categories": ["all"],
   "providers": [
     {
       "id": "hello.catalog",
@@ -14,7 +14,7 @@
         {
           "id": "main",
           "name": "Hello",
-          "categories": ["featured"],
+          "categories": ["all"],
           "display": "grid"
         }
       ]

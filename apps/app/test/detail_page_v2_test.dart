@@ -19,6 +19,7 @@ void main() {
           id: 'catalog-item',
         ),
         title: 'Catalog item',
+        overview: 'A catalog synopsis',
       );
 
       await tester.pumpWidget(
@@ -31,12 +32,86 @@ void main() {
 
       expect(find.text('Could not load details.'), findsNothing);
       expect(find.text('Catalog item'), findsWidgets);
-      expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+      expect(find.text('A catalog synopsis'), findsOneWidget);
+      expect(find.text('Read More'), findsNothing);
+      final watchButton = find.widgetWithText(FilledButton, 'Watch Now');
+      expect(watchButton, findsOneWidget);
+      expect(
+        tester.getBottomLeft(find.text('A catalog synopsis')).dy,
+        greaterThan(tester.getBottomLeft(watchButton).dy),
+      );
     },
   );
 
+  testWidgets('expanded description can be collapsed again', (tester) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'expanded-description',
+      ),
+      title: 'Expanded description',
+    );
+    const detail = MediaDetailV2(
+      item: item,
+      description:
+          'A long synopsis that continues beyond the compact hero preview. '
+          'The complete description should remain visible after expanding it. '
+          'This extra sentence makes the text span several lines on narrow '
+          'screens so the Read More affordance is actually exercised.',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsOneWidget);
+    await tester.tap(find.text('Read More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsNothing);
+    expect(find.text('Hide More'), findsOneWidget);
+
+    await tester.tap(find.text('Hide More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read More'), findsOneWidget);
+    expect(find.text('Hide More'), findsNothing);
+  });
+
+  testWidgets('back button stays visible after the detail hero scrolls away', (
+    tester,
+  ) async {
+    const item = VideoItemV2(
+      ref: MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'scrollable-detail',
+      ),
+      title: 'Scrollable detail',
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: item),
+        registry: ExtensionRegistry([FakeExtension()]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Back'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'an unreleased movie shows Remind Me instead of Play, with its release date',
+    'an unreleased movie still shows Watch Now without release metadata',
     (tester) async {
       final item = VideoItemV2(
         ref: const MediaRef(
@@ -58,15 +133,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(FilledButton, 'Play'), findsNothing);
-      expect(find.widgetWithText(FilledButton, 'Remind Me'), findsOneWidget);
-      expect(find.textContaining('Releases'), findsOneWidget);
-
-      await tester.tap(find.widgetWithText(FilledButton, 'Remind Me'));
-      await tester.pumpAndSettle();
-
-      expect(library.isReminded(item.ref), isTrue);
-      expect(find.widgetWithText(FilledButton, 'Reminder Set'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Watch Now'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Remind Me'), findsNothing);
+      expect(find.textContaining('Releases'), findsNothing);
     },
   );
 
@@ -74,11 +143,7 @@ void main() {
     tester,
   ) async {
     const movie = VideoItemV2(
-      ref: MediaRef(
-        extensionId: 'fake',
-        providerId: 'fake.p',
-        id: 'movie',
-      ),
+      ref: MediaRef(extensionId: 'fake', providerId: 'fake.p', id: 'movie'),
       title: 'Movie',
     );
     const collectionItem = VideoItemV2(
@@ -248,7 +313,179 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(FilledButton, 'Play E5'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Watch E5'), findsOneWidget);
+  });
+
+  testWidgets('loads a lazy episode group without an async setState error', (
+    tester,
+  ) async {
+    const seriesRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'lazy-series',
+    );
+    const episodeRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'lazy-e1',
+    );
+    const series = SeriesItemV2(ref: seriesRef, title: 'Lazy Series');
+    const placeholder = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Season 1',
+            episodes: [],
+            loaded: false,
+          ),
+        ],
+      ),
+    );
+    const loaded = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Season 1',
+            episodes: [
+              EpisodeSummary(ref: episodeRef, title: 'Episode 1', position: 1),
+            ],
+            loaded: true,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: series),
+        registry: ExtensionRegistry([
+          FakeExtension(
+            metaForGroup: (groupId) => groupId == null ? placeholder : loaded,
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Episode 1'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('lazy groups keep Continue on the watched season', (
+    tester,
+  ) async {
+    const seriesRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'lazy-resume-series',
+    );
+    const watchedRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'lazy-s1e4',
+    );
+    const series = SeriesItemV2(ref: seriesRef, title: 'Lazy Resume');
+    const placeholder = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Season 1',
+            episodes: [],
+            loaded: false,
+          ),
+          EpisodeGroup(
+            id: 'season:2',
+            title: 'Season 2',
+            episodes: [],
+            loaded: false,
+          ),
+        ],
+      ),
+    );
+    const loadedSeasonOne = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:1',
+            title: 'Season 1',
+            episodes: [
+              EpisodeSummary(ref: watchedRef, title: 'Episode 4', position: 4),
+            ],
+            loaded: true,
+          ),
+        ],
+      ),
+    );
+    const loadedSeasonTwo = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season:2',
+            title: 'Season 2',
+            episodes: [
+              EpisodeSummary(
+                ref: MediaRef(
+                  extensionId: 'fake',
+                  providerId: 'fake.p',
+                  id: 'lazy-s2e1',
+                ),
+                title: 'Episode 1',
+                position: 1,
+              ),
+            ],
+            loaded: true,
+          ),
+        ],
+      ),
+    );
+    final watched = EpisodeItemV2(
+      ref: watchedRef,
+      title: 'Episode 4',
+      subtitle: 'Lazy Resume',
+      episode: const EpisodeIdentity(
+        parentRef: seriesRef,
+        groupId: 'season:1',
+        position: 4,
+      ),
+    );
+    final library = LibraryController(
+      store: _MemoryLibraryStore(),
+      initial: {
+        UserMediaState.keyFor(watchedRef): UserMediaState(
+          item: watched,
+          progress: const Duration(minutes: 3),
+          lastWatched: DateTime.utc(2026, 9, 15),
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: series),
+        registry: ExtensionRegistry([
+          FakeExtension(
+            metaForGroup: (groupId) {
+              if (groupId == null) return placeholder;
+              return groupId == 'season:1' ? loadedSeasonOne : loadedSeasonTwo;
+            },
+          ),
+        ]),
+        libraryController: library,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Season 1'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Continue S1E4'), findsOneWidget);
+    expect(find.text('Episode 4'), findsWidgets);
   });
 
   group('a group too long to scroll', () {
@@ -344,7 +581,13 @@ void main() {
     testWidgets('switches range when a chip is tapped', (tester) async {
       await open(tester, detailWith(250));
 
-      await tester.tap(find.text('1–100'));
+      final firstRange = find.text('1–100');
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(firstRange);
       await tester.pumpAndSettle();
 
       expect(find.text('Episode 1'), findsWidgets);

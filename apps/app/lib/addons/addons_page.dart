@@ -379,10 +379,12 @@ class _ListingRow extends StatelessWidget {
       onPressed: controller.busy
           ? null
           : () async {
-              final installed = await controller.install(entry);
+              final installed = listing.isUpdate
+                  ? await controller.update(entry.id)
+                  : await controller.install(entry);
               if (installed) onInstallSucceeded();
             },
-      child: const Text('Install'),
+      child: Text(listing.isUpdate ? 'Update' : 'Install'),
     );
     return Container(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -431,6 +433,10 @@ class _ExtensionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = registry.isExtensionEnabled(manifest.id);
     final listing = installerController.listingFor(manifest.id);
+    final catalogProviders = [
+      for (final provider in manifest.providers)
+        if (provider.roles.contains(ProviderRole.catalog)) provider,
+    ];
     final streamProviders = [
       for (final provider in manifest.providers)
         if (provider.roles.contains(ProviderRole.stream)) provider,
@@ -474,6 +480,7 @@ class _ExtensionTile extends StatelessWidget {
               [
                 'v${manifest.version}',
                 if (manifest.author != null) 'by ${manifest.author}',
+                '${catalogProviders.length} catalogs',
                 '${streamProviders.length} sources',
               ].join(' · '),
               style: AppTypography.caption.copyWith(
@@ -557,7 +564,9 @@ class _ExtensionDetailsPage extends StatelessWidget {
           final listing = installerController.listingFor(currentManifest.id);
           final providers = [
             for (final provider in currentManifest.providers)
-              if (provider.roles.contains(ProviderRole.stream)) provider,
+              if (provider.roles.contains(ProviderRole.catalog) ||
+                  provider.roles.contains(ProviderRole.stream))
+                provider,
           ];
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -594,10 +603,15 @@ class _ExtensionDetailsPage extends StatelessWidget {
                     ),
                     for (final provider in providers)
                       SwitchListTile(
-                        secondary: const Icon(Icons.play_circle_outline),
+                        secondary: Icon(
+                          provider.roles.contains(ProviderRole.catalog)
+                              ? Icons.video_library_outlined
+                              : Icons.play_circle_outline,
+                        ),
                         title: Text(
                           provider.name ?? _providerLabel(provider.id),
                         ),
+                        subtitle: Text(_providerRoles(provider)),
                         value:
                             enabled && registry.isProviderEnabled(provider.id),
                         onChanged: enabled
@@ -619,7 +633,7 @@ class _ExtensionDetailsPage extends StatelessWidget {
                       installerController.busy &&
                       installerController.repoUrl != null,
                   onUpdate: listing?.isUpdate == true
-                      ? () => installerController.install(listing!.entry)
+                      ? () => installerController.update(currentManifest.id)
                       : null,
                   onCheckUpdates: installerController.repoUrl == null
                       ? null
@@ -800,6 +814,13 @@ String _providerLabel(String providerId) {
   final name = providerId.split('.').last;
   if (name.isEmpty) return providerId;
   return name[0].toUpperCase() + name.substring(1);
+}
+
+String _providerRoles(ProviderDecl provider) {
+  final roles = <String>[];
+  if (provider.roles.contains(ProviderRole.catalog)) roles.add('Catalog');
+  if (provider.roles.contains(ProviderRole.stream)) roles.add('Stream');
+  return roles.join(' · ');
 }
 
 class _Panel extends StatelessWidget {

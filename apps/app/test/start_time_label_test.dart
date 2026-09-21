@@ -33,6 +33,39 @@ void main() {
     expect(startTimeLabel(local(2026, 9, 1, 20, 5), now: now), '1 Sep 20:05');
   });
 
+  test('hero event start uses date and kickoff without an end time', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(
+      eventStartLabel(local(2026, 9, 1, 20, 5), now: now),
+      '1 Sep - 20:05',
+    );
+  });
+
+  test('hero event today shows kickoff only', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(eventStartLabel(local(2026, 8, 17, 20, 5), now: now), '20:05');
+  });
+
+  test('event card labels today and tomorrow explicitly', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(
+      eventCardStartLabel(local(2026, 8, 17, 0, 0), now: now),
+      'Today 00:00',
+    );
+    expect(
+      eventCardStartLabel(local(2026, 8, 18, 12, 0), now: now),
+      'Tomorrow 12:00',
+    );
+  });
+
+  test('event card labels other dates with a short date and start time', () {
+    final now = local(2026, 8, 17, 9, 0);
+    expect(
+      eventCardStartLabel(local(2026, 9, 18, 0, 0), now: now),
+      '18 Sep 00:00',
+    );
+  });
+
   test('same day-of-month in a different month is not "today"', () {
     final now = local(2026, 8, 17, 9, 0);
     expect(startTimeLabel(local(2026, 7, 17, 12, 0), now: now), '17 Jul 12:00');
@@ -54,6 +87,15 @@ void main() {
       label,
       '${expected.hour.toString().padLeft(2, '0')}:'
       '${expected.minute.toString().padLeft(2, '0')}',
+    );
+  });
+
+  test('an event range uses the device timezone for its end time', () {
+    final startsAt = DateTime(2026, 8, 17, 16, 30);
+    final endsAt = DateTime(2026, 8, 17, 18, 45);
+    expect(
+      eventTimeRangeLabel(startsAt, endsAt, now: DateTime(2026, 8, 17, 9)),
+      '16:30–18:45',
     );
   });
 }

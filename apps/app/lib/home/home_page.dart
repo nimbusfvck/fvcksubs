@@ -1,18 +1,24 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fvcksubs_core/fvcksubs_core.dart';
 
 import '../app_scope.dart';
 import '../addons/installer_controller.dart';
+import '../catalog/category_page.dart';
+import '../catalog/live_timeline_page.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
+import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 import '../widgets/centered_content.dart';
+import '../widgets/media_hero_layout.dart';
+import '../widgets/media_hero_flexible_space.dart';
 import 'catalog_grid_section.dart';
 import 'catalog_group_shelf.dart';
 import 'catalog_grouping.dart';
@@ -21,7 +27,13 @@ import 'category_chips.dart';
 import 'continue_watching_shelf.dart';
 import 'featured_controller.dart';
 import 'featured_hero.dart';
+import 'live_now_shelf.dart';
+import 'recommended_shelf.dart';
+import 'surprise_me_banner.dart';
+import 'top_ten_shelf.dart';
 import '../settings/nsfw_controller.dart';
+
+const _categoryHeaderAnimationDuration = Duration(milliseconds: 260);
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,9 +43,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String? _selectedCategory;
-
-  bool _restored = false;
+  bool _showCategoryHeader = true;
 
   int _generation = 0;
 
@@ -44,7 +54,14 @@ class _HomePageState extends State<HomePage> {
   String? _featuredSignature;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     if (_featuredReady) unawaited(_featuredController.close());
     super.dispose();
@@ -53,29 +70,57 @@ class _HomePageState extends State<HomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_featuredReady) {
-      final scope = AppScope.of(context);
-      _featuredController = FeaturedController(
-        registry: scope.registry,
-        catalogCache: scope.catalogCache,
-        pluginController: scope.pluginController,
-      );
-      _featuredReady = true;
+    if (_featuredReady) return;
+    final scope = AppScope.of(context);
+    _featuredController = FeaturedController(
+      registry: scope.registry,
+      catalogCache: scope.catalogCache,
+      pluginController: scope.pluginController,
+    );
+    _featuredReady = true;
+  }
+
+  String _homeCategory(List<String> categories) {
+    // Keep older extensions usable until they declare the Home category.
+    return categories.contains('all') ? 'all' : categories.first;
+  }
+
+  void _openCategory(String category) {
+    if (category.toLowerCase() == 'all') return;
+    final scope = AppScope.of(context);
+    final opensTimeline = scope.registry
+        .catalogsFor(category)
+        .any((binding) => binding.catalog.display == CatalogDisplay.timeline);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => opensTimeline
+            ? CatalogTimelinePage(category: category)
+            : CategoryPage(category: category),
+      ),
+    );
+  }
+
+  void _openSportCategory(List<String> categories) {
+    for (final category in categories) {
+      if (category.toLowerCase() == 'sport') {
+        _openCategory(category);
+        return;
+      }
     }
-    if (_restored) return;
-    _restored = true;
-    _restore();
   }
 
-  Future<void> _restore() async {
-    final category = await AppScope.of(context).homeCategoryStore.load();
-    if (!mounted) return;
-    setState(() => _selectedCategory = category);
-  }
-
-  void _selectCategory(String category) {
-    setState(() => _selectedCategory = category);
-    unawaited(AppScope.of(context).homeCategoryStore.save(category));
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    var showHeader = _showCategoryHeader;
+    if (position.pixels <= position.minScrollExtent ||
+        position.userScrollDirection == ScrollDirection.forward) {
+      showHeader = true;
+    } else if (position.userScrollDirection == ScrollDirection.reverse) {
+      showHeader = false;
+    }
+    if (showHeader == _showCategoryHeader || !mounted) return;
+    setState(() => _showCategoryHeader = showHeader);
   }
 
   void _selectPlugin(AppScope scope, String id) {
@@ -84,44 +129,37 @@ class _HomePageState extends State<HomePage> {
     unawaited(
       _featuredController.load(
         refresh: true,
-        priorityCategory: _selectedCategory,
+        homeCategory: _homeCategory(scope.registry.categories),
       ),
     );
   }
 
   void _ensureFeaturedLoaded(AppScope scope, List<String> categories) {
-    final priorityCategory = categories.contains(_selectedCategory)
-        ? _selectedCategory
-        : categories.first;
+    final homeCategory = _homeCategory(categories);
+    final plugins = scope.registry.pluginsFor(homeCategory);
+    final pluginId = scope.pluginController.resolve([
+      for (final plugin in plugins) plugin.id,
+    ]);
     final signature = [
-      'priority:$priorityCategory',
-      for (final category in categories) ...[
-        category,
-        for (final binding in scope.registry.catalogsFor(category))
+      'home:$homeCategory',
+      'selected:$pluginId',
+      for (final binding in scope.registry.catalogsFor(homeCategory))
+        if (binding.extensionId == pluginId)
           '${binding.extensionId}:${binding.extension.manifest.version}:'
               '${binding.catalog.id}',
-        'selected:${scope.pluginController.resolve([for (final plugin in scope.registry.pluginsFor(category)) plugin.id])}',
-      ],
     ].join('|');
     if (signature == _featuredSignature) return;
     _featuredSignature = signature;
-    unawaited(_featuredController.load(priorityCategory: priorityCategory));
+    unawaited(_featuredController.load(homeCategory: homeCategory));
   }
 
   Future<void> _refresh() async {
-    // Force-refreshes every category's catalogs, not just the selected one —
-    // the Featured hero draws live/upcoming events from all of them, so a
-    // category the viewer isn't looking at (e.g. "live") would otherwise keep
-    // serving a stale session cache indefinitely and never surface a newly
-    // live event. The selected category's shelves are covered by the same
-    // pass, so `_generation` can bump straight off this cache once it lands.
+    // The Home Hero is scoped to the selected provider's `all` catalogs. Other
+    // category pages own and load their catalogs when the viewer opens them.
     final categories = AppScope.of(context).registry.categories;
-    final priorityCategory = categories.contains(_selectedCategory)
-        ? _selectedCategory
-        : (categories.isEmpty ? null : categories.first);
     await _featuredController.load(
       refresh: true,
-      priorityCategory: priorityCategory,
+      homeCategory: categories.isEmpty ? null : _homeCategory(categories),
     );
     if (!mounted) return;
     setState(() => _generation++);
@@ -178,6 +216,8 @@ class _HomePageState extends State<HomePage> {
   Widget _body(BuildContext context, AppScope scope) {
     final registry = scope.registry;
     final categories = registry.categories;
+    final useRail =
+        scope.deviceClass.isTv || AppBreakpoints.usesNavigationRail(context);
 
     if (categories.isEmpty) {
       return const Scaffold(
@@ -188,9 +228,14 @@ class _HomePageState extends State<HomePage> {
 
     _ensureFeaturedLoaded(scope, categories);
 
-    final selected = categories.contains(_selectedCategory)
-        ? _selectedCategory!
-        : categories.first;
+    final selected = _homeCategory(categories);
+    final hasAllCategory = categories.any(
+      (category) => category.toLowerCase() == 'all',
+    );
+    final categoryChoices = [
+      for (final category in categories)
+        if (category.toLowerCase() != 'all') category,
+    ];
 
     final plugins = registry.pluginsFor(selected);
     final pluginId = scope.pluginController.resolve([
@@ -201,100 +246,85 @@ class _HomePageState extends State<HomePage> {
         if (binding.extensionId == pluginId) binding,
     ];
     final groups = groupHomeCatalogs(bindings);
-    return BlocBuilder<FeaturedController, FeaturedState>(
-      bloc: _featuredController,
-      builder: (context, featured) {
-        final showFeatured = featured.items.isNotEmpty || featured.isLoading;
-        final featuredHeight = !showFeatured
-            ? null
-            : math
-                  .min(
-                    480,
-                    math.max(420, MediaQuery.sizeOf(context).height * 0.52),
-                  )
-                  .toDouble();
-        return Scaffold(
-          body: RefreshIndicator(
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          RefreshIndicator(
             onRefresh: _refresh,
             child: CustomScrollView(
               key: bindings.isEmpty ? null : const Key('home-catalog-content'),
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverAppBar(
-                  expandedHeight: featuredHeight,
-                  pinned: true,
-                  floating: false,
-                  flexibleSpace: featuredHeight == null
-                      ? null
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final minHeight =
-                                MediaQuery.paddingOf(context).top +
-                                kToolbarHeight;
-                            final range = math.max(
-                              1,
-                              featuredHeight - minHeight,
-                            );
-                            final progress =
-                                ((constraints.maxHeight - minHeight) / range)
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-                            return CenteredContent(
-                              child: IgnorePointer(
-                                ignoring: progress < 0.5,
-                                child: Opacity(
-                                  opacity: progress,
-                                  child: featured.items.isEmpty
-                                      ? const FeaturedHeroPlaceholder()
-                                      : FeaturedHero(items: featured.items),
-                                ),
+                BlocBuilder<FeaturedController, FeaturedState>(
+                  bloc: _featuredController,
+                  builder: (context, featured) {
+                    final showFeatured =
+                        featured.items.isNotEmpty || featured.isLoading;
+                    final viewport = MediaQuery.sizeOf(context);
+                    final featuredHeight = !showFeatured
+                        ? null
+                        : MediaHeroLayout.snapToDevicePixel(
+                            context,
+                            MediaHeroLayout.heightForViewport(viewport) -
+                                MediaQuery.paddingOf(context).top,
+                          );
+                    return SliverAppBar(
+                      expandedHeight: featuredHeight,
+                      pinned: true,
+                      floating: false,
+                      flexibleSpace: featuredHeight == null
+                          ? null
+                          : MediaHeroFlexibleSpace(
+                              expandedHeight: featuredHeight,
+                              collapsedHeight:
+                                  kToolbarHeight +
+                                  MediaQuery.paddingOf(context).top,
+                              child: CenteredContent(
+                                child: featured.items.isEmpty
+                                    ? const FeaturedHeroPlaceholder()
+                                    : FeaturedHero(items: featured.items),
                               ),
-                            );
-                          },
+                            ),
+                      backgroundColor: AppColors.surfaceDark,
+                      foregroundColor: AppColors.onDark,
+                      surfaceTintColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      forceMaterialTransparency: true,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      centerTitle: false,
+                      titleSpacing: AppSpacing.md,
+                      title: const _HomeLogoTitle(),
+                      actions: [
+                        if (defaultTargetPlatform == TargetPlatform.macOS)
+                          IconButton(
+                            tooltip: 'Refresh',
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _refresh,
+                          ),
+                        IconButton(
+                          tooltip: 'Search',
+                          icon: const Icon(Icons.search),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              // Searching from the anime chip means searching
+                              // anime: carry the browsing scope across.
+                              builder: (_) =>
+                                  SearchPage(initialScope: selected),
+                            ),
+                          ),
                         ),
-                  backgroundColor: AppColors.surfaceDark,
-                  foregroundColor: AppColors.onDark,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  centerTitle: false,
-                  titleSpacing: AppSpacing.md,
-                  title: const _HomeLogoTitle(),
-                  actions: [
-                    if (defaultTargetPlatform == TargetPlatform.macOS)
-                      IconButton(
-                        tooltip: 'Refresh',
-                        icon: const Icon(Icons.refresh),
-                        onPressed: _refresh,
-                      ),
-                    IconButton(
-                      tooltip: 'Search',
-                      icon: const Icon(Icons.search),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          // Searching from the anime chip means searching
-                          // anime: carry the browsing scope across.
-                          builder: (_) => SearchPage(initialScope: selected),
-                        ),
-                      ),
-                    ),
-                    if (plugins.length > 1 && pluginId != null)
-                      PluginSelector(
-                        plugins: plugins,
-                        selectedId: pluginId,
-                        onSelected: (id) => _selectPlugin(scope, id),
-                      ),
-                  ],
-                ),
-                SliverPersistentHeader(
-                  key: const Key('home-category-header'),
-                  pinned: true,
-                  delegate: _CategoryHeaderDelegate(
-                    categories: categories,
-                    selected: selected,
-                    onSelected: _selectCategory,
-                  ),
+                        if (plugins.length > 1 && pluginId != null)
+                          PluginSelector(
+                            plugins: plugins,
+                            selectedId: pluginId,
+                            onSelected: (id) => _selectPlugin(scope, id),
+                          ),
+                      ],
+                    );
+                  },
                 ),
                 if (selected.toLowerCase() == 'all')
                   SliverToBoxAdapter(
@@ -303,6 +333,42 @@ class _HomePageState extends State<HomePage> {
                         controller: scope.libraryController,
                         registry: registry,
                       ),
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: TopTenShelf(
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: CenteredContent(
+                      child: TodaysMatchesShelf(
+                        catalogCache: scope.catalogCache,
+                        registry: registry,
+                        onSeeMore: () => _openSportCategory(categories),
+                        refreshToken: _generation,
+                      ),
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: RecommendedShelf(
+                      controller: scope.libraryController,
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
+                    ),
+                  ),
+                if (selected.toLowerCase() == 'all')
+                  SliverToBoxAdapter(
+                    child: SurpriseMeBanner(
+                      registry: registry,
+                      catalogCache: scope.catalogCache,
+                      refreshToken: _generation,
                     ),
                   ),
                 if (bindings.isEmpty)
@@ -323,8 +389,51 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-        );
-      },
+          if (categoryChoices.isNotEmpty && !useRail)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: AnimatedSlide(
+                  key: const Key('home-category-header-animation'),
+                  offset: _showCategoryHeader
+                      ? Offset.zero
+                      : const Offset(0, -1),
+                  duration: _categoryHeaderAnimationDuration,
+                  curve: Curves.easeInOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _showCategoryHeader ? 1 : 0,
+                    duration: _categoryHeaderAnimationDuration,
+                    curve: Curves.easeInOutCubic,
+                    child: IgnorePointer(
+                      ignoring: !_showCategoryHeader,
+                      child: Material(
+                        key: const Key('home-category-header'),
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          height: 48,
+                          child: CenteredContent(
+                            child: CategoryChips(
+                              categories: categoryChoices,
+                              // Home is the implicit `all` destination, so
+                              // no visible category chip is selected.
+                              selected: hasAllCategory ? '' : selected,
+                              onSelected: _openCategory,
+                              backgroundColor: AppColors.surfaceDarkElevated
+                                  .withValues(alpha: 0.62),
+                              selectedColor: AppColors.onDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -345,50 +454,6 @@ class _HomeLogoTitle extends StatelessWidget {
       alignment: Alignment.centerLeft,
     ),
   );
-}
-
-class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _CategoryHeaderDelegate({
-    required this.categories,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<String> categories;
-  final String selected;
-  final ValueChanged<String> onSelected;
-
-  @override
-  double get minExtent => 48;
-
-  @override
-  double get maxExtent => 48;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) => Material(
-    color: AppColors.surfaceDark,
-    elevation: overlapsContent ? 2 : 0,
-    child: SizedBox(
-      height: 48,
-      child: CenteredContent(
-        child: CategoryChips(
-          categories: categories,
-          selected: selected,
-          onSelected: onSelected,
-        ),
-      ),
-    ),
-  );
-
-  @override
-  bool shouldRebuild(covariant _CategoryHeaderDelegate oldDelegate) =>
-      oldDelegate.categories != categories ||
-      oldDelegate.selected != selected ||
-      oldDelegate.onSelected != onSelected;
 }
 
 class _NoExtensions extends StatelessWidget {

@@ -31,6 +31,12 @@ void main() {
             ..statusCode = 200
             ..write('hi there');
           await request.response.close();
+        case '/binary':
+          request.response
+            ..headers.contentType = ContentType('application', 'x-protobuf')
+            ..statusCode = 200
+            ..add(const [0x1a, 0x03, 0x68, 0x69, 0x21]);
+          await request.response.close();
         case '/redirect-ok':
           request.response
             ..statusCode = 302
@@ -116,6 +122,23 @@ void main() {
     expect(decoded['status'], 200);
     expect(decoded['body'], 'hi there');
     expect(decoded['header'], 'hello');
+  });
+
+  test('a binary response crosses the string bridge as marked base64', () async {
+    final result = await engine.evalAsync('''
+      (async () => {
+        const r = await fetch(${jsonEncode(urlFor('127.0.0.1', '/binary'))});
+        return {
+          status: r.status,
+          body: r.body,
+          encoding: r.headers['x-qjsr-body-encoding']
+        };
+      })()
+    ''');
+    final decoded = jsonDecode(result) as Map;
+    expect(decoded['status'], 200);
+    expect(decoded['encoding'], 'base64');
+    expect(decoded['body'], 'GgNoaSE=');
   });
 
   test(

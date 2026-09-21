@@ -220,6 +220,7 @@ flowchart LR
             K2["hmacSha256(key, v)"]
             K3["xor(a, b)"]
             K4["aesCbcDecrypt(key, iv, data)"]
+            K6["aesCbcEncrypt(key, iv, data)"]
             K5["aesGcmDecrypt(key, nonce, data)"]
         end
         subgraph M["host.match"]
@@ -293,6 +294,7 @@ All values in and out are **base64**.
 | `hmacSha256(keyB64, dataB64)` | → MAC, base64 |
 | `xor(aB64, bB64)` | Truncates to the **shorter** input — a keystream shorter than its input is a real upstream pattern, not an error. |
 | `aesCbcDecrypt(keyB64, ivB64, dataB64)` | PKCS7. Returns **`null`** if the data will not decrypt. |
+| `aesCbcEncrypt(keyB64, ivB64, dataB64)` | PKCS7. Returns ciphertext as base64. |
 | `aesGcmDecrypt(keyB64, nonceB64, dataB64)` | 128-bit tag **concatenated onto the end** of the ciphertext. No AAD. Returns **`null`** on tag-verification failure. |
 
 Decryption returns `null` for an invalid key so callers can try another candidate.

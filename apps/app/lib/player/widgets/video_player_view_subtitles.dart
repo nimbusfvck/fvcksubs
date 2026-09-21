@@ -1,6 +1,9 @@
 part of 'video_player_view.dart';
 
-Future<_DownloadedCaptionFile> _downloadCaptionFile(String url) async {
+Future<_DownloadedCaptionFile> _downloadCaptionFile(
+  String url, {
+  Map<String, String> headers = const {},
+}) async {
   final uri = Uri.tryParse(url);
   if (uri?.scheme == 'file' ||
       (uri?.scheme.isEmpty ?? true) && url.startsWith('/')) {
@@ -18,6 +21,9 @@ Future<_DownloadedCaptionFile> _downloadCaptionFile(String url) async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(Uri.parse(url));
+    for (final entry in headers.entries) {
+      request.headers.set(entry.key, entry.value);
+    }
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       await response.drain<void>();

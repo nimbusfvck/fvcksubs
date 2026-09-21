@@ -327,6 +327,7 @@ void main() {
         await t.controller.refresh();
         expect(t.controller.listings.single.isUpdate, isTrue);
         expect(t.controller.listings.single.isUpToDate, isFalse);
+        expect(t.controller.installableListings, hasLength(1));
         await t.controller.install(t.controller.listings.single.entry);
 
         expect(
@@ -337,6 +338,22 @@ void main() {
         expect(t.store.saved['remote_ext']!.version, '2.0.0');
       },
     );
+
+    test('update refreshes the repository before installing', () async {
+      final t = build();
+      await t.controller.setRepoUrl('$baseUrl/repo.json');
+      await t.controller.refresh();
+      await t.controller.install(t.controller.listings.single.entry);
+
+      // The listing shown in the details page is now stale. The update action
+      // must fetch the current entry before downloading it.
+      repoVersion = '3.0.0';
+      expect(t.controller.listings.single.entry.version, '1.0.0');
+
+      expect(await t.controller.update('remote_ext'), isTrue);
+      expect(t.store.saved['remote_ext']!.version, '3.0.0');
+      expect(t.controller.listings.single.entry.version, '3.0.0');
+    });
 
     test('a bundle that verifies but will not load is not persisted', () async {
       // The ordering guarantee in install()'s doc comment: persist only

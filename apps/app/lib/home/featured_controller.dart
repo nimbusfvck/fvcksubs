@@ -49,21 +49,58 @@ class FeaturedController extends Cubit<FeaturedState> {
   final PluginController pluginController;
 
   int _request = 0;
+  Future<void>? _activeLoad;
+  bool _activeIsRefresh = false;
+  bool _refreshQueued = false;
+  String? _queuedHomeCategory;
 
-  Future<void> load({bool refresh = false, String? priorityCategory}) async {
+  Future<void> load({bool refresh = false, String? homeCategory}) {
+    final activeLoad = _activeLoad;
+    if (activeLoad != null) {
+      if (refresh) {
+        _refreshQueued = true;
+        _queuedHomeCategory = homeCategory;
+        if (!_activeIsRefresh) return Future<void>.value();
+      }
+      return activeLoad;
+    }
+
+    final future = _load(refresh: refresh, homeCategory: homeCategory);
+    _activeLoad = future;
+    _activeIsRefresh = refresh;
+    return future.whenComplete(() {
+      if (!identical(_activeLoad, future)) return;
+      _activeLoad = null;
+      _activeIsRefresh = false;
+      if (_refreshQueued && !isClosed) {
+        final queuedHomeCategory = _queuedHomeCategory;
+        _refreshQueued = false;
+        _queuedHomeCategory = null;
+        unawaited(load(refresh: true, homeCategory: queuedHomeCategory));
+      }
+    });
+  }
+
+  Future<void> _load({
+    required bool refresh,
+    required String? homeCategory,
+  }) async {
     final request = ++_request;
-    emit(state.copyWith(status: FeaturedStatus.loading, clearError: true));
+    if (!refresh || state.items.isEmpty) {
+      emit(state.copyWith(status: FeaturedStatus.loading, clearError: true));
+    }
 
-    final categories = registry.categories;
+    final category = homeCategory ?? _defaultHomeCategory();
     final requests = <_FeaturedLoadRequest>[];
-    for (final category in categories) {
+    if (category != null) {
       final pluginId = pluginController.resolve([
         for (final plugin in registry.pluginsFor(category)) plugin.id,
       ]);
-      if (pluginId == null) continue;
-      for (final binding in registry.catalogsFor(category)) {
-        if (binding.extensionId == pluginId) {
-          requests.add(_FeaturedLoadRequest(binding, category));
+      if (pluginId != null) {
+        for (final binding in registry.catalogsFor(category)) {
+          if (binding.extensionId == pluginId) {
+            requests.add(_FeaturedLoadRequest(binding, category));
+          }
         }
       }
     }
@@ -71,9 +108,9 @@ class FeaturedController extends Cubit<FeaturedState> {
     final results = List<_FeaturedLoadResult?>.filled(requests.length, null);
     final loadOrder = [
       for (var index = 0; index < requests.length; index++)
-        if (requests[index].category == priorityCategory) index,
+        if (requests[index].category == category) index,
       for (var index = 0; index < requests.length; index++)
-        if (requests[index].category != priorityCategory) index,
+        if (requests[index].category != category) index,
     ];
     var nextLoad = 0;
     var completed = 0;
@@ -93,19 +130,6 @@ class FeaturedController extends Cubit<FeaturedState> {
         results[resultIndex] = result;
         completed++;
         hasPersistentCache = hasPersistentCache || result.fromPersistentCache;
-
-        if (isClosed || request != _request || result.page == null) continue;
-
-        // Publish the first usable pages immediately. The list stays in
-        // catalog order, even though requests finish in different orders, so
-        // completion timing never changes the extension's editorial signal.
-        final pages = [for (final entry in results) ?entry?.page];
-        emit(
-          FeaturedState(
-            status: FeaturedStatus.loading,
-            items: FeaturedAlgorithm.selectPages(pages),
-          ),
-        );
       }
     }
 
@@ -145,10 +169,17 @@ class FeaturedController extends Cubit<FeaturedState> {
     final items = FeaturedAlgorithm.selectPages(pages);
     emit(FeaturedState(status: FeaturedStatus.success, items: items));
     if (!refresh && hasPersistentCache) {
-      // Keep the first paint instant, but do not leave a prior session's hero
-      // feed stale until the viewer explicitly pulls to refresh.
-      unawaited(load(refresh: true));
+      // Keep the persisted Home snapshot usable, but do not leave a prior
+      // session's Hero feed stale until it refreshes in the background.
+      unawaited(load(refresh: true, homeCategory: category));
     }
+  }
+
+  String? _defaultHomeCategory() {
+    for (final category in registry.categories) {
+      if (category.toLowerCase() == 'all') return category;
+    }
+    return registry.categories.isEmpty ? null : registry.categories.first;
   }
 
   Future<_FeaturedLoadResult> _loadPage(
@@ -209,7 +240,7 @@ abstract final class FeaturedAlgorithm {
   // These limits apply while diversity is possible. They are relaxed during
   // the final fill so a single-kind catalog can still populate the carousel.
   static const _maximumPerKind = <MediaKindV2, int>{
-    MediaKindV2.event: 2,
+    MediaKindV2.event: 1,
     MediaKindV2.video: 2,
     MediaKindV2.series: 2,
     MediaKindV2.channel: 1,
@@ -229,13 +260,11 @@ abstract final class FeaturedAlgorithm {
   static const _pageWeight = 3.0;
   static const _pagePenalty = 1.0;
 
-  // Freshness scores keep live and imminent content ahead of distant events.
-  static const _liveFreshnessScore = 40.0;
+  // Freshness scores keep imminent content ahead of distant events.
   static const _imminentFreshnessScore = 24.0;
   static const _upcomingFreshnessScore = 16.0;
   static const _nearFutureFreshnessScore = 8.0;
   static const _futureFreshnessScore = 2.0;
-  static const _pastEventScore = -10.0;
   static const _currentReleaseScore = 20.0;
   static const _previousReleaseScore = 12.0;
   static const _olderRecentReleaseScore = 5.0;
@@ -249,7 +278,7 @@ abstract final class FeaturedAlgorithm {
   static const _ratingWeight = 2.0;
   static const _landscapeScore = 5.0;
   static const _portraitScore = 3.0;
-  static const _eventScore = 4.0;
+  static const _eventScore = 0.0;
   static const _channelScore = 3.0;
   static const _episodeScore = -8.0;
 
@@ -271,6 +300,7 @@ abstract final class FeaturedAlgorithm {
     Iterable<VersionedMediaItem> input, {
     int maxItems = 8,
     DateTime? now,
+    bool allowMultipleEvents = false,
   }) {
     final candidates = <_FeaturedCandidate>[];
     var itemIndex = 0;
@@ -290,6 +320,7 @@ abstract final class FeaturedAlgorithm {
       candidates,
       maxItems: maxItems,
       now: now ?? DateTime.now(),
+      allowMultipleEvents: allowMultipleEvents,
     );
   }
 
@@ -298,6 +329,7 @@ abstract final class FeaturedAlgorithm {
     Iterable<VersionedCatalogPage> input, {
     int maxItems = 8,
     DateTime? now,
+    bool allowMultipleEvents = false,
   }) {
     final candidates = <_FeaturedCandidate>[];
     var pageIndex = 0;
@@ -328,6 +360,7 @@ abstract final class FeaturedAlgorithm {
       candidates,
       maxItems: maxItems,
       now: now ?? DateTime.now(),
+      allowMultipleEvents: allowMultipleEvents,
     );
   }
 
@@ -335,6 +368,7 @@ abstract final class FeaturedAlgorithm {
     Iterable<_FeaturedCandidate> input, {
     required int maxItems,
     required DateTime now,
+    required bool allowMultipleEvents,
   }) {
     if (maxItems <= 0) return const [];
 
@@ -342,7 +376,7 @@ abstract final class FeaturedAlgorithm {
     // selection so the same title never occupies multiple hero pages.
     final unique = <MediaRef, _FeaturedCandidate>{};
     for (final candidate in input) {
-      if (!_isEligible(candidate.entry.item)) continue;
+      if (!_isEligible(candidate.entry.item, now)) continue;
       final existing = unique[candidate.entry.item.ref];
       if (existing == null || _isRicher(candidate, existing)) {
         unique[candidate.entry.item.ref] = candidate;
@@ -354,21 +388,25 @@ abstract final class FeaturedAlgorithm {
     final selected = <_FeaturedCandidate>[];
     final selectedRefs = <MediaRef>{};
     final kindCounts = <MediaKindV2, int>{};
+    final eventLimit = allowMultipleEvents ? maxItems : 1;
 
     void pick(
       bool Function(_FeaturedCandidate candidate) accepts,
       int Function(_FeaturedCandidate first, _FeaturedCandidate second) compare,
     ) {
       if (selected.length >= maxItems) return;
-      final matches = [
-        for (final candidate in candidates)
-          if (!selectedRefs.contains(candidate.entry.item.ref) &&
-              accepts(candidate) &&
-              _underKindLimit(candidate, kindCounts))
-            candidate,
-      ]..sort(compare);
-      if (matches.isEmpty) return;
-      final chosen = matches.first;
+      _FeaturedCandidate? chosen;
+      for (final candidate in candidates) {
+        if (selectedRefs.contains(candidate.entry.item.ref) ||
+            !accepts(candidate) ||
+            !_underKindLimit(candidate, kindCounts, eventLimit: eventLimit)) {
+          continue;
+        }
+        if (chosen == null || compare(candidate, chosen) < 0) {
+          chosen = candidate;
+        }
+      }
+      if (chosen == null) return;
       selected.add(chosen);
       selectedRefs.add(chosen.entry.item.ref);
       final kind = chosen.entry.item.kind;
@@ -377,9 +415,9 @@ abstract final class FeaturedAlgorithm {
 
     final composite = _compositeComparator(now);
 
-    // Reserve high-value slots first. Each slot has its own comparator so a
-    // high rating cannot displace a live event or the extension's lead item.
-    pick(_isLiveEvent, _eventComparator(now));
+    // Keep editorial video and series items at the front. By default a single
+    // highly rated event from the viewer's local day may follow them;
+    // category surfaces can opt into multiple events.
     pick(
       (candidate) => candidate.entry.item.kind == MediaKindV2.video,
       _editorialComparator(now),
@@ -388,10 +426,7 @@ abstract final class FeaturedAlgorithm {
       (candidate) => candidate.entry.item.kind == MediaKindV2.series,
       _editorialComparator(now),
     );
-    pick(
-      (candidate) => _isUpcomingEvent(candidate, now),
-      _upcomingComparator(now),
-    );
+    pick((candidate) => _isTodayEvent(candidate, now), _eventComparator(now));
     pick((candidate) => _isNewVod(candidate, now), _freshnessComparator(now));
     pick(_isRatedVod, _ratingComparator(now));
 
@@ -409,6 +444,7 @@ abstract final class FeaturedAlgorithm {
       kindCounts,
       maxItems: maxItems,
       enforceKindLimits: true,
+      eventLimit: eventLimit,
     );
     _fill(
       selected,
@@ -417,6 +453,7 @@ abstract final class FeaturedAlgorithm {
       kindCounts,
       maxItems: maxItems,
       enforceKindLimits: false,
+      eventLimit: eventLimit,
     );
 
     return [for (final candidate in selected) candidate.entry];
@@ -429,12 +466,20 @@ abstract final class FeaturedAlgorithm {
     Map<MediaKindV2, int> kindCounts, {
     required int maxItems,
     required bool enforceKindLimits,
+    required int eventLimit,
   }) {
     while (selected.length < maxItems) {
       final available = [
         for (final candidate in candidates)
           if (!selectedRefs.contains(candidate.entry.item.ref) &&
-              (!enforceKindLimits || _underKindLimit(candidate, kindCounts)))
+              (candidate.entry.item.kind == MediaKindV2.event
+                  ? _underKindLimit(
+                      candidate,
+                      kindCounts,
+                      eventLimit: eventLimit,
+                    )
+                  : !enforceKindLimits ||
+                        _underKindLimit(candidate, kindCounts)))
             candidate,
       ];
       if (available.isEmpty) return;
@@ -453,16 +498,20 @@ abstract final class FeaturedAlgorithm {
     }
   }
 
-  static bool _isEligible(MediaItemV2 item) {
-    if (item case EventItemV2(
-      schedule: final schedule,
-    ) when schedule.state == ScheduleState.ended) {
-      return false;
+  static bool _isEligible(MediaItemV2 item, DateTime now) {
+    // Channels remain available in catalogs, but the hero is reserved for
+    // editorial content and events from the viewer's local day.
+    if (item is ChannelItemV2) return false;
+    if (item case EventItemV2(schedule: final schedule)) {
+      if (schedule.state == ScheduleState.ended ||
+          !_isSameLocalDay(schedule.startsAt, now)) {
+        return false;
+      }
     }
     final artwork = item.artwork;
     if (artwork?.landscape != null || artwork?.portrait != null) return true;
 
-    // Live surfaces have a deterministic generated fallback. Other kinds stay
+    // Events have a deterministic generated fallback. Other kinds stay
     // excluded because a generic placeholder is not strong enough for a hero.
     return item is EventItemV2 || item is ChannelItemV2;
   }
@@ -492,26 +541,27 @@ abstract final class FeaturedAlgorithm {
 
   static bool _underKindLimit(
     _FeaturedCandidate candidate,
-    Map<MediaKindV2, int> counts,
-  ) {
+    Map<MediaKindV2, int> counts, {
+    int eventLimit = 1,
+  }) {
     final kind = candidate.entry.item.kind;
-    return (counts[kind] ?? 0) < (_maximumPerKind[kind] ?? 1);
+    final limit = kind == MediaKindV2.event
+        ? eventLimit
+        : (_maximumPerKind[kind] ?? 1);
+    return (counts[kind] ?? 0) < limit;
   }
 
-  static bool _isLiveEvent(_FeaturedCandidate candidate) =>
-      switch (candidate.entry.item) {
-        EventItemV2(schedule: final schedule) =>
-          schedule.state == ScheduleState.live,
-        _ => false,
-      };
-
-  static bool _isUpcomingEvent(_FeaturedCandidate candidate, DateTime now) {
+  static bool _isTodayEvent(_FeaturedCandidate candidate, DateTime now) {
     final item = candidate.entry.item;
-    if (item is! EventItemV2 || item.schedule.state == ScheduleState.live) {
-      return false;
-    }
-    final untilStart = item.schedule.startsAt.toUtc().difference(now.toUtc());
-    return !untilStart.isNegative && untilStart <= _upcomingWindow;
+    return item is EventItemV2 && _isSameLocalDay(item.schedule.startsAt, now);
+  }
+
+  static bool _isSameLocalDay(DateTime first, DateTime second) {
+    final firstLocal = first.toLocal();
+    final secondLocal = second.toLocal();
+    return firstLocal.year == secondLocal.year &&
+        firstLocal.month == secondLocal.month &&
+        firstLocal.day == secondLocal.day;
   }
 
   static bool _isNewVod(_FeaturedCandidate candidate, DateTime now) {
@@ -588,25 +638,6 @@ abstract final class FeaturedAlgorithm {
     );
   };
 
-  static int Function(_FeaturedCandidate, _FeaturedCandidate)
-  _upcomingComparator(DateTime now) => (first, second) {
-    final firstItem = first.entry.item as EventItemV2;
-    final secondItem = second.entry.item as EventItemV2;
-    final rating = _eventRatingCompare(first, second);
-    if (rating != 0) return rating;
-    final start = firstItem.schedule.startsAt.compareTo(
-      secondItem.schedule.startsAt,
-    );
-    if (start != 0) return start;
-    return _compareScores(
-      first,
-      second,
-      _compositeScore(first, now),
-      _compositeScore(second, now),
-      now,
-    );
-  };
-
   static int _eventRatingCompare(
     _FeaturedCandidate first,
     _FeaturedCandidate second,
@@ -650,9 +681,8 @@ abstract final class FeaturedAlgorithm {
     final item = candidate.entry.item;
     switch (item) {
       case EventItemV2(schedule: final schedule):
-        if (schedule.state == ScheduleState.live) return _liveFreshnessScore;
         final untilStart = schedule.startsAt.toUtc().difference(now.toUtc());
-        if (untilStart.isNegative) return _pastEventScore;
+        if (untilStart.isNegative) return 0.0;
         return switch (untilStart) {
           <= _imminentWindow => _imminentFreshnessScore,
           <= _upcomingWindow => _upcomingFreshnessScore,

@@ -3,6 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/addons/addons_controller.dart';
 import 'package:fvcksubs_app/addons/addons_page.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
+import 'package:fvcksubs_app/catalog/category_page.dart';
+import 'package:fvcksubs_app/home/continue_watching_shelf.dart';
+import 'package:fvcksubs_app/home/category_chips.dart';
+import 'package:fvcksubs_app/home/home_page.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/platform/device_class.dart';
 import 'package:fvcksubs_app/shell/app_nav_rail.dart';
@@ -25,6 +29,51 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('tv category is labeled Shows', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['all', 'tv'],
+          selected: 'all',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Shows'), findsOneWidget);
+    expect(find.text('Tv'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['movie'],
+          selected: 'movie',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('Movie'), findsNothing);
+  });
+
+  testWidgets('live category shows an animated indicator', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryChips(
+          categories: const ['live'],
+          selected: '',
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Live'), findsOneWidget);
+    expect(find.byKey(const Key('live-category-indicator')), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 550));
+    expect(find.byKey(const Key('live-category-indicator')), findsOneWidget);
+  });
 
   testWidgets('nav is fixed and does not depend on installed extensions', (
     tester,
@@ -150,6 +199,11 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Preferred subtitles'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Preferred subtitles'), findsOneWidget);
     expect(find.text('Indonesia'), findsOneWidget);
   });
@@ -215,6 +269,13 @@ void main() {
 
     expect(find.byType(AppNavRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('Sport'), findsOneWidget);
+    expect(find.byKey(const Key('home-category-header')), findsNothing);
+
+    await tester.tap(find.text('Sport'));
+    await tester.pump();
+    expect(find.byType(AppNavRail), findsOneWidget);
+    expect(find.byType(CategoryPage), findsOneWidget);
   });
 
   testWidgets(
@@ -284,6 +345,74 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
   });
 
+  testWidgets('all stays on Home while other categories open a category page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrapApp(
+        child: const HomePage(),
+        registry: ExtensionRegistry([
+          FakeExtension(
+            categories: ['all', 'movie'],
+            expanded: true,
+            items: [fakeItem(title: 'Home item')],
+          ),
+        ]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(CategoryPage), findsNothing);
+    expect(find.text('All'), findsNothing);
+
+    await tester.tap(find.text('Movies'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(CategoryPage), findsOneWidget);
+    expect(find.widgetWithText(AppPageBar, 'Movies'), findsOneWidget);
+    expect(find.text('Home item'), findsWidgets);
+  });
+
+  testWidgets(
+    'category chips hide while scrolling down and show while scrolling up',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapApp(
+          child: const HomePage(),
+          registry: ExtensionRegistry([
+            FakeExtension(
+              expanded: true,
+              items: [
+                for (var index = 0; index < 30; index++)
+                  fakeItem(id: 'item-$index', title: 'Item $index'),
+              ],
+            ),
+          ]),
+        ),
+      );
+      // The Home page contains long-lived scroll/preview state, so settling the
+      // entire tree is not a reliable way to wait for its catalog response.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      AnimatedSlide header() => tester.widget<AnimatedSlide>(
+        find.byKey(const Key('home-category-header-animation')),
+      );
+
+      expect(header().offset, Offset.zero);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(header().offset, const Offset(0, -1));
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(header().offset, Offset.zero);
+    },
+  );
+
   testWidgets('Continue Watching hides mature records when NSFW is off', (
     tester,
   ) async {
@@ -314,6 +443,49 @@ void main() {
     expect(find.text('Continue Watching'), findsNothing);
     expect(find.text('Mature item'), findsNothing);
   });
+
+  testWidgets(
+    'Continue Watching shows remaining duration beside a smaller checklist',
+    (tester) async {
+      final registry = ExtensionRegistry([FakeExtension()]);
+      final item = fakeItem(title: 'In progress');
+      final library = LibraryController(
+        store: _TestLibraryStore(),
+        initial: {
+          UserMediaState.keyFor(item.ref): UserMediaState(
+            item: item,
+            progress: const Duration(minutes: 25),
+            duration: const Duration(hours: 2),
+            lastWatched: DateTime.utc(2026, 9, 10),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapApp(
+          child: ContinueWatchingShelf(controller: library, registry: registry),
+          registry: registry,
+          libraryController: library,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1h 35m left'), findsOneWidget);
+      final checkButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.check_rounded),
+      );
+      expect(checkButton.iconSize, 16);
+      expect(
+        checkButton.constraints,
+        const BoxConstraints.tightFor(width: 36, height: 36),
+      );
+      expect(
+        tester.getSize(find.byType(LinearProgressIndicator)),
+        const Size(280, 4),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('expanded sectioned catalogs keep their section heading', (
     tester,
@@ -379,7 +551,10 @@ void main() {
       const Offset(0, 300),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Change service').first);
+    final changeService = find.byTooltip('Change service').first;
+    await tester.ensureVisible(changeService);
+    await tester.pumpAndSettle();
+    await tester.tap(changeService);
     await tester.pumpAndSettle();
     expect(find.text('Netflix'), findsOneWidget);
     await tester.tap(find.text('Netflix'));

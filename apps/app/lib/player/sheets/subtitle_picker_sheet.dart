@@ -58,7 +58,7 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   _OnlineSearchState _onlineState = _OnlineSearchState.idle;
   List<OnlineSubtitleSearchResult> _onlineResults = const [];
   String? _materializingId;
-  bool _translating = false;
+  String? _translatingSourceUrl;
   late final OnlineSubtitleSearchService _searchService;
   late final SubtitleTranslateService _translateService;
   bool _ownsSearchService = false;
@@ -82,7 +82,14 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   }
 
   List<_SubtitleGroup> get _groups {
-    final merged = subtitlesForPicker([...widget.tracks, ..._externalTracks]);
+    final merged = subtitlesForPicker([
+      ...widget.tracks,
+      ..._externalTracks,
+      if (widget.current != null &&
+          !widget.tracks.any((track) => track.url == widget.current!.url) &&
+          !_externalTracks.any((track) => track.url == widget.current!.url))
+        widget.current!,
+    ]);
     final byLabel = <String, List<SubtitleTrack>>{};
     for (final track in merged) {
       (byLabel[subtitleLanguageLabel(track.language)] ??= []).add(track);
@@ -214,7 +221,7 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
   Future<void> _translateSource(SubtitleTrack source) async {
     final target = preferenceLanguageCode;
     if (target == null || target.isEmpty) return;
-    setState(() => _translating = true);
+    setState(() => _translatingSourceUrl = source.url);
     try {
       final translated = await _translateService.translateTrack(
         source,
@@ -225,7 +232,11 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
         context,
       ).pop(PlayerSubtitleSelection.track(translated, isExternal: true));
     } catch (_) {
-      if (mounted) setState(() => _translating = false);
+      if (!mounted) return;
+      setState(() => _translatingSourceUrl = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subtitle translation failed')),
+      );
     }
   }
 
@@ -489,6 +500,16 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
                     : [
                         for (final (index, track) in expanded.tracks.indexed)
                           ListTile(
+                            leading: _translatingSourceUrl == track.url
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.brandAccent,
+                                    ),
+                                  )
+                                : null,
                             title: Text(
                               _variantName(track, index),
                               style: AppTypography.bodyMd.copyWith(
@@ -509,7 +530,7 @@ class _PlayerSubtitlePickerSheetState extends State<PlayerSubtitlePickerSheet> {
                                     color: AppColors.brandAccent,
                                   )
                                 : null,
-                            enabled: !_translating,
+                            enabled: _translatingSourceUrl == null,
                             onTap: () {
                               if (expanded.isTranslation) {
                                 _translateSource(track);

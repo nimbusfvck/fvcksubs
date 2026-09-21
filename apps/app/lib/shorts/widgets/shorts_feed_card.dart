@@ -85,7 +85,10 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
       duration: const Duration(milliseconds: 120),
       reverseDuration: const Duration(milliseconds: 300),
     );
-    _flashOpacity = CurvedAnimation(parent: _flashController, curve: Curves.easeOut);
+    _flashOpacity = CurvedAnimation(
+      parent: _flashController,
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -138,10 +141,15 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
   @override
   Widget build(BuildContext context) {
     final source = widget.previewResolution.source;
-    final artwork = widget.item.artwork?.portrait ?? widget.item.artwork?.landscape;
+    final artwork =
+        widget.item.artwork?.portrait ?? widget.item.artwork?.landscape;
     final effectivePlaying = widget.playing && !_paused;
-    final boxFit = widget.fit == PlayerFitMode.cover ? BoxFit.cover : BoxFit.contain;
-    final isPlayerActive = widget.previewResolution.status == PreviewStatus.usable && source != null;
+    final boxFit = widget.fit == PlayerFitMode.cover
+        ? BoxFit.cover
+        : BoxFit.contain;
+    final isPlayerActive =
+        widget.previewResolution.status == PreviewStatus.usable &&
+        source != null;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -249,20 +257,6 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
             ),
           ),
           Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xs),
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
-                  child: PlayerFitButton(mode: widget.fit, onToggle: widget.onToggleFit),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
@@ -285,14 +279,21 @@ class _ShortsFeedCardState extends State<ShortsFeedCard>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(child: _InfoOverlay(item: widget.item, detail: widget.detail)),
+                    Expanded(
+                      child: _InfoOverlay(
+                        item: widget.item,
+                        detail: widget.detail,
+                      ),
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     _ActionRail(
                       item: widget.item,
                       detail: widget.detail,
                       muted: widget.muted,
+                      fit: widget.fit,
                       onWatch: widget.onWatch,
                       onToggleMute: widget.onToggleMute,
+                      onToggleFit: widget.onToggleFit,
                     ),
                   ],
                 ),
@@ -331,7 +332,7 @@ class _InfoOverlay extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: AppSpacing.xs,
           children: [
-            Text(_kindLabel(item.kind), style: _metaStyle),
+            Text(_kindLabel(item), style: _metaStyle),
             if (item.releaseDate case final date?)
               Text('· ${formatReleaseDate(date)}', style: _metaStyle)
             else if (item.releaseYear case final year?)
@@ -354,15 +355,24 @@ class _InfoOverlay extends StatelessWidget {
     ],
   );
 
-  static const _metaStyle = TextStyle(color: AppColors.onDarkSoft, fontSize: 14);
+  static const _metaStyle = TextStyle(
+    color: AppColors.onDarkSoft,
+    fontSize: 14,
+  );
 
-  static String _kindLabel(MediaKindV2 kind) => switch (kind) {
-    MediaKindV2.video => 'Movie',
-    MediaKindV2.series => 'Series',
-    MediaKindV2.episode => 'Episode',
-    MediaKindV2.channel => 'Live',
-    MediaKindV2.event => 'Live event',
-  };
+  static String _kindLabel(MediaItemV2 item) {
+    final tags = item.tags.map((tag) => tag.toLowerCase()).toSet();
+    if (tags.contains('champions-league') || tags.contains('premier-league')) {
+      return 'Football';
+    }
+    return switch (item.kind) {
+      MediaKindV2.video => 'Movie',
+      MediaKindV2.series => 'Series',
+      MediaKindV2.episode => 'Episode',
+      MediaKindV2.channel => 'Live',
+      MediaKindV2.event => 'Live event',
+    };
+  }
 }
 
 /// Vertical Watch/Remind Me, Favorite, Audio rail anchored to the right
@@ -372,15 +382,19 @@ class _ActionRail extends StatelessWidget {
     required this.item,
     required this.detail,
     required this.muted,
+    required this.fit,
     required this.onWatch,
     required this.onToggleMute,
+    required this.onToggleFit,
   });
 
   final MediaItemV2 item;
   final MediaDetailV2? detail;
   final bool muted;
+  final PlayerFitMode fit;
   final VoidCallback onWatch;
   final VoidCallback onToggleMute;
+  final VoidCallback onToggleFit;
 
   @override
   Widget build(BuildContext context) {
@@ -395,13 +409,17 @@ class _ActionRail extends StatelessWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _RailAction(
-              icon: _iconFor(action.kind, reminded),
-              label: isRemindMe && reminded ? 'Reminder Set' : action.label,
-              tooltip: isRemindMe && reminded ? 'Reminder set' : action.label,
-              onTap: isRemindMe ? () => libraryController.toggleReminder(item) : onWatch,
-            ),
-            const SizedBox(height: AppSpacing.md),
+            if (shortsHasFullPlayback(item)) ...[
+              _RailAction(
+                icon: _iconFor(action.kind, reminded),
+                label: isRemindMe && reminded ? 'Reminder Set' : action.label,
+                tooltip: isRemindMe && reminded ? 'Reminder set' : action.label,
+                onTap: isRemindMe
+                    ? () => libraryController.toggleReminder(item)
+                    : onWatch,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             _RailAction(
               icon: favoriteActive ? Icons.check : Icons.add,
               label: 'Favorite',
@@ -415,6 +433,14 @@ class _ActionRail extends StatelessWidget {
               tooltip: muted ? 'Unmute' : 'Mute',
               onTap: onToggleMute,
             ),
+            const SizedBox(height: AppSpacing.md),
+            DecoratedBox(
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: PlayerFitButton(mode: fit, onToggle: onToggleFit),
+            ),
           ],
         );
       },
@@ -423,8 +449,11 @@ class _ActionRail extends StatelessWidget {
 
   IconData _iconFor(ShortsActionKind kind, bool reminded) => switch (kind) {
     ShortsActionKind.remindMe =>
-      reminded ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-    ShortsActionKind.watch || ShortsActionKind.watchLive => Icons.play_arrow_rounded,
+      reminded
+          ? Icons.notifications_active_rounded
+          : Icons.notifications_none_rounded,
+    ShortsActionKind.watch ||
+    ShortsActionKind.watchLive => Icons.play_arrow_rounded,
     ShortsActionKind.details => Icons.info_outline_rounded,
   };
 }

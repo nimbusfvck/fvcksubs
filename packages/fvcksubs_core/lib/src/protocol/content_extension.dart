@@ -25,7 +25,7 @@ abstract class ContentExtension {
       throw UnsupportedError('${manifest.id} does not provide a catalog');
 
   /// Returns one item's detail. Fills [ProviderRole.meta].
-  Future<MediaDetailV2> meta(MediaRef ref) =>
+  Future<MediaDetailV2> meta(MediaRef ref, {String? groupId}) =>
       throw UnsupportedError('${manifest.id} does not provide meta');
 
   /// Lists playable sources for an item. Half of [ProviderRole.stream].

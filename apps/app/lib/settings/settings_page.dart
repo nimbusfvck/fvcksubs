@@ -14,6 +14,8 @@ import '../player/state/subtitle_preference_controller.dart';
 import '../player/drm_test_page.dart';
 import 'quality_preference.dart';
 import 'nsfw_controller.dart';
+import 'preview_autoplay_preference_controller.dart';
+import 'febbox_cookie_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_page_bar.dart';
 
@@ -28,6 +30,10 @@ class SettingsPage extends StatelessWidget {
     final pictureInPictureController = AppScope.of(
       context,
     ).pictureInPicturePreferenceController;
+    final previewAutoplayController = AppScope.of(
+      context,
+    ).previewAutoplayPreferenceController;
+    final febboxCookieController = AppScope.of(context).febboxCookieController;
     return Scaffold(
       appBar: const AppPageBar(title: 'Settings'),
       body: ListenableBuilder(
@@ -46,6 +52,10 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             const _AddonsEntry(),
+            if (febboxCookieController != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _FebboxCookiePreference(controller: febboxCookieController),
+            ],
             const SizedBox(height: AppSpacing.md),
             const _SourcePriorityEntry(),
             const SizedBox(height: AppSpacing.md),
@@ -54,6 +64,8 @@ class SettingsPage extends StatelessWidget {
             QualityPreferenceEntry(controller: qualityController),
             const SizedBox(height: AppSpacing.md),
             _PictureInPicturePreference(controller: pictureInPictureController),
+            const SizedBox(height: AppSpacing.md),
+            _PreviewAutoplayPreference(controller: previewAutoplayController),
             const SizedBox(height: AppSpacing.md),
             _SubtitlePreference(controller: controller),
             const SizedBox(height: AppSpacing.md),
@@ -75,6 +87,154 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FebboxCookiePreference extends StatelessWidget {
+  const _FebboxCookiePreference({required this.controller});
+
+  final FebboxCookieController controller;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Material(
+      color: AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.lg,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: const Icon(Icons.lock_outline),
+        title: const Text('Febbox cookie'),
+        subtitle: Text(
+          controller.hasCookie
+              ? 'Personal cookie saved securely · used only for Febbox.'
+              : 'Add your personal ui cookie for higher-quality links.',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: controller.saving
+            ? null
+            : () => showDialog<void>(
+                context: context,
+                builder: (_) => _FebboxCookieDialog(controller: controller),
+              ),
+      ),
+    ),
+  );
+}
+
+class _FebboxCookieDialog extends StatefulWidget {
+  const _FebboxCookieDialog({required this.controller});
+
+  final FebboxCookieController controller;
+
+  @override
+  State<_FebboxCookieDialog> createState() => _FebboxCookieDialogState();
+}
+
+class _FebboxCookieDialogState extends State<_FebboxCookieDialog> {
+  late final TextEditingController _textController;
+
+  FebboxCookieController get _controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Never populate the field with the existing secret.
+    _textController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Febbox cookie'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Paste only the ui value, or the complete ui=... pair. '
+            'It is stored in the device Keychain/Keystore and sent only to '
+            'Febbox requests.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _textController,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            maxLines: 1,
+            decoration: const InputDecoration(
+              labelText: 'ui cookie value',
+              hintText: 'Paste from febbox.com',
+            ),
+          ),
+          if (_controller.error case final error?) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(error, style: const TextStyle(color: AppColors.error)),
+          ],
+        ],
+      ),
+    ),
+    actions: [
+      if (_controller.hasCookie)
+        TextButton(
+          onPressed: _controller.saving ? null : _clear,
+          child: const Text('Clear'),
+        ),
+      TextButton(
+        onPressed: _controller.saving
+            ? null
+            : () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _controller.saving ? null : _save,
+        child: Text(_controller.saving ? 'Applying…' : 'Save'),
+      ),
+    ],
+  );
+
+  Future<void> _save() async {
+    final saved = await _controller.save(_textController.text);
+    if (mounted && saved) Navigator.of(context).pop();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _clear() async {
+    final cleared = await _controller.clear();
+    if (mounted && cleared) Navigator.of(context).pop();
+    if (mounted) setState(() {});
+  }
+}
+
+class _PreviewAutoplayPreference extends StatelessWidget {
+  const _PreviewAutoplayPreference({required this.controller});
+
+  final PreviewAutoplayPreferenceController controller;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Material(
+      color: AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.lg,
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: controller.enabled,
+        onChanged: controller.setEnabled,
+        title: const Text('Autoplay previews'),
+        subtitle: const Text(
+          'Play short, muted trailer previews on Home and Detail pages.',
+        ),
+        secondary: const Icon(Icons.ondemand_video_outlined),
+      ),
+    ),
+  );
 }
 
 class _PictureInPicturePreference extends StatelessWidget {
@@ -588,9 +748,9 @@ class SubtitleAppearancePage extends StatelessWidget {
 
   static const _backgroundColors = <(String, Color)>[
     ('Transparent', Colors.transparent),
-    ('Black', Color(0xaa000000)),
-    ('Dark', Color(0xdd151515)),
-    ('Blue', Color(0xdd10243d)),
+    ('Black', Color(0x88000000)),
+    ('Dark', Color(0xbb151515)),
+    ('Blue', Color(0xbb10243d)),
   ];
 
   @override
