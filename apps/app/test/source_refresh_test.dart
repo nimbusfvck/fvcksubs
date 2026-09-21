@@ -24,6 +24,7 @@ ResolvedSource _source(String id, String label, String provider) =>
 Future<void> _showSheet(
   WidgetTester tester, {
   required List<ResolvedSource> sources,
+  String? title,
   Future<List<ResolvedSource>> Function()? onRefresh,
   ValueListenable<bool>? backgroundSourceLoading,
   ValueListenable<List<ResolvedSource>>? resolvedSourcesListenable,
@@ -33,6 +34,7 @@ Future<void> _showSheet(
       body: PlayerSourcePickerSheet(
         resolvedSources: sources,
         current: sources.first,
+        title: title,
         onRefresh: onRefresh,
         backgroundSourceLoading: backgroundSourceLoading,
         resolvedSourcesListenable: resolvedSourcesListenable,
@@ -143,8 +145,9 @@ void main() {
   testWidgets('the refresh control is hidden when no handler is given', (
     tester,
   ) async {
-    await _showSheet(tester, sources: [cricfy]);
+    await _showSheet(tester, sources: [cricfy], title: 'Source · Home vs Away');
     expect(find.byIcon(Icons.refresh), findsNothing);
+    expect(find.text('Source · Home vs Away'), findsOneWidget);
   });
 
   testWidgets('refreshing adds the sources discovery missed the first time', (

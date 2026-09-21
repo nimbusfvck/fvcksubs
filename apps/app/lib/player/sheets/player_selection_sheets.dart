@@ -17,6 +17,7 @@ class PlayerSourcePickerSheet extends StatefulWidget {
     super.key,
     required this.resolvedSources,
     required this.current,
+    this.title,
     this.providerNames = const {},
     this.onRefresh,
     this.backgroundSourceLoading,
@@ -25,6 +26,7 @@ class PlayerSourcePickerSheet extends StatefulWidget {
 
   final List<ResolvedSource> resolvedSources;
   final ResolvedSource current;
+  final String? title;
   final Map<String, String> providerNames;
 
   /// Runs discovery again and returns the merged list, or null to hide the
@@ -214,12 +216,29 @@ class _PlayerSourcePickerSheetState extends State<PlayerSourcePickerSheet> {
                         ),
                 ),
                 Expanded(
-                  child: Text(
-                    expanded?.label ?? 'Video Sources',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.titleMd.copyWith(
-                      color: AppColors.onDark,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        expanded?.label ?? widget.title ?? 'Video Sources',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.titleMd.copyWith(
+                          color: AppColors.onDark,
+                        ),
+                      ),
+                      if (expanded != null && widget.title != null)
+                        Text(
+                          widget.title!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.onDarkSoft,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 _refreshControl(expanded),

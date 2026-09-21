@@ -17,6 +17,7 @@ import 'models/app_player_controller.dart';
 import 'models/playback_media.dart';
 import 'models/playback_start_position.dart';
 import 'models/resolved_source.dart';
+import 'multi_view_page.dart';
 import 'sheets/player_selection_sheets.dart';
 import 'state/playback_stall_detector.dart';
 import 'state/persisted_resolved_source_recovery.dart';
@@ -1211,6 +1212,51 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller != null) unawaited(controller.toggleFullScreen());
   }
 
+  void _openMultiView() {
+    final event = widget.media.item;
+    if (event is! EventItemV2 || !_isLive) return;
+    final navigator = Navigator.of(context);
+    final scope = AppScope.of(context);
+    void restoreSinglePlayer(
+      EventItemV2 selectedEvent,
+      ResolvedSource selectedSource, {
+      required bool minimize,
+    }) {
+      final player = PlayerPage(
+        key: GlobalKey(),
+        item: selectedEvent,
+        resolvedSources: [selectedSource],
+        persistedSourceId: selectedSource.source.id,
+      );
+      scope.pictureInPictureSession.attach(player);
+      if (minimize) scope.pictureInPictureSession.minimize();
+      if (navigator.canPop()) navigator.pop();
+    }
+
+    // PlayerPage is hosted by the persistent mini-player overlay rather than
+    // being a normal route. Release that surface before pushing the actual
+    // multi-view route, otherwise the old native player remains above it.
+    _pictureInPictureSession?.detach(widget);
+    navigator.push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'multi-view'),
+        builder: (_) => MultiViewPage(
+          initialEvent: event,
+          initialSource: _current,
+          onOpenSinglePlayer: (selectedEvent, selectedSource) {
+            restoreSinglePlayer(selectedEvent, selectedSource, minimize: false);
+          },
+          onExitToMiniPlayer: (selectedEvent, selectedSource) =>
+              restoreSinglePlayer(
+                selectedEvent,
+                selectedSource,
+                minimize: true,
+              ),
+        ),
+      ),
+    );
+  }
+
   void _toggleFit() {
     final controller = _controller;
     final position = !_isLive ? controller?.value.value.position : null;
@@ -1417,6 +1463,9 @@ class _PlayerPageState extends State<PlayerPage> {
         onNearEnd: _showNextEpisode,
         onPlayEpisode: _playEpisode,
         onPlayNext: _playNextEpisode,
+        onOpenMultiView: _isLive && widget.media.item is EventItemV2
+            ? _openMultiView
+            : null,
         onSettling: (grace) => _stallDetector.defer(grace, now: DateTime.now()),
         onPauseUpNext: () => setState(() => _upNextPaused = true),
         onCancelUpNext: () => setState(() {

@@ -515,6 +515,10 @@ class RecordingPlayer {
     PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     playedStartPosition = startPosition;

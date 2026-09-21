@@ -44,6 +44,20 @@ void main() {
 
     expect(isEventToday(event, DateTime(2026, 9, 19, 9)), isTrue);
     expect(isEventToday(event, DateTime(2026, 9, 20, 0)), isFalse);
+
+    final overnight = EventItemV2(
+      ref: event.ref,
+      title: event.title,
+      schedule: Schedule(
+        startsAt: DateTime(2026, 9, 19, 23, 30),
+        endsAt: DateTime(2026, 9, 20, 1, 30),
+        state: ScheduleState.scheduled,
+      ),
+    );
+    expect(isEventToday(overnight, DateTime(2026, 9, 19, 23, 45)), isTrue);
+    expect(isEventToday(overnight, DateTime(2026, 9, 20, 0, 30)), isTrue);
+    expect(isEventToday(overnight, DateTime(2026, 9, 21)), isFalse);
+
     expect(isPopularSportEvent(event), isFalse);
     expect(
       isPopularSportEvent(
@@ -77,6 +91,28 @@ void main() {
     expect(
       eventScheduleStateAt(ended, startsAt.subtract(const Duration(days: 1))),
       ScheduleState.ended,
+    );
+  });
+
+  test('Today\'s Sporting Events keeps rated overnight matches visible', () {
+    final overnight = EventItemV2(
+      ref: const MediaRef(
+        extensionId: 'fake',
+        providerId: 'fake.p',
+        id: 'overnight',
+      ),
+      title: 'Overnight Event',
+      rating: 0.9,
+      schedule: Schedule(
+        startsAt: DateTime(2026, 9, 19, 23, 30),
+        endsAt: DateTime(2026, 9, 20, 1, 30),
+        state: ScheduleState.scheduled,
+      ),
+    );
+
+    expect(
+      popularSportEventsForToday([overnight], DateTime(2026, 9, 20, 0, 30)),
+      contains(overnight),
     );
   });
 

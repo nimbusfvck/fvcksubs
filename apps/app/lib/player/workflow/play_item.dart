@@ -199,6 +199,29 @@ Future<void> _playMedia(
 /// lived, so live playback must begin from a fresh resolution.
 bool canUseCachedPlaybackSources(PlaybackMedia item) => !item.isLive;
 
+/// Resolves one live event without opening the normal full-player route.
+///
+/// Multi-view owns its own presentation, but it must use the same source
+/// discovery, capability checks, provider filtering, and live retry policy as
+/// ordinary playback.
+Future<ResolvedSource?> resolveLiveEventForMultiView(
+  BuildContext context,
+  EventItemV2 event,
+) async {
+  final scope = AppScope.of(context);
+  final progress = _ResolveProgress();
+  try {
+    final result = await _resolveFirstPlayableWithRetry(
+      scope,
+      PlaybackMedia(event),
+      progress,
+    );
+    return result.first;
+  } finally {
+    progress.dispose();
+  }
+}
+
 /// Runs discovery and resolution again for [item], for the source picker's
 /// refresh control.
 ///
@@ -586,7 +609,8 @@ _resolveFirstPlayable(
       : preferredSource == null
       ? await _firstByPriority(futures)
       : await _firstPreferredEpisodeSource(futures, ordered, preferredSource);
-  _ResolvedSourceBatch? startRefresh() => backgroundRefresh ??
+  _ResolvedSourceBatch? startRefresh() =>
+      backgroundRefresh ??
       (canUseCachedPlaybackSources(item)
           ? _revalidate(
               scope,

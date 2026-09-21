@@ -14,13 +14,19 @@ import '../detail/open_versioned_item.dart';
 import '../theme/tokens.dart';
 import '../widgets/clickable.dart';
 
-/// Returns whether an event starts on [now]'s local calendar day.
+/// Returns whether an event overlaps [now]'s local calendar day.
 bool isEventToday(EventItemV2 event, DateTime now) {
   final startsAt = event.schedule.startsAt.toLocal();
   final localNow = now.toLocal();
-  return startsAt.year == localNow.year &&
-      startsAt.month == localNow.month &&
-      startsAt.day == localNow.day;
+  final dayStart = DateTime(localNow.year, localNow.month, localNow.day);
+  final nextDayStart = dayStart.add(const Duration(days: 1));
+  final endsAt = event.schedule.endsAt?.toLocal();
+  final startsToday =
+      !startsAt.isBefore(dayStart) && startsAt.isBefore(nextDayStart);
+  return startsToday ||
+      (startsAt.isBefore(dayStart) &&
+          endsAt != null &&
+          endsAt.isAfter(dayStart));
 }
 
 /// Uses an extension-provided editorial rating as the popularity signal.
@@ -28,7 +34,7 @@ bool isPopularSportEvent(EventItemV2 event) {
   return event.rating != null;
 }
 
-/// Returns at most ten rated events that start on [now]'s local day.
+/// Returns at most ten rated events that overlap [now]'s local day.
 List<EventItemV2> popularSportEventsForToday(
   Iterable<EventItemV2> events,
   DateTime now,

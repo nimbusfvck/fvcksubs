@@ -25,6 +25,10 @@ typedef PlayerBuilder =
       PlaybackStartPosition? startPosition,
       SubtitleTrack? preferredExternalSubtitle,
       SubtitleAppearance? subtitleAppearance,
+      bool muted,
+      bool playing,
+      bool? wakelock,
+      BoxFit fit,
       Key? key,
     });
 
@@ -46,6 +50,10 @@ Widget defaultPlayerBuilder(
   PlaybackStartPosition? startPosition,
   SubtitleTrack? preferredExternalSubtitle,
   SubtitleAppearance? subtitleAppearance,
+  bool muted = false,
+  bool playing = true,
+  bool? wakelock,
+  BoxFit fit = BoxFit.contain,
   Key? key,
 }) => platformPlayerBuilder(
   context,
@@ -60,4 +68,8 @@ Widget defaultPlayerBuilder(
   preferredQualityMaxHeight: preferredQualityMaxHeight,
   startPosition: startPosition,
   key: key,
+  muted: muted,
+  playing: playing,
+  wakelock: wakelock,
+  fit: fit,
 );

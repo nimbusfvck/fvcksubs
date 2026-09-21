@@ -49,6 +49,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
     this.landscapeLocked = false,
     this.onToggleLandscape = _noLandscapeToggle,
     this.onOpenSettings = _noOpenSettings,
+    this.onOpenMultiView,
     this.onEpisodeListVisibilityChanged = _noEpisodeListVisibilityChanged,
     required this.onSkip,
     this.skipIntroLabel,
@@ -135,6 +136,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
 
   /// Opens the player settings sheet.
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenMultiView;
 
   /// Announces episode rail visibility so the player can pause auto-hide while
   /// the viewer is choosing an episode.
@@ -208,6 +210,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           landscapeLocked: landscapeLocked,
           onToggleLandscape: onToggleLandscape,
           onOpenSettings: onOpenSettings,
+          onOpenMultiView: onOpenMultiView,
         ),
         transport: _PlayerTransportControls(
           visible: controlsVisible,
@@ -260,6 +263,7 @@ class PlayerControlsOverlayView extends StatelessWidget {
           landscapeLocked: landscapeLocked,
           onToggleLandscape: onToggleLandscape,
           onOpenSettings: onOpenSettings,
+          onOpenMultiView: onOpenMultiView,
         ),
       ),
       transport:
@@ -439,6 +443,7 @@ class _PlayerTopControls extends StatelessWidget {
     required this.landscapeLocked,
     required this.onToggleLandscape,
     required this.onOpenSettings,
+    this.onOpenMultiView,
   });
 
   final String title;
@@ -450,6 +455,7 @@ class _PlayerTopControls extends StatelessWidget {
   final bool landscapeLocked;
   final VoidCallback onToggleLandscape;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenMultiView;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -530,6 +536,13 @@ class _PlayerTopControls extends StatelessWidget {
                     ),
                   ),
                   PlayerFitButton(mode: fitMode, onToggle: onToggleFit),
+                  if (onOpenMultiView != null)
+                    IconButton(
+                      onPressed: onOpenMultiView,
+                      icon: const Icon(Icons.grid_view_rounded),
+                      color: Colors.white,
+                      tooltip: 'Multi-view',
+                    ),
                   PlayerOrientationButton(
                     landscapeLocked: landscapeLocked,
                     onToggle: onToggleLandscape,

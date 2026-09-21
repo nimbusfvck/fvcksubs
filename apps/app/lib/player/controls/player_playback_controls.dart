@@ -87,6 +87,7 @@ class PlayerPlaybackControls extends StatefulWidget {
     required this.onPlayNext,
     required this.onPauseUpNext,
     required this.onCancelUpNext,
+    this.onOpenMultiView,
     this.onSettling = _noSettling,
   });
 
@@ -111,6 +112,7 @@ class PlayerPlaybackControls extends StatefulWidget {
   final VoidCallback onPlayNext;
   final VoidCallback onPauseUpNext;
   final VoidCallback onCancelUpNext;
+  final VoidCallback? onOpenMultiView;
 
   /// Announces a deliberate interruption — a seek, or a track swap — so the
   /// page can stop its stall watchdog from reading the refill that follows as
@@ -838,6 +840,7 @@ class _PlayerPlaybackControlsState extends State<PlayerPlaybackControls> {
       onPlayEpisode: widget.onPlayEpisode,
       onOpenSubtitlePicker: _openSubtitlePicker,
       onOpenAudioPicker: audioTracks.length > 1 ? _openAudioPicker : null,
+      onOpenMultiView: widget.onOpenMultiView,
       onOpenQualityPicker: _openQualityPicker,
       onTimelineChangeStart: (value) {
         _hideTimer?.cancel();

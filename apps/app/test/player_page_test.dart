@@ -951,6 +951,10 @@ class _FailingPlayer extends RecordingPlayer {
     PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     final widget = super.build(
@@ -965,6 +969,10 @@ class _FailingPlayer extends RecordingPlayer {
       startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
+      muted: muted,
+      playing: playing,
+      wakelock: wakelock,
+      fit: fit,
       key: key,
     );
     if (controllers.isEmpty) {
@@ -1002,6 +1010,10 @@ class _FullViewportPlayer extends RecordingPlayer {
     PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     if (!_reportedController) {
@@ -1035,6 +1047,10 @@ class _PositionRecordingPlayer extends RecordingPlayer {
     PlaybackStartPosition? startPosition,
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
+    bool muted = false,
+    bool playing = true,
+    bool? wakelock,
+    BoxFit fit = BoxFit.contain,
     Key? key,
   }) {
     final widget = super.build(
@@ -1049,6 +1065,10 @@ class _PositionRecordingPlayer extends RecordingPlayer {
       startPosition: startPosition,
       preferredExternalSubtitle: preferredExternalSubtitle,
       subtitleAppearance: subtitleAppearance,
+      muted: muted,
+      playing: playing,
+      wakelock: wakelock,
+      fit: fit,
       key: key,
     );
     if (_lastUrl == stream.url) return widget;

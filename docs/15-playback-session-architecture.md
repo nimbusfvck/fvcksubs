@@ -295,7 +295,8 @@ This design does not:
 
 - change the extension protocol;
 - add a backend or remote playback service;
-- add multi-user or multi-session playback;
+- add multi-user playback or unbounded multi-session management; the app's
+  bounded sports live multi-view is a separate, opt-in presentation feature;
 - guarantee one native player instance across source replacement;
 - make Flutter controls or subtitles appear inside native OS PiP;
 - introduce a repository/use-case layer without a concrete consumer;
