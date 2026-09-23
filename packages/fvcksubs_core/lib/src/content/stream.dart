@@ -239,6 +239,8 @@ class PlayableStream extends Equatable {
   const PlayableStream({
     required this.url,
     this.headers = const {},
+    this.playlistHeaders = const {},
+    this.segmentHeaders = const {},
     this.format = StreamFormat.other,
     this.drm,
     this.audioUrl,
@@ -251,6 +253,8 @@ class PlayableStream extends Equatable {
   factory PlayableStream.fromJson(Map<String, Object?> json) => PlayableStream(
     url: json['url'] as String,
     headers: stringMap(json['headers']),
+    playlistHeaders: stringMap(json['playlistHeaders']),
+    segmentHeaders: stringMap(json['segmentHeaders']),
     format: enumByName(
       StreamFormat.values,
       json['format'],
@@ -272,6 +276,18 @@ class PlayableStream extends Equatable {
 
   /// HTTP headers that must accompany playback.
   final Map<String, String> headers;
+
+  /// Optional headers for the root and nested HLS playlists.
+  ///
+  /// When empty, [headers] is used. This supports origins that reject a
+  /// `Referer` on the manifest but require it for media segments.
+  final Map<String, String> playlistHeaders;
+
+  /// Optional headers for HLS media segments.
+  ///
+  /// When empty, [headers] is used. The app's live HLS proxy applies this to
+  /// segment requests after rewriting the playlist.
+  final Map<String, String> segmentHeaders;
 
   /// Container format.
   final StreamFormat format;
@@ -299,6 +315,8 @@ class PlayableStream extends Equatable {
   Map<String, Object?> toJson() => {
     'url': url,
     if (headers.isNotEmpty) 'headers': headers,
+    if (playlistHeaders.isNotEmpty) 'playlistHeaders': playlistHeaders,
+    if (segmentHeaders.isNotEmpty) 'segmentHeaders': segmentHeaders,
     'format': format.name,
     if (drm != null) 'drm': drm!.toJson(),
     if (audioUrl != null) 'audioUrl': audioUrl,
@@ -313,6 +331,8 @@ class PlayableStream extends Equatable {
   List<Object?> get props => [
     url,
     headers,
+    playlistHeaders,
+    segmentHeaders,
     format,
     drm,
     audioUrl,

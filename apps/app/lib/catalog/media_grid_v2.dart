@@ -42,15 +42,13 @@ class MediaGridV2 extends StatelessWidget {
     for (final section in sections) ...section.items,
   ];
 
-  bool get _portraitMode => _items.any(
-    (entry) => isPosterMediaItem(entry.item),
-  );
+  bool get _portraitMode =>
+      _items.any((entry) => isPosterMediaItem(entry.item));
 
   SliverGridDelegate _delegate(double width) {
     final minimumTileWidth = _portraitMode ? 160 : 280;
     final count = columns ?? (width ~/ minimumTileWidth).clamp(2, 6);
-    final tileWidth =
-        (width - AppSpacing.md * (count - 1)) / count;
+    final tileWidth = (width - AppSpacing.md * (count - 1)) / count;
     return _portraitMode
         ? SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: count,
@@ -75,6 +73,7 @@ class MediaGridV2 extends StatelessWidget {
     return MediaCardV2(
       item: envelope.item,
       showSubtitle: showSubtitle,
+      singleLineTitle: true,
       heroTag: onTapWithHero == null ? null : heroTag,
       onTap: () => onTapWithHero == null
           ? onTap(envelope)

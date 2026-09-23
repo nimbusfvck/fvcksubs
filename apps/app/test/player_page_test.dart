@@ -200,6 +200,11 @@ void main() {
     );
   });
 
+  test('ignores completion reported before a replacement source starts', () {
+    expect(shouldHandlePlaybackCompletion(sourceStarted: false), isFalse);
+    expect(shouldHandlePlaybackCompletion(sourceStarted: true), isTrue);
+  });
+
   testWidgets('switching source recreates playback with the selected stream', (
     tester,
   ) async {

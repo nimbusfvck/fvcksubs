@@ -8,11 +8,15 @@ class ArtworkPlaceholder extends StatelessWidget {
     this.icon = Icons.image_outlined,
     this.iconSize = 36,
     this.title,
+    this.titleAlignment = Alignment.center,
+    this.titleTextAlign = TextAlign.center,
   });
 
   final IconData icon;
   final double iconSize;
   final String? title;
+  final Alignment titleAlignment;
+  final TextAlign titleTextAlign;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -22,14 +26,15 @@ class ArtworkPlaceholder extends StatelessWidget {
       color: AppColors.surfaceDarkElevated,
       child: switch (title) {
         final label? => SizedBox.expand(
-          child: Center(
+          child: Align(
+            alignment: titleAlignment,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   label,
-                  textAlign: TextAlign.center,
+                  textAlign: titleTextAlign,
                   style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
                 ),
               ),

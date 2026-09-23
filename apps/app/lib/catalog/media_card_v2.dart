@@ -41,8 +41,8 @@ class MediaCardV2 extends StatelessWidget {
     this.enableHero = true,
     this.rank,
     this.compactEventFooter = false,
+    this.singleLineTitle = false,
     this.scheduleStateOverride,
-    this.showOutline = false,
   });
 
   final MediaItemV2 item;
@@ -63,15 +63,15 @@ class MediaCardV2 extends StatelessWidget {
   /// Uses a one-line title and start-only schedule for horizontal event cards.
   final bool compactEventFooter;
 
+  /// Constrains the card title to one line for compact grid layouts.
+  final bool singleLineTitle;
+
   /// Optional schedule state derived by a time-aware parent surface.
   final ScheduleState? scheduleStateOverride;
 
-  /// Draws an inset outline without clipping the card's focus ring.
-  final bool showOutline;
-
   @override
   Widget build(BuildContext context) {
-    final content = showOutline
+    final content = item is EventItemV2
         ? Stack(
             fit: StackFit.expand,
             children: [
@@ -108,6 +108,7 @@ class MediaCardV2 extends StatelessWidget {
         item: value,
         showSubtitle: showSubtitle,
         compactFooter: compactEventFooter,
+        singleLineTitle: singleLineTitle,
         scheduleStateOverride: scheduleStateOverride,
       );
     }
@@ -126,6 +127,7 @@ class MediaCardV2 extends StatelessWidget {
           item: value,
           showSubtitle: showSubtitle,
           compactFooter: compactEventFooter,
+          singleLineTitle: singleLineTitle,
           scheduleStateOverride: scheduleStateOverride,
         );
       }
@@ -134,6 +136,7 @@ class MediaCardV2 extends StatelessWidget {
       item: value,
       showSubtitle: showSubtitle,
       compactEventFooter: compactEventFooter,
+      singleLineTitle: singleLineTitle,
       scheduleStateOverride: scheduleStateOverride,
     );
   }
@@ -275,6 +278,9 @@ class MediaRecommendationCard extends StatelessWidget {
 bool _hasEventArtwork(EventItemV2 item) =>
     item.artwork?.landscape != null ||
     item.artwork?.logo != null ||
+    item.branding?.logo != null ||
+    item.branding?.primaryColor != null ||
+    item.branding?.secondaryColor != null ||
     item.participants.any((participant) => participant.logo != null);
 
 class _Poster extends StatelessWidget {
@@ -480,12 +486,14 @@ class _Match extends StatefulWidget {
     required this.item,
     required this.showSubtitle,
     required this.compactFooter,
+    required this.singleLineTitle,
     required this.scheduleStateOverride,
   });
 
   final EventItemV2 item;
   final bool showSubtitle;
   final bool compactFooter;
+  final bool singleLineTitle;
   final ScheduleState? scheduleStateOverride;
 
   @override
@@ -535,6 +543,7 @@ class _MatchState extends State<_Match> {
         item: widget.item,
         showSubtitle: widget.showSubtitle,
         compactEventFooter: widget.compactFooter,
+        singleLineTitle: widget.singleLineTitle,
         scheduleStateOverride: widget.scheduleStateOverride,
       ),
     ],
@@ -546,12 +555,14 @@ class _SingleEvent extends StatelessWidget {
     required this.item,
     required this.showSubtitle,
     required this.compactFooter,
+    required this.singleLineTitle,
     required this.scheduleStateOverride,
   });
 
   final EventItemV2 item;
   final bool showSubtitle;
   final bool compactFooter;
+  final bool singleLineTitle;
   final ScheduleState? scheduleStateOverride;
 
   @override
@@ -563,6 +574,7 @@ class _SingleEvent extends StatelessWidget {
         item: item,
         showSubtitle: showSubtitle,
         compactEventFooter: compactFooter,
+        singleLineTitle: singleLineTitle,
         scheduleStateOverride: scheduleStateOverride,
       ),
     ],
@@ -577,11 +589,18 @@ class _SingleEventArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final landscape = item.artwork?.landscape;
-    final artwork = landscape == null
+    final artwork = item.participants.isEmpty && item.branding != null
+        ? GeneratedBrandArtwork(
+            seed: _eventArtworkSeed(item),
+            label: _eventPlaceholderLabel(item),
+            logo: item.branding?.logo,
+            branding: item.branding,
+          )
+        : landscape == null
         ? GeneratedLiveArtwork(
             seed: _eventArtworkSeed(item),
             participants: item.participants,
-            logo: item.artwork?.logo,
+            logo: item.artwork?.logo ?? item.branding?.logo,
             branding: item.branding,
           )
         : LayoutBuilder(
@@ -629,8 +648,12 @@ class _EventArtworkFallback extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) =>
-      ArtworkPlaceholder(icon: Icons.live_tv_outlined, title: label);
+  Widget build(BuildContext context) => ArtworkPlaceholder(
+    icon: Icons.live_tv_outlined,
+    title: label,
+    titleAlignment: Alignment.centerLeft,
+    titleTextAlign: TextAlign.left,
+  );
 }
 
 String _eventPlaceholderLabel(EventItemV2 item) {
@@ -655,12 +678,14 @@ class _Summary extends StatelessWidget {
     required this.item,
     required this.showSubtitle,
     required this.compactEventFooter,
+    required this.singleLineTitle,
     required this.scheduleStateOverride,
   });
 
   final MediaItemV2 item;
   final bool showSubtitle;
   final bool compactEventFooter;
+  final bool singleLineTitle;
   final ScheduleState? scheduleStateOverride;
 
   @override
@@ -674,7 +699,15 @@ class _Summary extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ArtworkPlaceholder(title: placeholderTitle),
+              ArtworkPlaceholder(
+                title: placeholderTitle,
+                titleAlignment: item is EventItemV2
+                    ? Alignment.centerLeft
+                    : Alignment.center,
+                titleTextAlign: item is EventItemV2
+                    ? TextAlign.left
+                    : TextAlign.center,
+              ),
               if (item.releaseDate case final releaseDate? when item.isUpcoming)
                 _ReleaseDateBadge(releaseDate: releaseDate),
             ],
@@ -684,6 +717,7 @@ class _Summary extends StatelessWidget {
           item: item,
           showSubtitle: showSubtitle,
           compactEventFooter: compactEventFooter,
+          singleLineTitle: singleLineTitle,
           scheduleStateOverride: scheduleStateOverride,
         ),
       ],
@@ -722,12 +756,14 @@ class _CardFooter extends StatelessWidget {
     required this.item,
     required this.showSubtitle,
     required this.compactEventFooter,
+    required this.singleLineTitle,
     required this.scheduleStateOverride,
   });
 
   final MediaItemV2 item;
   final bool showSubtitle;
   final bool compactEventFooter;
+  final bool singleLineTitle;
   final ScheduleState? scheduleStateOverride;
 
   @override
@@ -753,7 +789,9 @@ class _CardFooter extends StatelessWidget {
           ],
           Text(
             item.title,
-            maxLines: event != null && compactEventFooter ? 1 : 2,
+            maxLines: singleLineTitle || (event != null && compactEventFooter)
+                ? 1
+                : 2,
             overflow: TextOverflow.ellipsis,
             style:
                 (event != null ? AppTypography.bodySm : AppTypography.titleSm)
@@ -832,7 +870,7 @@ String? _eventMeta(EventItemV2 item, {required bool compact}) {
   if (compact) return eventCardStartLabel(item.schedule.startsAt);
   if (item.schedule.state == ScheduleState.live &&
       item.schedule.label == null) {
-    return null;
+    return eventCardStartLabel(item.schedule.startsAt);
   }
   return item.schedule.label ??
       eventTimeRangeLabel(item.schedule.startsAt, item.schedule.endsAt);

@@ -13,7 +13,6 @@ class MiniPlayerNavigatorObserver extends NavigatorObserver {
   /// Session whose routes are being observed.
   final MiniPlayerSession session;
   OverlayEntry? _entry;
-  bool _playerWasAttached = false;
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
@@ -23,30 +22,18 @@ class MiniPlayerNavigatorObserver extends NavigatorObserver {
   }
 
   void _onSessionChanged() {
-    if (session.player == null) {
-      _playerWasAttached = false;
-      return;
-    }
     _syncHost();
   }
 
   void _syncHost() {
     final overlay = navigator?.overlay;
     if (overlay == null) return;
+    // MiniPlayerHost listens to the session itself. Keep this entry stable so
+    // attaching a PlayerPage with a GlobalKey cannot briefly mount the same
+    // player and modal navigator in both the old and new hosts.
     if (_entry == null) {
       _entry = OverlayEntry(builder: (_) => MiniPlayerHost(session: session));
       overlay.insert(_entry!);
-      _playerWasAttached = session.player != null;
-      return;
-    }
-    if (session.player != null && !_playerWasAttached) {
-      _entry!.remove();
-      final entry = OverlayEntry(
-        builder: (_) => MiniPlayerHost(session: session),
-      );
-      _entry = entry;
-      _playerWasAttached = true;
-      overlay.insert(entry);
     }
   }
 

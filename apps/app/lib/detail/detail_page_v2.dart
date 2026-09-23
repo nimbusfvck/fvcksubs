@@ -452,6 +452,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         detail.episodeGuide,
         detail.item.ref,
         state,
+        preferFirstAvailable: true,
       );
       final primaryTarget = primaryPlaybackTarget(detail, target);
       return _PrimaryPlayButton(
@@ -581,7 +582,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
           .firstOrNull;
       if (resumedGroup != null) return resumedGroup;
     }
-    return groups.last;
+    return groups.first;
   }
 
   String? _latestWatchedGroupId(MediaRef parentRef, LibraryState library) {
@@ -622,6 +623,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
       detail.episodeGuide,
       detail.item.ref,
       library,
+      preferFirstAvailable: true,
     );
     if (target == null || target.group.id != group.id) return 0;
     return (target.index ~/ _episodesPerRange).clamp(0, rangeCount - 1);

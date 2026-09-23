@@ -205,7 +205,7 @@ class _TodaysMatchesContent extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Today\'s Sporting Events',
+                'Today\'s Matches',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.titleMd.copyWith(color: AppColors.onDark),
@@ -249,10 +249,6 @@ class _TodaysMatchesContent extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: AppColors.surfaceDarkContainer,
-                    border: Border.all(
-                      color: AppColors.outlineDark,
-                      width: 0.6,
-                    ),
                     borderRadius: AppRadius.lg,
                   ),
                   child: MediaCardV2(

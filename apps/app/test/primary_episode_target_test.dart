@@ -80,6 +80,21 @@ void main() {
       expect(target?.resuming, isFalse);
     });
 
+    test('Detail can prefer the first available episode on first visit', () {
+      final guide = _guide.copyWithDefault(_s2e1);
+
+      final target = primaryEpisodeTarget(
+        guide,
+        _seriesRef,
+        LibraryState(),
+        preferFirstAvailable: true,
+      );
+
+      expect(target?.group.id, 'season-1');
+      expect(target?.index, 0);
+      expect(target?.resuming, isFalse);
+    });
+
     test('falls back to the last available episode with no default and nothing watched', () {
       final target = primaryEpisodeTarget(_guide, _seriesRef, LibraryState());
 

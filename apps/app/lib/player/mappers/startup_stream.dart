@@ -24,9 +24,11 @@ PlayableStream streamForVariant(
 ) => variant == null
     ? stream
     : PlayableStream(
-        url: variant.url,
-        headers: variant.headers.isEmpty ? stream.headers : variant.headers,
-        format: variant.format,
+      url: variant.url,
+      headers: variant.headers.isEmpty ? stream.headers : variant.headers,
+      playlistHeaders: stream.playlistHeaders,
+      segmentHeaders: stream.segmentHeaders,
+      format: variant.format,
         drm: stream.drm,
         audioUrl: stream.audioUrl,
         label: variant.label,

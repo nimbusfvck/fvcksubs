@@ -25,6 +25,11 @@ void main() {
         'User-Agent': 'Mozilla/5.0',
         'Referer': 'https://cricyplayers.com/',
       },
+      playlistHeaders: {'User-Agent': 'Mozilla/5.0'},
+      segmentHeaders: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://cricyplayers.com/',
+      },
       format: StreamFormat.dash,
       drm: DrmConfig(
         scheme: DrmScheme.clearKey,

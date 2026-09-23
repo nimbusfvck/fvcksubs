@@ -79,7 +79,7 @@ with its own app bar, scroll position, catalog cache, and pagination. A catalog 
 local-clock timeline and a single-column list grouped by the event's subtitle or tags (for
 example, a league or sport). The extension decides which category slice contains live items,
 upcoming items, or both, while the app draws the NOW line without knowing the provider or sport.
-Home also derives its `Today's Sporting Events` shelf from catalogs in the `sport` category,
+Home also derives its `Today's Matches` shelf from catalogs in the `sport` category,
 regardless of their browse layout. It shows up to ten rated events whose start time falls on the
 viewer’s local day, plus known schedules that start before midnight and end after it, and its `See more` action opens the `sport` category. Its popularity signal is
 the extension-supplied rating, so unrated sports are omitted. Event status changes from upcoming to

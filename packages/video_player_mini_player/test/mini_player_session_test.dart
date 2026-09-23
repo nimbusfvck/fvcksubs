@@ -72,6 +72,39 @@ void main() {
     session.dispose();
   });
 
+  testWidgets(
+    'navigator observer keeps one host when attaching a keyed player',
+    (tester) async {
+      final session = MiniPlayerSession();
+      final observer = MiniPlayerNavigatorObserver(session: session);
+      final firstPlayerKey = GlobalKey();
+      final secondPlayerKey = GlobalKey();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorObservers: [observer],
+          home: const SizedBox.shrink(),
+        ),
+      );
+      await tester.pump();
+
+      session.attach(SizedBox(key: firstPlayerKey));
+      await tester.pump();
+
+      expect(find.byKey(firstPlayerKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      session.detach(session.player!);
+      await tester.pump();
+      expect(find.byKey(firstPlayerKey), findsNothing);
+
+      session.attach(SizedBox(key: secondPlayerKey));
+      await tester.pump();
+      expect(find.byKey(secondPlayerKey), findsOneWidget);
+      session.dispose();
+    },
+  );
+
   testWidgets('drag moves and snaps the minimized player', (tester) async {
     final session = MiniPlayerSession();
     final playerKey = GlobalKey();

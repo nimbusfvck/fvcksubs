@@ -248,6 +248,8 @@ classDiagram
     class PlayableStream {
         String url
         Map headers
+        Map playlistHeaders
+        Map segmentHeaders
         String format
         Drm? drm
         String? audioUrl

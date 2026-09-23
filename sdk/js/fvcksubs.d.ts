@@ -298,6 +298,10 @@ interface PlayableStream {
   url: string;
   /** Headers applied to media requests, including `Referer` when required. */
   headers?: Record<string, string>;
+  /** Optional headers for the root and nested HLS playlists. */
+  playlistHeaders?: Record<string, string>;
+  /** Optional headers for HLS media segments. */
+  segmentHeaders?: Record<string, string>;
   /** Container/manifest hint used to configure the player. */
   format?: StreamFormat;
   /** Optional ClearKey, Widevine, or FairPlay playback configuration. */

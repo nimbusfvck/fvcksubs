@@ -274,6 +274,69 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Continue S2E2'), findsOneWidget);
   });
 
+  testWidgets('first visit selects season one and plays its first episode', (
+    tester,
+  ) async {
+    const seriesRef = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'first-visit-series',
+    );
+    const seasonOneEpisode = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'first-visit-s1e1',
+    );
+    const seasonTwoEpisode = MediaRef(
+      extensionId: 'fake',
+      providerId: 'fake.p',
+      id: 'first-visit-s2e1',
+    );
+    const series = SeriesItemV2(ref: seriesRef, title: 'First Visit Series');
+    final detail = MediaDetailV2(
+      item: series,
+      episodeGuide: EpisodeGuide(
+        groups: [
+          EpisodeGroup(
+            id: 'season-1',
+            title: 'Season 1',
+            episodes: [
+              EpisodeSummary(
+                ref: seasonOneEpisode,
+                title: 'Episode 1',
+                position: 1,
+              ),
+            ],
+          ),
+          EpisodeGroup(
+            id: 'season-2',
+            title: 'Season 2',
+            episodes: [
+              EpisodeSummary(
+                ref: seasonTwoEpisode,
+                title: 'Episode 1',
+                position: 1,
+              ),
+            ],
+          ),
+        ],
+        defaultEpisodeRef: seasonTwoEpisode,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapApp(
+        child: const DetailPageV2(item: series),
+        registry: ExtensionRegistry([FakeExtension(metaDetail: detail)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Season 1'), findsOneWidget);
+    expect(find.text('Season 2'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Watch S1E1'), findsOneWidget);
+  });
+
   testWidgets('an unseasoned group still names the episode on Play', (
     tester,
   ) async {
@@ -543,9 +606,9 @@ void main() {
 
       // Only the selected range is built. Episode tiles are built eagerly, so
       // this bounds the work as much as the scrolling. Nothing is watched, so
-      // the range shown is the one Play would start from — the newest.
-      expect(find.text('Episode 250'), findsWidgets);
-      expect(find.text('Episode 200'), findsNothing);
+      // the range shown is the first one, matching the first Play target.
+      expect(find.text('Episode 1'), findsWidgets);
+      expect(find.text('Episode 250'), findsNothing);
     });
 
     testWidgets('opens on the range holding what Play would resume', (

@@ -94,7 +94,7 @@ void main() {
     );
   });
 
-  test('Today\'s Sporting Events keeps rated overnight matches visible', () {
+  test('Today\'s Matches keeps rated overnight matches visible', () {
     final overnight = EventItemV2(
       ref: const MediaRef(
         extensionId: 'fake',
@@ -116,50 +116,47 @@ void main() {
     );
   });
 
-  test(
-    'Today\'s Sporting Events keeps rated events and caps the preview at 10',
-    () {
-      final today = DateTime(2026, 9, 19);
-      final candidates = [
-        for (final index in List<int>.generate(11, (i) => i + 1))
-          sportEvent(
-            id: 'rated-$index',
-            title: 'Rated Event $index',
-            startsAt: today.add(Duration(minutes: index)),
-            rating: 0.1,
-          ),
+  test('Today\'s Matches keeps rated events and caps the preview at 10', () {
+    final today = DateTime(2026, 9, 19);
+    final candidates = [
+      for (final index in List<int>.generate(11, (i) => i + 1))
         sportEvent(
-          id: 'unrated',
-          title: 'Unrated Event',
-          startsAt: today,
-          rating: null,
+          id: 'rated-$index',
+          title: 'Rated Event $index',
+          startsAt: today.add(Duration(minutes: index)),
+          rating: 0.1,
         ),
-        sportEvent(
-          id: 'tomorrow',
-          title: 'Tomorrow Event',
-          startsAt: today.add(const Duration(days: 1)),
-          rating: 1,
-        ),
-      ];
+      sportEvent(
+        id: 'unrated',
+        title: 'Unrated Event',
+        startsAt: today,
+        rating: null,
+      ),
+      sportEvent(
+        id: 'tomorrow',
+        title: 'Tomorrow Event',
+        startsAt: today.add(const Duration(days: 1)),
+        rating: 1,
+      ),
+    ];
 
-      final visible = popularSportEventsForToday(candidates, today);
+    final visible = popularSportEventsForToday(candidates, today);
 
-      expect(visible, hasLength(10));
-      expect(visible.map((event) => event.title), contains('Rated Event 10'));
-      expect(
-        visible.map((event) => event.title),
-        isNot(contains('Rated Event 11')),
-      );
-      expect(
-        visible.map((event) => event.title),
-        isNot(contains('Unrated Event')),
-      );
-      expect(
-        visible.map((event) => event.title),
-        isNot(contains('Tomorrow Event')),
-      );
-    },
-  );
+    expect(visible, hasLength(10));
+    expect(visible.map((event) => event.title), contains('Rated Event 10'));
+    expect(
+      visible.map((event) => event.title),
+      isNot(contains('Rated Event 11')),
+    );
+    expect(
+      visible.map((event) => event.title),
+      isNot(contains('Unrated Event')),
+    );
+    expect(
+      visible.map((event) => event.title),
+      isNot(contains('Tomorrow Event')),
+    );
+  });
 
   testWidgets('Home shows only today\'s sport matches and updates status', (
     tester,
@@ -236,7 +233,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('Today\'s Sporting Events'), findsOneWidget);
+    expect(find.text('Today\'s Matches'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const Key('home-todays-matches-shelf')),

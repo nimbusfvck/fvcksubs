@@ -168,7 +168,7 @@ Every argument and every result below is plain JSON.
 | `search` | `{ query, page?, category? }` | `{ items: [...], nextPage?, subCategories?: [...] }` |
 | `meta` | `{ ref: { extensionId, providerId, id } }` | `{ item, description?, genres?, runtimeMinutes?, certification?, cast?, seasons? }` |
 | `sources` | `{ item, enabledProviders?: [providerId, …], fast?: boolean }` | `{ sources: [ { id, label, provider? }, … ] }` |
-| `resolve` | `{ sourceId }` | `{ url, headers?, format?, drm?, audioUrl?, label?, subtitles? }` |
+| `resolve` | `{ sourceId }` | `{ url, headers?, playlistHeaders?, segmentHeaders?, format?, drm?, audioUrl?, label?, subtitles? }` |
 | `subtitles` | `{ item }` | `{ subtitles: [ { language, url, label? }, … ] }` |
 
 Note the two envelope shapes: `catalog`, `search`, `meta`, and `resolve` return the object

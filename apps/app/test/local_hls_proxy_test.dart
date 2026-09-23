@@ -11,14 +11,15 @@ void main() {
     'keeps the local segment URL stable when upstream signatures rotate',
     () async {
       var playlistRefreshes = 0;
-      String? receivedReferer;
+      String? receivedPlaylistReferer;
+      String? receivedSegmentReferer;
       String? requestedSignature;
       final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       unawaited(
         upstream.forEach((request) async {
           if (request.uri.path == '/playlist.m3u8') {
             playlistRefreshes++;
-            receivedReferer = request.headers.value('referer');
+            receivedPlaylistReferer = request.headers.value('referer');
             final signature = playlistRefreshes == 1 ? 'first' : 'second';
             request.response.headers.contentType = ContentType(
               'application',
@@ -34,6 +35,7 @@ http://127.0.0.1:${upstream.port}/segment/10?sig=$signature
             return;
           }
           if (request.uri.path == '/segment/10') {
+            receivedSegmentReferer = request.headers.value('referer');
             requestedSignature = request.uri.queryParameters['sig'];
             request.response.add(utf8.encode('segment-bytes'));
             await request.response.close();
@@ -50,7 +52,12 @@ http://127.0.0.1:${upstream.port}/segment/10?sig=$signature
         final stream = PlayableStream(
           url: 'http://127.0.0.1:${upstream.port}/playlist.m3u8',
           format: StreamFormat.hls,
-          headers: const {'Referer': 'https://gooz.aapmains.net'},
+          headers: const {'User-Agent': 'Mozilla/5.0'},
+          playlistHeaders: const {'User-Agent': 'Mozilla/5.0'},
+          segmentHeaders: const {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://segment-referrer.test/',
+          },
         );
         final proxied = await proxy.wrap(stream);
 
@@ -60,13 +67,14 @@ http://127.0.0.1:${upstream.port}/segment/10?sig=$signature
         final secondSegment = _playlistUri(secondPlaylist);
 
         expect(playlistRefreshes, 2);
-        expect(receivedReferer, 'https://gooz.aapmains.net');
+        expect(receivedPlaylistReferer, isNull);
         expect(firstSegment, isNotEmpty);
         expect(secondSegment, firstSegment);
 
         final segmentResponse = await client.getUrl(Uri.parse(firstSegment));
         final segment = await segmentResponse.close();
         expect(await utf8.decoder.bind(segment).join(), 'segment-bytes');
+        expect(receivedSegmentReferer, 'https://segment-referrer.test/');
         expect(requestedSignature, 'second');
       } finally {
         client.close(force: true);

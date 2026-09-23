@@ -35,7 +35,16 @@ class LocalHlsProxy {
       _sessionKeys[sessionKey] = sessionId;
       _sessions[sessionId] = _ProxySession(
         sourceUrl: stream.url,
-        headers: Map<String, String>.unmodifiable(stream.headers),
+        playlistHeaders: Map<String, String>.unmodifiable(
+          stream.playlistHeaders.isEmpty
+              ? stream.headers
+              : stream.playlistHeaders,
+        ),
+        segmentHeaders: Map<String, String>.unmodifiable(
+          stream.segmentHeaders.isEmpty
+              ? stream.headers
+              : stream.segmentHeaders,
+        ),
         isPlaylist: _looksLikePlaylist(stream),
       );
     }
@@ -265,9 +274,16 @@ class LocalHlsProxy {
   }
 
   String _streamKey(PlayableStream stream) {
-    final headers = stream.headers.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return '${stream.url}\u0000${headers.map((e) => '${e.key}=${e.value}').join('&')}';
+    String encodeHeaders(Map<String, String> values) {
+      final entries = values.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      return entries.map((e) => '${e.key}=${e.value}').join('&');
+    }
+
+    return '${stream.url}\u0000'
+        '${encodeHeaders(stream.headers)}\u0000'
+        '${encodeHeaders(stream.playlistHeaders)}\u0000'
+        '${encodeHeaders(stream.segmentHeaders)}';
   }
 
   void _log(String message) => logger?.call('[LocalHlsProxy] $message');
@@ -305,17 +321,19 @@ class LocalHlsProxy {
 class _ProxySession {
   _ProxySession({
     required this.sourceUrl,
-    required this.headers,
+    required this.playlistHeaders,
+    required this.segmentHeaders,
     required bool isPlaylist,
   }) : rootResource = _ProxyResource(
          id: 'root',
          url: sourceUrl,
-         headers: headers,
+         headers: playlistHeaders,
          isPlaylist: isPlaylist,
        );
 
   final String sourceUrl;
-  final Map<String, String> headers;
+  final Map<String, String> playlistHeaders;
+  final Map<String, String> segmentHeaders;
   final _ProxyResource rootResource;
   final Map<String, _ProxyResource> resources = {};
   final Map<String, String> idsByCanonicalUrl = {};
@@ -346,7 +364,7 @@ class _ProxySession {
     final resource = _ProxyResource(
       id: id,
       url: url.toString(),
-      headers: headers,
+      headers: isPlaylist ? playlistHeaders : segmentHeaders,
       isPlaylist: isPlaylist,
     )..localUrl = '$proxyBase/$id';
     resources[id] = resource;

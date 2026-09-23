@@ -9,17 +9,22 @@ typedef PrimaryEpisodeTarget = ({EpisodeGroup group, int index, bool resuming});
 ///
 /// An in-progress resume episode wins first ([resumedEpisodeTarget]);
 /// otherwise the guide's own declared default, if it's available; otherwise
-/// the most recent available episode. `null` means nothing in [guide] is
-/// playable yet. Shared by Detail and Shorts so both derive the same target
-/// from the same episode guide and library state.
+/// the most recent available episode. Set [preferFirstAvailable] for Detail's
+/// first-visit behavior: after resume has been checked, use the first
+/// available episode in guide order instead of a provider-selected default.
+/// `null` means nothing in [guide] is playable yet.
 PrimaryEpisodeTarget? primaryEpisodeTarget(
   EpisodeGuide? guide,
   MediaRef parentRef,
-  LibraryState library,
-) {
+  LibraryState library, {
+  bool preferFirstAvailable = false,
+}) {
   if (guide == null || guide.groups.isEmpty) return null;
   final resumed = resumedEpisodeTarget(guide, parentRef, library);
   if (resumed != null) return resumed;
+  if (preferFirstAvailable) {
+    return _firstAvailableEpisodeTarget(guide);
+  }
   final target = guide.defaultEpisodeRef;
   if (target != null) {
     for (final group in guide.groups) {
@@ -33,6 +38,21 @@ PrimaryEpisodeTarget? primaryEpisodeTarget(
   }
   for (final group in guide.groups.reversed) {
     for (final entry in group.episodes.indexed.toList().reversed) {
+      if (isEpisodeAvailable(entry.$2)) {
+        return (group: group, index: entry.$1, resuming: false);
+      }
+    }
+  }
+  return null;
+}
+
+PrimaryEpisodeTarget? _firstAvailableEpisodeTarget(EpisodeGuide guide) {
+  for (final group in guide.groups) {
+    // A lazy first group has to be loaded before its first episode can be
+    // selected. Detail will show its loading state instead of skipping to a
+    // later season that happened to be loaded already.
+    if (!group.loaded && group.episodes.isEmpty) return null;
+    for (final entry in group.episodes.indexed) {
       if (isEpisodeAvailable(entry.$2)) {
         return (group: group, index: entry.$1, resuming: false);
       }

@@ -227,6 +227,10 @@ what is actually available before playing, so a viewer is never dropped onto som
 has not been released yet. A viewer who taps a *specific* episode is never second-guessed —
 that tap already is their answer.
 
+On a first visit to a series, Detail selects the first episode group in guide order and Play
+starts its first available episode (for example, S1E1). Once an in-progress episode exists in
+the library, both the selected group and Play resume the most recently watched episode instead.
+
 ## 4.7 Play
 
 Playback follows this sequence:

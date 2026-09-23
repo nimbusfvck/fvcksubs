@@ -134,13 +134,21 @@ class GeneratedBanner extends StatelessWidget {
     return (homeFill, _separated(homeFill, awayFill));
   }
 
+  /// Returns the banner background while keeping unbranded events distinct
+  /// from the app surface.
+  @visibleForTesting
+  static Color backgroundFor(
+    List<Participant> participants, {
+    EventBranding? branding,
+  }) {
+    final (homeColor, _) = fillsFor(participants, branding: branding);
+    return Color.lerp(AppColors.surfaceDark, homeColor, 0.62)!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final (homeColor, _) = fillsFor(participants, branding: branding);
-    final primaryBrand = _parseHex(branding?.primaryColor);
-    final background = primaryBrand == null
-        ? AppColors.surfaceDark
-        : Color.lerp(AppColors.surfaceDark, _legibleFill(primaryBrand), 0.62)!;
+    final background = backgroundFor(participants, branding: branding);
     final accent = _accentFor(homeColor, branding);
 
     final crestSize = participantLogoSize;
@@ -561,6 +569,63 @@ class GeneratedLiveArtwork extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Solid branded artwork for events that have no participant identity.
+class GeneratedBrandArtwork extends StatelessWidget {
+  const GeneratedBrandArtwork({
+    super.key,
+    required this.seed,
+    required this.label,
+    this.logo,
+    this.branding,
+  });
+
+  final String seed;
+  final String label;
+  final ImageRef? logo;
+  final EventBranding? branding;
+
+  @override
+  Widget build(BuildContext context) {
+    final (primary, _) = GeneratedLiveArtwork.fillsFor(
+      seed,
+      branding: branding,
+    );
+    final background = Color.lerp(AppColors.surfaceDark, primary, 0.62)!;
+
+    return ColoredBox(
+      color: background,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Text(
+                label,
+                textAlign: TextAlign.left,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
+              ),
+            ),
+          ),
+          if (logo case final value?)
+            Positioned(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+              child: _BrandLogo(
+                imageUrl: value.url,
+                height: 28,
+                fallback: const SizedBox.shrink(),
+              ),
+            ),
+        ],
       ),
     );
   }

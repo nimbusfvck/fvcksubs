@@ -140,6 +140,14 @@ bool playbackIsStableForRenewalReset({
   required bool isBuffering,
 }) => isPlaying && !isBuffering && (!isLive || position > Duration.zero);
 
+@visibleForTesting
+/// Native backends can report completion while a source is being replaced or
+/// while a fallback controller is still starting. Those events must not
+/// advance an episode; a real completion can only happen after playback has
+/// started.
+bool shouldHandlePlaybackCompletion({required bool sourceStarted}) =>
+    sourceStarted;
+
 class PlayerPage extends StatefulWidget {
   PlayerPage({
     super.key,
@@ -539,6 +547,9 @@ class _PlayerPageState extends State<PlayerPage> {
         if (mounted &&
             attempt == _playbackAttempt &&
             identical(controller, _controller)) {
+          if (!shouldHandlePlaybackCompletion(sourceStarted: _sourceStarted)) {
+            return;
+          }
           if (!_upNextDismissed && !_upNextPaused && _nextEpisode != null) {
             _playNextEpisode();
           } else {

@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fvcksubs_app/catalog/media_card_actions.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/catalog/generated_banner.dart';
+import 'package:fvcksubs_app/catalog/start_time_label.dart';
 import 'package:fvcksubs_app/library/library_controller.dart';
 import 'package:fvcksubs_app/theme/tokens.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -366,6 +367,12 @@ void main() {
 
     expect(find.text('Live match'), findsNWidgets(2));
     expect(find.text('LIVE'), findsOneWidget);
+    expect(
+      find.text(
+        eventCardStartLabel(now.subtract(const Duration(minutes: 10)))!,
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('–'), findsNothing);
   });
 
@@ -463,6 +470,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('unbranded match banners use a generated background color', () {
+    final background = GeneratedBanner.backgroundFor(const [
+      Participant(name: 'Side A'),
+      Participant(name: 'Side B'),
+    ]);
+
+    expect(background, isNot(AppColors.surfaceDark));
+    expect(
+      background.computeLuminance(),
+      greaterThan(AppColors.surfaceDark.computeLuminance()),
+    );
+  });
+
   testWidgets(
     'an unbranded event derives a mark and does not show crest placeholders',
     (tester) async {
@@ -557,6 +577,10 @@ void main() {
 
     expect(find.text('Premier League'), findsOneWidget);
     expect(find.text('Home vs Away'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Premier League')).textAlign,
+      TextAlign.left,
+    );
   });
 
   testWidgets('event image errors use its league as the placeholder', (
@@ -720,6 +744,38 @@ void main() {
 
     expect(find.byType(GeneratedLiveArtwork), findsOneWidget);
     expect(find.byType(CachedNetworkImage), findsOneWidget);
+  });
+
+  testWidgets('event branding without participants uses its branding logo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            height: 172,
+            child: MediaCardV2(
+              item: EventItemV2(
+                ref: ref,
+                title: 'Asian Games 2026',
+                subtitle: 'Asian Games',
+                schedule: Schedule(startsAt: DateTime.utc(2026, 8, 20)),
+                branding: const EventBranding(
+                  logo: ImageRef('https://cdn.example/asian-games.png'),
+                  primaryColor: '#4F3B95',
+                ),
+              ),
+              onTap: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(GeneratedBrandArtwork), findsOneWidget);
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
+    expect(find.text('Asian Games'), findsOneWidget);
   });
 }
 

@@ -100,7 +100,7 @@ The host retains `unsupported` values so the UI can report them before playback 
 ```mermaid
 flowchart LR
     MI["MediaItem"] -->|"sources(item)"| SS["StreamSource<br/>id · label · provider<br/><i>cheap · cacheable · stable</i>"]
-    SS -->|"resolve(sourceId)"| PS["PlayableStream<br/>url · headers · format · drm<br/>audioUrl · label · subtitles<br/><i>signed · short-lived</i>"]
+    SS -->|"resolve(sourceId)"| PS["PlayableStream<br/>url · headers · playlistHeaders · segmentHeaders<br/>format · drm · audioUrl · label · subtitles<br/><i>signed · short-lived</i>"]
     PS --> PL["Player"]
 
     style SS fill:#1f3d2b,stroke:#5ba97b,color:#fff
@@ -119,7 +119,10 @@ DRM fields are provider-supplied protocol data: `clearKey` uses inline
 iOS/macOS; protected playback uses a platform view.
 
 `headers` matters: many edges redirect away from, or reject, playback requests that lack a
-`User-Agent` or `Referer`. Whatever the upstream needs must be returned here.
+`User-Agent` or `Referer`. Whatever the upstream needs must be returned here. For live HLS
+origins where the manifest and media segments require different headers, extensions may also
+return `playlistHeaders` and `segmentHeaders`; the app's session proxy applies them to the
+corresponding upstream requests. When either field is absent, it falls back to `headers`.
 
 ### Playback segments
 

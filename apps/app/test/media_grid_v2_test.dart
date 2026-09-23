@@ -174,6 +174,9 @@ void main() {
       );
 
       expect(tester.getSize(find.byType(MediaCardV2)).height, 172);
+      expect(find.byKey(const Key('media-card-outline')), findsOneWidget);
+      final title = tester.widget<Text>(find.text('Football match'));
+      expect(title.maxLines, 1);
     },
   );
 }
