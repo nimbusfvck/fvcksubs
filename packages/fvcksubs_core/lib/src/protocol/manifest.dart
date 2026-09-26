@@ -62,6 +62,10 @@ enum CatalogDisplay {
   /// Time-positioned vertical schedule. The extension supplies event
   /// timestamps; the app owns the timeline layout and local-clock indicator.
   timeline,
+
+  /// Channel programme grid. The extension supplies channel-labelled event
+  /// rows; the app owns the horizontal time axis and live-clock indicator.
+  channelSchedule,
 }
 
 /// What a catalog is for — a Home browse shelf, a featured hero feed, or a

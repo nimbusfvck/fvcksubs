@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
@@ -19,8 +20,6 @@ import 'live_timeline_cubit.dart';
 import 'participant_avatar.dart';
 import 'plugin_selector.dart';
 
-enum _TimelineDisplay { timeline, list }
-
 class CatalogTimelinePage extends StatefulWidget {
   const CatalogTimelinePage({super.key, required this.category});
 
@@ -35,8 +34,6 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
   DateTime? _selectedDate;
   String? _bindingSignature;
   Timer? _clock;
-  _TimelineDisplay _display = _TimelineDisplay.timeline;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -67,7 +64,8 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
     return [
       for (final binding in scope.registry.catalogsFor(widget.category))
         if (binding.extensionId == pluginId &&
-            binding.catalog.display == CatalogDisplay.timeline)
+            (binding.catalog.display == CatalogDisplay.timeline ||
+                binding.catalog.display == CatalogDisplay.channelSchedule))
           binding,
     ];
   }
@@ -104,6 +102,9 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
       for (final plugin in plugins) plugin.id,
     ]);
     final bindings = _bindings(scope);
+    final channelSchedule = bindings.any(
+      (binding) => binding.catalog.display == CatalogDisplay.channelSchedule,
+    );
     final signature = _signature(bindings);
     if (signature != _bindingSignature) {
       _bindingSignature = signature;
@@ -134,12 +135,10 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
           return Scaffold(
             key: const Key('catalog-timeline'),
             appBar: AppPageBar(
-              title: _categoryLabel(widget.category),
+              title: widget.category.toLowerCase() == 'live'
+                  ? 'Schedule'
+                  : _categoryLabel(widget.category),
               actions: [
-                _TimelineDisplaySelector(
-                  selected: _display,
-                  onSelected: (display) => setState(() => _display = display),
-                ),
                 if (plugins.length > 1 && pluginId != null)
                   PluginSelector(
                     plugins: plugins,
@@ -150,7 +149,12 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
             ),
             body: RefreshIndicator(
               onRefresh: () => _load(scope, refresh: true),
-              child: _content(state, selectedDate, dates, _display),
+              child: _content(
+                state,
+                selectedDate,
+                dates,
+                channelSchedule: channelSchedule,
+              ),
             ),
           );
         },
@@ -161,9 +165,9 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
   Widget _content(
     CatalogTimelineState state,
     DateTime selectedDate,
-    List<DateTime> dates,
-    _TimelineDisplay display,
-  ) {
+    List<DateTime> dates, {
+    required bool channelSchedule,
+  }) {
     if (state.isLoading && state.events.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -222,8 +226,12 @@ class _CatalogTimelinePageState extends State<CatalogTimelinePage> {
                       ),
                     ),
                   )
-                : display == _TimelineDisplay.list
-                ? _LeagueEventList(events: events)
+                : channelSchedule
+                ? _ChannelScheduleTimeline(
+                    events: events,
+                    selectedDay: selectedDate,
+                    now: DateTime.now(),
+                  )
                 : _Timeline(
                     events: events,
                     selectedDay: selectedDate,
@@ -295,52 +303,6 @@ class _DatePickerHeaderDelegate extends SliverPersistentHeaderDelegate {
       dates != oldDelegate.dates ||
       selected != oldDelegate.selected ||
       onSelected != oldDelegate.onSelected;
-}
-
-class _TimelineDisplaySelector extends StatelessWidget {
-  const _TimelineDisplaySelector({
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final _TimelineDisplay selected;
-  final ValueChanged<_TimelineDisplay> onSelected;
-
-  @override
-  Widget build(BuildContext context) => PopupMenuButton<_TimelineDisplay>(
-    key: const Key('catalog-display-selector'),
-    tooltip: 'Change display',
-    initialValue: selected,
-    onSelected: onSelected,
-    icon: Icon(
-      selected == _TimelineDisplay.timeline
-          ? Icons.view_timeline_outlined
-          : Icons.view_list_outlined,
-    ),
-    itemBuilder: (context) => [
-      for (final display in _TimelineDisplay.values)
-        PopupMenuItem<_TimelineDisplay>(
-          value: display,
-          child: Row(
-            children: [
-              Icon(
-                display == _TimelineDisplay.timeline
-                    ? Icons.view_timeline_outlined
-                    : Icons.view_list_outlined,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: Text(_displayLabel(display))),
-              if (display == selected) const Icon(Icons.check, size: 18),
-            ],
-          ),
-        ),
-    ],
-  );
-
-  static String _displayLabel(_TimelineDisplay display) => switch (display) {
-    _TimelineDisplay.timeline => 'Timeline',
-    _TimelineDisplay.list => 'List',
-  };
 }
 
 class _DatePicker extends StatelessWidget {
@@ -457,74 +419,533 @@ class _Timeline extends StatelessWidget {
       a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-class _LeagueEventList extends StatelessWidget {
-  const _LeagueEventList({required this.events});
+class _ChannelScheduleTimeline extends StatefulWidget {
+  const _ChannelScheduleTimeline({
+    required this.events,
+    required this.selectedDay,
+    required this.now,
+  });
+
+  static const double _timeGutter = 156;
+  static const double _phoneTimeGutter = 120;
+  static const double _minimumProgramWidth = 112;
+  static const double _timeHeader = 48;
+  static const double _pixelsPerHour = 224;
+  static const double _rowHeight = 88;
 
   final List<EventItemV2> events;
+  final DateTime selectedDay;
+  final DateTime now;
+
+  @override
+  State<_ChannelScheduleTimeline> createState() =>
+      _ChannelScheduleTimelineState();
+}
+
+class _ChannelScheduleTimelineState extends State<_ChannelScheduleTimeline> {
+  final ScrollController _scrollController = ScrollController();
+  bool _labelsVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAutoScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChannelScheduleTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameTimelineDay(oldWidget.selectedDay, widget.selectedDay)) {
+      _scheduleAutoScroll();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sections = <String, List<EventItemV2>>{};
-    for (final event in events) {
-      final label = _listSectionLabel(event);
-      sections
-          .putIfAbsent(label.isEmpty ? 'Other' : label, () => [])
-          .add(event);
-    }
-
-    return Padding(
-      key: const Key('catalog-list-view'),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        0,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final rows = _channelRows(widget.events);
+    final contentWidth =
+        24 * _ChannelScheduleTimeline._pixelsPerHour + AppSpacing.md;
+    final height =
+        _ChannelScheduleTimeline._timeHeader +
+        rows.length * _ChannelScheduleTimeline._rowHeight +
+        AppSpacing.md;
+    final showNow = _sameTimelineDay(widget.selectedDay, widget.now);
+    final timeGutter = AppBreakpoints.isPhone(context)
+        ? _ChannelScheduleTimeline._phoneTimeGutter
+        : _ChannelScheduleTimeline._timeGutter;
+    return SizedBox(
+      key: const Key('catalog-channel-timeline'),
+      height: height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final section in sections.entries) ...[
-            Row(
-              children: [
-                if (section.value.first.branding?.logo?.url.trim()
-                    case final logoUrl? when logoUrl.isNotEmpty) ...[
-                  _TimelineLeagueLogo(imageUrl: logoUrl, label: section.key),
-                  const SizedBox(width: AppSpacing.xs),
-                ],
-                Expanded(
-                  child: Text(
-                    section.key,
-                    style: AppTypography.titleMd.copyWith(
-                      color: AppColors.onDark,
+          ClipRect(
+            child: AnimatedContainer(
+              key: const Key('catalog-channel-labels'),
+              width: _labelsVisible ? timeGutter : 0,
+              height: height,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeInOutCubic,
+              child: SizedBox(
+                width: timeGutter,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    color: AppColors.surfaceDark,
+                    border: Border(
+                      right: BorderSide(color: AppColors.hairlineDark),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(
+                        height: _ChannelScheduleTimeline._timeHeader,
+                      ),
+                      for (final row in rows)
+                        SizedBox(
+                          height: _ChannelScheduleTimeline._rowHeight,
+                          child: _ChannelScheduleRowLabel(row: row),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ClipRect(
+              child: NotificationListener<UserScrollNotification>(
+                onNotification: _handleUserScroll,
+                child: SingleChildScrollView(
+                  key: const Key('catalog-channel-programs-scroll'),
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(right: AppSpacing.md),
+                  child: SizedBox(
+                    width: contentWidth,
+                    height: height,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _ChannelScheduleGridPainter(
+                              rowCount: rows.length,
+                            ),
+                          ),
+                        ),
+                        for (var index = 0; index < rows.length; index++)
+                          for (final event in rows[index].events)
+                            if (_channelEventRange(event, widget.selectedDay)
+                                case final range?)
+                              Positioned(
+                                top:
+                                    _ChannelScheduleTimeline._timeHeader +
+                                    index *
+                                        _ChannelScheduleTimeline._rowHeight +
+                                    6,
+                                left:
+                                    range.startMinutes /
+                                    60 *
+                                    _ChannelScheduleTimeline._pixelsPerHour,
+                                width: math.max(
+                                  _ChannelScheduleTimeline._minimumProgramWidth,
+                                  (range.endMinutes - range.startMinutes) /
+                                      60 *
+                                      _ChannelScheduleTimeline._pixelsPerHour,
+                                ),
+                                height:
+                                    _ChannelScheduleTimeline._rowHeight - 12,
+                                child: _ChannelProgramCard(
+                                  event: event,
+                                  now: widget.now,
+                                ),
+                              ),
+                        if (showNow)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                key: const Key('catalog-now-line'),
+                                painter: _ChannelScheduleNowPainter(
+                                  nowMinutes:
+                                      widget.now.hour * 60 + widget.now.minute,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            for (final event in section.value) ...[
-              _TimelineEventCard(
-                group: _TimelineEventGroup(List.unmodifiable([event])),
-                showMetadata: false,
-                listLayout: true,
               ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-          ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  bool _handleUserScroll(UserScrollNotification notification) {
+    if (notification.metrics.axis != Axis.horizontal) return false;
+    final visible = switch (notification.direction) {
+      ScrollDirection.reverse => false,
+      ScrollDirection.forward => true,
+      ScrollDirection.idle => _labelsVisible,
+    };
+    if (visible != _labelsVisible && mounted) {
+      setState(() => _labelsVisible = visible);
+    }
+    return false;
+  }
+
+  void _scheduleAutoScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_sameTimelineDay(widget.selectedDay, widget.now)) {
+        return;
+      }
+      if (!_scrollController.hasClients) return;
+      final nowOffset = widget.now.hour * 60 + widget.now.minute;
+      final target =
+          nowOffset / 60 * _ChannelScheduleTimeline._pixelsPerHour -
+          _scrollController.position.viewportDimension * 0.35;
+      unawaited(
+        _scrollController.animateTo(
+          target.clamp(0.0, _scrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        ),
+      );
+    });
+  }
+}
+
+class _ChannelScheduleRow {
+  _ChannelScheduleRow(this.name, this.logoUrl);
+
+  final String name;
+  final String? logoUrl;
+  final List<EventItemV2> events = [];
+}
+
+List<_ChannelScheduleRow> _channelRows(List<EventItemV2> events) {
+  final rows = <String, _ChannelScheduleRow>{};
+  for (final event in events) {
+    final name = event.subtitle?.trim();
+    final label = name == null || name.isEmpty ? 'TV Channel' : name;
+    final logo = event.branding?.logo?.url.trim();
+    final row = rows.putIfAbsent(label, () => _ChannelScheduleRow(label, logo));
+    row.events.add(event);
+  }
+  final result = rows.values.toList();
+  for (final row in result) {
+    row.events.sort(
+      (first, second) =>
+          first.schedule.startsAt.compareTo(second.schedule.startsAt),
+    );
+    final merged = _mergeChannelEvents(row.events);
+    row.events
+      ..clear()
+      ..addAll(merged);
+  }
+  return result;
+}
+
+List<EventItemV2> _mergeChannelEvents(List<EventItemV2> events) {
+  final merged = <EventItemV2>[];
+  for (final event in events) {
+    final previous = merged.lastOrNull;
+    final previousEnd = previous?.schedule.endsAt;
+    final sameTitle =
+        previous != null &&
+        _scheduleTitleKey(previous.title) == _scheduleTitleKey(event.title);
+    if (!sameTitle ||
+        previousEnd == null ||
+        event.schedule.startsAt.isAfter(previousEnd)) {
+      merged.add(event);
+      continue;
+    }
+
+    final eventEnd = event.schedule.endsAt;
+    final end = eventEnd == null || eventEnd.isBefore(previousEnd)
+        ? previousEnd
+        : eventEnd;
+    merged[merged.length - 1] = EventItemV2(
+      ref: previous.ref,
+      title: previous.title,
+      subtitle: previous.subtitle,
+      overview: previous.overview,
+      originalTitle: previous.originalTitle,
+      originalLanguage: previous.originalLanguage,
+      genres: previous.genres,
+      countries: previous.countries,
+      tags: previous.tags,
+      releaseYear: previous.releaseYear,
+      releaseDate: previous.releaseDate,
+      rating: previous.rating,
+      ratingVotes: previous.ratingVotes,
+      ratings: previous.ratings,
+      imdbId: previous.imdbId,
+      artwork: previous.artwork,
+      schedule: Schedule(
+        startsAt: previous.schedule.startsAt,
+        state: previous.schedule.state,
+        label: previous.schedule.label,
+        endsAt: end,
+      ),
+      participants: previous.participants,
+      branding: previous.branding,
+    );
+  }
+  return merged;
+}
+
+String _scheduleTitleKey(String value) =>
+    value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+class _ChannelScheduleRange {
+  const _ChannelScheduleRange({
+    required this.startMinutes,
+    required this.endMinutes,
+  });
+
+  final double startMinutes;
+  final double endMinutes;
+}
+
+_ChannelScheduleRange? _channelEventRange(
+  EventItemV2 event,
+  DateTime selectedDay,
+) {
+  final dayStart = DateTime(
+    selectedDay.year,
+    selectedDay.month,
+    selectedDay.day,
+  );
+  final dayEnd = dayStart.add(const Duration(days: 1));
+  final start = event.schedule.startsAt.toLocal();
+  final end =
+      event.schedule.endsAt?.toLocal() ?? start.add(const Duration(hours: 1));
+  if (!start.isBefore(dayEnd) || !end.isAfter(dayStart)) return null;
+  final clampedStart = start.isBefore(dayStart) ? dayStart : start;
+  final clampedEnd = end.isAfter(dayEnd) ? dayEnd : end;
+  return _ChannelScheduleRange(
+    startMinutes: clampedStart.difference(dayStart).inSeconds / 60,
+    endMinutes: math
+        .max(
+          clampedStart.difference(dayStart).inSeconds / 60 + 1,
+          clampedEnd.difference(dayStart).inSeconds / 60,
+        )
+        .toDouble(),
+  );
+}
+
+class _ChannelScheduleGridPainter extends CustomPainter {
+  const _ChannelScheduleGridPainter({required this.rowCount});
+
+  final int rowCount;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = AppColors.hairlineDark
+      ..strokeWidth = 1;
+    final labelStyle = AppTypography.caption.copyWith(
+      color: AppColors.onDarkSoft,
+    );
+    for (var halfHour = 0; halfHour <= 48; halfHour++) {
+      final x = halfHour / 2 * _ChannelScheduleTimeline._pixelsPerHour;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      if (halfHour < 48) {
+        final hour = halfHour ~/ 2;
+        final minute = halfHour.isEven ? '00' : '30';
+        final label = TextPainter(
+          text: TextSpan(
+            text: '${hour.toString().padLeft(2, '0')}:$minute',
+            style: labelStyle,
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        label.paint(canvas, Offset(x + 4, 8));
+      }
+    }
+    final headerY = _ChannelScheduleTimeline._timeHeader;
+    canvas.drawLine(Offset(0, headerY), Offset(size.width, headerY), gridPaint);
+    for (var row = 0; row <= rowCount; row++) {
+      final y = headerY + row * _ChannelScheduleTimeline._rowHeight;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ChannelScheduleGridPainter oldDelegate) =>
+      oldDelegate.rowCount != rowCount;
+}
+
+class _ChannelScheduleNowPainter extends CustomPainter {
+  const _ChannelScheduleNowPainter({required this.nowMinutes});
+
+  final int nowMinutes;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x = nowMinutes / 60 * _ChannelScheduleTimeline._pixelsPerHour;
+    final nowPaint = Paint()
+      ..color = AppColors.liveAccent
+      ..strokeWidth = 2;
+    canvas.drawLine(Offset(x, 0), Offset(x, size.height), nowPaint);
+    canvas.drawCircle(
+      Offset(x, _ChannelScheduleTimeline._timeHeader),
+      4,
+      nowPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ChannelScheduleNowPainter oldDelegate) =>
+      oldDelegate.nowMinutes != nowMinutes;
+}
+
+class _ChannelScheduleRowLabel extends StatelessWidget {
+  const _ChannelScheduleRowLabel({required this.row});
+
+  final _ChannelScheduleRow row;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.xs,
+      vertical: AppSpacing.xs,
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: row.logoUrl == null
+              ? const Icon(Icons.tv_outlined, color: AppColors.onDarkSoft)
+              : CachedNetworkImage(
+                  imageUrl: row.logoUrl!,
+                  fit: BoxFit.contain,
+                  fadeInDuration: Duration.zero,
+                  memCacheWidth: artworkCacheDimension(context, 44),
+                  errorWidget: (_, _, _) => const Icon(
+                    Icons.tv_outlined,
+                    color: AppColors.onDarkSoft,
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          row.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: AppTypography.caption.copyWith(color: AppColors.onDark),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ChannelProgramCard extends StatelessWidget {
+  const _ChannelProgramCard({required this.event, required this.now});
+
+  final EventItemV2 event;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = event.schedule.startsAt.toLocal();
+    final end = event.schedule.endsAt?.toLocal();
+    final isLive = !now.isBefore(start) && (end == null || now.isBefore(end));
+    return Material(
+      color: isLive
+          ? AppColors.liveAccent.withValues(alpha: 0.14)
+          : AppColors.surfaceDarkElevated,
+      borderRadius: AppRadius.sm,
+      child: InkWell(
+        borderRadius: AppRadius.sm,
+        onTap: () => openVersionedItem(
+          context,
+          VersionedMediaItem(item: event),
+          contentRating: AppScope.of(
+            context,
+          ).registry.contentRatingFor(event.ref),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 140;
+              final timeLabel = end == null
+                  ? _channelTime(start)
+                  : '${_channelTime(start)} – ${_channelTime(end)}';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: compact ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        (compact ? AppTypography.bodySm : AppTypography.bodyMd)
+                            .copyWith(
+                              color: AppColors.onDark,
+                              fontWeight: isLive ? FontWeight.w700 : null,
+                            ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          timeLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(
+                            color: isLive
+                                ? AppColors.liveAccent
+                                : AppColors.onDarkSoft,
+                          ),
+                        ),
+                      ),
+                      if (isLive) ...[
+                        const SizedBox(width: AppSpacing.xxs),
+                        Text(
+                          'LIVE',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.liveAccent,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 }
 
-String _listSectionLabel(EventItemV2 event) {
-  final subtitle = event.subtitle?.trim();
-  if (subtitle != null && subtitle.isNotEmpty) return subtitle;
-  if (event.participants.length == 2) return 'Other';
-  final tags = event.tags.join('|').trim();
-  return tags.isEmpty ? 'Other' : tags;
-}
+bool _sameTimelineDay(DateTime first, DateTime second) =>
+    first.year == second.year &&
+    first.month == second.month &&
+    first.day == second.day;
+
+String _channelTime(DateTime value) =>
+    '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 
 class _TimelineEventGroup {
   const _TimelineEventGroup(this.events);
@@ -1193,100 +1614,6 @@ class _TimelineTitle extends StatelessWidget {
   }
 }
 
-class _TimelineListMatchTitle extends StatelessWidget {
-  const _TimelineListMatchTitle({
-    required this.home,
-    required this.away,
-    required this.startTime,
-  });
-
-  final Participant home;
-  final Participant away;
-  final String startTime;
-
-  @override
-  Widget build(BuildContext context) {
-    final homeName = home.shortName ?? home.name;
-    final awayName = away.shortName ?? away.name;
-    return Row(
-      children: [
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Flexible(
-                child: Text(
-                  homeName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xxs),
-              _TimelineParticipantLogo(participant: home),
-            ],
-          ),
-        ),
-        SizedBox(
-          width: 48,
-          child: Text(
-            startTime,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              _TimelineParticipantLogo(participant: away),
-              const SizedBox(width: AppSpacing.xxs),
-              Flexible(
-                child: Text(
-                  awayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TimelineListEventTitle extends StatelessWidget {
-  const _TimelineListEventTitle({required this.title, required this.startTime});
-
-  final String title;
-  final String startTime;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.bodySm.copyWith(color: AppColors.onDark),
-        ),
-      ),
-      const SizedBox(width: AppSpacing.sm),
-      SizedBox(
-        width: 48,
-        child: Text(
-          startTime,
-          textAlign: TextAlign.center,
-          style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
-        ),
-      ),
-    ],
-  );
-}
-
 bool _hasParticipantLogo(Participant participant) =>
     participant.logo?.url.trim().isNotEmpty ?? false;
 
@@ -1408,16 +1735,9 @@ class _TimelineLiveIndicatorState extends State<_TimelineLiveIndicator>
 }
 
 class _TimelineEventCard extends StatelessWidget {
-  const _TimelineEventCard({
-    required this.group,
-    this.showMetadata = true,
-    this.listLayout = false,
-    this.compact = false,
-  });
+  const _TimelineEventCard({required this.group, this.compact = false});
 
   final _TimelineEventGroup group;
-  final bool showMetadata;
-  final bool listLayout;
   final bool compact;
 
   @override
@@ -1432,21 +1752,15 @@ class _TimelineEventCard extends StatelessWidget {
     final cardColor = _timelineCardColor(group);
     final time = end == null ? _time(start) : '${_time(start)} – ${_time(end)}';
     final title = isGroup ? '${group.events.length} events' : event.title;
-    final description = showMetadata && isGroup
+    final description = isGroup
         ? _eventGroupingLabel(event).replaceAll('|', ' · ')
-        : showMetadata
-        ? _eventDescription(event)
-        : '';
-    final leagueLogoUrl = showMetadata
-        ? event.branding?.logo?.url.trim()
-        : null;
+        : _eventDescription(event);
+    final leagueLogoUrl = event.branding?.logo?.url.trim();
     final participants = event.participants.take(2).toList(growable: false);
     final showParticipants =
         !isGroup &&
         participants.length == 2 &&
         participants.any(_hasParticipantLogo);
-    final showListMatch = listLayout && !isGroup && participants.length == 2;
-    final showListEvent = listLayout && !isGroup && !showListMatch;
     final cardPadding = compact
         ? const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
@@ -1478,35 +1792,22 @@ class _TimelineEventCard extends StatelessWidget {
                           const SizedBox(width: AppSpacing.xs),
                         ],
                         Expanded(
-                          child: showListMatch
-                              ? _TimelineListMatchTitle(
-                                  home: participants.first,
-                                  away: participants.last,
-                                  startTime: _time(start),
-                                )
-                              : showListEvent
-                              ? _TimelineListEventTitle(
-                                  title: title,
-                                  startTime: _time(start),
-                                )
-                              : _TimelineTitle(
-                                  title: title,
-                                  participants: showParticipants
-                                      ? participants
-                                      : const [],
-                                ),
+                          child: _TimelineTitle(
+                            title: title,
+                            participants: showParticipants
+                                ? participants
+                                : const [],
+                          ),
                         ),
                       ],
                     ),
-                    if (!listLayout) ...[
-                      SizedBox(height: sectionGap),
-                      Text(
-                        time,
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.onDarkSoft,
-                        ),
+                    SizedBox(height: sectionGap),
+                    Text(
+                      time,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.onDarkSoft,
                       ),
-                    ],
+                    ),
                     if (description.isNotEmpty ||
                         (leagueLogoUrl != null &&
                             leagueLogoUrl.isNotEmpty)) ...[

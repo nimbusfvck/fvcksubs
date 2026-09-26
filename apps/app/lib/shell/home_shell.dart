@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fvcksubs_core/fvcksubs_core.dart';
-
 import '../addons/addons_controller.dart';
 import '../app_scope.dart';
 import '../catalog/category_page.dart';
-import '../catalog/live_timeline_page.dart';
 import '../home/home_page.dart';
 import '../library/library_page.dart';
 import '../settings/settings_page.dart';
@@ -34,12 +31,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _body(AppScope scope) {
     final category = _selectedCategory;
     if (_destination == AppDestination.home && category != null) {
-      final opensTimeline = scope.registry
-          .catalogsFor(category)
-          .any((binding) => binding.catalog.display == CatalogDisplay.timeline);
-      return opensTimeline
-          ? CatalogTimelinePage(category: category)
-          : CategoryPage(category: category);
+      return CategoryPage(category: category);
     }
     return switch (_destination) {
       AppDestination.home => const HomePage(),

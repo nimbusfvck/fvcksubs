@@ -5,12 +5,9 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fvcksubs_core/fvcksubs_core.dart';
-
 import '../app_scope.dart';
 import '../addons/installer_controller.dart';
 import '../catalog/category_page.dart';
-import '../catalog/live_timeline_page.dart';
 import '../catalog/plugin_selector.dart';
 import '../search/search_page.dart';
 import '../theme/breakpoints.dart';
@@ -87,16 +84,8 @@ class _HomePageState extends State<HomePage> {
 
   void _openCategory(String category) {
     if (category.toLowerCase() == 'all') return;
-    final scope = AppScope.of(context);
-    final opensTimeline = scope.registry
-        .catalogsFor(category)
-        .any((binding) => binding.catalog.display == CatalogDisplay.timeline);
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => opensTimeline
-            ? CatalogTimelinePage(category: category)
-            : CategoryPage(category: category),
-      ),
+      MaterialPageRoute<void>(builder: (_) => CategoryPage(category: category)),
     );
   }
 

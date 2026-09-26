@@ -127,6 +127,144 @@ class MediaTrailer extends Equatable {
   List<Object?> get props => [title, url, site, thumbnail, mimeType];
 }
 
+/// One scheduled programme in a continuously available channel's guide.
+class ChannelProgramV2 extends Equatable {
+  /// Creates a channel programme.
+  const ChannelProgramV2({
+    required this.id,
+    required this.title,
+    required this.startsAt,
+    required this.endsAt,
+    this.subtitle,
+    this.description,
+  });
+
+  /// Decodes and validates a channel programme.
+  factory ChannelProgramV2.fromJson(Map<String, Object?> json) {
+    _rejectUnknown(json, const {
+      'id',
+      'title',
+      'subtitle',
+      'description',
+      'startsAt',
+      'endsAt',
+    }, 'channel program');
+    final startsAt = _requiredUtc(json['startsAt'], 'channelProgram.startsAt');
+    final endsAt = _requiredUtc(json['endsAt'], 'channelProgram.endsAt');
+    if (!endsAt.isAfter(startsAt)) {
+      throw const FormatException(
+        'channelProgram.endsAt must be after startsAt',
+      );
+    }
+    return ChannelProgramV2(
+      id: _requiredString(json['id'], 'channelProgram.id'),
+      title: _requiredString(json['title'], 'channelProgram.title'),
+      subtitle: _optionalString(json['subtitle'], 'channelProgram.subtitle'),
+      description: _optionalString(
+        json['description'],
+        'channelProgram.description',
+      ),
+      startsAt: startsAt,
+      endsAt: endsAt,
+    );
+  }
+
+  /// Stable upstream programme identifier.
+  final String id;
+
+  /// Display title.
+  final String title;
+
+  /// Optional secondary title or episode label.
+  final String? subtitle;
+
+  /// Optional synopsis.
+  final String? description;
+
+  /// Programme start in UTC.
+  final DateTime startsAt;
+
+  /// Programme end in UTC.
+  final DateTime endsAt;
+
+  /// Encodes this programme.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'title': title,
+    if (subtitle != null) 'subtitle': subtitle,
+    if (description != null) 'description': description,
+    'startsAt': startsAt.toUtc().toIso8601String(),
+    'endsAt': endsAt.toUtc().toIso8601String(),
+  };
+
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    subtitle,
+    description,
+    startsAt,
+    endsAt,
+  ];
+}
+
+/// Short programme guide for a continuously available channel.
+class ChannelGuideV2 extends Equatable {
+  /// Creates a channel guide.
+  const ChannelGuideV2({
+    required this.programs,
+    this.generatedAt,
+    this.available = true,
+  });
+
+  /// Decodes and validates a channel guide.
+  factory ChannelGuideV2.fromJson(Map<String, Object?> json) {
+    _rejectUnknown(json, const {
+      'generatedAt',
+      'available',
+      'programs',
+    }, 'channel guide');
+    final programs = json['programs'];
+    if (programs is! List) {
+      throw const FormatException('channelGuide.programs must be a list');
+    }
+    final available = json['available'];
+    if (available != null && available is! bool) {
+      throw const FormatException('channelGuide.available must be a boolean');
+    }
+    return ChannelGuideV2(
+      generatedAt: json['generatedAt'] == null
+          ? null
+          : _requiredUtc(json['generatedAt'], 'channelGuide.generatedAt'),
+      available: available as bool? ?? true,
+      programs: [
+        for (final entry in programs)
+          ChannelProgramV2.fromJson(_object(entry, 'channelGuide.programs[]')),
+      ],
+    );
+  }
+
+  /// When the upstream guide was generated, in UTC.
+  final DateTime? generatedAt;
+
+  /// Whether the channel currently has guide data.
+  final bool available;
+
+  /// Programmes in chronological display order.
+  final List<ChannelProgramV2> programs;
+
+  /// Encodes this guide.
+  Map<String, Object?> toJson() => {
+    if (generatedAt != null)
+      'generatedAt': generatedAt!.toUtc().toIso8601String(),
+    'available': available,
+    'programs': programs.map((program) => program.toJson()).toList(),
+  };
+
+  @override
+  List<Object?> get props => [generatedAt, available, programs];
+}
+
 /// One playable entry in an episode guide.
 class EpisodeSummary extends Equatable {
   /// Creates an episode summary.
@@ -427,6 +565,7 @@ class MediaDetailV2 extends Equatable {
     this.collection,
     this.recommendations = const [],
     this.episodeGuide,
+    this.channelGuide,
   });
 
   /// Decodes and validates a protocol-v2 detail response.
@@ -441,6 +580,7 @@ class MediaDetailV2 extends Equatable {
       'collection',
       'recommendations',
       'episodeGuide',
+      'channelGuide',
     }, 'media detail');
     final tags = json['tags'];
     if (tags != null && tags is! List) {
@@ -501,6 +641,11 @@ class MediaDetailV2 extends Equatable {
           : EpisodeGuide.fromJson(
               _object(json['episodeGuide'], 'detail.episodeGuide'),
             ),
+      channelGuide: json['channelGuide'] == null
+          ? null
+          : ChannelGuideV2.fromJson(
+              _object(json['channelGuide'], 'detail.channelGuide'),
+            ),
     );
   }
 
@@ -531,6 +676,9 @@ class MediaDetailV2 extends Equatable {
   /// Optional navigation data for episodic content.
   final EpisodeGuide? episodeGuide;
 
+  /// Optional programme data for continuously available channels.
+  final ChannelGuideV2? channelGuide;
+
   /// Encodes this detail response.
   Map<String, Object?> toJson() => {
     'item': item.toJson(),
@@ -547,6 +695,7 @@ class MediaDetailV2 extends Equatable {
           .map((recommendation) => recommendation.toJson())
           .toList(),
     if (episodeGuide != null) 'episodeGuide': episodeGuide!.toJson(),
+    if (channelGuide != null) 'channelGuide': channelGuide!.toJson(),
   };
 
   @override
@@ -560,6 +709,7 @@ class MediaDetailV2 extends Equatable {
     collection,
     recommendations,
     episodeGuide,
+    channelGuide,
   ];
 }
 
@@ -618,6 +768,10 @@ DateTime? _optionalUtc(Object? value, String path) {
   }
   return parsed;
 }
+
+DateTime _requiredUtc(Object? value, String path) =>
+    _optionalUtc(value, path) ??
+    (throw FormatException('$path must be an ISO-8601 UTC timestamp'));
 
 void _rejectUnknown(
   Map<String, Object?> json,

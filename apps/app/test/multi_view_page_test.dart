@@ -56,6 +56,7 @@ void main() {
   testWidgets('sports multi-view starts with one event and an add slot', (
     tester,
   ) async {
+    final player = RecordingPlayer();
     EventItemV2? selectedEvent;
     ResolvedSource? selectedSource;
     EventItemV2? miniEvent;
@@ -75,7 +76,7 @@ void main() {
           },
         ),
         registry: ExtensionRegistry([]),
-        player: RecordingPlayer(),
+        player: player,
       ),
     );
     await tester.pump();
@@ -84,6 +85,7 @@ void main() {
     expect(find.text('Add live event'), findsOneWidget);
     expect(find.byTooltip('Remove event'), findsOneWidget);
     expect(find.byTooltip('Change source'), findsOneWidget);
+    expect(player.playedMixWithOthers, isTrue);
     expect(find.byTooltip('Pin player'), findsOneWidget);
     expect(find.byTooltip('Single player'), findsOneWidget);
 

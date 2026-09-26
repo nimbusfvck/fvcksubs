@@ -7,6 +7,7 @@ import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../addons/installer_controller.dart';
 import '../app_scope.dart';
+import 'live_timeline_page.dart';
 import '../home/catalog_grid_section.dart';
 import '../home/catalog_group_shelf.dart';
 import '../home/catalog_grouping.dart';
@@ -38,19 +39,50 @@ class _CategoryPageState extends State<CategoryPage> {
 
   Future<void> _refresh() async {
     final scope = AppScope.of(context);
-    final plugins = scope.registry.pluginsFor(widget.category);
-    final pluginId = scope.pluginController.resolve([
-      for (final plugin in plugins) plugin.id,
-    ]);
-    final bindings = [
-      for (final binding in scope.registry.catalogsFor(widget.category))
-        if (binding.extensionId == pluginId) binding,
-    ];
+    final bindings = _categoryBindings(scope);
     await Future.wait([
       for (final binding in bindings) _refreshBinding(scope, binding),
     ]);
     if (!mounted) return;
     setState(() => _generation++);
+  }
+
+  String? _selectedPluginId(AppScope scope) {
+    final plugins = scope.registry.pluginsFor(widget.category);
+    return scope.pluginController.resolve([
+      for (final plugin in plugins) plugin.id,
+    ]);
+  }
+
+  List<CatalogBinding> _categoryBindings(AppScope scope) {
+    final pluginId = _selectedPluginId(scope);
+    return [
+      for (final binding in scope.registry.catalogsFor(widget.category))
+        if (binding.extensionId == pluginId &&
+            binding.catalog.display != CatalogDisplay.timeline &&
+            binding.catalog.display != CatalogDisplay.channelSchedule)
+          binding,
+    ];
+  }
+
+  List<CatalogBinding> _scheduleBindings(AppScope scope) {
+    final pluginId = _selectedPluginId(scope);
+    return [
+      for (final binding in scope.registry.catalogsFor(widget.category))
+        if (binding.extensionId == pluginId &&
+            (binding.catalog.display == CatalogDisplay.timeline ||
+                binding.catalog.display == CatalogDisplay.channelSchedule))
+          binding,
+    ];
+  }
+
+  void _openSchedule() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'catalog-schedule'),
+        builder: (_) => CatalogTimelinePage(category: widget.category),
+      ),
+    );
   }
 
   Future<void> _refreshBinding(AppScope scope, CatalogBinding binding) async {
@@ -176,13 +208,11 @@ class _CategoryPageState extends State<CategoryPage> {
     final pluginId = scope.pluginController.resolve([
       for (final plugin in plugins) plugin.id,
     ]);
-    final bindings = [
-      for (final binding in scope.registry.catalogsFor(widget.category))
-        if (binding.extensionId == pluginId) binding,
-    ];
+    final bindings = _categoryBindings(scope);
+    final hasSchedule = _scheduleBindings(scope).isNotEmpty;
     final groups = groupHomeCatalogs(bindings);
     _ensureFeaturedLoaded(scope, bindings);
-    final featuredHeight = _featuredItems.isEmpty
+    final featuredHeight = _featuredItems.length < 2
         ? null
         : MediaHeroLayout.snapToDevicePixel(
             context,
@@ -224,6 +254,16 @@ class _CategoryPageState extends State<CategoryPage> {
                 style: AppTypography.titleLg.copyWith(color: AppColors.onDark),
               ),
               actions: [
+                if (hasSchedule)
+                  TextButton.icon(
+                    key: const Key('category-schedule-button'),
+                    onPressed: _openSchedule,
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: const Text('Schedule'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.onDark,
+                    ),
+                  ),
                 if (plugins.length > 1 && pluginId != null)
                   PluginSelector(
                     plugins: plugins,

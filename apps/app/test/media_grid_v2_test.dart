@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvcksubs_app/catalog/channel_card.dart';
 import 'package:fvcksubs_app/catalog/media_card_v2.dart';
 import 'package:fvcksubs_app/catalog/media_grid_v2.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
@@ -84,6 +85,44 @@ void main() {
     expect(find.text('Movies'), findsNothing);
     expect(find.textContaining('2026'), findsOneWidget);
     expect(find.textContaining('8.4'), findsOneWidget);
+  });
+
+  testWidgets('channel catalogs use icon cards in the full grid', (
+    tester,
+  ) async {
+    final channel = const VersionedMediaItem(
+      item: ChannelItemV2(
+        ref: MediaRef(
+          extensionId: 'example',
+          providerId: 'example.catalog',
+          id: 'espn',
+        ),
+        title: 'ESPN',
+      ),
+    );
+    VersionedMediaItem? tapped;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 300,
+            child: MediaGridV2(
+              sections: [
+                CatalogSectionV2(id: 'channels', items: [channel]),
+              ],
+              onTap: (value) => tapped = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ChannelCard), findsOneWidget);
+    expect(find.byType(MediaCardV2), findsNothing);
+    await tester.tap(find.byType(ChannelCard));
+    expect(tapped, same(channel));
   });
 
   testWidgets('poster cards show a title below the 2:3 image', (tester) async {

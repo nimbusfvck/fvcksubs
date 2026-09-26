@@ -149,6 +149,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
                   widget.entry.source.stream,
                   isLive: true,
                   muted: widget.muted,
+                  mixWithOthers: true,
                   playing: true,
                   wakelock: false,
                   fit: BoxFit.contain,

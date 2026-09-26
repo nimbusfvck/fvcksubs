@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_app/player/widgets/video_player_view.dart';
+import 'package:video_player/video_player.dart' as vp;
 
 void main() {
   test('warms progressive provider variants before seeking', () {
@@ -9,6 +10,13 @@ void main() {
     expect(shouldWarmVariantBeforeSeek(StreamFormat.other), isTrue);
     expect(shouldWarmVariantBeforeSeek(StreamFormat.hls), isFalse);
     expect(shouldWarmVariantBeforeSeek(StreamFormat.dash), isFalse);
+  });
+
+  test('hints native format for extensionless playback URLs', () {
+    expect(videoFormatHintForStream(StreamFormat.hls), vp.VideoFormat.hls);
+    expect(videoFormatHintForStream(StreamFormat.dash), vp.VideoFormat.dash);
+    expect(videoFormatHintForStream(StreamFormat.mp4), isNull);
+    expect(videoFormatHintForStream(StreamFormat.other), isNull);
   });
 
   test('subtitle overlay keeps the same viewport rect across resolutions', () {

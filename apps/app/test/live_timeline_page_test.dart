@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fvcksubs_app/catalog/category_page.dart';
 import 'package:fvcksubs_app/catalog/live_timeline_page.dart';
 import 'package:fvcksubs_app/home/live_now_shelf.dart';
+import 'package:fvcksubs_app/home/featured_hero.dart';
 import 'package:fvcksubs_app/catalog/participant_avatar.dart';
 import 'package:fvcksubs_app/home/home_page.dart';
 import 'package:fvcksubs_app/widgets/app_page_bar.dart';
@@ -296,7 +297,7 @@ void main() {
     );
   });
 
-  testWidgets('Live opens the timeline and keeps schedule category available', (
+  testWidgets('Live opens rows first and exposes the schedule action', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -309,11 +310,11 @@ void main() {
           FakeExtension(
             categories: ['all', 'live', 'schedule'],
             catalogs: [
-              const FakeCatalog(
+              FakeCatalog(
                 id: 'live-now',
                 name: 'Live Now',
-                categories: ['all'],
-                items: [],
+                categories: ['all', 'live'],
+                items: [fakeItem(id: 'tv-channel', title: 'TV Channel')],
                 display: CatalogDisplay.row,
               ),
               FakeCatalog(
@@ -329,7 +330,7 @@ void main() {
                     startsAt: now.add(const Duration(minutes: 30)),
                   ),
                 ],
-                display: CatalogDisplay.timeline,
+                display: CatalogDisplay.channelSchedule,
               ),
             ],
           ),
@@ -344,8 +345,23 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
+    expect(find.byType(CategoryPage), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CategoryPage),
+        matching: find.byType(FeaturedHero),
+      ),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('category-schedule-button')), findsOneWidget);
+    expect(find.text('TV Channel'), findsAtLeastNWidgets(1));
+    await tester.tap(find.byKey(const Key('category-schedule-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
     expect(find.byType(CatalogTimelinePage), findsOneWidget);
-    expect(find.widgetWithText(AppPageBar, 'Live'), findsOneWidget);
+    expect(find.widgetWithText(AppPageBar, 'Schedule'), findsOneWidget);
+    expect(find.byKey(const Key('catalog-channel-timeline')), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const Key('catalog-timeline')),
@@ -361,12 +377,26 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('catalog-now-line')), findsOneWidget);
-    expect(find.byKey(const Key('catalog-mobile-timeline')), findsOneWidget);
-    final eventTitle = find.descendant(
-      of: find.byKey(const Key('catalog-mobile-timeline')),
-      matching: find.text('Arsenal vs Chelsea'),
+    expect(
+      tester.getSize(find.byKey(const Key('catalog-channel-labels'))).width,
+      120,
     );
-    expect(tester.getSize(eventTitle).width, greaterThan(200));
+    final programsScroll = find.byKey(
+      const Key('catalog-channel-programs-scroll'),
+    );
+    await tester.drag(programsScroll, const Offset(-240, 0));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const Key('catalog-channel-labels'))).width,
+      0,
+    );
+    await tester.drag(programsScroll, const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const Key('catalog-channel-labels'))).width,
+      120,
+    );
+    expect(find.byKey(const Key('catalog-mobile-timeline')), findsNothing);
   });
 
   testWidgets('timeline date selector stays pinned and uses readable text', (
@@ -465,7 +495,9 @@ void main() {
     expect(find.text('Arsenal vs Chelsea'), findsOneWidget);
   });
 
-  testWidgets('toolbar switches to a league-grouped list view', (tester) async {
+  testWidgets('schedule has no display selector and stays in timeline view', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final now = DateTime.now().toUtc();
@@ -539,25 +571,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byKey(const Key('catalog-display-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('List'));
-    await tester.pump();
-
-    expect(find.byKey(const Key('catalog-list-view')), findsOneWidget);
-    expect(find.byKey(const Key('catalog-mobile-timeline')), findsNothing);
-    expect(find.text('Premier League'), findsOneWidget);
-    expect(find.text('2 events'), findsNothing);
-    expect(find.text('Arsenal'), findsOneWidget);
-    expect(find.text('Chelsea'), findsOneWidget);
-    expect(find.text('Liverpool'), findsOneWidget);
-    expect(find.text('City'), findsOneWidget);
-    expect(find.text('MotoGP'), findsOneWidget);
-    expect(find.text('Sprint Race'), findsOneWidget);
-    expect(find.text('Other'), findsOneWidget);
-    expect(find.text('Rangers'), findsOneWidget);
-    expect(find.text('Celtic'), findsOneWidget);
-    expect(find.text('VS'), findsNothing);
+    expect(find.byKey(const Key('catalog-display-selector')), findsNothing);
+    expect(find.byKey(const Key('catalog-mobile-timeline')), findsOneWidget);
+    expect(find.text('Arsenal vs Chelsea'), findsOneWidget);
   });
 
   testWidgets('timeline cards use the league primary color when available', (

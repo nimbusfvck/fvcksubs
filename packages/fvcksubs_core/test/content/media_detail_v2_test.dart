@@ -110,6 +110,44 @@ void main() {
     );
   });
 
+  test('channel guide round-trips independently from episode guide', () {
+    const ref = MediaRef(
+      extensionId: 'nimora',
+      providerId: 'nimora.tvnow',
+      id: 'tvnow:espn',
+    );
+    final detail = MediaDetailV2(
+      item: ChannelItemV2(ref: ref, title: 'ESPN'),
+      channelGuide: ChannelGuideV2(
+        generatedAt: DateTime.utc(2026, 9, 23, 14, 45),
+        programs: [
+          ChannelProgramV2(
+            id: 'program-1',
+            title: 'First Take',
+            subtitle: 'Live',
+            description: 'Sports debate show.',
+            startsAt: DateTime.utc(2026, 9, 23, 14),
+            endsAt: DateTime.utc(2026, 9, 23, 16),
+          ),
+        ],
+      ),
+    );
+
+    expect(MediaDetailV2.fromJson(detail.toJson()), detail);
+  });
+
+  test('channel programme requires a UTC end after its start', () {
+    expect(
+      () => ChannelProgramV2.fromJson({
+        'id': 'program-1',
+        'title': 'First Take',
+        'startsAt': '2026-09-23T14:00:00Z',
+        'endsAt': '2026-09-23T14:00:00+00:00',
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('rejects unknown fields and non-UTC availability', () {
     expect(
       () => MediaDetailV2.fromJson({

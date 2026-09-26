@@ -479,6 +479,9 @@ class RecordingPlayer {
   /// switch actually rebuilt the player, not just updated its stream field.
   int buildCount = 0;
 
+  /// Whether the most recent player build allows other players to keep audio.
+  bool? playedMixWithOthers;
+
   /// The `preferredSubtitleLanguage` the most recent build was called with
   /// — lets a test assert the player was told the viewer's subtitle
   /// preference.
@@ -516,6 +519,7 @@ class RecordingPlayer {
     SubtitleTrack? preferredExternalSubtitle,
     SubtitleAppearance? subtitleAppearance,
     bool muted = false,
+    bool mixWithOthers = false,
     bool playing = true,
     bool? wakelock,
     BoxFit fit = BoxFit.contain,
@@ -524,6 +528,7 @@ class RecordingPlayer {
     playedStartPosition = startPosition;
     played = stream;
     playedIsLive = isLive;
+    playedMixWithOthers = mixWithOthers;
     playedPreferredSubtitleLanguage = preferredSubtitleLanguage;
     playedPreferredQualityMaxHeight = preferredQualityMaxHeight;
     playedPreferredExternalSubtitle = preferredExternalSubtitle;

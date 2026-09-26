@@ -5,6 +5,7 @@ import 'package:fvcksubs_core/fvcksubs_core.dart';
 import 'package:fvcksubs_extension_host/fvcksubs_extension_host.dart';
 
 import '../app_scope.dart';
+import '../catalog/channel_card.dart';
 import '../catalog/catalog_screen.dart';
 import '../catalog/media_card_actions.dart';
 import '../catalog/media_card_v2.dart';
@@ -44,6 +45,7 @@ class CatalogShelf extends StatefulWidget {
     CatalogDisplay.row => rowPreviewLimit,
     CatalogDisplay.grid => previewLimit,
     CatalogDisplay.timeline => listPreviewLimit,
+    CatalogDisplay.channelSchedule => listPreviewLimit,
   };
 
   @override
@@ -327,6 +329,13 @@ class _Section extends StatelessWidget {
             scrollable: false,
             columns: 1,
           ),
+          CatalogDisplay.channelSchedule => MediaGridV2(
+            sections: [CatalogSectionV2(id: section.id, items: preview)],
+            onTap: onTap,
+            onTapWithHero: onTapWithHero,
+            scrollable: false,
+            columns: 1,
+          ),
         },
       ],
     );
@@ -448,6 +457,10 @@ class _Carousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.isNotEmpty &&
+        items.every((entry) => entry.item is ChannelItemV2)) {
+      return _ChannelCarousel(items: items, onTap: onTap);
+    }
     final posterMode = items.any((entry) => isPosterMediaItem(entry.item));
     final itemWidth = posterMode ? 140.0 : 300.0;
     final height = posterMode ? mediaCardPosterHeight(itemWidth) : 172.0;
@@ -484,6 +497,43 @@ class _Carousel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ChannelCarousel extends StatelessWidget {
+  const _ChannelCarousel({required this.items, required this.onTap});
+
+  final List<VersionedMediaItem> items;
+  final ValueChanged<VersionedMediaItem> onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: ChannelCard.preferredHeight + Clickable.ringBleed * 2,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+      itemBuilder: (context, index) {
+        final entry = items[index];
+        final channel = entry.item as ChannelItemV2;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: Clickable.ringBleed),
+          child: SizedBox(
+            width: 112,
+            child: ChannelCard(
+              channel: channel,
+              onTap: () => onTap(entry),
+              onLongPress: () => showMediaCardActions(
+                context,
+                channel,
+                onViewDetails: () => openDetails(context, channel),
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 class _ShelfMessage extends StatelessWidget {

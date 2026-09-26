@@ -72,6 +72,7 @@ class DetailController extends Cubit<DetailState> {
             collection: current.collection,
             recommendations: current.recommendations,
             episodeGuide: guide,
+            channelGuide: current.channelGuide,
           ),
         ),
       );

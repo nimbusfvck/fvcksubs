@@ -6,6 +6,16 @@ import 'catalog_binding.dart';
 /// own unscoped chip, so listing it here would render two of them.
 const _allCategory = 'all';
 
+const _preferredHomeCategoryOrder = [
+  'all',
+  'live',
+  'sport',
+  'movie',
+  'tv',
+  'anime',
+  'nsfw',
+];
+
 /// The set of installed extensions, and the routing over them.
 ///
 /// The app never talks to an extension directly — it asks the registry, which
@@ -169,8 +179,9 @@ class ExtensionRegistry {
     }
   }
 
-  /// Categories declared by installed, *enabled* extensions, de-duplicated,
-  /// first-seen order. These become Home's category choices.
+  /// Categories declared by installed, *enabled* extensions, de-duplicated.
+  /// Built-in Home categories use a stable editorial order; custom categories
+  /// retain their first-seen order after those built-ins.
   List<String> get categories {
     final seen = <String>{};
     final ordered = <String>[];
@@ -213,7 +224,16 @@ class ExtensionRegistry {
         }
       }
     }
-    return ordered;
+    final preferred = [
+      for (final category in _preferredHomeCategoryOrder)
+        for (final available in ordered)
+          if (available.toLowerCase() == category) available,
+    ];
+    return [
+      ...preferred,
+      for (final category in ordered)
+        if (!preferred.contains(category)) category,
+    ];
   }
 
   /// Every catalog serving [category], across enabled extensions and

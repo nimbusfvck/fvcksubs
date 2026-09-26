@@ -8,6 +8,7 @@ import '../detail/open_versioned_item.dart';
 import '../theme/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../widgets/clickable.dart';
+import 'channel_card.dart';
 import 'media_card_actions.dart';
 import 'media_card_v2.dart';
 import 'catalog_section_header.dart';
@@ -42,10 +43,24 @@ class MediaGridV2 extends StatelessWidget {
     for (final section in sections) ...section.items,
   ];
 
+  bool get _channelMode =>
+      _items.isNotEmpty && _items.every((entry) => entry.item is ChannelItemV2);
+
   bool get _portraitMode =>
-      _items.any((entry) => isPosterMediaItem(entry.item));
+      !_channelMode && _items.any((entry) => isPosterMediaItem(entry.item));
 
   SliverGridDelegate _delegate(double width) {
+    if (_channelMode) {
+      final count = columns != null && columns! > 1
+          ? columns!
+          : (width ~/ 112).clamp(2, 6);
+      return SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: count,
+        crossAxisSpacing: AppSpacing.sm,
+        mainAxisSpacing: AppSpacing.md,
+        mainAxisExtent: ChannelCard.preferredHeight + Clickable.ringBleed * 2,
+      );
+    }
     final minimumTileWidth = _portraitMode ? 160 : 280;
     final count = columns ?? (width ~/ minimumTileWidth).clamp(2, 6);
     final tileWidth = (width - AppSpacing.md * (count - 1)) / count;
@@ -69,6 +84,20 @@ class MediaGridV2 extends StatelessWidget {
     VersionedMediaItem envelope, {
     bool showSubtitle = true,
   }) {
+    if (envelope.item case final ChannelItemV2 channel) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: Clickable.ringBleed),
+        child: ChannelCard(
+          channel: channel,
+          onTap: () => onTap(envelope),
+          onLongPress: () => showMediaCardActions(
+            context,
+            channel,
+            onViewDetails: () => openDetails(context, channel),
+          ),
+        ),
+      );
+    }
     final heroTag = Object();
     return MediaCardV2(
       item: envelope.item,

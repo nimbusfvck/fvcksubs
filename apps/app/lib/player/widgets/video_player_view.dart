@@ -39,6 +39,21 @@ void _logFullPlaybackUrl(String stage, String url) {
 bool shouldWarmVariantBeforeSeek(StreamFormat format) =>
     format == StreamFormat.mp4 || format == StreamFormat.other;
 
+/// Keeps Android's Media3 format detection correct for extensionless proxy
+/// URLs, such as the loopback URL used by live HLS playback.
+@visibleForTesting
+vp.VideoFormat? videoFormatHintForStream(StreamFormat format) {
+  switch (format) {
+    case StreamFormat.dash:
+      return vp.VideoFormat.dash;
+    case StreamFormat.hls:
+      return vp.VideoFormat.hls;
+    case StreamFormat.mp4:
+    case StreamFormat.other:
+      return null;
+  }
+}
+
 /// Returns true only when startup has evidence that media can be rendered.
 ///
 /// A native controller may report `isPlaying` while it is still waiting for a
@@ -94,6 +109,7 @@ class VideoPlayerView extends StatefulWidget {
     this.preferredExternalSubtitle,
     this.subtitleAppearance,
     this.muted = false,
+    this.mixWithOthers = false,
     this.looping = false,
     this.playing = true,
     this.fit = BoxFit.contain,
@@ -117,6 +133,7 @@ class VideoPlayerView extends StatefulWidget {
   final SubtitleTrack? preferredExternalSubtitle;
   final SubtitleAppearance? subtitleAppearance;
   final bool muted;
+  final bool mixWithOthers;
   final bool looping;
   final bool playing;
   final BoxFit fit;
@@ -278,15 +295,18 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     final allowBackgroundPlayback = Platform.isIOS && !widget.preview;
     final needsVideoPlayerOptions =
         widget.isLive ||
+        widget.mixWithOthers ||
         allowBackgroundPlayback ||
         (Platform.isIOS && widget.preview);
     return vp.VideoPlayerController.networkUrl(
       Uri.parse(stream.url),
+      formatHint: videoFormatHintForStream(stream.format),
       httpHeaders: stream.headers,
       isLive: widget.isLive,
       videoPlayerOptions: needsVideoPlayerOptions
           ? vp.VideoPlayerOptions(
               allowBackgroundPlayback: allowBackgroundPlayback,
+              mixWithOthers: widget.mixWithOthers,
               allowPictureInPicture: !widget.preview,
               liveConfiguration: widget.isLive
                   ? widget.liveOptions ?? _defaultLiveOptions()

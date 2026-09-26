@@ -165,6 +165,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
         .where((trailer) => !_isAutoplayTrailer(trailer))
         .toList(growable: false);
     final guide = detail.episodeGuide;
+    final channelGuide = detail.channelGuide;
     final groups = guide?.groups ?? const <EpisodeGroup>[];
     final libraryController = AppScope.of(context).libraryController;
     final alignStart = MediaHeroLayout.isLargeScreen(context);
@@ -240,6 +241,7 @@ class _DetailPageV2State extends State<DetailPageV2> {
                                     const SizedBox(height: AppSpacing.xl),
                                     _Facts(values: detail.facts),
                                   ],
+                                  _channelGuideSection(channelGuide),
                                   if ((alignStart
                                           ? detail.credits
                                           : detail.credits
@@ -554,6 +556,26 @@ class _DetailPageV2State extends State<DetailPageV2> {
       );
     },
   );
+
+  Widget _channelGuideSection(ChannelGuideV2? guide) {
+    if (guide == null) return const SizedBox.shrink();
+    final programs = guide.programs;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.xl),
+        const _SectionTitle('TV Guide'),
+        const SizedBox(height: AppSpacing.sm),
+        if (programs.isEmpty)
+          Text(
+            guide.available ? 'No guide data available.' : 'Guide unavailable.',
+            style: AppTypography.bodySm.copyWith(color: AppColors.onDarkSoft),
+          )
+        else
+          for (final program in programs) _ChannelProgramTile(program: program),
+      ],
+    );
+  }
 
   EpisodeGroup? _selectedGroup(
     MediaDetailV2 detail,
@@ -1768,6 +1790,100 @@ class _EpisodeImageFallback extends StatelessWidget {
     color: AppColors.surfaceDarkElevated,
     child: Icon(Icons.movie_outlined, color: AppColors.onDarkSoft),
   );
+}
+
+class _ChannelProgramTile extends StatelessWidget {
+  const _ChannelProgramTile({required this.program});
+
+  final ChannelProgramV2 program;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now().toUtc();
+    final current =
+        !now.isBefore(program.startsAt) && now.isBefore(program.endsAt);
+    final time = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(program.startsAt.toLocal()));
+    return Container(
+      key: ValueKey('channel-program-${program.id}'),
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: current
+            ? AppColors.liveAccent.withValues(alpha: 0.12)
+            : AppColors.surfaceDarkElevated,
+        borderRadius: AppRadius.sm,
+        border: current
+            ? Border.all(color: AppColors.liveAccent.withValues(alpha: 0.45))
+            : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 68,
+            child: Text(
+              time,
+              style: AppTypography.caption.copyWith(
+                color: current ? AppColors.liveAccent : AppColors.onDarkSoft,
+                fontWeight: current ? FontWeight.w700 : null,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  program.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onDark,
+                    fontWeight: current ? FontWeight.w700 : null,
+                  ),
+                ),
+                if (program.subtitle case final subtitle?
+                    when subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  ),
+                if (program.description case final description?
+                    when description.isNotEmpty)
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.onDarkSoft,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (current) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'LIVE',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.liveAccent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionTitle extends StatelessWidget {
